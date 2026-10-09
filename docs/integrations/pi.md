@@ -116,24 +116,24 @@ Settings 的资源数组支持 `!pattern`、`+path`、`-path`。Skill 停用可�
 
 ```json
 {
-  "providers": {
-    "vibemate-deepseek": {
-      "baseUrl": "https://api.deepseek.com",
-      "api": "openai-completions",
-      "apiKey": "${VIBEMATE_DEEPSEEK_API_KEY}",
-      "models": [
-        {
-          "id": "deepseek-flash",
-          "input": ["text", "image"],
-          "reasoning": true,
-          "compat": {
-            "maxTokensField": "max_tokens",
-            "thinkingFormat": "deepseek"
-          }
+    "providers": {
+        "vibemate-deepseek": {
+            "baseUrl": "https://api.deepseek.com",
+            "api": "openai-completions",
+            "apiKey": "${VIBEMATE_DEEPSEEK_API_KEY}",
+            "models": [
+                {
+                    "id": "deepseek-flash",
+                    "input": ["text", "image"],
+                    "reasoning": true,
+                    "compat": {
+                        "maxTokensField": "max_tokens",
+                        "thinkingFormat": "deepseek"
+                    }
+                }
+            ]
         }
-      ]
     }
-  }
 }
 ```
 
@@ -141,9 +141,9 @@ Settings 的资源数组支持 `!pattern`、`+path`、`-path`。Skill 停用可�
 
 ```json
 {
-  "mcpServers": {
-    "vibemate-smoke": { "enabled": false }
-  }
+    "mcpServers": {
+        "vibemate-smoke": { "enabled": false }
+    }
 }
 ```
 

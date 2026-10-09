@@ -1,0 +1,100 @@
+{
+    "app": {
+        "stage": "Early development",
+        "eyebrow": "Your agents, together",
+        "title": "A home for your agent configuration.",
+        "summary": "Providers, models, skills, and MCP servers — managed in one desktop workspace.",
+        "scopeTitle": "First release scope",
+        "areaCount_one": "{{count, number}} area",
+        "areaCount_other": "{{count, number}} areas",
+        "planned": "Planned",
+        "foundation": "Foundation ready. Integrations will be added next.",
+        "scope": {
+            "providers": {
+                "title": "Providers",
+                "detail": "Bring your own API access and model preferences."
+            },
+            "agents": {
+                "title": "Agents",
+                "detail": "Preview configuration changes before applying them."
+            },
+            "skills": {
+                "title": "Skills",
+                "items": "One shared collection",
+                "detail": "Track sources, review updates, and sync to your agents."
+            },
+            "mcp": {
+                "title": "MCP servers",
+                "items": "Shared server definitions",
+                "detail": "Manage connections with each agent's supported options."
+            }
+        }
+    },
+    "desktop": {
+        "home": "Configuration overview",
+        "brandHome": "{{name}} · Configuration overview",
+        "sidebar": "Application sidebar",
+        "navigation": "Configuration navigation",
+        "nav": {
+            "overview": "Overview",
+            "providers": "Providers",
+            "agents": "Agents",
+            "skills": "Skills",
+            "mcp": "MCP servers",
+            "settings": "Settings"
+        },
+        "collapse": "Collapse navigation",
+        "expand": "Expand navigation",
+        "settingsTitle": "General settings",
+        "plannedTitle": "Not implemented",
+        "plannedDetail": "This feature has not been implemented. No connection or configuration changes are available yet.",
+        "overview": {
+            "title": "Configuration relationships",
+            "state": "Not connected · planned",
+            "diagram": "Providers above agents, with shared skills and MCP definitions alongside",
+            "providers": "Planned providers",
+            "agents": "Planned agents",
+            "applicationPoint": "Configuration application",
+            "caption": "Dashed lines describe planned relationships, not connected or applied configuration.",
+            "statistics": "Statistics area",
+            "reserved": "Reserved",
+            "statisticsEmpty": "Statistics are not implemented.",
+            "statisticsDetail": "No usage, quota, or connection counts have been collected."
+        }
+    },
+    "settings": {
+        "appearance": {
+            "label": "Appearance",
+            "cycle": "Appearance: {{current}}; switch to {{next}}",
+            "current": "Current appearance: {{mode}}.",
+            "temporary": "Appearance and navigation layout apply to this window only. A new window starts with system appearance and expanded navigation.",
+            "modes": {
+                "system": "Follow system",
+                "light": "Light",
+                "dark": "Dark"
+            }
+        },
+        "startup": {
+            "loading": "Reading language preference…",
+            "readFailed": "The language preference could not be read. Retry before opening the app.",
+            "initializationFailed": "The interface language could not be prepared. Retry to open the app.",
+            "retry": "Retry startup"
+        },
+        "language": {
+            "label": "Interface language",
+            "system": "Follow system",
+            "zhCN": "简体中文",
+            "en": "English",
+            "saving": "Saving language preference…",
+            "saved": "Language preference saved.",
+            "preview": "Browser preview cannot save language preferences.",
+            "saveFailed": "The language preference could not be saved. Your previous choice is unchanged; try again.",
+            "saveUnconfirmed": "The saved language preference could not be confirmed. Reload it before making another change.",
+            "reload": "Reload saved preference",
+            "reloading": "Reading saved language preference…",
+            "reloaded": "Saved language preference reloaded.",
+            "reloadFailed": "The saved language preference could not be read. Try reloading it again.",
+            "applyFailed": "The preference is saved, but the interface language could not be changed. Reload the saved preference to retry."
+        }
+    }
+}

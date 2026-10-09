@@ -2,6 +2,7 @@
 
 mod commands;
 pub mod credentials;
+pub mod settings;
 pub mod storage;
 
 use std::io::Write;
@@ -33,7 +34,11 @@ pub fn run() {
             app.manage(status);
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![commands::get_app_info])
+        .invoke_handler(tauri::generate_handler![
+            commands::get_app_info,
+            commands::get_locale_preference,
+            commands::save_locale_preference,
+        ])
         .run(tauri::generate_context!())
         .expect("failed to start vibemate desktop runtime");
 }

@@ -1,62 +1,62 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-  workflow_dispatch:
+    push:
+        branches: [main]
+    pull_request:
+    workflow_dispatch:
 
 permissions:
-  contents: read
+    contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+    group: ci-${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
 
 jobs:
-  frontend:
-    name: Frontend checks
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/setup@v3
-        with:
-          runtime: node@24
-          cache: true
-          install: false
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm run check:frontend
+    frontend:
+        name: Frontend checks
+        runs-on: ubuntu-24.04
+        steps:
+            - uses: actions/checkout@v4
+            - uses: pnpm/setup@v3
+              with:
+                  runtime: node@24
+                  cache: true
+                  install: false
+            - run: pnpm install --frozen-lockfile
+            - run: pnpm run check:frontend
 
-  desktop:
-    name: Desktop (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-latest, windows-latest, ubuntu-24.04]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Linux system dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
-      - uses: pnpm/setup@v3
-        with:
-          runtime: node@24
-          cache: true
-          install: false
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri -> target
-      - run: pnpm install --frozen-lockfile
-      # Tauri reads frontendDist at compile time; build it before Cargo checks.
-      - run: pnpm run build
-      - run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
-      - run: cargo clippy --manifest-path src-tauri/Cargo.toml --locked --all-targets -- -D warnings
-      - run: cargo test --manifest-path src-tauri/Cargo.toml --locked
-      # Build an executable without publishing installers or requiring signing keys.
-      - run: pnpm run tauri build --no-bundle -- --locked
+    desktop:
+        name: Desktop (${{ matrix.os }})
+        strategy:
+            fail-fast: false
+            matrix:
+                os: [macos-latest, windows-latest, ubuntu-24.04]
+        runs-on: ${{ matrix.os }}
+        steps:
+            - uses: actions/checkout@v4
+            - name: Install Linux system dependencies
+              if: runner.os == 'Linux'
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+            - uses: pnpm/setup@v3
+              with:
+                  runtime: node@24
+                  cache: true
+                  install: false
+            - uses: dtolnay/rust-toolchain@stable
+              with:
+                  components: rustfmt, clippy
+            - uses: Swatinem/rust-cache@v2
+              with:
+                  workspaces: src-tauri -> target
+            - run: pnpm install --frozen-lockfile
+            # Tauri reads frontendDist at compile time; build it before Cargo checks.
+            - run: pnpm run build
+            - run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+            - run: cargo clippy --manifest-path src-tauri/Cargo.toml --locked --all-targets -- -D warnings
+            - run: cargo test --manifest-path src-tauri/Cargo.toml --locked
+            # Build an executable without publishing installers or requiring signing keys.
+            - run: pnpm run tauri build --no-bundle -- --locked

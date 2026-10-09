@@ -1,53 +1,59 @@
 [
-  {
-    "label": "vibemate: Desktop development",
-    "command": "pnpm",
-    "args": ["run", "tauri", "dev"],
-    "cwd": "$ZED_WORKTREE_ROOT"
-  },
-  {
-    "label": "vibemate: Frontend preview",
-    "command": "pnpm",
-    "args": ["run", "dev"],
-    "cwd": "$ZED_WORKTREE_ROOT"
-  },
-  {
-    "label": "vibemate: Check frontend",
-    "command": "pnpm",
-    "args": ["run", "check:frontend"],
-    "cwd": "$ZED_WORKTREE_ROOT"
-  },
-  {
-    "label": "vibemate: Check Rust formatting",
-    "command": "cargo",
-    "args": ["fmt", "--manifest-path", "src-tauri/Cargo.toml", "--", "--check"],
-    "cwd": "$ZED_WORKTREE_ROOT"
-  },
-  {
-    "label": "vibemate: Run Clippy",
-    "command": "cargo",
-    "args": [
-      "clippy",
-      "--manifest-path",
-      "src-tauri/Cargo.toml",
-      "--locked",
-      "--all-targets",
-      "--",
-      "-D",
-      "warnings"
-    ],
-    "cwd": "$ZED_WORKTREE_ROOT"
-  },
-  {
-    "label": "vibemate: Test Rust",
-    "command": "cargo",
-    "args": ["test", "--manifest-path", "src-tauri/Cargo.toml", "--locked"],
-    "cwd": "$ZED_WORKTREE_ROOT"
-  },
-  {
-    "label": "vibemate: Build desktop",
-    "command": "pnpm",
-    "args": ["run", "tauri", "build", "--no-bundle", "--", "--locked"],
-    "cwd": "$ZED_WORKTREE_ROOT"
-  }
+    {
+        "label": "vibemate: Desktop development",
+        "command": "pnpm",
+        "args": ["run", "tauri", "dev"],
+        "cwd": "$ZED_WORKTREE_ROOT"
+    },
+    {
+        "label": "vibemate: Frontend preview",
+        "command": "pnpm",
+        "args": ["run", "dev"],
+        "cwd": "$ZED_WORKTREE_ROOT"
+    },
+    {
+        "label": "vibemate: Check frontend",
+        "command": "pnpm",
+        "args": ["run", "check:frontend"],
+        "cwd": "$ZED_WORKTREE_ROOT"
+    },
+    {
+        "label": "vibemate: Check Rust formatting",
+        "command": "cargo",
+        "args": [
+            "fmt",
+            "--manifest-path",
+            "src-tauri/Cargo.toml",
+            "--",
+            "--check"
+        ],
+        "cwd": "$ZED_WORKTREE_ROOT"
+    },
+    {
+        "label": "vibemate: Run Clippy",
+        "command": "cargo",
+        "args": [
+            "clippy",
+            "--manifest-path",
+            "src-tauri/Cargo.toml",
+            "--locked",
+            "--all-targets",
+            "--",
+            "-D",
+            "warnings"
+        ],
+        "cwd": "$ZED_WORKTREE_ROOT"
+    },
+    {
+        "label": "vibemate: Test Rust",
+        "command": "cargo",
+        "args": ["test", "--manifest-path", "src-tauri/Cargo.toml", "--locked"],
+        "cwd": "$ZED_WORKTREE_ROOT"
+    },
+    {
+        "label": "vibemate: Build desktop",
+        "command": "pnpm",
+        "args": ["run", "tauri", "build", "--no-bundle", "--", "--locked"],
+        "cwd": "$ZED_WORKTREE_ROOT"
+    }
 ]

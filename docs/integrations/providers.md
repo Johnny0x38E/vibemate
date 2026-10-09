@@ -137,11 +137,11 @@ DeepSeek 首条文本路径：
 
 ```json
 {
-  "model": "deepseek-flash",
-  "messages": [{ "role": "user", "content": "Hello" }],
-  "thinking": { "type": "disabled" },
-  "max_tokens": 1024,
-  "stream": false
+    "model": "deepseek-flash",
+    "messages": [{ "role": "user", "content": "Hello" }],
+    "thinking": { "type": "disabled" },
+    "max_tokens": 1024,
+    "stream": false
 }
 ```
 
@@ -149,9 +149,9 @@ Command Code 选择声明支持 Chat Completions 的 GOAT 模型：
 
 ```json
 {
-  "model": "<GOAT_CHAT_MODEL_ID_FROM_CATALOG>",
-  "messages": [{ "role": "user", "content": "Hello" }],
-  "stream": false
+    "model": "<GOAT_CHAT_MODEL_ID_FROM_CATALOG>",
+    "messages": [{ "role": "user", "content": "Hello" }],
+    "stream": false
 }
 ```
 
@@ -159,10 +159,10 @@ OpenRouter 选择声明支持所需输出参数的文本模型：
 
 ```json
 {
-  "model": "<OPENROUTER_MODEL_ID_WITH_ORGANIZATION_PREFIX>",
-  "messages": [{ "role": "user", "content": "Hello" }],
-  "max_completion_tokens": 1024,
-  "stream": false
+    "model": "<OPENROUTER_MODEL_ID_WITH_ORGANIZATION_PREFIX>",
+    "messages": [{ "role": "user", "content": "Hello" }],
+    "max_completion_tokens": 1024,
+    "stream": false
 }
 ```
 

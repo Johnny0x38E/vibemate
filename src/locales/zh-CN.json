@@ -1,0 +1,100 @@
+{
+    "app": {
+        "stage": "开发初期",
+        "eyebrow": "集中管理你的 Agent",
+        "title": "集中管理 Agent 配置。",
+        "summary": "在一个桌面工作区中管理服务商、模型、技能和 MCP 服务器。",
+        "scopeTitle": "首个版本的范围",
+        "areaCount_one": "{{count, number}} 个领域",
+        "areaCount_other": "{{count, number}} 个领域",
+        "planned": "计划中",
+        "foundation": "基础已就绪，接入功能将在后续实现。",
+        "scope": {
+            "providers": {
+                "title": "服务商",
+                "detail": "使用你自己的 API 访问凭据和模型偏好。"
+            },
+            "agents": {
+                "title": "Agent",
+                "detail": "应用配置前先预览变更。"
+            },
+            "skills": {
+                "title": "技能",
+                "items": "共享技能库",
+                "detail": "记录来源、检查更新，并同步到你的 Agent。"
+            },
+            "mcp": {
+                "title": "MCP 服务器",
+                "items": "共享服务器定义",
+                "detail": "按各 Agent 支持的选项管理连接。"
+            }
+        }
+    },
+    "desktop": {
+        "home": "配置概览",
+        "brandHome": "{{name}} · 配置概览",
+        "sidebar": "应用侧栏",
+        "navigation": "配置导航",
+        "nav": {
+            "overview": "概览",
+            "providers": "服务商",
+            "agents": "Agent",
+            "skills": "技能",
+            "mcp": "MCP 服务器",
+            "settings": "设置"
+        },
+        "collapse": "折叠导航",
+        "expand": "展开导航",
+        "settingsTitle": "通用设置",
+        "plannedTitle": "功能尚未实现",
+        "plannedDetail": "此功能尚未实现，目前不提供连接或配置修改操作。",
+        "overview": {
+            "title": "配置关系",
+            "state": "未接入 · 计划中",
+            "diagram": "Provider 在上，Agent 在下，两侧为共享技能和 MCP 定义",
+            "providers": "计划中的 Provider",
+            "agents": "计划中的 Agent",
+            "applicationPoint": "配置应用关系",
+            "caption": "虚线仅表示计划中的关系，不表示已连接或已应用配置。",
+            "statistics": "统计展示区",
+            "reserved": "预留",
+            "statisticsEmpty": "统计功能尚未实现。",
+            "statisticsDetail": "尚未收集用量、配额或连接数量。"
+        }
+    },
+    "settings": {
+        "appearance": {
+            "label": "外观",
+            "cycle": "外观：{{current}}；切换为{{next}}",
+            "current": "当前外观：{{mode}}。",
+            "temporary": "外观和导航布局仅在当前窗口生效。新窗口默认跟随系统外观并展开导航。",
+            "modes": {
+                "system": "跟随系统",
+                "light": "浅色",
+                "dark": "深色"
+            }
+        },
+        "startup": {
+            "loading": "正在读取语言偏好…",
+            "readFailed": "无法读取语言偏好，请重试后再进入应用。",
+            "initializationFailed": "无法准备界面语言，请重试后再进入应用。",
+            "retry": "重试启动"
+        },
+        "language": {
+            "label": "界面语言",
+            "system": "跟随系统",
+            "zhCN": "简体中文",
+            "en": "English",
+            "saving": "正在保存语言偏好…",
+            "saved": "语言偏好已保存。",
+            "preview": "浏览器预览无法保存语言偏好。",
+            "saveFailed": "无法保存语言偏好，原选择未改变，请重试。",
+            "saveUnconfirmed": "无法确认已保存的语言偏好，请重新读取后再修改。",
+            "reload": "重新读取已保存的偏好",
+            "reloading": "正在读取已保存的语言偏好…",
+            "reloaded": "已重新读取保存的语言偏好。",
+            "reloadFailed": "无法读取已保存的语言偏好，请再次尝试重新读取。",
+            "applyFailed": "偏好已保存，但无法切换界面语言，请重新读取已保存的偏好后重试。"
+        }
+    }
+}

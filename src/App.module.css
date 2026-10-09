@@ -1,0 +1,169 @@
+.shell {
+    --sidebar-width: 188px;
+    /* One row height for the traffic lights and both drag areas. */
+    --titlebar-height: 44px;
+    display: grid;
+    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+    grid-template-rows: var(--titlebar-height) minmax(0, 1fr);
+    height: 100dvh;
+}
+.shell[data-collapsed="true"] {
+    --sidebar-width: 88px;
+}
+.sidebar {
+    /* Span both rows so the sidebar top, not a separate bar, holds the window controls. */
+    grid-row: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    padding: 0 12px 12px;
+    border-right: 1px solid var(--color-border);
+    background: var(--color-sidebar);
+}
+.windowSpace {
+    height: var(--titlebar-height);
+    flex-shrink: 0;
+}
+.titlebarStrip {
+    grid-column: 2;
+    grid-row: 1;
+}
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 6px 20px;
+    border: 0;
+    color: var(--color-text);
+    background: none;
+    cursor: pointer;
+}
+.brandIcon {
+    display: block;
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+}
+/* 18 px tall keeps the wordmark's x-height near the 13 px interface text. */
+.brandName {
+    display: block;
+    height: 18px;
+    /* viewBox is 101 × 19, so 18 px tall is about 96 px wide. */
+    width: 96px;
+    flex-shrink: 0;
+    color: var(--color-text);
+}
+.navigation {
+    display: grid;
+    gap: 5px;
+}
+.navigationButton,
+.collapse {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 44px;
+    padding: 0 12px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-control);
+    color: var(--color-text);
+    background: none;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+}
+.navigationButton svg,
+.collapse svg {
+    flex-shrink: 0;
+    color: var(--color-summary);
+}
+.navigationButton:hover,
+.collapse:hover {
+    background: var(--color-hover);
+}
+.navigationButton[aria-current="page"] {
+    background: var(--color-selected);
+    font-weight: 600;
+}
+.brand:focus-visible,
+.navigationButton:focus-visible,
+.collapse:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+}
+.sidebarBottom {
+    margin-top: auto;
+}
+.shell[data-collapsed="true"] .brandName,
+.shell[data-collapsed="true"] .navigationText {
+    display: none;
+}
+.shell[data-collapsed="true"] .brand,
+.shell[data-collapsed="true"] .navigationButton,
+.shell[data-collapsed="true"] .collapse {
+    justify-content: center;
+    gap: 0;
+}
+/* Expanded: Settings fills the row and the icon-only toggle sits at its right end. */
+.sidebarBottom {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.sidebarBottom .navigationButton {
+    flex: 1;
+    min-width: 0;
+}
+.collapse {
+    width: 44px;
+    flex-shrink: 0;
+    justify-content: center;
+    padding: 0;
+}
+/* Collapsed: stack vertically with the toggle above Settings, both centered. */
+.shell[data-collapsed="true"] .sidebarBottom {
+    flex-direction: column-reverse;
+    gap: 5px;
+}
+.content {
+    grid-column: 2;
+    grid-row: 2;
+    min-width: 0;
+    min-height: 0;
+    padding: var(--space-sm) var(--space-lg) var(--space-lg);
+    overflow: auto;
+}
+.pageHeading {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+}
+.planned {
+    max-width: 680px;
+    margin-top: var(--space-lg);
+    padding: var(--space-lg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    background: var(--color-surface);
+}
+.planned h2 {
+    margin: 0;
+    font-size: 0.875rem;
+}
+.planned p {
+    margin: var(--space-md) 0 0;
+    color: var(--color-summary);
+    line-height: 1.7;
+}
+.settings {
+    max-width: 680px;
+}
+.language {
+    padding: var(--space-lg) 0;
+}
+@media (max-width: 800px) {
+    .content {
+        padding: var(--space-sm) 20px 20px;
+    }
+}

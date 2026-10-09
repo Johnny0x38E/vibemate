@@ -1,122 +1,259 @@
-import { StrictMode } from "react";
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { StrictMode, type JSX, type ReactNode } from "react";
+import {
+    act,
+    cleanup,
+    fireEvent,
+    render as renderView,
+    screen,
+} from "@testing-library/react";
+import type { i18n } from "i18next";
+import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import App from "./App";
-import { type AppInfo, getAppInfo } from "./lib/desktop";
+import DesktopApp from "./App";
+import { createAppI18n } from "./i18n";
+import { LocaleStartup } from "./features/settings/LocaleStartup";
+import { LanguageSelector } from "./features/settings/LanguageSelector";
+import {
+    getLocalePreference,
+    saveLocalePreference,
+    SettingsRequestError,
+} from "./lib/desktop/settings";
+
+let translator: i18n;
+function render(element: ReactNode) {
+    // Keep StrictMode at the root, as in main.tsx. A nested-only StrictMode in
+    // React 19 does not replay initial effects when its parent is not strict.
+    return renderView(
+        <StrictMode>
+            <I18nextProvider i18n={translator}>{element}</I18nextProvider>
+        </StrictMode>,
+    );
+}
+
+// A concrete settings slot lets navigation tests observe preservation of a real
+// input. Native language persistence is covered by the startup/selector tests.
+function App(): JSX.Element {
+    return (
+        <DesktopApp
+            languageSettings={
+                <input aria-label="Unsubmitted note" defaultValue="Draft" />
+            }
+        />
+    );
+}
 
 // Replace only the desktop boundary; the component and React lifecycle remain real.
-vi.mock(import("./lib/desktop"), () => ({
-  getAppInfo: vi.fn<typeof getAppInfo>(),
+vi.mock(import("./lib/desktop/settings"), async (importOriginal) => ({
+    ...(await importOriginal()),
+    getLocalePreference: vi.fn<typeof getLocalePreference>(),
+    saveLocalePreference: vi.fn<typeof saveLocalePreference>(),
 }));
 
-beforeEach(() => {
-  vi.mocked(getAppInfo).mockReset();
+beforeEach(async () => {
+    vi.mocked(getLocalePreference)
+        .mockReset()
+        .mockResolvedValue({ kind: "desktop", preference: "en" });
+    vi.mocked(saveLocalePreference).mockReset();
+    translator = await createAppI18n("en");
 });
 
 afterEach(() => {
-  // Vitest globals are disabled, so cleanup is registered explicitly.
-  cleanup();
+    // Vitest globals are disabled, so cleanup is registered explicitly.
+    cleanup();
 });
 
-/** Hold a desktop response until the test chooses to complete it. */
-function pendingAppInfo(): {
-  promise: Promise<AppInfo | null>;
-  resolve: (value: AppInfo | null) => void;
-  reject: (error: Error) => void;
-} {
-  let resolveResponse: (value: AppInfo | null) => void = () => {
-    throw new Error("The pending response has not been initialized.");
-  };
-  let rejectResponse: (error: Error) => void = () => {
-    throw new Error("The pending response has not been initialized.");
-  };
-  const promise = new Promise<AppInfo | null>((resolve, reject) => {
-    // The executor runs synchronously, before these callbacks are returned.
-    resolveResponse = resolve;
-    rejectResponse = reject;
-  });
-  return { promise, resolve: resolveResponse, reject: rejectResponse };
+test("collapses navigation without losing accessible destinations or changing the current page", () => {
+    render(<App />);
+    const collapse = screen.getByRole("button", {
+        name: "Collapse navigation",
+    });
+    collapse.focus();
+    fireEvent.click(collapse);
+    expect(screen.getByRole("button", { name: "Expand navigation" })).toBe(
+        collapse,
+    );
+    expect(collapse.getAttribute("aria-expanded")).toBe("false");
+    expect(document.activeElement).toBe(collapse);
+    fireEvent.click(screen.getByRole("button", { name: "Providers" }));
+    expect(
+        screen
+            .getByRole("button", { name: "Providers" })
+            .getAttribute("aria-current"),
+    ).toBe("page");
+    expect(
+        screen.getByRole("heading", { name: "Not implemented" }),
+    ).toBeDefined();
+    fireEvent.click(collapse);
+    expect(collapse.getAttribute("aria-expanded")).toBe("true");
+    expect(
+        screen
+            .getByRole("button", { name: "Providers" })
+            .getAttribute("aria-current"),
+    ).toBe("page");
+});
+
+test("returns to the relationship home from both Overview and the brand", () => {
+    render(<App />);
+    const overview = screen.getByRole("button", { name: "Overview" });
+    expect(overview.getAttribute("aria-current")).toBe("page");
+    fireEvent.click(screen.getByRole("button", { name: "Providers" }));
+    expect(overview.getAttribute("aria-current")).toBeNull();
+    fireEvent.click(overview);
+    expect(overview.getAttribute("aria-current")).toBe("page");
+    expect(
+        screen.getByRole("main", { name: "Configuration overview" }),
+    ).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Agents" }));
+    fireEvent.click(
+        screen.getByRole("button", {
+            name: "vibemate · Configuration overview",
+        }),
+    );
+    expect(overview.getAttribute("aria-current")).toBe("page");
+});
+
+test("keeps every button and field outside the window drag regions", () => {
+    render(<App />);
+    const dragRegions = Array.from(
+        document.querySelectorAll("[data-tauri-drag-region]"),
+    );
+    const controls = Array.from(
+        document.querySelectorAll("button, input, select, textarea, a[href]"),
+    );
+    // Guard against a vacuous pass: the check is meaningless without both sides.
+    expect(dragRegions.length).toBeGreaterThan(0);
+    expect(controls.length).toBeGreaterThan(0);
+    // jsdom has no layout engine, so overlap is verified in the native window.
+    // Containment is still the rule that stops clicks from being swallowed.
+    const controlsInsideDragRegion = controls.filter((control) =>
+        dragRegions.some((region) => region.contains(control)),
+    );
+    expect(controlsInsideDragRegion).toEqual([]);
+});
+
+test("keeps the same settings input and appearance while navigating elsewhere", () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    const input = screen.getByRole("textbox", { name: "Unsubmitted note" });
+    fireEvent.change(input, { target: { value: "Still editing" } });
+    fireEvent.click(
+        screen.getByRole("button", {
+            name: "Appearance: Follow system; switch to Light",
+        }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Agents" }));
+    expect(screen.queryByRole("textbox")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    expect(screen.getByRole("textbox")).toBe(input);
+    expect(input).toHaveProperty("value", "Still editing");
+    expect(
+        screen.getByRole("button", {
+            name: "Appearance: Light; switch to Dark",
+        }),
+    ).toBeDefined();
+    expect(document.documentElement.dataset["appearance"]).toBe("light");
+});
+
+test("translates current navigation without resetting the selected page or collapse", async () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Skills" }));
+    fireEvent.click(
+        screen.getByRole("button", { name: "Collapse navigation" }),
+    );
+    await act(async () => {
+        await translator.changeLanguage("zh-CN");
+    });
+    expect(
+        screen
+            .getByRole("button", { name: "技能" })
+            .getAttribute("aria-current"),
+    ).toBe("page");
+    const expand = screen.getByRole("button", { name: "展开导航" });
+    expect(expand.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(expand);
+    expect(
+        screen
+            .getByRole("button", { name: "折叠导航" })
+            .getAttribute("aria-expanded"),
+    ).toBe("true");
+});
+
+function renderDesktopStartup() {
+    return render(
+        <LocaleStartup systemLanguage="zh-TW">
+            {(snapshot) => (
+                <DesktopApp
+                    languageSettings={<LanguageSelector {...snapshot} />}
+                />
+            )}
+        </LocaleStartup>,
+    );
 }
 
-test("replaces the loading status with desktop metadata when the request completes", async () => {
-  const response = pendingAppInfo();
-  vi.mocked(getAppInfo).mockReturnValue(response.promise);
-  render(<App />);
-
-  expect(screen.getByRole("status").textContent).toBe(
-    "Checking desktop runtime…",
-  );
-  await act(async () => {
-    response.resolve({ name: "vibemate", version: "0.1.0" });
-    await response.promise;
-  });
-  expect(screen.getByRole("status").textContent).toBe(
-    "vibemate 0.1.0 · Desktop runtime ready",
-  );
-});
-
-test("reports a failed desktop request without displaying the underlying error", async () => {
-  vi.mocked(getAppInfo).mockRejectedValue(
-    new Error("Synthetic private diagnostic"),
-  );
-  render(<App />);
-
-  await screen.findByText(
-    "Desktop metadata unavailable. Restart the app to retry.",
-  );
-  expect(screen.getByRole("status").textContent).toBe(
-    "Desktop metadata unavailable. Restart the app to retry.",
-  );
-  expect(screen.queryByText("Synthetic private diagnostic")).toBeNull();
-});
-
-test("reports browser preview when no desktop runtime is available", async () => {
-  vi.mocked(getAppInfo).mockResolvedValue(null);
-  render(<App />);
-
-  await screen.findByText("Browser preview · Desktop runtime unavailable");
-  expect(screen.getByRole("status").textContent).toBe(
-    "Browser preview · Desktop runtime unavailable",
-  );
-});
-
-test.each(["success", "failure"] as const)(
-  "keeps the current result when a cleaned-up request later settles with %s",
-  async (outcome) => {
-    const obsolete = pendingAppInfo();
-    const current = pendingAppInfo();
-    vi.mocked(getAppInfo)
-      .mockReturnValueOnce(obsolete.promise)
-      .mockReturnValueOnce(current.promise);
-
-    // StrictMode cleans up the first effect before starting it again. Both
-    // responses address the same visible component, so a missing guard is observable.
-    render(
-      <StrictMode>
-        <App />
-      </StrictMode>,
+test("keeps an uncertain language save blocked across navigation until a real selector reload reconciles it", async () => {
+    vi.mocked(saveLocalePreference).mockRejectedValue(
+        new SettingsRequestError("operation_failed"),
     );
-    await act(async () => {
-      current.resolve({ name: "vibemate", version: "0.1.0" });
-      await current.promise;
+    renderDesktopStartup();
+    fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
+    const selector = screen.getByRole("combobox", {
+        name: "Interface language",
     });
-    expect(screen.getByRole("status").textContent).toBe(
-      "vibemate 0.1.0 · Desktop runtime ready",
-    );
-
-    await act(async () => {
-      if (outcome === "success") {
-        obsolete.resolve({ name: "Obsolete", version: "0.0.9" });
-        await obsolete.promise;
-      } else {
-        obsolete.reject(new Error("Obsolete request failed"));
-        await expect(obsolete.promise).rejects.toThrow(
-          "Obsolete request failed",
-        );
-      }
+    fireEvent.change(selector, { target: { value: "zh-CN" } });
+    const reload = await screen.findByRole("button", {
+        name: "Reload saved preference",
     });
-    expect(screen.getByRole("status").textContent).toBe(
-      "vibemate 0.1.0 · Desktop runtime ready",
+    fireEvent.click(screen.getByRole("button", { name: "Providers" }));
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    expect(screen.getByRole("combobox")).toBe(selector);
+    expect(selector).toHaveProperty("disabled", true);
+    expect(
+        screen.getByRole("button", { name: "Reload saved preference" }),
+    ).toBe(reload);
+    vi.mocked(getLocalePreference).mockResolvedValue({
+        kind: "desktop",
+        preference: "zh-CN",
+    });
+    fireEvent.click(reload);
+    await screen.findByText("已重新读取保存的语言偏好。");
+    expect(screen.getByRole("combobox", { name: "界面语言" })).toHaveProperty(
+        "value",
+        "zh-CN",
     );
-  },
-);
+    expect(document.documentElement.lang).toBe("zh-CN");
+    expect(
+        screen
+            .getByRole("button", { name: "设置" })
+            .getAttribute("aria-current"),
+    ).toBe("page");
+});
+
+test("finishes a pending save while Settings is hidden and retains its confirmed choice on return", async () => {
+    let finishSave: (choice: "zh-CN") => void = () => {
+        throw new Error("Not initialized");
+    };
+    const pendingSave = new Promise<"zh-CN">((resolve) => {
+        finishSave = resolve;
+    });
+    vi.mocked(saveLocalePreference).mockReturnValue(pendingSave);
+    renderDesktopStartup();
+    fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
+    const selector = screen.getByRole("combobox");
+    fireEvent.change(selector, { target: { value: "zh-CN" } });
+    fireEvent.click(screen.getByRole("button", { name: "Providers" }));
+    await act(async () => {
+        finishSave("zh-CN");
+        await pendingSave;
+    });
+    expect(document.documentElement.lang).toBe("zh-CN");
+    expect(
+        screen
+            .getByRole("button", { name: "服务商" })
+            .getAttribute("aria-current"),
+    ).toBe("page");
+    fireEvent.click(screen.getByRole("button", { name: "设置" }));
+    expect(screen.getByRole("combobox")).toBe(selector);
+    expect(selector).toHaveProperty("value", "zh-CN");
+    expect(selector).toHaveProperty("disabled", false);
+    expect(screen.getByText("语言偏好已保存。")).toBeDefined();
+});

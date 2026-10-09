@@ -1,0 +1,760 @@
+<!doctype html>
+<html lang="zh-CN" data-appearance="system">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>vibemate · 桌面壳设计预览</title>
+        <style>
+            :root {
+                color-scheme: light;
+                --background: #f7f8f7;
+                --sidebar: #ecefec;
+                --surface: #ffffff;
+                --muted-surface: #f0f2f0;
+                --text: #202621;
+                --muted: #626d65;
+                --border: #d7ddd8;
+                --selected: #dce3dd;
+                --focus: #59685e;
+                font-family:
+                    -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+                font-synthesis: none;
+            }
+            @media (prefers-color-scheme: dark) {
+                :root:not([data-appearance="light"]) {
+                    color-scheme: dark;
+                    --background: #191d1a;
+                    --sidebar: #141815;
+                    --surface: #202622;
+                    --muted-surface: #252c27;
+                    --text: #e5eae6;
+                    --muted: #a1ada4;
+                    --border: #354038;
+                    --selected: #303b33;
+                    --focus: #b6c9bd;
+                }
+            }
+            :root[data-appearance="dark"] {
+                color-scheme: dark;
+                --background: #191d1a;
+                --sidebar: #141815;
+                --surface: #202622;
+                --muted-surface: #252c27;
+                --text: #e5eae6;
+                --muted: #a1ada4;
+                --border: #354038;
+                --selected: #303b33;
+                --focus: #b6c9bd;
+            }
+            * {
+                box-sizing: border-box;
+            }
+            body {
+                margin: 0;
+                color: var(--text);
+                background: var(--background);
+                font-size: 13px;
+            }
+            button,
+            select {
+                font: inherit;
+                color: inherit;
+            }
+            button {
+                cursor: pointer;
+            }
+            button:focus-visible,
+            select:focus-visible,
+            a:focus-visible {
+                outline: 2px solid var(--focus);
+                outline-offset: 3px;
+            }
+            .shell {
+                --sidebar-width: 188px;
+                display: grid;
+                grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+                grid-template-rows: minmax(0, 1fr);
+                height: 100dvh;
+                min-height: 560px;
+            }
+            .shell[data-collapsed="true"] {
+                --sidebar-width: 88px;
+            }
+            .shell[data-collapsed="true"] .brand-name,
+            .shell[data-collapsed="true"] .nav-text,
+            .shell[data-collapsed="true"] .preview-label {
+                display: none;
+            }
+            .shell[data-collapsed="true"] .brand,
+            .shell[data-collapsed="true"] .nav-button {
+                justify-content: center;
+                gap: 0;
+            }
+            .shell[data-collapsed="true"] .collapse-chevron {
+                transform: rotate(180deg);
+            }
+            .sidebar {
+                display: flex;
+                flex-direction: column;
+                background: var(--sidebar);
+                border-right: 1px solid var(--border);
+                padding: 0 12px 12px;
+            }
+            .native-controls {
+                height: 44px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding-left: 4px;
+            }
+            .native-controls span {
+                width: 12px;
+                height: 12px;
+                border-radius: 50%;
+                box-shadow: inset 0 0 0 1px #00000012;
+            }
+            .native-controls span:nth-child(1) {
+                background: #ff6058;
+            }
+            .native-controls span:nth-child(2) {
+                background: #febc2e;
+            }
+            .native-controls span:nth-child(3) {
+                background: #28c840;
+            }
+            .brand {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                border: 0;
+                background: none;
+                padding: 12px 6px 20px;
+                text-align: left;
+            }
+            .monogram {
+                display: grid;
+                place-items: center;
+                width: 32px;
+                height: 32px;
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                background: var(--surface);
+                font-size: 22px;
+                font-weight: 600;
+            }
+            .brand-name {
+                font-size: 17px;
+                font-weight: 650;
+                letter-spacing: -0.4px;
+            }
+            nav {
+                display: grid;
+                gap: 5px;
+            }
+            .nav-button {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                width: 100%;
+                min-height: 40px;
+                padding: 0 12px;
+                border: 1px solid transparent;
+                border-radius: 6px;
+                background: none;
+                text-align: left;
+            }
+            .nav-button:hover {
+                background: var(--muted-surface);
+            }
+            .nav-button[aria-current="page"] {
+                background: var(--selected);
+                font-weight: 600;
+            }
+            .nav-mark {
+                color: var(--muted);
+                font-size: 11px;
+                width: 14px;
+            }
+            .sidebar-bottom {
+                margin-top: auto;
+            }
+            .preview-label {
+                padding: 8px 12px 4px;
+                color: var(--muted);
+                font-size: 11px;
+            }
+            .workspace {
+                min-width: 0;
+                min-height: 0;
+            }
+            h1 {
+                font-size: 16px;
+                margin: 0;
+                font-weight: 600;
+            }
+            .content {
+                height: 100%;
+                overflow: auto;
+                padding: 24px;
+            }
+            .icon-button {
+                display: grid;
+                place-items: center;
+                width: 40px;
+                height: 40px;
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                background: var(--surface);
+            }
+            .icon-button:hover {
+                background: var(--muted-surface);
+            }
+            .icon {
+                width: 20px;
+                height: 20px;
+                fill: none;
+                stroke: currentColor;
+                stroke-width: 1.6;
+                stroke-linecap: round;
+                stroke-linejoin: round;
+                flex-shrink: 0;
+            }
+            .symbol-definitions {
+                display: none;
+            }
+            [hidden] {
+                display: none;
+            }
+            .section-head {
+                display: flex;
+                align-items: baseline;
+                justify-content: space-between;
+                flex-wrap: wrap;
+                gap: 8px;
+                margin-bottom: 16px;
+            }
+            h2 {
+                font-size: 13px;
+                margin: 0;
+                font-weight: 600;
+            }
+            .annotation {
+                font-size: 11px;
+                color: var(--muted);
+            }
+            .relationship {
+                margin: 0;
+                padding: 22px 16px 16px;
+                background: var(--surface);
+                border: 1px solid var(--border);
+                border-radius: 8px;
+            }
+            .provider-row,
+            .agent-row {
+                list-style: none;
+                padding: 0;
+                margin: 0;
+                display: grid;
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                gap: 12px;
+            }
+            .agent-row {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                margin: 0 48px;
+            }
+            .node {
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                gap: 6px;
+                text-align: center;
+                min-height: 54px;
+                padding: 8px;
+                border: 1px solid var(--border);
+                border-radius: 5px;
+                background: var(--muted-surface);
+                overflow-wrap: anywhere;
+            }
+            .node-name {
+                font-size: 12px;
+                font-weight: 500;
+            }
+            .node-state {
+                font-size: 10px;
+                color: var(--muted);
+            }
+            .connections {
+                display: block;
+                height: 34px;
+                width: 100%;
+                color: var(--border);
+            }
+            .connection-line {
+                stroke: currentColor;
+                stroke-width: 1.5;
+                fill: none;
+                stroke-dasharray: 4 4;
+                vector-effect: non-scaling-stroke;
+            }
+            .shared-row {
+                display: grid;
+                grid-template-columns: 70px minmax(0, 1fr) 70px;
+                gap: 16px;
+                align-items: center;
+            }
+            .application-point {
+                position: relative;
+                text-align: center;
+                padding: 12px 4px;
+                border-top: 4px solid var(--border);
+                font-size: 11px;
+                color: var(--muted);
+            }
+            .application-point::before,
+            .application-point::after {
+                content: "";
+                position: absolute;
+                width: 16px;
+                top: 14px;
+                border-top: 1px dashed var(--border);
+            }
+            .application-point::before {
+                left: -16px;
+            }
+            .application-point::after {
+                right: -16px;
+            }
+            figcaption {
+                margin-top: 16px;
+                text-align: center;
+                font-size: 11px;
+                color: var(--muted);
+                line-height: 1.6;
+            }
+            .statistics {
+                margin-top: 24px;
+            }
+            .reserved-area {
+                min-height: 100px;
+                display: grid;
+                place-content: center;
+                text-align: center;
+                gap: 8px;
+                border: 1px dashed var(--border);
+                border-radius: 6px;
+                color: var(--muted);
+            }
+            .reserved-area p {
+                margin: 0;
+                font-size: 12px;
+            }
+            .reserved-area .detail {
+                font-size: 11px;
+            }
+            .planned-view,
+            .settings-view {
+                max-width: 680px;
+            }
+            .planned-view p,
+            .settings-view p {
+                color: var(--muted);
+                line-height: 1.7;
+            }
+            .empty-panel {
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                background: var(--surface);
+                padding: 24px;
+                margin-top: 20px;
+            }
+            .empty-panel p {
+                margin-bottom: 0;
+            }
+            .settings-row {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto;
+                gap: 20px;
+                align-items: start;
+                padding: 20px 0;
+                border-bottom: 1px solid var(--border);
+            }
+            .settings-row p {
+                margin: 8px 0 0;
+                font-size: 12px;
+            }
+            .settings-row select {
+                min-height: 34px;
+                padding: 4px 8px;
+                border: 1px solid var(--border);
+                border-radius: 5px;
+                background: var(--surface);
+                max-width: 100%;
+            }
+            .settings-row select:disabled {
+                cursor: not-allowed;
+            }
+            .design-notice {
+                margin-top: 20px;
+                font-size: 11px;
+                color: var(--muted);
+                line-height: 1.6;
+            }
+            @media (max-width: 800px) {
+                .content {
+                    padding: 20px;
+                }
+                .relationship {
+                    padding: 18px 12px 14px;
+                }
+                .provider-row {
+                    gap: 8px;
+                }
+                .shared-row {
+                    grid-template-columns: 56px minmax(0, 1fr) 56px;
+                    gap: 12px;
+                }
+                .node {
+                    padding: 8px 4px;
+                }
+                .agent-row {
+                    margin: 0 24px;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <svg class="symbol-definitions" aria-hidden="true">
+            <symbol id="appearance-system" viewBox="0 0 24 24">
+                <rect x="3" y="4" width="18" height="13" rx="2" />
+                <path d="M12 17v4M8 21h8" />
+            </symbol>
+            <symbol id="appearance-light" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="4" />
+                <path
+                    d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.4 1.4M17.6 17.6L19 19M5 19l1.4-1.4M17.6 6.4L19 5"
+                />
+            </symbol>
+            <symbol id="appearance-dark" viewBox="0 0 24 24">
+                <path d="M20.5 14.2A9 9 0 0 1 9.8 3.5a9 9 0 1 0 10.7 10.7Z" />
+            </symbol>
+        </svg>
+        <div class="shell" data-collapsed="false">
+            <aside id="main-sidebar" class="sidebar" aria-label="应用侧栏">
+                <div
+                    class="native-controls"
+                    aria-hidden="true"
+                    title="macOS 原生窗控位置示意；此预览无法操作窗口"
+                >
+                    <span></span><span></span><span></span>
+                </div>
+                <button
+                    class="brand"
+                    data-view="home"
+                    aria-label="vibemate 配置概览"
+                    aria-current="page"
+                >
+                    <span class="monogram" aria-hidden="true">v</span>
+                    <span class="brand-name">vibemate</span>
+                </button>
+                <nav aria-label="配置导航">
+                    <button
+                        class="nav-button"
+                        data-view="providers"
+                        aria-label="Provider"
+                        title="Provider"
+                    >
+                        <span class="nav-mark" aria-hidden="true">P</span
+                        ><span class="nav-text">Provider</span>
+                    </button>
+                    <button
+                        class="nav-button"
+                        data-view="agents"
+                        aria-label="Agent"
+                        title="Agent"
+                    >
+                        <span class="nav-mark" aria-hidden="true">A</span
+                        ><span class="nav-text">Agent</span>
+                    </button>
+                    <button
+                        class="nav-button"
+                        data-view="skills"
+                        aria-label="Skills"
+                        title="Skills"
+                    >
+                        <span class="nav-mark" aria-hidden="true">S</span
+                        ><span class="nav-text">Skills</span>
+                    </button>
+                    <button
+                        class="nav-button"
+                        data-view="mcp"
+                        aria-label="MCPs"
+                        title="MCPs"
+                    >
+                        <span class="nav-mark" aria-hidden="true">M</span
+                        ><span class="nav-text">MCPs</span>
+                    </button>
+                </nav>
+                <div class="sidebar-bottom">
+                    <button
+                        id="collapse-navigation"
+                        class="nav-button"
+                        aria-label="折叠导航"
+                        title="折叠导航"
+                        aria-expanded="true"
+                        aria-controls="main-sidebar"
+                    >
+                        <svg
+                            class="icon collapse-chevron"
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                        >
+                            <path d="m14 6-6 6 6 6" />
+                        </svg>
+                        <span class="nav-text">折叠导航</span>
+                    </button>
+                    <button
+                        class="nav-button"
+                        data-view="settings"
+                        aria-label="Settings"
+                        title="Settings"
+                    >
+                        <span class="nav-mark" aria-hidden="true">⚙</span
+                        ><span class="nav-text">Settings</span>
+                    </button>
+                    <div class="preview-label">桌面壳 · 设计预览</div>
+                </div>
+            </aside>
+            <div class="workspace">
+                <main class="content" aria-label="配置概览">
+                    <section data-panel="home">
+                        <div class="section-head">
+                            <h2>配置关系</h2>
+                            <span class="annotation">未接入 · 结构示意</span>
+                        </div>
+                        <figure
+                            class="relationship"
+                            aria-label="Provider 在上，Agent 在下，两侧为共享 Skills 和 MCPs"
+                        >
+                            <ul
+                                class="provider-row"
+                                aria-label="计划中的 Provider"
+                            >
+                                <li class="node">
+                                    <span class="node-name"
+                                        >Command Code GOAT</span
+                                    ><span class="node-state">计划中</span>
+                                </li>
+                                <li class="node">
+                                    <span class="node-name">DeepSeek</span
+                                    ><span class="node-state">计划中</span>
+                                </li>
+                                <li class="node">
+                                    <span class="node-name">OpenRouter</span
+                                    ><span class="node-state">计划中</span>
+                                </li>
+                            </ul>
+                            <svg
+                                class="connections"
+                                viewBox="0 0 300 34"
+                                preserveAspectRatio="none"
+                                aria-hidden="true"
+                            >
+                                <path
+                                    class="connection-line"
+                                    d="M50 0V17H150V34 M150 0V34 M250 0V17H150"
+                                />
+                            </svg>
+                            <div class="shared-row">
+                                <div class="node">
+                                    <span class="node-name">Skills</span
+                                    ><span class="node-state">计划中</span>
+                                </div>
+                                <div class="application-point">
+                                    配置应用关系
+                                </div>
+                                <div class="node">
+                                    <span class="node-name">MCPs</span
+                                    ><span class="node-state">计划中</span>
+                                </div>
+                            </div>
+                            <svg
+                                class="connections"
+                                viewBox="0 0 300 34"
+                                preserveAspectRatio="none"
+                                aria-hidden="true"
+                            >
+                                <path
+                                    class="connection-line"
+                                    d="M150 0V17H80V34 M150 17H220V34"
+                                />
+                            </svg>
+                            <ul class="agent-row" aria-label="计划中的 Agent">
+                                <li class="node">
+                                    <span class="node-name">Pi</span
+                                    ><span class="node-state">计划中</span>
+                                </li>
+                                <li class="node">
+                                    <span class="node-name">Grok Build</span
+                                    ><span class="node-state">计划中</span>
+                                </li>
+                            </ul>
+                            <figcaption>
+                                虚线仅表示未来配置关系，不表示已连接或已应用。
+                            </figcaption>
+                        </figure>
+                        <section
+                            class="statistics"
+                            aria-labelledby="statistics-title"
+                        >
+                            <div class="section-head">
+                                <h2 id="statistics-title">统计展示区</h2>
+                                <span class="annotation">预留</span>
+                            </div>
+                            <div class="reserved-area">
+                                <p>统计功能尚未实现</p>
+                                <p class="detail">
+                                    这里只固定布局，不展示虚构的用量或连接数量。
+                                </p>
+                            </div>
+                        </section>
+                    </section>
+                    <section data-panel="planned" class="planned-view" hidden>
+                        <h1 id="planned-title">Provider</h1>
+                        <div class="empty-panel">
+                            <h2>功能尚未实现</h2>
+                            <p>
+                                此屏只演示侧栏导航与桌面布局，不提供新增、连接或配置应用操作。
+                            </p>
+                        </div>
+                    </section>
+                    <section data-panel="settings" class="settings-view" hidden>
+                        <h1>通用设置</h1>
+                        <div class="settings-row">
+                            <div>
+                                <label for="language">界面语言</label>
+                                <p id="language-note">
+                                    实际应用将保留 P08 的 Rust
+                                    持久化与失败重试。此设计预览不能保存偏好。
+                                </p>
+                            </div>
+                            <select
+                                id="language"
+                                disabled
+                                aria-describedby="language-note"
+                            >
+                                <option>跟随系统</option>
+                                <option>简体中文</option>
+                                <option>English</option>
+                            </select>
+                        </div>
+                        <div class="settings-row">
+                            <div>
+                                <h2>外观</h2>
+                                <p id="appearance-status" role="status">
+                                    当前外观：跟随系统。
+                                </p>
+                                <p>
+                                    点击图标按跟随系统、浅色、深色轮换；预览不保存偏好。
+                                </p>
+                            </div>
+                            <button
+                                id="appearance"
+                                class="icon-button"
+                                aria-label="外观：跟随系统；点击切换为浅色"
+                                title="跟随系统 → 浅色"
+                                aria-describedby="appearance-status"
+                            >
+                                <svg class="icon" aria-hidden="true">
+                                    <use href="#appearance-system" />
+                                </svg>
+                            </button>
+                        </div>
+                    </section>
+                    <p class="design-notice">
+                        仅供设计确认。红黄绿为原生窗口按钮的位置示意；实际窗口拖动、缩放与关闭将在
+                        Tauri 中单独实现和验收。
+                    </p>
+                </main>
+            </div>
+        </div>
+        <script>
+            // This local design artifact has no desktop APIs, network calls, or persistence.
+            const titles = {
+                home: "配置概览",
+                providers: "Provider",
+                agents: "Agent",
+                skills: "Skills",
+                mcp: "MCPs",
+                settings: "Settings",
+            };
+            document.querySelectorAll("[data-view]").forEach((button) => {
+                button.addEventListener("click", () => {
+                    const view = button.dataset.view;
+                    document
+                        .querySelectorAll("[data-view]")
+                        .forEach((item) =>
+                            item.removeAttribute("aria-current"),
+                        );
+                    button.setAttribute("aria-current", "page");
+                    document
+                        .querySelector(".content")
+                        .setAttribute("aria-label", titles[view]);
+                    document.getElementById("planned-title").textContent =
+                        titles[view];
+                    const panel =
+                        view === "home" || view === "settings"
+                            ? view
+                            : "planned";
+                    document
+                        .querySelectorAll("[data-panel]")
+                        .forEach((section) => {
+                            section.hidden = section.dataset.panel !== panel;
+                        });
+                    document.querySelector(".content").scrollTop = 0;
+                });
+            });
+            const shell = document.querySelector(".shell");
+            const collapseButton = document.getElementById(
+                "collapse-navigation",
+            );
+            collapseButton.addEventListener("click", () => {
+                const collapsed = shell.dataset.collapsed !== "true";
+                shell.dataset.collapsed = String(collapsed);
+                collapseButton.setAttribute(
+                    "aria-expanded",
+                    String(!collapsed),
+                );
+                const label = collapsed ? "展开导航" : "折叠导航";
+                collapseButton.setAttribute("aria-label", label);
+                collapseButton.title = label;
+                collapseButton.querySelector(".nav-text").textContent = label;
+            });
+
+            const appearances = ["system", "light", "dark"];
+            const appearanceNames = {
+                system: "跟随系统",
+                light: "浅色",
+                dark: "深色",
+            };
+            const appearanceButton = document.getElementById("appearance");
+            let appearanceIndex = 0;
+            appearanceButton.addEventListener("click", () => {
+                appearanceIndex = (appearanceIndex + 1) % appearances.length;
+                const mode = appearances[appearanceIndex];
+                const nextMode =
+                    appearances[(appearanceIndex + 1) % appearances.length];
+                document.documentElement.dataset.appearance = mode;
+                appearanceButton
+                    .querySelector("use")
+                    .setAttribute("href", `#appearance-${mode}`);
+                appearanceButton.setAttribute(
+                    "aria-label",
+                    `外观：${appearanceNames[mode]}；点击切换为${appearanceNames[nextMode]}`,
+                );
+                appearanceButton.title = `${appearanceNames[mode]} → ${appearanceNames[nextMode]}`;
+                document.getElementById("appearance-status").textContent =
+                    `当前外观：${appearanceNames[mode]}。`;
+            });
+        </script>
+    </body>
+</html>

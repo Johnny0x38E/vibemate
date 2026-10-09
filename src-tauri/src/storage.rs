@@ -40,10 +40,21 @@ pub struct Migration {
 ///
 /// Version 1 only marks the database as versioned. Business tables arrive with
 /// the task that first needs them; each new migration appends one version.
-const MIGRATIONS: &[Migration] = &[Migration {
-    version: 1,
-    sql: "",
-}];
+const MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 1,
+        sql: "",
+    },
+    Migration {
+        version: 2,
+        // A singleton table makes the only current preference explicit instead of
+        // introducing an unvalidated key/value settings store before it is needed.
+        sql: "CREATE TABLE locale_preference (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            preference TEXT NOT NULL CHECK (preference IN ('system', 'zh-CN', 'en'))
+        ) STRICT;",
+    },
+];
 
 /// Errors from opening or migrating the private database.
 ///
@@ -167,7 +178,7 @@ impl Storage {
     /// A poisoned lock means another thread panicked while using the connection.
     /// The app then refuses further database work instead of continuing with an
     /// operation that may have stopped halfway.
-    fn lock(&self) -> Result<MutexGuard<'_, Connection>, StorageError> {
+    pub(crate) fn lock(&self) -> Result<MutexGuard<'_, Connection>, StorageError> {
         self.connection
             .lock()
             .map_err(|_| StorageError::Unavailable)

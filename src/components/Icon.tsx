@@ -1,0 +1,109 @@
+import type { JSX, ReactNode } from "react";
+
+/** Small decorative icons shared by navigation and appearance controls. */
+export type IconName =
+    | "home"
+    | "providers"
+    | "agents"
+    | "skills"
+    | "mcp"
+    | "settings"
+    | "collapse"
+    | "system"
+    | "light"
+    | "dark";
+
+/** Render an inline SVG; the containing control must provide its accessible name. */
+export function Icon({ name }: { name: IconName }): JSX.Element {
+    let content: ReactNode;
+    switch (name) {
+        case "home":
+            content = <path d="m3 10 9-7 9 7v10H3Zm6 10v-7h6v7" />;
+            break;
+        case "providers":
+            content = (
+                <>
+                    <rect x="3" y="4" width="18" height="7" rx="2" />
+                    <rect x="3" y="14" width="18" height="7" rx="2" />
+                    <path d="M7 7.5h.01M7 17.5h.01" />
+                </>
+            );
+            break;
+        case "agents":
+            content = (
+                <>
+                    <rect x="4" y="6" width="16" height="14" rx="3" />
+                    <path d="M12 3v3M8 11h.01M16 11h.01M8 16h8" />
+                </>
+            );
+            break;
+        case "skills":
+            content = (
+                <>
+                    <path d="m12 3 9 5-9 5-9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5" />
+                </>
+            );
+            break;
+        case "mcp":
+            content = (
+                <>
+                    <rect x="2" y="8" width="6" height="8" rx="1" />
+                    <rect x="16" y="8" width="6" height="8" rx="1" />
+                    <path d="M8 12h8" />
+                </>
+            );
+            break;
+        case "settings":
+            content = (
+                <>
+                    <circle cx="12" cy="12" r="3" />
+                    <path d="m10 3-1 3-3 1-3-1-1 4 2 2-2 2 1 4 3-1 3 1 1 3h4l1-3 3-1 3 1 1-4-2-2 2-2-1-4-3 1-3-1-1-3Z" />
+                </>
+            );
+            break;
+        case "collapse":
+            content = (
+                <>
+                    <rect x="3" y="4" width="18" height="16" rx="2" />
+                    <path d="M9 4v16" />
+                </>
+            );
+            break;
+        case "system":
+            content = (
+                <>
+                    <rect x="3" y="4" width="18" height="13" rx="2" />
+                    <path d="M12 17v4M8 21h8" />
+                </>
+            );
+            break;
+        case "light":
+            content = (
+                <>
+                    <circle cx="12" cy="12" r="4" />
+                    <path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.4 1.4M17.6 17.6L19 19M5 19l1.4-1.4M17.6 6.4L19 5" />
+                </>
+            );
+            break;
+        case "dark":
+            content = (
+                <path d="M20.5 14.2A9 9 0 0 1 9.8 3.5a9 9 0 1 0 10.7 10.7Z" />
+            );
+            break;
+    }
+    return (
+        <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+        >
+            {content}
+        </svg>
+    );
+}

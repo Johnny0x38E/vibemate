@@ -1,0 +1,82 @@
+.selector {
+    display: grid;
+    gap: var(--space-sm);
+    max-width: 36rem;
+    color: var(--color-text);
+}
+
+.label {
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.select,
+.retry {
+    min-height: 44px;
+    max-width: 100%;
+    padding: var(--space-sm) var(--space-md);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    color: var(--color-text);
+    background: var(--color-surface);
+    font: inherit;
+}
+
+.field {
+    position: relative;
+    width: min(100%, 20rem);
+}
+
+.field::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    right: var(--space-md);
+    width: 7px;
+    height: 7px;
+    border-right: 1.6px solid var(--color-summary);
+    border-bottom: 1.6px solid var(--color-summary);
+    transform: translateY(-70%) rotate(45deg);
+    pointer-events: none;
+}
+
+.select {
+    appearance: none;
+    width: 100%;
+    height: 44px;
+    padding-block: 0;
+    padding-inline-end: 40px;
+    cursor: pointer;
+}
+
+.select:hover:not(:disabled),
+.retry:hover:not(:disabled) {
+    background: var(--color-hover);
+}
+
+.select:focus-visible,
+.retry:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 3px;
+}
+
+.select:disabled,
+.retry:disabled {
+    color: var(--color-summary);
+    cursor: not-allowed;
+}
+
+.message {
+    margin: 0;
+    color: var(--color-summary);
+    font-size: 0.875rem;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+
+.retry {
+    justify-self: start;
+    white-space: normal;
+    text-align: start;
+    cursor: pointer;
+}

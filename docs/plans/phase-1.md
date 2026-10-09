@@ -13,8 +13,8 @@
 
 ## Current state
 
-The desktop scaffold, read-only version command, documentation, and CI workflow
-are present. All provider and agent integrations remain unimplemented.
+The desktop scaffold, read-only version command, documentation, CI workflow,
+and changelog-driven draft release workflow are present. All provider and agent integrations remain unimplemented.
 No credentials have been collected and no agent configuration has been changed.
 
 ## Implementation order

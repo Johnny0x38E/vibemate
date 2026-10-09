@@ -10,7 +10,8 @@
     "tauri": "tauri",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "test:release": "node --test scripts/release-notes.test.mjs"
   },
   "dependencies": {
     "react": "^19.1.0",

@@ -111,6 +111,13 @@ follow, debug, and extend.
 - Add meaningful tests for config preservation, protocol mapping, credentials,
   rollback, and platform-specific behavior as these features are implemented.
   Do not add tests that merely assert a static label or duplicate the code.
+- Maintain `CHANGELOG.md` in English. Keep pending changes under `Unreleased`;
+  stable release notes use `## [X.Y.Z] - YYYY-MM-DD`. Tag releases as `vX.Y.Z`.
+  GitHub Release bodies must come from that version entry, not the whole file
+  or automatically generated commit summaries. See `docs/releases.md`.
+- Keep GitHub CI and the tag-triggered release workflow working. Validate version
+  agreement and changelog content before uploads. Keep releases as drafts until
+  all target builds succeed and assets are reviewed.
 - Keep GitHub Actions CI working on macOS, Windows, and Linux. Local macOS
   verification does not prove native Windows or Linux behavior.
 - Keep documentation and dependency license choices compatible with MIT.

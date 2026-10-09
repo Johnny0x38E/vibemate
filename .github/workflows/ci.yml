@@ -26,6 +26,7 @@ jobs:
       - run: npm ci
       - run: npm run format:check
       - run: npm run typecheck
+      - run: npm run test:release
       - run: npm run build
 
   desktop:

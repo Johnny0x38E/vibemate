@@ -43,5 +43,6 @@ The initial screen makes one read-only call from React to Rust to display the
 application version. It does not read or modify any agent configuration.
 
 GitHub Actions runs frontend checks and native Rust checks/builds on all three
-platforms after this repository is pushed to GitHub. Release signing and
-installer publication will be added separately.
+platforms after this repository is pushed to GitHub. Installer builds are defined in `.github/workflows/release.yml`: a stable version
+tag creates a draft with notes from `CHANGELOG.md`. See
+[`docs/releases.md`](docs/releases.md). OS signing is not configured yet.

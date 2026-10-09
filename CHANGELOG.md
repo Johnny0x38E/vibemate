@@ -17,7 +17,7 @@ GitHub release notes are extracted from the matching version section only.
 
 ### Added
 
-- Added a private SQLite configuration database in the app-data folder. It records a schema version, upgrades inside transactions, and stops startup with a safe message if it cannot be opened or upgraded.
+- Added a private SQLite configuration database in the app-data folder. It records a schema version and upgrades inside transactions. If it cannot be opened or upgraded, the app still opens, logs a safe reason, and leaves the file unchanged for later recovery.
 
 - Added UI behavior tests for desktop metadata loading, safe error feedback, browser preview, and effect cleanup; included them in frontend checks.
 

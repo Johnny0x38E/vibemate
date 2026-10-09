@@ -4,24 +4,44 @@ mod commands;
 pub mod credentials;
 pub mod storage;
 
+use std::io::Write;
+
 use tauri::Manager;
 
 /// Start the desktop runtime, open private storage, and register UI commands.
 ///
-/// Tauri owns the window and event loop. Startup stops if the private database
-/// cannot be opened or upgraded, because configuration features cannot work
-/// safely without it. Tauri reports the returned error.
+/// The window opens even when private storage is unavailable. The storage outcome
+/// stays in managed state, so commands can report it and a later backup restore can
+/// rebuild the database. Only a failure of Tauri itself stops the process.
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
             // The database lives in the platform app-data folder, never in the project.
-            let data_directory = app.path().app_data_dir()?;
-            let storage = storage::Storage::open_in_directory(&data_directory)?;
-            // Managed state is shared by all commands; `Storage` serializes its own access.
-            app.manage(storage);
+            let status = match app.path().app_data_dir() {
+                Ok(data_directory) => storage::StorageStatus::open_in_directory(&data_directory),
+                Err(error) => {
+                    report_startup_problem(&format!(
+                        "vibemate could not locate its app-data folder: {error}"
+                    ));
+                    storage::StorageStatus::Unavailable(storage::StorageError::LocateDataDirectory)
+                }
+            };
+            if let Err(error) = status.storage() {
+                report_startup_problem(&error.to_string());
+            }
+            // Managed state is shared by all commands; `StorageStatus` is safe across threads.
+            app.manage(status);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![commands::get_app_info])
         .run(tauri::generate_context!())
         .expect("failed to start vibemate desktop runtime");
+}
+
+/// Write a startup problem to stderr so a developer running from a terminal can see it.
+///
+/// Writing is best effort. A GUI launch may have no terminal, and a failed log line
+/// must not stop the app. Messages must never contain secrets.
+fn report_startup_problem(message: &str) {
+    let _ = writeln!(std::io::stderr(), "{message}");
 }

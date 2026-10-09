@@ -53,6 +53,8 @@ const MIGRATIONS: &[Migration] = &[Migration {
 pub enum StorageError {
     /// The app-data folder could not be created.
     DataDirectory(std::io::Error),
+    /// Tauri could not resolve the app-data folder, so no database path exists.
+    LocateDataDirectory,
     /// SQLite could not open the file or read its schema version.
     Database(rusqlite::Error),
     /// A migration failed and rolled back; the database stays at the previous version.
@@ -72,6 +74,8 @@ impl std::fmt::Display for StorageError {
             Self::DataDirectory(_) => {
                 formatter.write_str("vibemate could not create its private data folder.")
             }
+            Self::LocateDataDirectory => formatter
+                .write_str("vibemate could not find its private data folder on this device."),
             Self::Database(_) => {
                 formatter.write_str("vibemate could not open its private configuration database.")
             }
@@ -95,7 +99,7 @@ impl std::error::Error for StorageError {
         match self {
             Self::DataDirectory(error) => Some(error),
             Self::Database(error) | Self::MigrationFailed { source: error, .. } => Some(error),
-            Self::NewerSchema { .. } | Self::Unavailable => None,
+            Self::LocateDataDirectory | Self::NewerSchema { .. } | Self::Unavailable => None,
         }
     }
 }
@@ -167,6 +171,41 @@ impl Storage {
         self.connection
             .lock()
             .map_err(|_| StorageError::Unavailable)
+    }
+}
+
+/// The outcome of opening private storage at startup.
+///
+/// The app opens even when storage is unavailable. Keeping the failure in managed
+/// state lets commands report it, and lets a later backup restore rebuild the
+/// database, instead of hiding the whole window. Opening never deletes, renames,
+/// or rewrites a file that cannot be read.
+pub enum StorageStatus {
+    /// The database is open and at the current schema version.
+    Ready(Storage),
+    /// The database could not be opened or upgraded. The file was left unchanged.
+    Unavailable(StorageError),
+}
+
+impl StorageStatus {
+    /// Open the database in `directory` and keep the outcome instead of returning an error.
+    pub fn open_in_directory(directory: &Path) -> Self {
+        match Storage::open_in_directory(directory) {
+            Ok(storage) => Self::Ready(storage),
+            Err(error) => Self::Unavailable(error),
+        }
+    }
+
+    /// Borrow the open database, or the reason it could not be opened.
+    ///
+    /// # Errors
+    ///
+    /// Returns the stored `StorageError` when the database is unavailable.
+    pub fn storage(&self) -> Result<&Storage, &StorageError> {
+        match self {
+            Self::Ready(storage) => Ok(storage),
+            Self::Unavailable(error) => Err(error),
+        }
     }
 }
 
@@ -384,10 +423,24 @@ mod tests {
     }
 
     #[test]
-    fn storage_can_be_shared_between_threads() {
-        // Tauri stores managed state across threads. This stops compiling if the
-        // storage wrapper loses `Send` or `Sync`.
+    fn unreadable_database_is_reported_and_left_unchanged() {
+        let directory = TestDirectory::new("unreadable");
+        let path = directory.path.join(DATABASE_FILE_NAME);
+        let original = b"this file is not a SQLite database".to_vec();
+        fs::write(&path, &original).expect("write unreadable file");
+
+        // Startup must still produce a status, so the window can open.
+        let status = StorageStatus::open_in_directory(&directory.path);
+
+        assert!(matches!(status.storage(), Err(StorageError::Database(_))));
+        assert_eq!(fs::read(&path).expect("read file back"), original);
+    }
+
+    #[test]
+    fn storage_status_can_be_shared_between_threads() {
+        // Tauri stores the status as managed state across threads. This stops compiling
+        // if the status, or the storage it wraps, loses `Send` or `Sync`.
         fn assert_send_sync<T: Send + Sync>() {}
-        assert_send_sync::<Storage>();
+        assert_send_sync::<StorageStatus>();
     }
 }

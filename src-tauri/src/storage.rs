@@ -13,7 +13,7 @@ use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
 
-use rusqlite::Connection;
+use rusqlite::{Connection, TransactionBehavior};
 
 /// File name of the database inside the app-data folder.
 const DATABASE_FILE_NAME: &str = "vibemate.sqlite3";
@@ -214,37 +214,61 @@ impl StorageStatus {
 /// The current version comes from SQLite's `user_version` header field. A version
 /// above the newest migration in this build means a newer app wrote the file.
 /// Refusing to touch it avoids guessing at tables this build does not understand.
+///
+/// This migrator is intentionally small: the tests cover rollback, refusal of newer
+/// files, and concurrent openers. Consider a migration crate only if the project
+/// needs down migrations or Rust-side data rewrites.
 fn apply_migrations(
     connection: &mut Connection,
     migrations: &[Migration],
 ) -> Result<(), StorageError> {
-    let current = read_schema_version(connection)?;
     let supported = latest_version(migrations);
+    // Check before changing anything, so a newer file is untouched even when no
+    // migration is pending.
+    let current = read_schema_version(connection)?;
     if current > supported {
         return Err(StorageError::NewerSchema {
             found: current,
             supported,
         });
     }
-    for migration in migrations
-        .iter()
-        .filter(|migration| migration.version > current)
-    {
-        apply_one(connection, *migration)?;
+    // Each step re-reads the version under its own write lock; see `apply_one`.
+    for migration in migrations {
+        apply_one(connection, *migration, supported)?;
     }
     Ok(())
 }
 
-/// Run one migration and record its version in the same transaction.
+/// Run one migration unless the database already reached its version.
 ///
-/// `transaction()` starts a transaction that rolls back when dropped without
-/// `commit`. Every `?` below therefore leaves the database unchanged on failure.
-fn apply_one(connection: &mut Connection, migration: Migration) -> Result<(), StorageError> {
+/// The version is read inside an immediate transaction. SQLite takes the write lock
+/// when such a transaction starts, so a second app instance waits here (see
+/// `BUSY_TIMEOUT`) and then sees the upgrade that the first instance committed.
+/// Reading the version before taking the lock could let two instances run the same
+/// `CREATE TABLE`. A failing `?` drops the transaction, which rolls back this step.
+fn apply_one(
+    connection: &mut Connection,
+    migration: Migration,
+    supported: u32,
+) -> Result<(), StorageError> {
     let failed = |source: rusqlite::Error| StorageError::MigrationFailed {
         version: migration.version,
         source,
     };
-    let transaction = connection.transaction().map_err(failed)?;
+    let transaction = connection
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(StorageError::Database)?;
+    let current = read_schema_version(&transaction)?;
+    if current > supported {
+        return Err(StorageError::NewerSchema {
+            found: current,
+            supported,
+        });
+    }
+    if current >= migration.version {
+        // Another app instance, or an earlier run, already applied this version.
+        return Ok(());
+    }
     transaction.execute_batch(migration.sql).map_err(failed)?;
     // `user_version` is stored in the database header, so this update commits with
     // the schema change instead of becoming visible on its own.
@@ -270,6 +294,7 @@ fn latest_version(migrations: &[Migration]) -> u32 {
 mod tests {
     use super::*;
     use std::path::PathBuf;
+    use std::sync::Barrier;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     /// A unique folder under the system temp directory, removed when the test ends.
@@ -412,6 +437,77 @@ mod tests {
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .expect("read version");
         assert_eq!(version, 9);
+    }
+
+    #[test]
+    fn upgrade_applies_each_missing_version_and_keeps_existing_rows() {
+        let directory = TestDirectory::new("multi-step");
+        let path = directory.path.join(DATABASE_FILE_NAME);
+        let first = Migration {
+            version: 1,
+            sql: "CREATE TABLE sample (value TEXT NOT NULL); INSERT INTO sample (value) VALUES ('kept');",
+        };
+        let second = Migration {
+            version: 2,
+            sql: "ALTER TABLE sample ADD COLUMN note TEXT;",
+        };
+        let third = Migration {
+            version: 3,
+            sql: "CREATE TABLE later (id INTEGER PRIMARY KEY);",
+        };
+        Storage::open_file(&path, &[first]).expect("open at version 1");
+
+        let storage =
+            Storage::open_file(&path, &[first, second, third]).expect("upgrade to version 3");
+
+        assert_eq!(storage.schema_version().expect("read version"), 3);
+        assert_eq!(read_sample_value(&storage), "kept");
+        let connection = storage.lock().expect("lock test connection");
+        let later_tables: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE name = 'later'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("count later table");
+        assert_eq!(later_tables, 1);
+    }
+
+    #[test]
+    fn concurrent_openers_apply_each_migration_exactly_once() {
+        let directory = TestDirectory::new("concurrent");
+        let path = directory.path.join(DATABASE_FILE_NAME);
+        // Applying this twice would fail on CREATE TABLE, and the row count would double.
+        let migrations = [Migration {
+            version: 1,
+            sql: "CREATE TABLE sample (value TEXT NOT NULL); INSERT INTO sample (value) VALUES ('once');",
+        }];
+        let barrier = Barrier::new(4);
+
+        // Four threads open the same file at the same moment, like four app instances.
+        let opened: Vec<bool> = std::thread::scope(|scope| {
+            let handles: Vec<_> = (0..4)
+                .map(|_| {
+                    scope.spawn(|| {
+                        barrier.wait();
+                        Storage::open_file(&path, &migrations).is_ok()
+                    })
+                })
+                .collect();
+            handles
+                .into_iter()
+                .map(|handle| handle.join().expect("opener thread finished"))
+                .collect()
+        });
+
+        assert!(opened.iter().all(|succeeded| *succeeded));
+        let storage = Storage::open_file(&path, &migrations).expect("reopen after the race");
+        assert_eq!(storage.schema_version().expect("read version"), 1);
+        let connection = storage.lock().expect("lock test connection");
+        let rows: i64 = connection
+            .query_row("SELECT COUNT(*) FROM sample", [], |row| row.get(0))
+            .expect("count sample rows");
+        assert_eq!(rows, 1);
     }
 
     #[test]

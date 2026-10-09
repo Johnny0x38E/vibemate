@@ -1,19 +1,19 @@
 [
   {
     "label": "vibemate: Desktop development",
-    "command": "npm",
-    "args": ["run", "tauri", "--", "dev"],
+    "command": "pnpm",
+    "args": ["run", "tauri", "dev"],
     "cwd": "$ZED_WORKTREE_ROOT"
   },
   {
     "label": "vibemate: Frontend preview",
-    "command": "npm",
+    "command": "pnpm",
     "args": ["run", "dev"],
     "cwd": "$ZED_WORKTREE_ROOT"
   },
   {
     "label": "vibemate: Check frontend",
-    "command": "npm",
+    "command": "pnpm",
     "args": ["run", "check:frontend"],
     "cwd": "$ZED_WORKTREE_ROOT"
   },
@@ -46,8 +46,8 @@
   },
   {
     "label": "vibemate: Build desktop",
-    "command": "npm",
-    "args": ["run", "tauri", "build", "--", "--no-bundle", "--", "--locked"],
+    "command": "pnpm",
+    "args": ["run", "tauri", "build", "--no-bundle", "--", "--locked"],
     "cwd": "$ZED_WORKTREE_ROOT"
   }
 ]

@@ -42,7 +42,7 @@ integration must never appear as connected or supported in the interface.
   version. Do not use Tauri 1 configuration, permissions, or plugin examples.
   Evaluate future stable major releases before migrating and verify platform
   support and API changes.
-- Keep Cargo and npm lockfiles for reproducible dependency resolution. Broad
+- Keep Cargo and pnpm lockfiles for reproducible dependency resolution. Broad
   version ranges do not update locked dependencies automatically. Check official
   releases when adding/updating dependencies, update compatible stable versions,
   and run the relevant checks. Keep Rust/JS Tauri packages compatible; their
@@ -111,13 +111,13 @@ checks in CI and Release Actions; do not weaken them to bypass a failure.
 
 ## Verification and open source
 
-- Use npm and Cargo; commit both application lockfiles.
-- Frontend: `npm run check:frontend` (formatting, lint, both TypeScript configs,
+- Use pnpm and Cargo; commit both application lockfiles.
+- Frontend: `pnpm run check:frontend` (formatting, lint, both TypeScript configs,
   release-tool tests, and build). Keep ESLint warnings at zero.
 - Rust: `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check`,
   `cargo clippy --manifest-path src-tauri/Cargo.toml --locked --all-targets -- -D warnings`,
   and `cargo test --manifest-path src-tauri/Cargo.toml --locked`.
-- Desktop build: `npm run tauri build -- --no-bundle -- --locked`.
+- Desktop build: `pnpm run tauri build --no-bundle -- --locked`.
 - Add meaningful tests for config preservation, protocol mapping, credentials,
   rollback, and platform-specific behavior as these features are implemented.
   Do not add tests that merely assert a static label or duplicate the code.

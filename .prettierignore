@@ -4,5 +4,5 @@ src-tauri/target/
 src-tauri/gen/
 *.rs
 Cargo.lock
-package-lock.json
+pnpm-lock.yaml
 .codegraph/

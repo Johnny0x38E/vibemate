@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "npm run typecheck && vite build",
+    "build": "pnpm run typecheck && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
@@ -14,8 +14,8 @@
     "test:release": "node --test scripts/release-notes.test.mjs",
     "lint:code": "eslint src vite.config.ts eslint.config.mjs scripts --max-warnings 0 --no-inline-config",
     "lint:a11y": "oxlint --config .oxlintrc.json --deny-warnings src",
-    "lint": "npm run lint:code && npm run lint:a11y",
-    "check:frontend": "npm run format:check && npm run lint && npm run test:release && npm run build"
+    "lint": "pnpm run lint:code && pnpm run lint:a11y",
+    "check:frontend": "pnpm run format:check && pnpm run lint && pnpm run test:release && pnpm run build"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
@@ -37,11 +37,13 @@
     "prettier": "^3.6.2",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.71.1",
-    "vite": "^8.0.16"
+    "vite": "^8.0.16",
+    "yaml": "2.9.1"
   },
   "description": "A desktop configuration manager for coding agents.",
   "license": "MIT",
   "engines": {
     "node": ">=24.0.0"
-  }
+  },
+  "packageManager": "pnpm@12.10.1"
 }

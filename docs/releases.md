@@ -7,11 +7,14 @@
 ## Prepare a stable version
 
 1. Update the version in `package.json`, `src-tauri/Cargo.toml`, and
-   `src-tauri/tauri.conf.json`. Refresh and commit both lockfiles.
+   `src-tauri/tauri.conf.json`. Run `pnpm install --frozen-lockfile` to verify
+   JavaScript dependencies and refresh Cargo.lock after changing the Rust package version.
+   Commit `pnpm-lock.yaml` and `src-tauri/Cargo.lock`. The pnpm lockfile records
+   dependencies, not the application version.
 2. Move the ready changes into `## [X.Y.Z] - YYYY-MM-DD` in `CHANGELOG.md` and
    leave an `Unreleased` section for subsequent work. The heading is part of the
    release format; do not rename it or duplicate the same version.
-3. Run the checks in `CONTRIBUTING.md`, including `npm run test:release`.
+3. Run the checks in `CONTRIBUTING.md`, including `pnpm run test:release`.
    Run `node scripts/release-notes.mjs vX.Y.Z` to preview the exact release body.
 4. Commit the release changes. When ready to start remote builds, create and
    push the matching `vX.Y.Z` Git tag to GitHub.
@@ -22,7 +25,8 @@ The current scaffold has only an `Unreleased` entry. It is not a published
 ## GitHub Actions behavior
 
 `.github/workflows/release.yml` runs on stable version tags. It checks version
-agreement across the manifests and npm lockfile, tests the note extractor, and
+agreement across the app manifests and dependency declarations in the pnpm lockfile,
+tests the note extractor, and
 reads only the matching changelog section. Missing, duplicate, or empty notes
 stop the workflow before a draft is created. Changelog content is passed as data,
 never interpolated into a shell command or executable script.

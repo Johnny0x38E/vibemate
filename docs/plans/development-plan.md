@@ -1,6 +1,6 @@
 # vibemate 第一阶段开发计划
 
-日期：2026-10-09。状态：待维护者审阅，尚未开始功能实现。
+日期：2026-10-09。状态：维护者已授权开始实施；先完成 P00 包管理器迁移，再开始 P01。
 
 ## 目标与范围
 
@@ -25,7 +25,7 @@ DeepSeek、OpenRouter；Agent 是 Pi、Grok Build。目标平台是 macOS、Wind
 - 已有 CHANGELOG 分版本提取、发布校验测试及四目标安装包草稿 Release 工作流。
 - **没有** Provider 接入、Model 管理、Agent 配置写入、Skill/MCP 管理、SQLite、
   系统凭据库、i18n 或交互功能测试框架。不要把已有的发布校验测试当作业务测试。
-- 目前没有 codegraph 索引。按工具给出的指示使用文件工具；索引由维护者决定启用。
+- 当前 codegraph 索引可查询；仓库上下文和跨模块分析使用项目绝对路径。
 
 这些基础不重新实施。后续依赖按功能需要增加，不能先搭一个庞大的插件框架。
 
@@ -163,7 +163,7 @@ Rust 使用稳定错误 code 与安全参数，前端决定语言；不翻译配
 
 1. 切换工作区后先读本文件、`todo.md`、两份 AGENTS 文件和实际代码；不要重建骨架。
    单人顺序执行；不使用子代理，除非维护者以后明确批准。
-2. 第一个任务是 P01。接入资料不全时先列出准确缺项，收集可确认的其他资料；
+2. 维护者决定先完成 P00 的 pnpm 迁移；第一个业务接入任务是 P01。接入资料不全时先列出准确缺项，收集可确认的其他资料；
    不伪造实现、不把受阻条目勾选完成，也不为计划缺项直接扩大实现范围。
 3. 每项任务列出的路径是建议的主要文件。开始前按实际结构确定文件与测试位置；
    **总共超过约五个文件或超过一个专注会话，就先在清单中拆成子任务**，包含注册、
@@ -175,22 +175,22 @@ Rust 使用稳定错误 code 与安全参数，前端决定语言；不翻译配
 6. 更新相关学习文档和英文 CHANGELOG；每个完成的任务尽量形成独立本地提交。
    检查点记录维护者审阅。进入新阶段前解决该阶段的协议/范围疑问，不重复询问已经
    明确授权的普通实施步骤。
-7. 本次只交付计划。维护者审阅并在新工作区发起实施后，才开始 P01 的工作。
+7. 维护者已于 2026-10-09 明确授权开始实施。任务状态与验证记录更新在 `todo.md`。
 
 ### 验证命令约定
 
 当前已有：
 
 ```sh
-npm run check:frontend
+pnpm run check:frontend
 cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 cargo clippy --manifest-path src-tauri/Cargo.toml --locked --all-targets -- -D warnings
 cargo test --manifest-path src-tauri/Cargo.toml --locked
-npm run tauri build -- --no-bundle -- --locked
+pnpm run tauri build --no-bundle -- --locked
 ```
 
-P04 新增并接入 `npm run test:ui`；此前不能声称这个命令已经可用。
-后续 UI 验证使用 `npm run test:ui -- <测试文件>`，Rust 使用
+P04 新增并接入 `pnpm run test:ui`；此前不能声称这个命令已经可用。
+后续 UI 验证使用 `pnpm run test:ui <测试文件>`，Rust 使用
 `cargo test --manifest-path src-tauri/Cargo.toml --locked <测试过滤词>`。
 清单中的文件名/过滤词是预期名称，实施时与实际测试同步，防止过滤词匹配零条测试。
 纯文档任务只做事实、链接与格式检查，不为文档变更重跑所有原生构建。

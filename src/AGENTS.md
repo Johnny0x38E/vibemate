@@ -117,7 +117,7 @@ Read `docs/frontend.md` before introducing a new frontend pattern.
   interactions using user-visible behavior. Mock the desktop boundary in UI
   tests. Avoid implementation snapshots or assertions for static labels alone.
   Introduce the UI test runner when the first interactive behavior needs it.
-- Run `npm run check:frontend` before completing frontend changes. CI and the
+- Run `pnpm run check:frontend` before completing frontend changes. CI and the
   release prepare job must run this command. No warnings are accepted by ESLint.
 - For visible changes, inspect the browser preview using ego-browser and check
   keyboard behavior, long content, and minimum-width layout where relevant.

@@ -1,6 +1,6 @@
 # vibemate 第一阶段执行清单
 
-状态：计划待审阅；下列任务均未开始。说明与设计见 [development-plan.md](development-plan.md)。
+状态：维护者已明确开始实施；先完成包管理器迁移，再按依赖顺序开始 P01。说明与设计见 [development-plan.md](development-plan.md)。
 这里是唯一任务状态来源，不能在其他文件维护第二份勾选清单。
 
 ## 执行约定
@@ -17,8 +17,72 @@
 
 ## 开始实施前
 
-- [ ] 维护者已审阅计划，并在新工作区明确开始实施。
-- [ ] 读取最新 AGENTS 文件、代码和本清单；确认没有其他会话的未提交变更。
+- [x] 维护者已明确授权开始实施，并决定先迁移至 pnpm（2026-10-09）。
+- [x] 已读取最新 AGENTS 文件、代码和本清单；Zed 配置已独立提交并推送为 `a2d0eab`，开始迁移前工作区干净。
+
+## 前置任务 P00：迁移至 pnpm
+
+维护者在开始功能实施前选择 pnpm。迁移范围包含安装、发布校验、CI、Tauri、Zed
+和文档，因此先拆成以下子任务；完成后继续 P01，不扩展业务功能。
+
+### P00.a：固定工具版本并迁移锁文件
+
+- [x] 在 `package.json` 固定 pnpm 当前稳定版本，替换内部 npm 脚本。
+- [x] 使用 `pnpm import` 迁移已有解析结果，提交 `pnpm-lock.yaml` 并移除 npm 锁文件。
+- [x] 仅批准实际需要的依赖构建脚本，冻结锁文件安装成功。
+
+**Files:** `package.json`、`package-lock.json`、`pnpm-lock.yaml`；仅在确有依赖构建脚本时增加 `pnpm-workspace.yaml`。
+**Verification:** `pnpm --version`、`pnpm install --frozen-lockfile`。
+**Dependencies:** None。
+
+### P00.b：保留发布前校验
+
+- [x] 保留 manifest/tag 版本一致性和 changelog 校验；按 pnpm importer 验证依赖声明。
+- [x] 沿用现有公开 `readReleaseMetadata` 测试边界，覆盖锁文件过期、缺失与损坏。
+
+**Files:** `scripts/release-notes.mjs`、`scripts/release-notes.test.mjs`。
+**Verification:** `pnpm run test:release`；先确认失败，再实现对应行为。
+**Dependencies:** P00.a。
+
+### P00.c：切换运行入口和远端工作流
+
+- [x] CI/Release 安装固定 pnpm 并使用冻结锁文件；保留所有已有检查和草稿发布条件。
+- [x] Tauri 前置命令和 Zed 任务使用 pnpm，正确传递参数。
+
+**Files:** `.github/workflows/ci.yml`、`.github/workflows/release.yml`、
+`src-tauri/tauri.conf.json`、`.zed/tasks.json`。
+**Verification:** 完整前端、Rust 检查和本机桌面构建；远端结果单独记录。
+**Dependencies:** P00.b。
+
+### P00.d：更新开发规范与入门命令
+
+- [x] 根目录与前端 AGENTS、README、CONTRIBUTING、前端文档使用 pnpm。
+- [x] 安装说明固定版本，说明 npm 仅用于首次安装 pnpm；共享配置与 CI 命令一致。
+
+**Files:** `AGENTS.md`、`src/AGENTS.md`、`README.md`、`CONTRIBUTING.md`、`docs/frontend.md`。
+**Verification:** 命令核对与格式检查。
+**Dependencies:** P00.c。
+
+### P00.e：同步发布、学习文档和计划
+
+- [x] 同步中文入门文档、发布文档、锁文件格式忽略、changelog 和开发计划。
+- [x] 记录实际版本、命令、平台、结果与限制，迁移不标记任何业务任务完成。
+
+**Files:** `docs/getting-started.zh-CN.md`、`docs/releases.md`、`.prettierignore`、
+`CHANGELOG.md`、`docs/plans/development-plan.md`；本清单随各子任务更新。
+**Verification:** `pnpm run check:frontend`、差异检查和 npm 命令残留检查。
+**Dependencies:** P00.d。
+
+**执行记录（2026-10-09）：**
+
+- macOS Apple Silicon；Node.js `26.3.0`、pnpm `12.10.1`、Rust/Cargo `1.99.0`；CI 保持 Node.js 24。
+- `pnpm import` 后核对并恢复两项补丁版本，18 个已有直接依赖版本全部保持一致；仅新增发布工具需要的 `yaml@2.9.1`（ISC，MIT 兼容）。
+- `pnpm install --frozen-lockfile` 通过；不需要额外依赖构建脚本，因此未新增 workspace 或放宽构建审批策略。
+- `pnpm run check:frontend` 通过，发布测试实际执行 8 条；测试先因旧 npm 锁文件读取逻辑失败，迁移实现后通过。
+- Rust fmt、Clippy 通过；`cargo test --manifest-path src-tauri/Cargo.toml --locked` 成功，但当前骨架实际为 0 条测试，不作为业务测试覆盖。
+- `pnpm run tauri build --no-bundle -- --locked` 通过，产物为 `src-tauri/target/release/vibemate`。
+- 两份 workflow YAML 可解析，保留冻结安装与全部既有检查；Windows/Linux、Node.js 24 和远端草稿 Release 尚待实际工作流验证。
+- Zed 配置提交 `a2d0eab` 已推送；迁移将作为独立提交，P01 资料核实继续，不标记其他业务任务完成。
 
 ## 阶段 A：接入证据
 
@@ -35,7 +99,7 @@
 **Verification:**
 
 - [ ] 人工核对每个结论的原始来源与示例。
-- [ ] 运行 `npm run format:check`，检查文档链接。
+- [ ] 运行 `pnpm run format:check`，检查文档链接。
 
 **Dependencies:** None。
 
@@ -60,7 +124,7 @@
 **Verification:**
 
 - [ ] 人工用官方资料与可用安装版本核对，未安装的平台标记待验。
-- [ ] 运行 `npm run format:check`。
+- [ ] 运行 `pnpm run format:check`。
 
 **Dependencies:** P01。
 
@@ -85,7 +149,7 @@
 **Verification:**
 
 - [ ] 人工对照原始来源，检查脱敏示例可解析。
-- [ ] 运行 `npm run format:check`。
+- [ ] 运行 `pnpm run format:check`。
 
 **Dependencies:** P01。
 
@@ -111,21 +175,21 @@
 
 **Acceptance criteria:**
 
-- [ ] 选择并说明最小测试组合，建议 Vitest + Testing Library，提供 `npm run test:ui`。
+- [ ] 选择并说明最小测试组合，建议 Vitest + Testing Library，提供 `pnpm run test:ui`。
 - [ ] 替换现有 desktop 边界，验证加载完成、失败反馈和卸载后忽略异步结果，测试不是静态标签快照。
 - [ ] 把 UI 测试接入 `check:frontend`，同步 ESLint/TypeScript 测试环境，不降低严格规则。
 
 **Verification:**
 
-- [ ] 运行 `npm run test:ui -- src/App.test.tsx`，确认实际执行上述行为测试。
-- [ ] 运行 `npm run check:frontend`；如另需 setup 文件或额外配置，先补拆子任务。
+- [ ] 运行 `pnpm run test:ui src/App.test.tsx`，确认实际执行上述行为测试。
+- [ ] 运行 `pnpm run check:frontend`；如另需 setup 文件或额外配置，先补拆子任务。
 
 **Dependencies:** P01,P02,P03。
 
 **Files likely touched:**
 
 - `package.json`
-- `package-lock.json`
+- `pnpm-lock.yaml`
 - `vite.config.ts`
 - `src/App.test.tsx`
 - `eslint.config.mjs`
@@ -209,14 +273,14 @@
 **Verification:**
 
 - [ ] 核对语言解析表与资源 key/插值参数一致性，覆盖中文变体、英文和未知语言样本；对应自动检查在 P09 接入。
-- [ ] 运行 `npm run check:frontend`；不得为 i18n 依赖降低 TypeScript 或 lint 规则。
+- [ ] 运行 `pnpm run check:frontend`；不得为 i18n 依赖降低 TypeScript 或 lint 规则。
 
 **Dependencies:** P04。
 
 **Files likely touched:**
 
 - `package.json`
-- `package-lock.json`
+- `pnpm-lock.yaml`
 - `src/i18n/index.ts`
 - `src/locales/zh-CN.json`
 - `src/locales/en.json`
@@ -266,7 +330,7 @@
 
 **Verification:**
 
-- [ ] 运行 `npm run test:ui -- src/App.test.tsx`，覆盖双语、切换、回退、启动偏好及错误状态。
+- [ ] 运行 `pnpm run test:ui src/App.test.tsx`，覆盖双语、切换、回退、启动偏好及错误状态。
 - [ ] 运行 `check:frontend`；按需把资源校验/脚本/CI接线拆成 P09 子任务后验证。
 - [ ] ego-browser 和 Tauri 检查两种语言、720×560、长英文/中文、日期/数字及可访问名称；确认不会改变模型 ID 或配置内容。
 
@@ -305,7 +369,7 @@
 **Verification:**
 
 - [ ] 运行 Rust `providers` 过滤测试与 ProviderForm UI 测试，覆盖非法 URL 和持久化重读。
-- [ ] 运行 `npm run check:frontend` 与 Rust fmt/Clippy。
+- [ ] 运行 `pnpm run check:frontend` 与 Rust fmt/Clippy。
 - [ ] 实际 Tauri 保存非敏感配置，重启验证；需要额外注册/样式文件时先拆子任务。
 
 **Dependencies:** P04,P05,P09。
@@ -1135,7 +1199,7 @@
 
 **Verification:**
 
-- [ ] 运行受影响页面行为测试与 `npm run check:frontend`。
+- [ ] 运行受影响页面行为测试与 `pnpm run check:frontend`。
 - [ ] 用 ego-browser 做最小窗口、键盘、长内容和错误状态检查并记录证据。
 - [ ] 用实际 Tauri 确认桌面错误/原生行为没有被浏览器 mock 隐藏。
 
@@ -1228,7 +1292,7 @@
 
 **Verification:**
 
-- [ ] 运行 `npm run check:frontend`、完整 Rust 检查和发布说明预览。
+- [ ] 运行 `pnpm run check:frontend`、完整 Rust 检查和发布说明预览。
 - [ ] 检查四个真实 Actions job 与安装包；没有远端授权时记录待执行，不创建远端或推标签。
 
 **Dependencies:** P36,P37,P38。

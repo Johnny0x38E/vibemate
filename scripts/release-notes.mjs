@@ -3,6 +3,7 @@ import { readFileSync, appendFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { randomUUID } from "node:crypto";
+import { parseAllDocuments } from "yaml";
 
 /**
  * Read one stable release section and require all app version files to agree.
@@ -22,11 +23,9 @@ export function readReleaseMetadata(projectRoot, tag) {
   const cargoVersion = /^version\s*=\s*"([^"]+)"\s*$/m.exec(
     packageSection ?? "",
   )?.[1];
-  const lock = JSON.parse(read("package-lock.json"));
+  const manifest = JSON.parse(read("package.json"));
   const versions = {
-    "package.json": JSON.parse(read("package.json")).version,
-    "package-lock.json": lock.version,
-    "package-lock.json root package": lock.packages?.[""]?.version,
+    "package.json": manifest.version,
     "src-tauri/Cargo.toml": cargoVersion,
     "src-tauri/tauri.conf.json": JSON.parse(read("src-tauri/tauri.conf.json"))
       .version,
@@ -35,6 +34,8 @@ export function readReleaseMetadata(projectRoot, tag) {
     if (value !== version)
       throw new Error(`${file} version ${value} does not match ${tag}.`);
   }
+
+  validateDependencyLock(read("pnpm-lock.yaml"), manifest);
 
   const lines = read("CHANGELOG.md").split(/\r?\n/);
   const heading = `## [${version}] - `;
@@ -64,6 +65,57 @@ export function readReleaseMetadata(projectRoot, tag) {
     throw new Error(`CHANGELOG notes for ${version} are empty.`);
   }
   return { tag, version, notes };
+}
+
+/**
+ * Require the application's pnpm importer to match its declared dependencies.
+ * The frozen install in CI also validates the complete dependency resolution.
+ */
+function validateDependencyLock(source, manifest) {
+  // pnpm 12 can prepend a separate document for pnpm/config dependencies.
+  // That importer must never stand in for the application's dependency list.
+  const documents = parseAllDocuments(source);
+  const importers = [];
+  for (const document of documents) {
+    if (document.errors.length > 0) {
+      throw new Error("pnpm-lock.yaml contains invalid YAML.");
+    }
+    const importer = document.toJS()?.importers?.["."];
+    if (
+      importer &&
+      !importer.packageManagerDependencies &&
+      !importer.configDependencies
+    ) {
+      importers.push(importer);
+    }
+  }
+  if (importers.length !== 1) {
+    throw new Error(
+      "pnpm-lock.yaml must contain one application root importer.",
+    );
+  }
+  const importer = importers[0];
+  for (const group of [
+    "dependencies",
+    "devDependencies",
+    "optionalDependencies",
+  ]) {
+    const declared = manifest[group] ?? {};
+    const locked = importer[group] ?? {};
+    const names = new Set([...Object.keys(declared), ...Object.keys(locked)]);
+    for (const name of names) {
+      if (
+        !(name in declared) ||
+        locked[name]?.specifier !== declared[name] ||
+        typeof locked[name]?.version !== "string" ||
+        !locked[name].version
+      ) {
+        throw new Error(
+          `pnpm-lock.yaml ${group}.${name} does not match package.json.`,
+        );
+      }
+    }
+  }
 }
 
 /** Emit multiline Actions outputs without interpreting changelog text as code. */

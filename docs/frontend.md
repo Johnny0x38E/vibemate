@@ -27,7 +27,7 @@ Without that guard, a previous request could update an obsolete view.
 ## Changes must pass automated checks
 
 ```sh
-npm run check:frontend
+pnpm run check:frontend
 ```
 
 This runs Prettier, ESLint with zero allowed warnings, TypeScript for both the
@@ -46,7 +46,7 @@ Formatting is handled by Prettier, so style rules must not conflict with it.
 
 ## Editing in Zed
 
-Open the repository root in Zed and run `npm ci` before editing the frontend.
+Open the repository root in Zed and run `pnpm install --frozen-lockfile` before editing the frontend.
 The project requires Node.js 24 or newer. Zed has native Rust, TypeScript, and
 TSX support; no separate extension is required for those languages.
 
@@ -63,7 +63,7 @@ start desktop development, preview the frontend, or run the project checks.
 Tasks run from the repository root, even when a backend file is active.
 The frontend preview does not provide native Tauri operations.
 
-Editor diagnostics do not replace `npm run check:frontend`: the dedicated
+Editor diagnostics do not replace `pnpm run check:frontend`: the dedicated
 Oxlint accessibility checks and release-tool tests still run through that command.
 Keep themes, fonts, keybindings, and personal AI settings in Zed's user settings.
 Commit shared project settings and tasks so contributors use the same commands.

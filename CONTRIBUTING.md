@@ -8,15 +8,15 @@ documentation in English so contributors can follow the code.
 ## Local checks
 
 ```sh
-npm ci
-npm run check:frontend
+pnpm install --frozen-lockfile
+pnpm run check:frontend
 cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 cargo clippy --manifest-path src-tauri/Cargo.toml --locked --all-targets -- -D warnings
 cargo test --manifest-path src-tauri/Cargo.toml --locked
-npm run tauri build -- --no-bundle -- --locked
+pnpm run tauri build --no-bundle -- --locked
 ```
 
-Use `npm run format` and `cargo fmt --manifest-path src-tauri/Cargo.toml` to
+Use `pnpm run format` and `cargo fmt --manifest-path src-tauri/Cargo.toml` to
 apply formatting. Add tests when new behavior can lose data, misroute requests,
 or change agent configuration. Use synthetic credentials and temporary config
 files in tests, never real API keys or your personal agent configuration.

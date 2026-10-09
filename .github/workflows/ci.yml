@@ -19,12 +19,13 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/setup@v3
         with:
-          node-version: "24"
-          cache: npm
-      - run: npm ci
-      - run: npm run check:frontend
+          runtime: node@24
+          cache: true
+          install: false
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run check:frontend
 
   desktop:
     name: Desktop (${{ matrix.os }})
@@ -40,21 +41,22 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
-      - uses: actions/setup-node@v4
+      - uses: pnpm/setup@v3
         with:
-          node-version: "24"
-          cache: npm
+          runtime: node@24
+          cache: true
+          install: false
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
-      - run: npm ci
+      - run: pnpm install --frozen-lockfile
       # Tauri reads frontendDist at compile time; build it before Cargo checks.
-      - run: npm run build
+      - run: pnpm run build
       - run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
       - run: cargo clippy --manifest-path src-tauri/Cargo.toml --locked --all-targets -- -D warnings
       - run: cargo test --manifest-path src-tauri/Cargo.toml --locked
       # Build an executable without publishing installers or requiring signing keys.
-      - run: npm run tauri build -- --no-bundle -- --locked
+      - run: pnpm run tauri build --no-bundle -- --locked

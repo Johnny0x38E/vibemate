@@ -8,6 +8,8 @@ GitHub release notes are extracted from the matching version section only.
 
 ### Changed
 
+- Migrated development, CI, desktop commands, and release validation to pinned pnpm with a frozen dependency lockfile.
+
 - Replaced editor extension recommendations with shared Zed settings, development tasks, and setup instructions.
 
 ### Added

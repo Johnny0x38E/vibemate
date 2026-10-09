@@ -21,13 +21,22 @@ The project follows stable Rust and uses edition 2024. Run `rustup update stable
 to refresh an existing installation before development. Tauri dependencies are
 locked; compatible stable updates are validated before changing lockfiles.
 
+Install pnpm 12.10.1 once if it is not already available:
+
 ```sh
-npm ci
-npm run tauri dev
+npm install --global pnpm@12.10.1
 ```
 
-For a frontend-only preview, run `npm run dev`. The UI explains that the Rust
-runtime is unavailable in this mode. `npm run tauri build -- --no-bundle -- --locked`
+The `packageManager` field fixes the version used by the project and CI.
+Use pnpm for all project commands; npm is only used here to bootstrap pnpm.
+
+```sh
+pnpm install --frozen-lockfile
+pnpm run tauri dev
+```
+
+For a frontend-only preview, run `pnpm run dev`. The UI explains that the Rust
+runtime is unavailable in this mode. `pnpm run tauri build --no-bundle -- --locked`
 builds a desktop executable without an installer.
 
 ## Find your way around

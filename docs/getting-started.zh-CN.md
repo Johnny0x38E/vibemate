@@ -12,8 +12,9 @@ macOS 桌面开发通常从 Xcode Command Line Tools 开始；如构建报错，
 ```sh
 cd /Users/johnny/code/personal/vibemate
 rustup update stable
-npm ci
-npm run tauri dev
+# 未安装 pnpm 时先执行一次：npm install --global pnpm@12.10.1
+pnpm install --frozen-lockfile
+pnpm run tauri dev
 ```
 
 仓库使用 Rust `stable` 工具链和 Edition 2024；`stable` 表示跟随稳定通道，
@@ -21,7 +22,7 @@ npm run tauri dev
 不使用 nightly 功能。Tauri 依赖通过锁文件固定，升级后需要重新验证。
 
 第一次运行会下载并编译 Rust 依赖，耗时通常比后续启动长。
-`npm run dev` 仅预览网页；`npm run tauri dev` 同时启动网页开发服务器与 Rust 桌面程序。
+`pnpm run dev` 仅预览网页；`pnpm run tauri dev` 同时启动网页开发服务器与 Rust 桌面程序。
 
 ## 建议阅读顺序
 
@@ -40,7 +41,7 @@ Rust 管系统操作、网络、密钥和配置写入；React 管界面。先理
 
 ## 检查与 CI
 
-`npm run typecheck` 检查 TypeScript；`npm run build` 构建前端。
+`pnpm run typecheck` 检查 TypeScript；`pnpm run build` 构建前端。
 `cargo fmt` 统一 Rust 格式，`cargo clippy` 检查常见问题，`cargo test` 运行测试。
 完整命令见 `CONTRIBUTING.md`。
 

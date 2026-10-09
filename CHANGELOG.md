@@ -8,11 +8,16 @@ GitHub release notes are extracted from the matching version section only.
 
 ### Changed
 
+- Scoped the Zed multi-document YAML workaround to the generated pnpm lockfile and kept private learning documents outside shared checks.
+- Raised the minimum Node.js version to 24.15 for the jsdom test environment.
+
 - Migrated development, CI, desktop commands, and release validation to pinned pnpm with a frozen dependency lockfile. Tauri API 2.12.1 and Vite 8.3.3 satisfy pnpm's default release-age policy.
 
 - Replaced editor extension recommendations with shared Zed settings, development tasks, and setup instructions.
 
 ### Added
+
+- Added UI behavior tests for desktop metadata loading, safe error feedback, browser preview, and effect cleanup; included them in frontend checks.
 
 - Documented Grok Build 1.0.50 configuration and toggle behavior, with a provider/agent capability matrix that separates configuration evidence from runtime verification.
 

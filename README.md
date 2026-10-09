@@ -14,7 +14,7 @@ The first release targets **Command Code GOAT, DeepSeek, and OpenRouter** with
 
 ## Start developing
 
-Install Node.js 24 LTS, the current stable Rust through rustup, and the
+Install Node.js 24 LTS (24.15 or newer), the current stable Rust through rustup, and the
 [Tauri system prerequisites](https://v2.tauri.app/start/prerequisites/).
 
 The project follows stable Rust and uses edition 2024. Run `rustup update stable`
@@ -44,8 +44,6 @@ builds a desktop executable without an installer.
 - [`AGENTS.md`](AGENTS.md): coding rules, English comments, and verification.
 - [`src/AGENTS.md`](src/AGENTS.md): strict frontend rules.
 - [`docs/frontend.md`](docs/frontend.md): React/Tauri boundaries and automated checks.
-- [`docs/getting-started.zh-CN.md`](docs/getting-started.zh-CN.md): a beginner's
-  guide to Rust, Tauri, React, and the files in this repository.
 - [`docs/architecture.md`](docs/architecture.md): responsibilities and extension points.
 - [`docs/plans/phase-1.md`](docs/plans/phase-1.md): scope, implementation order, and acceptance criteria.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md): local checks and contribution expectations.

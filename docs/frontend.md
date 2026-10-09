@@ -31,7 +31,7 @@ pnpm run check:frontend
 ```
 
 This runs Prettier, ESLint with zero allowed warnings, TypeScript for both the
-UI and Vite configuration, release-tool tests, and a production frontend build.
+UI and Vite configuration, release-tool tests, UI behavior tests, and a production frontend build.
 CI and the release workflow run the same command before continuing.
 
 TypeScript enables strict, exact optional properties, and unchecked-index checks.
@@ -47,7 +47,7 @@ Formatting is handled by Prettier, so style rules must not conflict with it.
 ## Editing in Zed
 
 Open the repository root in Zed and run `pnpm install --frozen-lockfile` before editing the frontend.
-The project requires Node.js 24 or newer. Zed has native Rust, TypeScript, and
+The project supports Node.js 24.15+ on the Node 24 line, or Node.js 26+. Zed has native Rust, TypeScript, and
 TSX support; no separate extension is required for those languages.
 
 The shared `.zed/settings.json` enables Prettier formatting on save for frontend
@@ -73,6 +73,12 @@ See the official [Rust](https://zed.dev/docs/languages/rust),
 [language configuration](https://zed.dev/docs/configuring-languages), and
 [tasks](https://zed.dev/docs/tasks) documentation for editor behavior.
 
+The pnpm 12 lockfile contains separate YAML documents for the package manager
+and application. Zed's YAML diagnostics can reject this generated format, so
+`.zed/settings.json` reads only `pnpm-lock.yaml` as Plain Text. Other YAML files
+keep their normal language support. Validate the lockfile with
+`pnpm install --frozen-lockfile`; do not merge or reformat its documents manually.
+
 ## Internationalization is planned before business screens
 
 Phase 1 supports Simplified Chinese and English. The current scaffold still
@@ -90,9 +96,30 @@ validation, comments, credentials, styling, and platform assumptions explicitly.
 For UI changes, inspect loading/error/empty states, keyboard focus, long labels,
 and resizing. For desktop behavior, also run the real Tauri app.
 
-The static scaffold does not yet have interactive feature tests. Add a UI test
-runner and behavior tests when forms or mutations are implemented. Keep those
-tests focused on outcomes rather than component internals.
+## UI behavior tests
+
+Run `pnpm run test:ui` once, or `pnpm run test:ui src/App.test.tsx` for the
+metadata behavior. Vitest shares the Vite configuration and uses jsdom to supply
+a DOM inside Node.js. React Testing Library renders the real component. DOM
+Testing Library is an explicit peer dependency; all four test packages are MIT.
+Vitest 5 supports this project's Vite 8 and React Testing Library supports React 19.
+jsdom 30 requires Node 24.15 or newer on the supported Node 24 line.
+
+Tests import Vitest APIs explicitly, so no test globals or relaxed lint rules are
+needed. Both existing TypeScript configurations and strict ESLint remain in force.
+Only `src/**/*.test.{ts,tsx}` runs in Vitest; release-tool tests retain Node's runner.
+Cleanup is registered explicitly because Vitest globals are disabled.
+
+`src/App.test.tsx` replaces only `src/lib/desktop` and verifies loading to ready,
+safe failure feedback, browser-only preview, and stale success/failure responses.
+The lifecycle cases use StrictMode's effect cleanup and restart: the first request
+settles after the second, and must not replace the current visible status.
+Temporarily disabling the cleanup guard caused both lifecycle cases to fail;
+restoring the original source made all five cases pass.
+
+These DOM tests do not verify Rust, the Tauri WebView, or provider connectivity.
+Add behavior tests for new forms and mutations at their desktop boundary as they
+are implemented; keep synthetic credentials out of production fixtures.
 
 ## Safe IPC example
 

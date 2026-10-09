@@ -43,5 +43,8 @@
         }
       }
     }
+  },
+  "file_types": {
+    "Plain Text": ["pnpm-lock.yaml"]
   }
 }

@@ -6,3 +6,6 @@ src-tauri/gen/
 Cargo.lock
 pnpm-lock.yaml
 .codegraph/
+
+# Personal learning documents are not part of shared checks.
+docs/local/

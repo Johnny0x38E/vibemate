@@ -1,6 +1,6 @@
 # vibemate 第一阶段执行清单
 
-状态：P00 包管理器迁移、P01–P03 接入证据、P04 UI 测试入口与 P05 私有配置存储已完成；业务功能尚未实现，首页草图与绿色启用语义已确认，样式后续调整。说明与设计见 [development-plan.md](development-plan.md)。
+状态：P00 包管理器迁移、P01–P03 接入证据、P04 UI 测试入口、P05 私有配置存储与 P06 凭据接口已完成；业务功能尚未实现，首页草图与绿色启用语义已确认，样式后续调整。说明与设计见 [development-plan.md](development-plan.md)。
 这里是唯一任务状态来源，不能在其他文件维护第二份勾选清单。
 
 ## 执行约定
@@ -328,14 +328,14 @@
 
 **Acceptance criteria:**
 
-- [ ] 生产使用 OS 凭据库，测试使用可注入假实现；状态输出不含明文密钥。
-- [ ] 覆盖不可用、取消访问、替换失败和删除失败，不回退为明文数据库。
-- [ ] 定义与数据库保存的补偿步骤和私有备份处理，避免孤立凭据。
+- [x] 生产使用 OS 凭据库，测试使用可注入假实现；状态输出不含明文密钥。
+- [x] 覆盖不可用、取消访问、替换失败和删除失败，不回退为明文数据库。
+- [x] 定义与数据库保存的补偿步骤和私有备份处理，避免孤立凭据。
 
 **Verification:**
 
-- [ ] 运行 `cargo test --manifest-path src-tauri/Cargo.toml --locked credentials`。
-- [ ] 运行 Rust fmt/Clippy；本机凭据库 smoke check 使用临时测试条目并清理。
+- [x] 运行 `cargo test --manifest-path src-tauri/Cargo.toml --locked credentials`。
+- [x] 运行 Rust fmt/Clippy；本机凭据库 smoke check 使用临时测试条目并清理。
 
 **Dependencies:** P05。
 
@@ -348,12 +348,32 @@
 
 **Estimated scope:** M：4 个建议主文件；如需额外文件先按执行约定拆分。
 
-**执行记录：** 尚未实施。
+**执行记录（2026-10-09）：**
+
+- 实现提交：`af5de68`（`feat: add OS credential store boundary`）；涉及 `Cargo.toml`、`Cargo.lock`、`src/credentials.rs`、`src/lib.rs`。尚未推送，远端 CI 未运行。
+- 维护者决定：Linux 使用 Secret Service；无密钥环服务时明确失败，不回退为明文。
+- 依赖：`keyring 4.2.0`（MIT OR Apache-2.0，registry 最新稳定版，最低 Rust 1.88，本机工具链 1.99）。使用默认 `v1` 特性：macOS Keychain、Windows Credential Manager、其他 Unix 的 Secret Service；首次 `Entry::new` 自动选择平台后端。新增 69 个锁定包，许可证扫描均属 MIT、Apache-2.0、Zlib、BSD 等兼容类别。MPL-2.0 项（cssparser、selectors 等）早于本任务即由 Tauri 依赖引入。
+- 设计：
+  - `CredentialStore` 包含 `save`、`load`、`delete`；数据库只保存非敏感引用。生产实现为 `OsCredentialStore`，测试使用内存假实现。
+  - `Secret` 的 `Debug` 输出占位符，取值必须调用 `expose`，便于审查。
+  - `CredentialError` 不携带底层数据。部分 keyring 错误（如 `BadEncoding`）含原始密钥字节，映射时直接丢弃。
+  - 补偿流程 `replace_then_commit`：读取旧值作为仅内存的私有备份；写入新值；执行数据库提交。提交失败则回写旧值，或在没有旧值时删除新引用。回写失败时返回 `restored: false`，调用方必须保留恢复记录（P19/P34 处理）。
+  - 删除不存在的条目视为成功，保证幂等。
+- 测试：`cargo test --manifest-path src-tauri/Cargo.toml --locked credentials` 执行 8 条，覆盖 Debug 脱敏、不可用时提交前停止、访问被拒绝时保留旧值、提交失败回写旧值、无旧值时删除新引用、回写失败被报告、删除失败被报告、平台错误映射。完整 `cargo test --locked` 为 14 条通过、1 条手动测试忽略。
+- 变异验证：临时去掉“提交失败后回写旧值”，两条补偿测试失败（退出码 101）；按字节恢复后 8/8 通过。
+- 真实钥匙串冒烟（macOS arm64）：`cargo test --manifest-path src-tauri/Cargo.toml --locked credentials -- --ignored` 使用临时合成条目完成保存、读取、删除，删除后读取为空；随后 `security` 查询确认未残留 `dev.vibemate.desktop` 条目。
+- 静态与构建：`cargo fmt --check`、`cargo clippy --locked --all-targets -- -D warnings` 通过；`pnpm run tauri build --no-bundle -- --locked` 通过。
+- 限制：
+  - macOS 用户取消钥匙串授权（`errSecUserCanceled`，-128）未被 keyring 单独映射，当前归为 `OperationFailed`，界面只能显示通用失败。“取消访问”的边界目前以 `AccessDenied` 类别覆盖，细分需真机确认后单独处理。
+  - Linux Secret Service 与 Windows Credential Manager 未在本机运行。需远端 CI 编译，并在真实桌面上验证无服务、锁定、删除等行为（P37）。
+  - `Secret` 离开作用域时不会清零内存（尚未引入 zeroize）；平台库内部的副本也不由本项目控制。
+  - 错误文本目前为英文开发者文本，P09 改为错误码加翻译。
+  - 补偿流程已定义，但还没有业务功能调用它（P10–P11 接入）。
 
 ### Checkpoint C06: 存储与测试基础可用（P04–P06）
 
-- [ ] 本组任务验收与验证有实际证据；受阻项没有勾选为完成。
-- [ ] 前端完整检查、Rust fmt/Clippy/测试与本机原生构建通过；基础没有扩张成完整框架。
+- [x] 本组任务验收与验证有实际证据；受阻项没有勾选为完成。
+- [x] 前端完整检查、Rust fmt/Clippy/测试与本机原生构建通过；基础没有扩张成完整框架。
 - [ ] 本组结果已报告维护者，审阅意见已记录；下一组必需的协议或范围决策已解决。
 
 ### Task P07: 建立中英文翻译资源

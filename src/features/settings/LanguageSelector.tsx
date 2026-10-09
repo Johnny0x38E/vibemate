@@ -1,4 +1,11 @@
-import { useEffect, useId, useRef, useState, type JSX } from "react";
+import {
+    useEffect,
+    useId,
+    useRef,
+    useState,
+    type JSX,
+    type ReactNode,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { resolveSystemLocale } from "../../i18n";
 import {
@@ -8,6 +15,7 @@ import {
     type LocalePreference,
     type LocalePreferenceResult,
 } from "../../lib/desktop/settings";
+import fieldStyles from "./settingsField.module.css";
 import styles from "./LanguageSelector.module.css";
 
 /** Startup supplies a validated choice and the system language before mounting. */
@@ -16,19 +24,34 @@ export interface LanguageSelectorProps {
     initialPreference: LocalePreferenceResult;
     /** Used only when the confirmed choice is "system"; explicit choices take priority. */
     systemLanguage: string;
+    /** Additional preference rows rendered inside the grouped settings card. */
+    footer?: ReactNode;
 }
 
 type Status =
     | "idle"
     | "saving"
-    | "saved"
     | "saveFailed"
     | "saveUnconfirmed"
     | "reloading"
-    | "reloaded"
     | "reloadFailed"
     | "applyFailed"
     | "preview";
+
+const ERROR_MESSAGE_KEY: Partial<
+    Record<
+        Status,
+        | "settings.language.saveFailed"
+        | "settings.language.saveUnconfirmed"
+        | "settings.language.reloadFailed"
+        | "settings.language.applyFailed"
+    >
+> = {
+    saveFailed: "settings.language.saveFailed",
+    saveUnconfirmed: "settings.language.saveUnconfirmed",
+    reloadFailed: "settings.language.reloadFailed",
+    applyFailed: "settings.language.applyFailed",
+};
 
 /**
  * Save a language choice through Rust before changing the shared React translator.
@@ -38,6 +61,7 @@ type Status =
 export function LanguageSelector({
     initialPreference,
     systemLanguage,
+    footer,
 }: LanguageSelectorProps): JSX.Element {
     const { t, i18n } = useTranslation();
     const id = useId();
@@ -72,10 +96,7 @@ export function LanguageSelector({
         return active.current;
     }
 
-    async function applyConfirmed(
-        confirmed: LocalePreference,
-        success: "saved" | "reloaded",
-    ): Promise<void> {
+    async function applyConfirmed(confirmed: LocalePreference): Promise<void> {
         if (!isActive()) return;
         // The persisted choice is known even if changing the translator fails.
         // Never label an already committed write as a failed save.
@@ -86,7 +107,7 @@ export function LanguageSelector({
                     ? resolveSystemLocale(systemLanguage)
                     : confirmed,
             );
-            if (isActive()) setStatus(success);
+            if (isActive()) setStatus("idle");
         } catch {
             if (isActive()) setStatus("applyFailed");
         }
@@ -100,7 +121,7 @@ export function LanguageSelector({
         setStatus("saving");
         try {
             const saved = await saveLocalePreference(next);
-            await applyConfirmed(saved, "saved");
+            await applyConfirmed(saved);
         } catch (error: unknown) {
             if (!active.current) return;
             if (
@@ -135,7 +156,7 @@ export function LanguageSelector({
                 setStatus("preview");
                 return;
             }
-            await applyConfirmed(result.preference, "reloaded");
+            await applyConfirmed(result.preference);
         } catch {
             if (active.current) setStatus("reloadFailed");
         } finally {
@@ -143,48 +164,66 @@ export function LanguageSelector({
         }
     }
 
+    const errorKey = ERROR_MESSAGE_KEY[status];
+    const statusMessage = preview
+        ? t("settings.language.preview")
+        : errorKey
+          ? t(errorKey)
+          : null;
+
     return (
         <div className={styles["selector"]}>
-            <label className={styles["label"]} htmlFor={id}>
-                {t("settings.language.label")}
-            </label>
-            {/* The wrapper draws the arrow: WebKit ignores height on a native select
-                unless its appearance is removed, and CSP forbids data: images. */}
-            <div className={styles["field"]}>
-                <select
-                    className={styles["select"]}
-                    id={id}
-                    value={preference}
-                    disabled={preview || busy || needsReload}
-                    aria-describedby={`${id}-status`}
-                    onChange={(event) => {
-                        const value = event.currentTarget.value;
-                        if (
-                            value === "system" ||
-                            value === "zh-CN" ||
-                            value === "en"
-                        ) {
-                            // save handles both rejection and lifecycle cleanup internally.
-                            void save(value);
-                        }
-                    }}
-                >
-                    <option value="system">
-                        {t("settings.language.system")}
-                    </option>
-                    <option value="zh-CN" lang="zh-CN">
-                        {t("settings.language.zhCN")}
-                    </option>
-                    <option value="en" lang="en">
-                        {t("settings.language.en")}
-                    </option>
-                </select>
+            <div className={fieldStyles["group"]}>
+                <div className={fieldStyles["row"]}>
+                    <label className={fieldStyles["label"]} htmlFor={id}>
+                        {t("settings.language.label")}
+                    </label>
+                    {/* The wrapper draws the arrow: WebKit ignores height on a native select
+                    unless its appearance is removed, and CSP forbids data: images. */}
+                    <div className={fieldStyles["field"]}>
+                        <select
+                            className={fieldStyles["select"]}
+                            id={id}
+                            value={preference}
+                            disabled={preview || busy || needsReload}
+                            aria-describedby={
+                                statusMessage ? `${id}-status` : undefined
+                            }
+                            onChange={(event) => {
+                                const value = event.currentTarget.value;
+                                if (
+                                    value === "system" ||
+                                    value === "zh-CN" ||
+                                    value === "en"
+                                ) {
+                                    // save handles both rejection and lifecycle cleanup internally.
+                                    void save(value);
+                                }
+                            }}
+                        >
+                            <option value="system">
+                                {t("settings.language.system")}
+                            </option>
+                            <option value="zh-CN" lang="zh-CN">
+                                {t("settings.language.zhCN")}
+                            </option>
+                            <option value="en" lang="en">
+                                {t("settings.language.en")}
+                            </option>
+                        </select>
+                    </div>
+                </div>
+                {footer}
             </div>
-            <p className={styles["message"]} id={`${id}-status`} role="status">
-                {preview
-                    ? t("settings.language.preview")
-                    : status !== "idle" && t(`settings.language.${status}`)}
-            </p>
+            {statusMessage ? (
+                <p
+                    className={styles["message"]}
+                    id={`${id}-status`}
+                    role="status"
+                >
+                    {statusMessage}
+                </p>
+            ) : null}
             {(needsReload || status === "reloading") && (
                 <button
                     className={styles["retry"]}

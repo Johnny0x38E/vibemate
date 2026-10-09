@@ -80,7 +80,8 @@ test("keeps the previous choice and offers another attempt after a definite writ
     fireEvent.change(screen.getByRole("combobox"), {
         target: { value: "zh-CN" },
     });
-    await screen.findByText("语言偏好已保存。");
+    await screen.findByRole("combobox", { name: "语言" });
+    expect(screen.getByRole("combobox")).toHaveProperty("value", "zh-CN");
 });
 
 test("blocks further writes after an unknown outcome until the saved choice is reloaded", async () => {
@@ -104,8 +105,8 @@ test("blocks further writes after an unknown outcome until the saved choice is r
     fireEvent.click(
         screen.getByRole("button", { name: "Reload saved preference" }),
     );
-    await screen.findByText("已重新读取保存的语言偏好。");
-    expect(screen.getByRole("combobox", { name: "界面语言" })).toHaveProperty(
+    await screen.findByRole("combobox", { name: "语言" });
+    expect(screen.getByRole("combobox", { name: "语言" })).toHaveProperty(
         "value",
         "zh-CN",
     );
@@ -125,7 +126,7 @@ test("prevents browser preview writes and translates its explanation", async () 
     await act(async () => {
         await instance.changeLanguage("zh-CN");
     });
-    expect(screen.getByRole("combobox", { name: "界面语言" })).toHaveProperty(
+    expect(screen.getByRole("combobox", { name: "语言" })).toHaveProperty(
         "disabled",
         true,
     );
@@ -140,19 +141,20 @@ test("explicit choices override the system and follow system resolves Chinese va
     fireEvent.change(screen.getByRole("combobox"), {
         target: { value: "zh-CN" },
     });
-    await screen.findByText("语言偏好已保存。");
+    await screen.findByRole("combobox", { name: "语言" });
     vi.mocked(saveLocalePreference).mockResolvedValueOnce("en");
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "en" } });
-    await screen.findByText("Language preference saved.");
-    expect(
-        screen.getByRole("combobox", { name: "Interface language" }),
-    ).toHaveProperty("value", "en");
+    await screen.findByRole("combobox", { name: "Language" });
+    expect(screen.getByRole("combobox", { name: "Language" })).toHaveProperty(
+        "value",
+        "en",
+    );
     vi.mocked(saveLocalePreference).mockResolvedValueOnce("system");
     fireEvent.change(screen.getByRole("combobox"), {
         target: { value: "system" },
     });
-    await screen.findByText("语言偏好已保存。");
-    expect(screen.getByRole("combobox", { name: "界面语言" })).toHaveProperty(
+    await screen.findByRole("combobox", { name: "语言" });
+    expect(screen.getByRole("combobox", { name: "语言" })).toHaveProperty(
         "value",
         "system",
     );
@@ -191,7 +193,7 @@ test("keeps writes blocked after a reload failure and permits a later reload", a
     fireEvent.click(
         screen.getByRole("button", { name: "Reload saved preference" }),
     );
-    await screen.findByText("已重新读取保存的语言偏好。");
+    await screen.findByRole("combobox", { name: "Language" });
     expect(screen.getByRole("combobox")).toHaveProperty("value", "system");
 });
 
@@ -228,7 +230,7 @@ test("distinguishes a committed save from a translator failure", async () => {
     fireEvent.click(
         screen.getByRole("button", { name: "Reload saved preference" }),
     );
-    await screen.findByText("已重新读取保存的语言偏好。");
+    await screen.findByRole("combobox", { name: "语言" });
     change.mockRestore();
 });
 
@@ -245,7 +247,7 @@ test("keeps the Chinese choice and gives a Chinese explanation after a failed sa
             />
         </I18nextProvider>,
     );
-    fireEvent.change(screen.getByRole("combobox", { name: "界面语言" }), {
+    fireEvent.change(screen.getByRole("combobox", { name: "语言" }), {
         target: { value: "en" },
     });
     await screen.findByText("无法保存语言偏好，原选择未改变，请重试。");
@@ -287,9 +289,6 @@ test("prevents duplicate reloads and ignores a reload completed after unmount", 
         })),
     );
     fireEvent.click(retry);
-    expect(screen.getByRole("status").textContent).toBe(
-        "Reading saved language preference…",
-    );
     expect(retry).toHaveProperty("disabled", true);
     fireEvent.click(retry);
     expect(getLocalePreference).toHaveBeenCalledTimes(1);
@@ -339,11 +338,8 @@ test("waits for a saved choice before switching language and keeps other input",
     );
     const model = screen.getByRole("textbox", { name: "Unsubmitted model ID" });
     fireEvent.change(model, { target: { value: "custom-model-id" } });
-    const select = screen.getByRole("combobox", { name: "Interface language" });
+    const select = screen.getByRole("combobox", { name: "Language" });
     fireEvent.change(select, { target: { value: "zh-CN" } });
-    expect(screen.getByRole("status").textContent).toBe(
-        "Saving language preference…",
-    );
     expect(select).toHaveProperty("disabled", true);
     expect(select).toHaveProperty("value", "system");
     expect(instance.resolvedLanguage).toBe("en");
@@ -354,11 +350,10 @@ test("waits for a saved choice before switching language and keeps other input",
         response.resolve("zh-CN");
         await response.promise;
     });
-    expect(screen.getByRole("combobox", { name: "界面语言" })).toHaveProperty(
+    expect(screen.getByRole("combobox", { name: "语言" })).toHaveProperty(
         "value",
         "zh-CN",
     );
-    expect(screen.getByRole("status").textContent).toBe("语言偏好已保存。");
     expect(model).toHaveProperty("value", "custom-model-id");
     expect(screen.getByRole("textbox", { name: "Unsubmitted model ID" })).toBe(
         model,

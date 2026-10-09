@@ -12,46 +12,40 @@ import { AppearanceControl } from "./AppearanceControl";
 
 afterEach(cleanup);
 
-test("cycles this window's appearance and keeps the same focused button", async () => {
+test("selects appearance from the dropdown", async () => {
     const instance = await createAppI18n("en");
     render(
         <I18nextProvider i18n={instance}>
             <AppearanceControl />
         </I18nextProvider>,
     );
-    const button = screen.getByRole("button", {
-        name: "Appearance: Follow system; switch to Light",
-    });
-    button.focus();
-    fireEvent.click(button);
+    const select = screen.getByRole("combobox", { name: "Appearance" });
+    fireEvent.change(select, { target: { value: "light" } });
     expect(document.documentElement.dataset["appearance"]).toBe("light");
-    expect(
-        screen.getByRole("button", {
-            name: "Appearance: Light; switch to Dark",
-        }),
-    ).toBe(button);
-    fireEvent.click(button);
+    expect(select).toHaveProperty("value", "light");
+    fireEvent.change(select, { target: { value: "dark" } });
     expect(document.documentElement.dataset["appearance"]).toBe("dark");
-    fireEvent.click(button);
+    fireEvent.change(select, { target: { value: "system" } });
     expect(document.documentElement.dataset["appearance"]).toBe("system");
-    expect(document.activeElement).toBe(button);
 });
 
-test("updates current and next mode names without resetting appearance when language changes", async () => {
+test("keeps the selected appearance when language changes", async () => {
     const instance = await createAppI18n("en");
     render(
         <I18nextProvider i18n={instance}>
             <AppearanceControl />
         </I18nextProvider>,
     );
-    fireEvent.click(screen.getByRole("button"));
+    fireEvent.change(screen.getByRole("combobox", { name: "Appearance" }), {
+        target: { value: "light" },
+    });
     await act(async () => {
         await instance.changeLanguage("zh-CN");
     });
-    expect(
-        screen.getByRole("button", { name: "外观：浅色；切换为深色" }),
-    ).toHaveProperty("title", "外观：浅色；切换为深色");
-    expect(screen.getByRole("status").textContent).toBe("当前外观：浅色。");
+    expect(screen.getByRole("combobox", { name: "外观" })).toHaveProperty(
+        "value",
+        "light",
+    );
     expect(document.documentElement.dataset["appearance"]).toBe("light");
 });
 
@@ -63,7 +57,9 @@ test("restores the previous document attribute when its owner unmounts", async (
             <AppearanceControl />
         </I18nextProvider>,
     );
-    fireEvent.click(screen.getByRole("button"));
+    fireEvent.change(screen.getByRole("combobox", { name: "Appearance" }), {
+        target: { value: "light" },
+    });
     view.unmount();
     expect(document.documentElement.dataset["appearance"]).toBe("dark");
     delete document.documentElement.dataset["appearance"];

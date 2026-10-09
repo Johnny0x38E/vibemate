@@ -1,0 +1,80 @@
+.settings {
+    width: 100%;
+    max-width: none;
+}
+
+.title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.tabs {
+    display: flex;
+    gap: var(--space-lg);
+    margin-top: var(--space-md);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.tab {
+    position: relative;
+    margin: 0;
+    padding: 10px 2px 12px;
+    border: 0;
+    color: var(--color-summary);
+    background: none;
+    font: inherit;
+    font-size: 0.8125rem;
+    cursor: pointer;
+}
+
+.tab:hover {
+    color: var(--color-text);
+}
+
+.tab[aria-selected="true"] {
+    color: var(--color-text);
+    font-weight: 600;
+}
+
+.tab[aria-selected="true"]::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    bottom: -1px;
+    left: 0;
+    height: 2px;
+    border-radius: 2px 2px 0 0;
+    background: var(--color-accent);
+}
+
+.tab:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+}
+
+.panel {
+    min-width: 0;
+}
+
+.aboutPlaceholder {
+    margin-top: var(--space-lg);
+    max-width: 36rem;
+    padding: var(--space-lg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    background: var(--color-surface);
+}
+
+.aboutHeading {
+    margin: 0;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.aboutDetail {
+    margin: var(--space-sm) 0 0;
+    color: var(--color-summary);
+    font-size: 0.8125rem;
+    line-height: 1.7;
+}

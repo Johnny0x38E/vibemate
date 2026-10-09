@@ -1,5 +1,5 @@
 .shell {
-    --sidebar-width: 188px;
+    --sidebar-width: 200px;
     /* One row height for the traffic lights and both drag areas. */
     --titlebar-height: 44px;
     display: grid;
@@ -24,9 +24,13 @@
     height: var(--titlebar-height);
     flex-shrink: 0;
 }
-.titlebarStrip {
+.titlebarRow {
     grid-column: 2;
     grid-row: 1;
+    height: var(--titlebar-height);
+}
+.titlebarDrag {
+    height: 100%;
 }
 .brand {
     display: flex;
@@ -85,6 +89,10 @@
 .navigationButton[aria-current="page"] {
     background: var(--color-selected);
     font-weight: 600;
+}
+.brand:hover {
+    border-radius: var(--radius-control);
+    background: var(--color-hover);
 }
 .brand:focus-visible,
 .navigationButton:focus-visible,
@@ -155,12 +163,6 @@
     margin: var(--space-md) 0 0;
     color: var(--color-summary);
     line-height: 1.7;
-}
-.settings {
-    max-width: 680px;
-}
-.language {
-    padding: var(--space-lg) 0;
 }
 @media (max-width: 800px) {
     .content {

@@ -4,7 +4,8 @@
     --color-background: #f7f8f7;
     --color-sidebar: #ecefec;
     --color-surface: #ffffff;
-    --color-hover: #f0f2f0;
+    /* Darker than the sidebar (#ecefec) so row hovers read clearly in light mode. */
+    --color-hover: #dfe4e0;
     --color-selected: #dce3dd;
     --color-border: #d7ddd8;
     --color-summary: #626d65;

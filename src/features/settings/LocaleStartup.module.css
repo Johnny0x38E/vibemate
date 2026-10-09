@@ -1,3 +1,20 @@
+.startupShell {
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
+}
+
+.startupTitlebar {
+    flex-shrink: 0;
+    height: 44px;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-sidebar);
+}
+
+.startupDrag {
+    height: 100%;
+}
+
 .startup {
     max-width: 1120px;
     margin: auto;

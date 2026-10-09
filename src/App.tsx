@@ -2,9 +2,10 @@ import { useId, useState, type JSX, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { BrandWordmark } from "./components/BrandWordmark";
 import { Icon } from "./components/Icon";
+import { TitlebarChrome } from "./components/TitlebarChrome";
 import { WindowDragRegion } from "./components/WindowDragRegion";
 import { RelationshipOverview } from "./features/overview/RelationshipOverview";
-import { AppearanceControl } from "./features/settings/AppearanceControl";
+import { SettingsView } from "./features/settings/SettingsView";
 // Use the bundled application icon so the sidebar follows future icon changes.
 import appIcon from "../src-tauri/icons/128x128@2x.png";
 import styles from "./App.module.css";
@@ -120,7 +121,10 @@ export default function App({ languageSettings }: AppProps): JSX.Element {
             {/* A narrow unpainted strip above the scrolling content keeps the top edge
                 draggable without a visible title bar. It stays outside <main> so
                 scrolled content can never slide underneath it. */}
-            <WindowDragRegion className={styles["titlebarStrip"]} />
+            <TitlebarChrome
+                className={styles["titlebarRow"]}
+                dragClassName={styles["titlebarDrag"]}
+            />
             <main className={styles["content"]} aria-label={pageLabel}>
                 {page === "home" && <RelationshipOverview />}
                 {page !== "home" && page !== "settings" && (
@@ -134,16 +138,10 @@ export default function App({ languageSettings }: AppProps): JSX.Element {
                 )}
                 {/* Keep the real control alive when leaving Settings. Unmounting here
                     would discard a committed choice or an unknown save outcome. */}
-                <section
-                    className={styles["settings"]}
+                <SettingsView
+                    languageSettings={languageSettings}
                     hidden={page !== "settings"}
-                >
-                    <h1 className={styles["pageHeading"]}>
-                        {t("desktop.settingsTitle")}
-                    </h1>
-                    <div className={styles["language"]}>{languageSettings}</div>
-                    <AppearanceControl />
-                </section>
+                />
             </main>
         </div>
     );

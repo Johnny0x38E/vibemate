@@ -15,6 +15,8 @@ import {
 } from "../../lib/desktop/settings";
 import en from "../../locales/en.json";
 import zhCN from "../../locales/zh-CN.json";
+import { TitlebarChrome } from "../../components/TitlebarChrome";
+import { usesCustomWindowChrome } from "../../lib/desktop/window";
 import styles from "./LocaleStartup.module.css";
 
 /** Validated startup inputs supplied to the ready application composition. */
@@ -114,32 +116,41 @@ export function LocaleStartup({
     }, [state, systemLocale]);
 
     if (state.status !== "ready") {
+        const customChrome = usesCustomWindowChrome();
         return (
-            <main
-                className={styles["startup"]}
-                aria-busy={state.status === "loading"}
-            >
-                <p role={state.status === "loading" ? "status" : "alert"}>
-                    {state.status === "loading"
-                        ? messages.loading
-                        : messages[state.status]}
-                </p>
-                {state.status !== "loading" && (
-                    <button
-                        className={styles["retry"]}
-                        type="button"
-                        onClick={() => {
-                            // Close the gap before React removes the retry button.
-                            if (pending.current) return;
-                            pending.current = true;
-                            setState({ status: "loading" });
-                            setAttempt((previous) => previous + 1);
-                        }}
-                    >
-                        {messages.retry}
-                    </button>
+            <div className={styles["startupShell"]}>
+                {customChrome && (
+                    <TitlebarChrome
+                        className={styles["startupTitlebar"]}
+                        dragClassName={styles["startupDrag"]}
+                    />
                 )}
-            </main>
+                <main
+                    className={styles["startup"]}
+                    aria-busy={state.status === "loading"}
+                >
+                    <p role={state.status === "loading" ? "status" : "alert"}>
+                        {state.status === "loading"
+                            ? messages.loading
+                            : messages[state.status]}
+                    </p>
+                    {state.status !== "loading" && (
+                        <button
+                            className={styles["retry"]}
+                            type="button"
+                            onClick={() => {
+                                // Close the gap before React removes the retry button.
+                                if (pending.current) return;
+                                pending.current = true;
+                                setState({ status: "loading" });
+                                setAttempt((previous) => previous + 1);
+                            }}
+                        >
+                            {messages.retry}
+                        </button>
+                    )}
+                </main>
+            </div>
         );
     }
 

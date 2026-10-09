@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import { LocaleStartup } from "./features/settings/LocaleStartup";
+import { AppearanceControl } from "./features/settings/AppearanceControl";
 import { LanguageSelector } from "./features/settings/LanguageSelector";
 
 const root = document.getElementById("root");
@@ -11,7 +12,14 @@ ReactDOM.createRoot(root).render(
     <React.StrictMode>
         <LocaleStartup systemLanguage={navigator.language}>
             {(snapshot) => (
-                <App languageSettings={<LanguageSelector {...snapshot} />} />
+                <App
+                    languageSettings={
+                        <LanguageSelector
+                            {...snapshot}
+                            footer={<AppearanceControl />}
+                        />
+                    }
+                />
             )}
         </LocaleStartup>
     </React.StrictMode>,

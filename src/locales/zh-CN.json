@@ -45,7 +45,13 @@
         },
         "collapse": "折叠导航",
         "expand": "展开导航",
-        "settingsTitle": "通用设置",
+        "window": {
+            "group": "窗口控制",
+            "minimize": "最小化窗口",
+            "maximize": "最大化窗口",
+            "restore": "还原窗口",
+            "close": "关闭窗口"
+        },
         "plannedTitle": "功能尚未实现",
         "plannedDetail": "此功能尚未实现，目前不提供连接或配置修改操作。",
         "overview": {
@@ -63,11 +69,13 @@
         }
     },
     "settings": {
+        "tabs": {
+            "ariaLabel": "设置分区",
+            "general": "常规",
+            "about": "关于"
+        },
         "appearance": {
             "label": "外观",
-            "cycle": "外观：{{current}}；切换为{{next}}",
-            "current": "当前外观：{{mode}}。",
-            "temporary": "外观和导航布局仅在当前窗口生效。新窗口默认跟随系统外观并展开导航。",
             "modes": {
                 "system": "跟随系统",
                 "light": "浅色",
@@ -81,18 +89,14 @@
             "retry": "重试启动"
         },
         "language": {
-            "label": "界面语言",
+            "label": "语言",
             "system": "跟随系统",
             "zhCN": "简体中文",
             "en": "English",
-            "saving": "正在保存语言偏好…",
-            "saved": "语言偏好已保存。",
             "preview": "浏览器预览无法保存语言偏好。",
             "saveFailed": "无法保存语言偏好，原选择未改变，请重试。",
             "saveUnconfirmed": "无法确认已保存的语言偏好，请重新读取后再修改。",
             "reload": "重新读取已保存的偏好",
-            "reloading": "正在读取已保存的语言偏好…",
-            "reloaded": "已重新读取保存的语言偏好。",
             "reloadFailed": "无法读取已保存的语言偏好，请再次尝试重新读取。",
             "applyFailed": "偏好已保存，但无法切换界面语言，请重新读取已保存的偏好后重试。"
         }

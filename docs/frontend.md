@@ -8,13 +8,22 @@ React describes the interface; Rust handles local system and provider operations
 
 - `src/main.tsx` locates the HTML root and mounts React in StrictMode, with
   `LocaleStartup` withholding the App until its language preference is ready.
-- `src/App.tsx` composes the desktop shell: the collapsible 188/88 px sidebar
+- `src/App.tsx` composes the desktop shell: the collapsible 200/88 px sidebar
   (brand, Overview, four feature destinations, Settings with the icon-only
-  collapse toggle), the relationship home, planned pages, and a Settings section
-  that stays mounted while hidden so pending saves and input survive navigation.
-- `src/components/WindowDragRegion.tsx` marks unpainted strips that drag the
-  window (`data-tauri-drag-region`, permission `core:window:allow-start-dragging`).
-  Never place buttons or fields inside one; an App test enforces this.
+  collapse toggle), the relationship home, planned pages, and `SettingsView`
+  (mounted while hidden) for the settings area.
+- `src/features/settings/SettingsView.tsx` renders the settings title, General/About
+  tabs, and panels. General hosts `LanguageSelector` (with `footer={<AppearanceControl />}`)
+  composed in `src/main.tsx`. Tab switches and leaving Settings keep preference
+  controls mounted so pending saves and input survive.
+- `src/features/settings/settingsField.module.css` shares the grouped-card row
+  layout (label left, 36 px select right) for language and appearance.
+- Sidebar width is fixed at 200/88 px (`--sidebar-width`, `data-collapsed`); only
+  the collapse button changes layout.
+- `src/components/WindowDragRegion.tsx` and `TitlebarChrome.tsx` (with
+  `WindowControls` on Windows/Linux builds) implement drag strips and custom
+  window chrome. Never place buttons or fields inside a drag region; an App test
+  enforces this. Window IPC lives in `src/lib/desktop/window.ts`.
 - `src/components/BrandWordmark.tsx` draws the "vibemate" wordmark as SVG paths,
   so the brand needs no font file. `src/components/Icon.tsx` holds UI icons.
 - `src/lib/desktop.ts` checks runtime availability, calls Rust, and validates
@@ -25,7 +34,9 @@ On macOS the window uses Tauri's overlay title bar (`titleBarStyle: "Overlay"`,
 `hiddenTitle`, `trafficLightPosition` in `tauri.conf.json`): the native traffic
 lights stay, but there is no separate title-bar row. The top 44 px of the sidebar
 and of the content column are drag regions centered on the traffic-light row.
-Windows and Linux still use native decorations until their own controls exist.
+Windows and Linux builds use undecorated windows with in-app minimize, maximize,
+and close controls in the content-column title strip (`TitlebarChrome`). macOS
+keeps the overlay title bar and native traffic lights in the sidebar.
 Vite emits every asset as a file (`assetsInlineLimit: 0`) because the CSP's
 `img-src 'self'` blocks the `data:` URIs Vite would otherwise create.
 
@@ -65,51 +76,22 @@ Formatting is handled by Prettier, so style rules must not conflict with it.
 
 ## Editing in Zed
 
-Open the repository root in Zed and run `pnpm install --frozen-lockfile` before editing the frontend.
-The project supports Node.js 24.15+ on the Node 24 line, or Node.js 26+. Zed has native Rust, TypeScript, and
-TSX support; no separate extension is required for those languages.
+Open the repository root, run `pnpm install --frozen-lockfile`, then use
+`task: spawn` → a `vibemate:` task for dev, preview, or `check:frontend`.
+Node.js 24.15+ (24 line) or 26+; Zed covers Rust/TypeScript/TSX without extra
+extensions.
 
-The shared `.zed/settings.json` contains only project-specific ESLint language
-server entries, Rust project discovery/Clippy, and the lockfile type workaround.
-The `...` entry preserves Zed's other language servers, including its default
-TypeScript server. Save-time formatting and formatter preferences come from
-Zed's user settings or defaults; the repository does not duplicate personal
-preferences such as turning Rust format-on-save off.
+Shared repo config only:
 
-The `prettier` field in `package.json` sets `tabWidth: 4` for frontend code,
-configuration, and supported document formats, so CLI checks do not depend on
-anyone's global editor settings. Other Prettier defaults remain unchanged,
-including LF line endings and the 80-column print width. Separate `.editorconfig`
-and `.prettierrc.json` files are not needed. Editor indentation while typing comes
-from user settings or defaults; formatting enforces the repository's four spaces.
-ESLint reads `eslint.config.mjs`; its rules and Oxlint accessibility checks remain
-separate from formatting.
+- `.zed/settings.json` — ESLint language servers, `src-tauri/Cargo.toml` for
+  rust-analyzer/Clippy on save, and `pnpm-lock.yaml` as Plain Text (pnpm’s
+  multi-document lockfile is not normal YAML).
+- `.zed/tasks.json` — same commands as CI (see tasks in repo).
+- `package.json` → `prettier.tabWidth: 4` for formatted JS/TS/JSON/CSS; Rust
+  uses `rustfmt` via `rust-toolchain.toml`. Themes, format-on-save, and
+  keybindings stay in user settings.
 
-The explicit `src-tauri/Cargo.toml` path identifies the backend crate, and
-rust-analyzer runs Clippy on save. `rust-toolchain.toml` selects stable Rust with
-rustfmt and Clippy. Rust source formatting is owned by rustfmt, not Prettier;
-generated lockfiles retain their tool-generated layout.
-
-Run `task: spawn` from Zed's command palette and select a `vibemate:` task to
-start desktop development, preview the frontend, or run the project checks.
-Tasks run from the repository root, even when a backend file is active.
-The frontend preview does not provide native Tauri operations.
-
-Editor diagnostics do not replace `pnpm run check:frontend`: the dedicated
-Oxlint accessibility checks and release-tool tests still run through that command.
-Keep themes, fonts, keybindings, and personal AI settings in Zed's user settings.
-Commit shared project settings and tasks so contributors use the same commands.
-
-See the official [Rust](https://zed.dev/docs/languages/rust),
-[TypeScript](https://zed.dev/docs/languages/typescript),
-[language configuration](https://zed.dev/docs/configuring-languages), and
-[tasks](https://zed.dev/docs/tasks) documentation for editor behavior.
-
-The pnpm 12 lockfile contains separate YAML documents for the package manager
-and application. Zed's YAML diagnostics can reject this generated format, so
-`.zed/settings.json` reads only `pnpm-lock.yaml` as Plain Text. Other YAML files
-keep their normal language support. Validate the lockfile with
-`pnpm install --frozen-lockfile`; do not merge or reformat its documents manually.
+Editor diagnostics do not replace `pnpm run check:frontend`.
 
 ## Internationalization foundation
 

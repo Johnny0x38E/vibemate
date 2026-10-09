@@ -8,20 +8,19 @@ GitHub release notes are extracted from the matching version section only.
 
 ### Changed
 
-- Replaced the scope landing page with the desktop shell: a collapsible 188/88 px sidebar with the app icon and an SVG "vibemate" wordmark, an Overview destination, honest planned pages, a relationship home with reserved statistics, and Settings holding the language selector and an icon-only appearance cycle. The runtime status line was removed. Settings stays mounted so pending saves and input survive navigation.
-- On macOS, removed the separate native title-bar row with Tauri's overlay title bar while keeping the native traffic lights inside the sidebar. Unpainted 44 px top strips drag the window; the capability adds only `core:window:allow-start-dragging`. Verified with macOS release-build screenshots and maintainer checks (maximize, minimize, drag, edge resize, double-click zoom, fullscreen, startup-gate controls/drag, long English labels, and bilingual shell navigation). Windows/Linux window controls are not yet verified or implemented.
-- Restyled the language selector to match the 44 px controls, and stopped Vite from inlining assets as `data:` URIs, which the CSP blocks.
+- Replaced the scope landing page with the desktop shell: a collapsible 200/88 px sidebar (fixed widths, toggle only) with the app icon and an SVG "vibemate" wordmark, an Overview destination, honest planned pages, a relationship home with reserved statistics, and Settings with language and appearance controls. The runtime status line was removed. Settings and its tabs stay mounted while hidden so pending saves and input survive navigation.
+- On macOS, removed the separate native title-bar row with Tauri's overlay title bar while keeping the native traffic lights inside the sidebar. Unpainted 44 px top strips drag the window.
+- On Windows and Linux, disabled native decorations and added in-app minimize, maximize or restore, and close controls in the content title strip (including the startup gate).
+- Reworked Settings: top tabs for General and About (About is an honest placeholder only), a full-width grouped list row layout for Language and Appearance dropdowns, and no success or descriptive status text when changes apply immediately. Error, preview, and reload paths for language preference are unchanged. Light-mode row hover contrast was improved.
+- Stopped Vite from inlining assets as `data:` URIs, which the CSP blocks.
 
-- Established a sketch-based desktop-shell design baseline with a local light/dark preview, collapsible navigation, and an icon-only appearance cycle.
+- Established a sketch-based desktop-shell design baseline with a local light/dark preview and collapsible navigation (`docs/plans/desktop-shell-design.md`).
 
-- Standardized supported source and configuration indentation on four spaces, moved Prettier options into package.json, and removed redundant EditorConfig, standalone Prettier, and Tauri-local Git ignore files. Kept all Zed tasks while limiting project editor settings to project-specific integration.
+- Standardized four-space indentation via `package.json` Prettier options and trimmed redundant editor config files; Zed project settings cover ESLint, Rust, tasks, and the pnpm lockfile workaround (`docs/frontend.md`).
 
-- Scoped the Zed multi-document YAML workaround to the generated pnpm lockfile and kept private learning documents outside shared checks.
 - Raised the minimum Node.js version to 24.15 for the jsdom test environment.
 
 - Migrated development, CI, desktop commands, and release validation to pinned pnpm with a frozen dependency lockfile. Tauri API 2.12.1 and Vite 8.3.3 satisfy pnpm's default release-age policy.
-
-- Replaced editor extension recommendations with shared Zed settings, development tasks, and setup instructions.
 
 ### Added
 

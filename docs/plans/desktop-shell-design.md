@@ -2,7 +2,7 @@
 
 ## Decision and status
 
-P09 is paused while the approved desktop shell is implemented. The maintainer's reference is
+P09 is paused; the desktop shell (I02) is largely complete. The maintainer's reference is
 `docs/local/程序首页原型草图.png`. That private sketch is the source of the layout;
 this shared document records its meaning without publishing the original image.
 
@@ -11,27 +11,21 @@ The maintainer confirmed these choices:
 - Remove the separate native titlebar row.
 - On macOS, retain real native traffic-light controls inside the sidebar's top area.
 - Follow the system appearance; light and dark modes share the same structure.
-- Collapse the 188 px sidebar to an approximately 88 px icon rail, not a hidden drawer.
+- Collapse the 200 px expanded sidebar to an approximately 88 px icon rail, not a
+  hidden drawer. Width is fixed; only the collapse control toggles layout.
 - Remove the independent right-hand page titlebar, including its preview utilities.
-- Use one icon button in Settings to cycle system → light → dark → system.
+- Settings uses top tabs (General and About; About may stay a placeholder until
+  `get_app_info` is wired). General lists Language and Appearance as grouped
+  rows with compact dropdowns, not icon-cycle controls.
 
-The [interactive preview](desktop-shell-preview.html) is a design artifact, not
-an implemented desktop shell. Its window controls are illustrative, its language
-selector cannot save, and business integrations remain unimplemented. The maintainer
-approved the revised layout as the current design baseline; approval is not runtime
-verification.
+The [interactive preview](desktop-shell-preview.html) is a layout artifact only:
+it does not save language preferences, and its Settings UI is not kept in sync
+with production (tabs and dropdowns in the app). Business integrations remain
+unimplemented.
 
-Implementation status (2026-10-10): the production shell and the macOS overlay
-title bar are implemented and checked in the macOS release build with screenshots.
-Later maintainer adjustments: an Overview destination, the app icon plus an SVG
-"vibemate" wordmark (icon only when collapsed), no runtime status text, and the
-toggle placement below. Still unverified or unimplemented: Windows/Linux window controls and the Settings
-"About" section. macOS maintainer verification (2026-10-10): maximize, minimize,
-window drag, edge resize, double-click zoom on the drag strip, fullscreen, startup
-gate window controls/drag, long English labels, and bilingual shell navigation
-behave normally.
-See
-[todo.md](todo.md), I02.b–I02.d.
+**Production (I02):** shell, macOS overlay title bar, Windows/Linux undecorated
+window controls, and Settings General/About UX are implemented. **Still open:**
+Settings About content via `get_app_info`. Checklist: [todo.md](todo.md) I02.d.
 
 ## Layout
 
@@ -51,9 +45,9 @@ See
 └──────────────────┴──────────────────────────────────────────────────────┘
 ```
 
-- Expanded sidebar: approximately 188 px. Collapsed icon rail: approximately
-  88 px, including enough room for all three native macOS controls. All navigation
-  destinations and Settings remain available at the 720×560 minimum size.
+- Expanded sidebar: 200 px. Collapsed icon rail: approximately 88 px, including
+  enough room for all three native macOS controls. All navigation destinations
+  and Settings remain available at the 720×560 minimum size.
 - Reserve approximately 44 px above the brand for macOS controls. Their window
   coordinates stay fixed across collapse/expand; never move them beside a title.
 - There is no independent right-hand header row, divider, or utility strip.
@@ -67,12 +61,13 @@ See
   destinations and bottom-aligned Settings from the sketch.
 - Scroll long main content independently of the sidebar. Dialogs, long labels,
   and keyboard focus must remain usable at the minimum size.
-- Place language preferences and appearance control inside Settings. Appearance
-  is a single icon-only button, not a dropdown or a group of switches. Click,
-  Enter, or Space cycles system → light → dark → system. The monitor/sun/moon icon
-  represents the selected mode; tooltips and accessible names describe both the
-  current mode and next action. System mode must continue following OS changes.
-  The preview changes only its own CSS and does not persist appearance.
+- Place language preferences and appearance inside Settings → General. Both use
+  the same row pattern (label left, select right) inside one bordered group.
+  Appearance is a three-option select (follow system, light, dark); it sets
+  `data-appearance` on the document for this window only and does not persist.
+  Language preference still saves through Rust when not in browser preview.
+  Do not show redundant success or “current mode” copy when the UI updates
+  immediately; keep error and reload messaging for uncertain outcomes.
 - Startup owns preference resolution, not page layout; it must not prepend a
   language section to every page.
 - Use system fonts, restrained neutral surfaces, fine dividers, and compact
@@ -137,9 +132,10 @@ The sole implementation checklist remains [todo.md](todo.md), under I02.
 Implement one reviewable behavior at a time, with file lists split before editing.
 
 The first draft received provisional approval, then the maintainer requested
-collapse, removal of the right-hand header, and an icon-only appearance cycle.
+collapse, removal of the right-hand header, and Settings tabs with grouped
+Language/Appearance dropdowns (the static preview may still show older controls).
 Review the updated preview expanded/collapsed in both appearances at 720×560,
-including invariant native-control coordinates and keyboard-only cycling. After
+including invariant native-control coordinates. After
 visual approval, implement the shell, then move the language selector into Settings,
 then implement the native window chrome. Keep the existing startup, save/reload,
 and input-preservation behavior intact. Add both translations with each new view.

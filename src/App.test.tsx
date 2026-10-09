@@ -12,6 +12,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import DesktopApp from "./App";
 import { createAppI18n } from "./i18n";
 import { LocaleStartup } from "./features/settings/LocaleStartup";
+import { AppearanceControl } from "./features/settings/AppearanceControl";
 import { LanguageSelector } from "./features/settings/LanguageSelector";
 import {
     getLocalePreference,
@@ -36,7 +37,17 @@ function App(): JSX.Element {
     return (
         <DesktopApp
             languageSettings={
-                <input aria-label="Unsubmitted note" defaultValue="Draft" />
+                <>
+                    <LanguageSelector
+                        initialPreference={{
+                            kind: "desktop",
+                            preference: "en",
+                        }}
+                        systemLanguage="en"
+                        footer={<AppearanceControl />}
+                    />
+                    <input aria-label="Unsubmitted note" defaultValue="Draft" />
+                </>
             }
         />
     );
@@ -136,21 +147,18 @@ test("keeps the same settings input and appearance while navigating elsewhere", 
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     const input = screen.getByRole("textbox", { name: "Unsubmitted note" });
     fireEvent.change(input, { target: { value: "Still editing" } });
-    fireEvent.click(
-        screen.getByRole("button", {
-            name: "Appearance: Follow system; switch to Light",
-        }),
-    );
+    fireEvent.change(screen.getByRole("combobox", { name: "Appearance" }), {
+        target: { value: "light" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Agents" }));
     expect(screen.queryByRole("textbox")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     expect(screen.getByRole("textbox")).toBe(input);
     expect(input).toHaveProperty("value", "Still editing");
-    expect(
-        screen.getByRole("button", {
-            name: "Appearance: Light; switch to Dark",
-        }),
-    ).toBeDefined();
+    expect(screen.getByRole("combobox", { name: "Appearance" })).toHaveProperty(
+        "value",
+        "light",
+    );
     expect(document.documentElement.dataset["appearance"]).toBe("light");
 });
 
@@ -183,7 +191,12 @@ function renderDesktopStartup() {
         <LocaleStartup systemLanguage="zh-TW">
             {(snapshot) => (
                 <DesktopApp
-                    languageSettings={<LanguageSelector {...snapshot} />}
+                    languageSettings={
+                        <LanguageSelector
+                            {...snapshot}
+                            footer={<AppearanceControl />}
+                        />
+                    }
                 />
             )}
         </LocaleStartup>,
@@ -197,7 +210,7 @@ test("keeps an uncertain language save blocked across navigation until a real se
     renderDesktopStartup();
     fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
     const selector = screen.getByRole("combobox", {
-        name: "Interface language",
+        name: "Language",
     });
     fireEvent.change(selector, { target: { value: "zh-CN" } });
     const reload = await screen.findByRole("button", {
@@ -205,7 +218,7 @@ test("keeps an uncertain language save blocked across navigation until a real se
     });
     fireEvent.click(screen.getByRole("button", { name: "Providers" }));
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
-    expect(screen.getByRole("combobox")).toBe(selector);
+    expect(screen.getByRole("combobox", { name: "Language" })).toBe(selector);
     expect(selector).toHaveProperty("disabled", true);
     expect(
         screen.getByRole("button", { name: "Reload saved preference" }),
@@ -215,8 +228,8 @@ test("keeps an uncertain language save blocked across navigation until a real se
         preference: "zh-CN",
     });
     fireEvent.click(reload);
-    await screen.findByText("已重新读取保存的语言偏好。");
-    expect(screen.getByRole("combobox", { name: "界面语言" })).toHaveProperty(
+    await screen.findByRole("combobox", { name: "语言" });
+    expect(screen.getByRole("combobox", { name: "语言" })).toHaveProperty(
         "value",
         "zh-CN",
     );
@@ -238,7 +251,9 @@ test("finishes a pending save while Settings is hidden and retains its confirmed
     vi.mocked(saveLocalePreference).mockReturnValue(pendingSave);
     renderDesktopStartup();
     fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
-    const selector = screen.getByRole("combobox");
+    const selector = screen.getByRole("combobox", {
+        name: "Language",
+    });
     fireEvent.change(selector, { target: { value: "zh-CN" } });
     fireEvent.click(screen.getByRole("button", { name: "Providers" }));
     await act(async () => {
@@ -252,8 +267,7 @@ test("finishes a pending save while Settings is hidden and retains its confirmed
             .getAttribute("aria-current"),
     ).toBe("page");
     fireEvent.click(screen.getByRole("button", { name: "设置" }));
-    expect(screen.getByRole("combobox")).toBe(selector);
+    expect(screen.getByRole("combobox", { name: "语言" })).toBe(selector);
     expect(selector).toHaveProperty("value", "zh-CN");
     expect(selector).toHaveProperty("disabled", false);
-    expect(screen.getByText("语言偏好已保存。")).toBeDefined();
 });

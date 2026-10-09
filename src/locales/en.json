@@ -45,7 +45,13 @@
         },
         "collapse": "Collapse navigation",
         "expand": "Expand navigation",
-        "settingsTitle": "General settings",
+        "window": {
+            "group": "Window controls",
+            "minimize": "Minimize window",
+            "maximize": "Maximize window",
+            "restore": "Restore window",
+            "close": "Close window"
+        },
         "plannedTitle": "Not implemented",
         "plannedDetail": "This feature has not been implemented. No connection or configuration changes are available yet.",
         "overview": {
@@ -63,11 +69,13 @@
         }
     },
     "settings": {
+        "tabs": {
+            "ariaLabel": "Settings sections",
+            "general": "General",
+            "about": "About"
+        },
         "appearance": {
             "label": "Appearance",
-            "cycle": "Appearance: {{current}}; switch to {{next}}",
-            "current": "Current appearance: {{mode}}.",
-            "temporary": "Appearance and navigation layout apply to this window only. A new window starts with system appearance and expanded navigation.",
             "modes": {
                 "system": "Follow system",
                 "light": "Light",
@@ -81,18 +89,14 @@
             "retry": "Retry startup"
         },
         "language": {
-            "label": "Interface language",
+            "label": "Language",
             "system": "Follow system",
             "zhCN": "简体中文",
             "en": "English",
-            "saving": "Saving language preference…",
-            "saved": "Language preference saved.",
             "preview": "Browser preview cannot save language preferences.",
             "saveFailed": "The language preference could not be saved. Your previous choice is unchanged; try again.",
             "saveUnconfirmed": "The saved language preference could not be confirmed. Reload it before making another change.",
             "reload": "Reload saved preference",
-            "reloading": "Reading saved language preference…",
-            "reloaded": "Saved language preference reloaded.",
             "reloadFailed": "The saved language preference could not be read. Try reloading it again.",
             "applyFailed": "The preference is saved, but the interface language could not be changed. Reload the saved preference to retry."
         }

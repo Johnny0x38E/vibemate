@@ -1,4 +1,5 @@
 <!doctype html>
+<!-- Layout-only artifact: Settings UI here is outdated; production uses General/About tabs and dropdowns (see desktop-shell-design.md). -->
 <html lang="zh-CN" data-appearance="system">
     <head>
         <meta charset="UTF-8" />
@@ -10,7 +11,7 @@
                 --background: #f7f8f7;
                 --sidebar: #ecefec;
                 --surface: #ffffff;
-                --muted-surface: #f0f2f0;
+                --muted-surface: #dfe4e0;
                 --text: #202621;
                 --muted: #626d65;
                 --border: #d7ddd8;
@@ -70,7 +71,7 @@
                 outline-offset: 3px;
             }
             .shell {
-                --sidebar-width: 188px;
+                --sidebar-width: 200px;
                 display: grid;
                 grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
                 grid-template-rows: minmax(0, 1fr);

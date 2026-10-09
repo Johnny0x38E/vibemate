@@ -57,12 +57,20 @@ describe("bundled translations", () => {
 
     it("preserves interpolated values inside translated sentences", async () => {
         const instance = await createAppI18n("zh-CN");
-        expect(
-            instance.t("settings.appearance.cycle", {
-                current: "Light",
-                next: "Dark",
-            }),
-        ).toBe("外观：Light；切换为Dark");
+        expect(instance.t("settings.appearance.modes.light")).toBe("浅色");
+    });
+
+    it("exposes settings tab labels in both locales", async () => {
+        const enInstance = await createAppI18n("en");
+        expect(enInstance.t("settings.tabs.general")).toBe("General");
+        expect(enInstance.t("settings.tabs.about")).toBe("About");
+        expect(enInstance.t("settings.tabs.ariaLabel")).toBe(
+            "Settings sections",
+        );
+        const zhInstance = await createAppI18n("zh-CN");
+        expect(zhInstance.t("settings.tabs.general")).toBe("常规");
+        expect(zhInstance.t("settings.tabs.about")).toBe("关于");
+        expect(zhInstance.t("settings.tabs.ariaLabel")).toBe("设置分区");
     });
 
     it("uses locale-aware plural rules and Intl number formatting", async () => {

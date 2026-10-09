@@ -1,0 +1,104 @@
+.controls {
+    display: flex;
+    flex-shrink: 0;
+    align-items: stretch;
+    height: 100%;
+}
+
+.control {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 46px;
+    border: 0;
+    color: var(--color-text);
+    background: none;
+    font: inherit;
+    cursor: pointer;
+}
+
+.control:hover {
+    background: var(--color-hover);
+}
+
+.controlClose:hover {
+    color: #fff;
+    background: #c42b1c;
+}
+
+.control:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: -2px;
+}
+
+.iconMinimize,
+.iconMaximize,
+.iconRestore,
+.iconClose {
+    display: block;
+    box-sizing: border-box;
+}
+
+.iconMinimize {
+    width: 10px;
+    height: 1px;
+    background: currentColor;
+}
+
+.iconMaximize {
+    width: 10px;
+    height: 10px;
+    border: 1px solid currentColor;
+}
+
+.iconRestore {
+    position: relative;
+    width: 10px;
+    height: 10px;
+}
+
+.iconRestore::before,
+.iconRestore::after {
+    position: absolute;
+    box-sizing: border-box;
+    width: 8px;
+    height: 8px;
+    border: 1px solid currentColor;
+    background: var(--color-sidebar);
+    content: "";
+}
+
+.iconRestore::before {
+    top: 0;
+    right: 0;
+}
+
+.iconRestore::after {
+    bottom: 0;
+    left: 0;
+}
+
+.iconClose {
+    position: relative;
+    width: 10px;
+    height: 10px;
+}
+
+.iconClose::before,
+.iconClose::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 12px;
+    height: 1px;
+    background: currentColor;
+    content: "";
+}
+
+.iconClose::before {
+    transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.iconClose::after {
+    transform: translate(-50%, -50%) rotate(-45deg);
+}

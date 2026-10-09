@@ -1,0 +1,11 @@
+.chrome {
+    display: flex;
+    align-items: stretch;
+    min-width: 0;
+    height: 100%;
+}
+
+.drag {
+    flex: 1;
+    min-width: 0;
+}

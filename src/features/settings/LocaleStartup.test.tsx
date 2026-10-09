@@ -87,7 +87,7 @@ test("withholds application content until a saved English choice overrides a Chi
         await response.promise;
     });
     expect(
-        await screen.findByRole("combobox", { name: "Interface language" }),
+        await screen.findByRole("combobox", { name: "Language" }),
     ).toHaveProperty("value", "en");
     expect(document.documentElement.lang).toBe("en");
     expect(screen.getByRole("textbox")).toHaveProperty("value", "Draft");
@@ -95,9 +95,9 @@ test("withholds application content until a saved English choice overrides a Chi
 });
 
 test.each([
-    ["en-US", "zh-CN", "界面语言", "zh-CN"],
-    ["zh-Hant-HK", "system", "界面语言", "zh-CN"],
-    ["fr-FR", "system", "Interface language", "en"],
+    ["en-US", "zh-CN", "语言", "zh-CN"],
+    ["zh-Hant-HK", "system", "语言", "zh-CN"],
+    ["fr-FR", "system", "Language", "en"],
 ] as const)(
     "resolves %s with saved %s before opening the app",
     async (systemLanguage, preference, label, language) => {
@@ -127,7 +127,7 @@ test("opens preview in the system language without allowing persistence", async 
         </LocaleStartup>,
     );
     expect(
-        await screen.findByRole("combobox", { name: "界面语言" }),
+        await screen.findByRole("combobox", { name: "语言" }),
     ).toHaveProperty("disabled", true);
     expect(document.documentElement.lang).toBe("zh-CN");
     expect(screen.getByText("浏览器预览无法保存语言偏好。")).toBeDefined();
@@ -162,7 +162,7 @@ test("blocks the app after a read failure and retries without saving a default",
         await response.promise;
     });
     expect(
-        await screen.findByRole("combobox", { name: "界面语言" }),
+        await screen.findByRole("combobox", { name: "语言" }),
     ).toHaveProperty("value", "zh-CN");
     expect(getLocalePreference).toHaveBeenCalledTimes(2);
     expect(saveLocalePreference).not.toHaveBeenCalled();
@@ -189,7 +189,7 @@ test("distinguishes translator initialization failure from a failed preference r
     expect(screen.queryByText("Synthetic translator diagnostic")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "重试启动" }));
     expect(
-        await screen.findByRole("combobox", { name: "Interface language" }),
+        await screen.findByRole("combobox", { name: "Language" }),
     ).toHaveProperty("value", "en");
     expect(saveLocalePreference).not.toHaveBeenCalled();
 });
@@ -219,7 +219,7 @@ test.each(["resolve", "reject"] as const)(
                 </LocaleStartup>
             </StrictMode>,
         );
-        await screen.findByRole("combobox", { name: "Interface language" });
+        await screen.findByRole("combobox", { name: "Language" });
         const input = screen.getByRole("textbox");
         fireEvent.change(input, { target: { value: "Still editing" } });
         await act(async () => {
@@ -229,7 +229,7 @@ test.each(["resolve", "reject"] as const)(
             await oldResponse.catch(() => undefined);
         });
         expect(
-            screen.getByRole("combobox", { name: "Interface language" }),
+            screen.getByRole("combobox", { name: "Language" }),
         ).toHaveProperty("value", "en");
         expect(document.documentElement.lang).toBe("en");
         expect(screen.getByRole("textbox")).toBe(input);
@@ -255,7 +255,7 @@ test("updates HTML language only after a confirmed save and preserves the same i
             <input aria-label="Note" />
         </LocaleStartup>,
     );
-    await screen.findByRole("combobox", { name: "Interface language" });
+    await screen.findByRole("combobox", { name: "Language" });
     const input = screen.getByRole("textbox");
     fireEvent.change(input, { target: { value: "Unsubmitted draft" } });
     fireEvent.change(screen.getByRole("combobox"), {
@@ -266,7 +266,7 @@ test("updates HTML language only after a confirmed save and preserves the same i
         finishSave("zh-CN");
         await save;
     });
-    await screen.findByText("语言偏好已保存。");
+    await screen.findByRole("combobox", { name: "语言" });
     expect(document.documentElement.lang).toBe("zh-CN");
     expect(screen.getByRole("textbox")).toBe(input);
     expect(input).toHaveProperty("value", "Unsubmitted draft");

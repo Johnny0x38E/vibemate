@@ -14,6 +14,8 @@ GitHub release notes are extracted from the matching version section only.
 
 ### Added
 
+- Recorded official provider protocols, model metadata, parameter constraints, and the first documented Pi compatibility path.
+
 - Initial Rust, Tauri 2, React, and TypeScript desktop scaffold.
 - Project rules, MIT license, contributor guide, and Chinese learning guide.
 - Native CI checks for macOS, Windows, and Linux.

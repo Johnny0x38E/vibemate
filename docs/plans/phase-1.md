@@ -24,7 +24,9 @@ No credentials have been collected and no agent configuration has been changed.
 The detailed development plan is [development-plan.md](development-plan.md).
 The single task checklist is [todo.md](todo.md). These files expand the same
 phase-1 scope; this overview does not contain a second execution checklist.
-The plan is awaiting maintainer review. No feature task is marked complete.
+Implementation is authorized. The pnpm migration is recorded as P00, and
+P01 provider evidence is in [providers.md](../integrations/providers.md).
+Agent contracts and all business implementations remain pending.
 
 ## Implementation order
 

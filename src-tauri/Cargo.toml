@@ -2,7 +2,7 @@
 name = "vibemate"
 version = "0.1.0"
 description = "A desktop configuration manager for coding agents"
-authors = ["vibemate contributors"]
+authors = ["Johnny Huang"]
 license = "MIT"
 edition = "2024"
 

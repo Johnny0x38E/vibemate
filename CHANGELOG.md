@@ -8,7 +8,7 @@ GitHub release notes are extracted from the matching version section only.
 
 ### Changed
 
-- Migrated development, CI, desktop commands, and release validation to pinned pnpm with a frozen dependency lockfile.
+- Migrated development, CI, desktop commands, and release validation to pinned pnpm with a frozen dependency lockfile. Tauri API 2.12.1 and Vite 8.3.3 satisfy pnpm's default release-age policy.
 
 - Replaced editor extension recommendations with shared Zed settings, development tasks, and setup instructions.
 

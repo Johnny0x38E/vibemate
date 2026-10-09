@@ -76,13 +76,23 @@
 **执行记录（2026-10-09）：**
 
 - macOS Apple Silicon；Node.js `26.3.0`、pnpm `12.10.1`、Rust/Cargo `1.99.0`；CI 保持 Node.js 24。
-- `pnpm import` 后核对并恢复两项补丁版本，18 个已有直接依赖版本全部保持一致；仅新增发布工具需要的 `yaml@2.9.1`（ISC，MIT 兼容）。
+- `pnpm import` 后核对并恢复两项补丁版本，最初 18 个已有直接依赖版本保持一致；远端 CI 后续暴露发布年龄限制，修正结果见下方；仅新增发布工具需要的 `yaml@2.9.1`（ISC，MIT 兼容）。
 - `pnpm install --frozen-lockfile` 通过；不需要额外依赖构建脚本，因此未新增 workspace 或放宽构建审批策略。
 - `pnpm run check:frontend` 通过，发布测试实际执行 8 条；测试先因旧 npm 锁文件读取逻辑失败，迁移实现后通过。
 - Rust fmt、Clippy 通过；`cargo test --manifest-path src-tauri/Cargo.toml --locked` 成功，但当前骨架实际为 0 条测试，不作为业务测试覆盖。
 - `pnpm run tauri build --no-bundle -- --locked` 通过，产物为 `src-tauri/target/release/vibemate`。
 - 两份 workflow YAML 可解析，保留冻结安装与全部既有检查；Windows/Linux、Node.js 24 和远端草稿 Release 尚待实际工作流验证。
-- Zed 配置提交 `a2d0eab` 已推送；迁移将作为独立提交，P01 资料核实继续，不标记其他业务任务完成。
+- Zed 配置提交 `a2d0eab` 已推送；迁移提交 `3f75043` 已推送；P01 资料核实继续，不标记其他业务任务完成。
+
+### P00.f：修复干净 CI 安装的发布年龄限制
+
+- [x] 使用符合 pnpm 默认 24 小时发布年龄策略的 Tauri API `2.12.1` 与 Vite `8.3.3`，不禁用策略。
+- [x] 在隔离 store/cache 中验证冻结安装，重新完成前端与桌面构建。
+- [ ] 核对实际 GitHub CI 结果，记录补丁版本调整和平台结果。
+
+**Files:** `pnpm-lock.yaml`、`CHANGELOG.md`；本清单记录验证结果。
+**Dependencies:** P00.a–P00.e。
+**执行记录：** `3f75043` 的远端前端检查在安装阶段失败：Tauri API `2.12.2` 与 Vite `8.3.4` 发布未满 24 小时，本机缓存未暴露此限制。此前本机成功不代表干净 CI 安装通过。修正后隔离 store/cache 冻结安装、完整前端检查（8 条发布测试）和 macOS 桌面构建再次通过；远端验证待新提交触发。
 
 ## 阶段 A：接入证据
 

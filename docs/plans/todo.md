@@ -1,6 +1,6 @@
 # vibemate 第一阶段执行清单
 
-状态：P00 包管理器迁移、P01–P03 接入证据与 P04 UI 测试入口已完成；业务功能尚未实现，首页草图与绿色启用语义已确认，样式后续调整。说明与设计见 [development-plan.md](development-plan.md)。
+状态：P00 包管理器迁移、P01–P03 接入证据、P04 UI 测试入口与 P05 私有配置存储已完成；业务功能尚未实现，首页草图与绿色启用语义已确认，样式后续调整。说明与设计见 [development-plan.md](development-plan.md)。
 这里是唯一任务状态来源，不能在其他文件维护第二份勾选清单。
 
 ## 执行约定
@@ -283,14 +283,14 @@
 
 **Acceptance criteria:**
 
-- [ ] 使用平台 app-data 目录与临时测试数据库，创建 schema version 并可重复初始化。
-- [ ] 迁移失败保持旧数据可读且报告安全错误；不写入项目目录或数据库密钥字段。
-- [ ] 确定连接与并发访问方式，只有需要的业务表随后续任务增加。
+- [x] 使用平台 app-data 目录与临时测试数据库，创建 schema version 并可重复初始化。
+- [x] 迁移失败保持旧数据可读且报告安全错误；不写入项目目录或数据库密钥字段。
+- [x] 确定连接与并发访问方式，只有需要的业务表随后续任务增加。
 
 **Verification:**
 
-- [ ] 运行 `cargo test --manifest-path src-tauri/Cargo.toml --locked storage`，覆盖首次启动、重复初始化与失败迁移。
-- [ ] 运行 Rust fmt/Clippy；在 Tauri 中检查实际数据目录。
+- [x] 运行 `cargo test --manifest-path src-tauri/Cargo.toml --locked storage`，覆盖首次启动、重复初始化与失败迁移。
+- [x] 运行 Rust fmt/Clippy；在 Tauri 中检查实际数据目录。
 
 **Dependencies:** P01,P02,P03。
 
@@ -303,7 +303,24 @@
 
 **Estimated scope:** M：4 个建议主文件；如需额外文件先按执行约定拆分。
 
-**执行记录：** 尚未实施。
+**执行记录（2026-10-09）：**
+
+- 实现提交：`dab6344`（`feat: add private SQLite configuration storage`）；涉及 `Cargo.toml`、`Cargo.lock`、`src/storage.rs`、`src/lib.rs` 与 CHANGELOG。尚未推送，远端 CI 未运行。
+- 依赖：`rusqlite 0.40.2`（MIT，与 `cargo info` 显示的最新版本一致），关闭默认特性，只启用 `bundled`，使三平台使用同一版 SQLite（`libsqlite3-sys 0.38.2`，MIT）。新增传递依赖 `fallible-iterator`、`fallible-streaming-iterator`、`vcpkg` 为 MIT/Apache-2.0。
+- 设计决定：
+  - 连接：一个 `Connection` 放在 `Mutex` 中，每次短操作加锁；跨进程写入由 SQLite 串行化，`busy_timeout` 等待 5 秒；保留默认回滚日志，数据库是单个文件，便于 P19 的备份与恢复。
+  - 版本与迁移：版本号存于 SQLite `user_version`；每个迁移与版本更新在同一事务提交，失败则回滚。迁移器约 40 行，未引入 `rusqlite_migration`，因为当前只需要线性版本号。
+  - 版本基线：版本 1 只标记数据库已版本化，不建业务表。
+  - 更新版本的数据库：版本高于本构建时拒绝写入，避免误读未知表。
+  - 启动失败：数据库无法打开或升级时应用退出，并输出安全文案。当前阶段尚无用户数据，先采用明确失败；界面如何展示存储错误（错误码与翻译）留给 P09/P10，维护者可在 P10 前决定是否改为可启动并提示。
+- 测试：`cargo test --manifest-path src-tauri/Cargo.toml --locked storage` 执行 6 条，覆盖首次创建目录与数据库并到最新版本；重复打开保留数据且不重复执行迁移；失败迁移回滚、旧数据仍可读，错误文本不含 SQL 或路径；拒绝更新版本的数据库且不修改；迁移编号连续；存储可跨线程共享。完整 `cargo test --locked` 同为 6/6。
+- 变异验证：临时把迁移事务改为丢弃时提交（`DropBehavior::Commit`），失败迁移测试失败（退出码 101）；按字节恢复后 6/6 通过。
+- 静态检查：`cargo fmt --check`、`cargo clippy --locked --all-targets -- -D warnings` 通过；`pnpm run format:check` 通过（CHANGELOG）；`pnpm run tauri build --no-bundle -- --locked` 通过。
+- 真实 Tauri（macOS arm64，发布构建产物）：
+  - 首次启动在 `~/Library/Application Support/dev.vibemate.desktop/vibemate.sqlite3` 创建数据库；`PRAGMA user_version` 为 1，`integrity_check` 为 ok，无业务表；项目目录未生成数据库。
+  - 把版本改为 9 后启动：应用拒绝启动并输出安全文案（数据库版本 9，本构建支持到 1），数据库仍为版本 9。
+  - 验证结束后删除了测试生成的数据目录（验证前该目录不存在）。
+- 限制：Windows/Linux 上的 bundled SQLite 编译与路径行为待远端三平台 CI 验证；数据库文件权限未额外收紧（位于用户私有的 Application Support 目录），备份权限留给 P19/P37 验证；错误文案目前为英文开发者文本，P09 改为错误码加翻译。本任务未接触 OS 凭据库，数据库中没有密钥字段。
 
 ### Task P06: 建立 OS 凭据接口
 

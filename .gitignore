@@ -1,0 +1,16 @@
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/gen/
+.codegraph/
+.DS_Store
+*.log
+.env
+.env.*
+!.env.example
+*.local
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Application lockfiles belong in Git; generated build output does not.

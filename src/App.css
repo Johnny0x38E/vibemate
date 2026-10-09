@@ -1,0 +1,140 @@
+:root {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #e8eee9;
+  background: #141a17;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+.workspace {
+  max-width: 1120px;
+  margin: auto;
+  padding: 32px 48px;
+}
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #344039;
+  padding-bottom: 22px;
+}
+.brand {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -1px;
+}
+.brand-dot {
+  color: #bbdf93;
+}
+.stage,
+.eyebrow {
+  font-size: 11px;
+  letter-spacing: 1.8px;
+  color: #acc0af;
+}
+.intro {
+  padding: 44px 0 34px;
+}
+h1 {
+  font-size: clamp(38px, 5vw, 62px);
+  line-height: 1.06;
+  letter-spacing: -2.5px;
+  margin: 14px 0 20px;
+  font-weight: 550;
+}
+.summary {
+  color: #adbcb1;
+  max-width: 510px;
+  line-height: 1.6;
+  font-size: 16px;
+}
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.section-heading h2 {
+  font-size: 15px;
+  font-weight: 500;
+  margin: 0;
+}
+.section-heading span,
+.number {
+  color: #9faea4;
+  font-size: 12px;
+}
+.scope-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.scope-card {
+  padding: 20px;
+  background: #1c251f;
+  border: 1px solid #344039;
+  border-radius: 10px;
+}
+.card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.planned {
+  font-size: 11px;
+  color: #c4d8b4;
+  border: 1px solid #526249;
+  border-radius: 4px;
+  padding: 3px 7px;
+}
+h3 {
+  margin: 18px 0 8px;
+  font-size: 20px;
+  font-weight: 550;
+}
+.items {
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 0;
+  color: #dde5df;
+}
+.detail {
+  font-size: 13px;
+  color: #a8b8ad;
+  line-height: 1.6;
+  margin: 8px 0 0;
+}
+footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 22px;
+}
+footer p {
+  color: #a8b8ad;
+  font-size: 12px;
+  margin: 0;
+  line-height: 1.5;
+}
+.runtime {
+  color: #c4d8b4;
+}
+@media (max-width: 650px) {
+  .workspace {
+    padding: 24px;
+  }
+  .scope-grid {
+    grid-template-columns: 1fr;
+  }
+  .stage {
+    font-size: 9px;
+    letter-spacing: 1px;
+  }
+}

@@ -1,6 +1,7 @@
 //! Desktop startup and command registration for vibemate.
 
 mod commands;
+pub mod credentials;
 pub mod storage;
 
 use tauri::Manager;

@@ -1,6 +1,6 @@
 # vibemate 第一阶段执行清单
 
-状态：P00 包管理器迁移与 P01 接入证据已完成；业务功能尚未实现，首页草图与绿色启用语义已确认，样式后续调整。说明与设计见 [development-plan.md](development-plan.md)。
+状态：P00 包管理器迁移、P01–P03 接入证据与 P04 UI 测试入口已完成；业务功能尚未实现，首页草图与绿色启用语义已确认，样式后续调整。说明与设计见 [development-plan.md](development-plan.md)。
 这里是唯一任务状态来源，不能在其他文件维护第二份勾选清单。
 
 ## 执行约定
@@ -196,7 +196,7 @@
 
 - [x] 本组任务验收与验证有实际证据；受阻项没有勾选为完成。
 - [x] 三家 Provider、两个 Agent 的协议/认证/Skill/MCP 支持矩阵已记录，缺项已提出。
-- [ ] 本组结果随本轮报告维护者，后续审阅意见在此记录；当前无阻止 P04 的必需协议或范围决策。
+- [x] 维护者已指示继续 P04，并确认继续 pnpm；当前无必需的协议或范围决策。
 
 **C03 执行记录：** P01–P03 官方证据与本机隔离验证已记录；矩阵区分协议入口与真实接通。未实现业务能力保持未实现，本阶段没有额外桥接范围决策。
 
@@ -208,14 +208,14 @@
 
 **Acceptance criteria:**
 
-- [ ] 选择并说明最小测试组合，建议 Vitest + Testing Library，提供 `pnpm run test:ui`。
-- [ ] 替换现有 desktop 边界，验证加载完成、失败反馈和卸载后忽略异步结果，测试不是静态标签快照。
-- [ ] 把 UI 测试接入 `check:frontend`，同步 ESLint/TypeScript 测试环境，不降低严格规则。
+- [x] 选择并说明最小测试组合，建议 Vitest + Testing Library，提供 `pnpm run test:ui`。
+- [x] 替换现有 desktop 边界，验证加载完成、失败反馈和卸载后忽略异步结果，测试不是静态标签快照。
+- [x] 把 UI 测试接入 `check:frontend`，同步 ESLint/TypeScript 测试环境，不降低严格规则。
 
 **Verification:**
 
-- [ ] 运行 `pnpm run test:ui src/App.test.tsx`，确认实际执行上述行为测试。
-- [ ] 运行 `pnpm run check:frontend`；如另需 setup 文件或额外配置，先补拆子任务。
+- [x] 运行 `pnpm run test:ui src/App.test.tsx`，确认实际执行上述行为测试。
+- [x] 运行 `pnpm run check:frontend`；如另需 setup 文件或额外配置，先补拆子任务。
 
 **Dependencies:** P01,P02,P03。
 
@@ -229,7 +229,53 @@
 
 **Estimated scope:** M：5 个建议主文件；如需额外文件先按执行约定拆分。
 
-**执行记录：** 尚未实施。
+### P04.a：测试入口与首个加载行为
+
+- [x] 核对稳定 Vitest/Testing Library/DOM 环境与 Vite/Node 的兼容性。
+- [x] 添加 runner 与桌面信息加载测试，保留严格 TypeScript/ESLint。
+
+**Files:** `package.json`、`pnpm-lock.yaml`、`vite.config.ts`、`src/App.test.tsx`。
+**Verification:** 目标 UI 测试、双 tsconfig 类型检查、现有 lint。
+**Dependencies:** P03。
+
+### P04.b：失败与生命周期回归
+
+- [x] 覆盖失败反馈、浏览器预览与 StrictMode 清理后的旧成功/失败请求。
+- [x] 临时移除清理保护时回归测试失败，恢复后通过；不改生产行为来迎合测试。
+
+**Files:** `src/App.test.tsx`；仅在实际问题需要时修改 `src/App.tsx`。
+**Verification:** 实际测试数量非零，记录临时变异验证结果。
+**Dependencies:** P04.a。
+
+### P04.c：完整检查与学习说明
+
+- [x] `test:ui` 纳入 `check:frontend`，CI/Release 继续使用同一完整入口。
+- [x] 更新公开测试说明与 changelog，学习材料写入被忽略的 docs/local。
+
+**Files:** `package.json`、`docs/frontend.md`、`CHANGELOG.md`、`docs/local/p04-ui-tests.zh-CN.md`；本清单随子任务记录。
+**Verification:** 完整前端检查、冻结安装与相关原生检查；不宣称 DOM 测试证明真实桌面行为。
+**Dependencies:** P04.b。
+
+### P04.d：修复 Zed 的生成锁文件诊断
+
+- [x] 只将 pnpm-lock.yaml 设为 Plain Text，保留普通 YAML 检查和冻结锁文件校验。
+- [x] 验证 Zed 中原先第 158 行的多文档错误消失，记录兼容限制。
+
+**Files:** `.zed/settings.json`、`docs/frontend.md`；changelog/本清单与 P04.c 合并记录。
+**Dependencies:** P04.a。
+
+**执行记录（P04.a–P04.d，2026-10-09）：**
+
+- 实现提交：`2daff2a`（依赖、`test:ui`、App 行为测试与 Vite 测试环境）；`28368cb`（`check:frontend` 文档、Zed 锁文件规则、`.prettierignore`、CHANGELOG 与 README 旧链接）。两提交尚未推送，远端 CI 未运行。
+- 依赖（均为 MIT，已核对 registry 的 latest 稳定版）：Vitest `5.0.3`、React Testing Library `16.3.3`、DOM Testing Library `10.4.2`、jsdom `30.1.2`。RTL 的对等依赖支持 React 19 与 `@testing-library/dom ^10`；Vitest 5 的对等依赖包含 Vite `^8.0.0`，本项目 Vite `8.3.3` 满足。Vite 最新 `8.3.4` 尚未满足 pnpm 24 小时发布年龄策略，因此保持 `8.3.3`。jsdom 30 在 Node 24 线要求 `^24.15.0`，与 `package.json` engines 一致。
+- 环境：macOS（Darwin 27.0.0，arm64）；pnpm `12.10.1`；Node.js `24.16.0`（CI 使用的 24 线）与 `26.3.0`；Rust/Cargo `1.99.0`。
+- 完整检查：`pnpm install --frozen-lockfile` 通过；`pnpm run check:frontend` 在 Node 24.16.0 与 26.3.0 下均通过（Prettier、ESLint 与 oxlint 零警告、发布测试 8/8、UI 测试 5/5、双 tsconfig、Vite 构建）。
+- 目标测试：`pnpm run test:ui src/App.test.tsx` 执行 5 条，覆盖加载完成、失败反馈且不显示底层错误、浏览器预览，以及 StrictMode 清理后旧成功/旧失败响应均不覆盖当前结果。
+- 变异验证：临时删除 `App.tsx` 中的 `active = false` 清理保护后，两条旧响应用例失败（2 failed / 3 passed）；按字节恢复后 `src/App.tsx` 与提交版本一致，5 条再次通过。生产代码未改动。
+- 卸载语义：“卸载后忽略异步结果”通过 StrictMode 的 cleanup 后重新 setup 的新旧响应竞争验证。单纯卸载后检查页面为空不能证明保护有效，原因见学习说明。
+- 原生检查：`cargo fmt --check`、`cargo clippy --locked --all-targets -- -D warnings`、`cargo test --locked`（0 条，当前骨架尚无业务测试）与 `pnpm run tauri build --no-bundle -- --locked` 均通过。
+- 限制：DOM 测试不证明 Tauri WebView、Rust IPC、真实窗口或 Provider 连接；Windows/Linux 上的 UI 测试待远端 CI 验证。Zed 误报清除由维护者确认。
+- 学习说明位于被 Git 忽略的 `docs/local/p04-ui-tests.zh-CN.md`，不进入提交；`getting-started` 学习文档已按授权移入 `docs/local/`，README 中的公开旧链接已移除。
 
 ### Task P05: 建立私有配置存储
 

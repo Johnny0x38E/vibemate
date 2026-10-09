@@ -190,7 +190,7 @@
 - 临时 GROK_HOME 的 inspect、symlink Skill disabled 发现、MCP enabled/disabled 发现差异与原生启停持久化/无关字段保留检查通过；未启动会话或 Server。
 - Python 3.11 tomllib 示例解析、`pnpm run format:check`；真实凭据、协议请求和 Windows/Linux 行为保持未验证。
 - `docs/integrations/compatibility.md` 完成 C03 能力矩阵；当前无必须新增代理/启动器的前置决策，进入 P04 测试基础。
-- 用户已有 `docs/getting-started.zh-CN.md` 删除保持原样，不纳入本任务提交。
+- 本任务提交 `cc68e78`。用户已有 `docs/getting-started.zh-CN.md` 删除保持原样，不纳入本任务提交。
 
 ### Checkpoint C03: 接入范围已明确（P01–P03）
 

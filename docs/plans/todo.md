@@ -158,7 +158,7 @@
 - 临时纯解析检查通过：模型 schema 接受且不解析凭据、MCP 项目停用保留全局字段/未受信任项目被忽略、symlink Skill 发现；临时文件已清理。
 - JSON 示例解析、`pnpm run format:check`；仅文档改动不重复原生构建。
 - 未启动真实会话、MCP、Skill 脚本或模型请求，也未读取真实 auth.json；Windows/Linux 和运行中重载保持待验证。
-- 已将首页启停语义记录到 architecture/development-plan；下一项按依赖为 P03。本任务形成独立本地提交。
+- 已将首页启停语义记录到 architecture/development-plan；下一项按依赖为 P03。本任务提交为 `b07afbb`。
 
 ### Task P03: 核实 Grok Build 的配置能力
 

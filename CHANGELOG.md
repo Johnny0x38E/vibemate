@@ -17,6 +17,8 @@ GitHub release notes are extracted from the matching version section only.
 
 ### Added
 
+- Added a private SQLite configuration database in the app-data folder. It records a schema version, upgrades inside transactions, and stops startup with a safe message if it cannot be opened or upgraded.
+
 - Added UI behavior tests for desktop metadata loading, safe error feedback, browser preview, and effect cleanup; included them in frontend checks.
 
 - Documented Grok Build 1.0.50 configuration and toggle behavior, with a provider/agent capability matrix that separates configuration evidence from runtime verification.

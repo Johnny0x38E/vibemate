@@ -45,6 +45,15 @@ ESLint checks TypeScript frontend/config files and Node release scripts.
 Formatting is handled by Prettier, so style rules must not conflict with it.
 Use the VS Code ESLint, Oxc, and Prettier extensions for feedback while editing.
 
+## Internationalization is planned before business screens
+
+Phase 1 supports Simplified Chinese and English. The current scaffold still
+has English literals; the early i18n tasks in `docs/plans/todo.md` migrate them
+before business forms are implemented. Add both translations, accessible names,
+and error messages with every subsequent feature. Rust persists language
+preferences and returns safe error codes; React translates user-facing messages.
+Translation consistency checks will join `check:frontend` when i18n is implemented.
+
 ## Manual review still matters
 
 Automated checks do not enforce every architecture decision or prove a usable

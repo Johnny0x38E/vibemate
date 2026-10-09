@@ -9,6 +9,8 @@
 - Providers: Command Code GOAT, DeepSeek, OpenRouter.
 - Agents: Pi, Grok Build.
 - Shared skills with source tracking and updates; shared MCP definitions.
+- Phase-1 UI internationalization: Simplified Chinese (`zh-CN`) and English (`en`),
+  system-language detection, persistent manual selection, and translation checks.
 - Clear English code comments; beginner-readable implementation; GitHub CI.
 
 ## Current state
@@ -16,6 +18,13 @@
 The desktop scaffold, read-only version command, documentation, CI workflow,
 and changelog-driven draft release workflow are present. All provider and agent integrations remain unimplemented.
 No credentials have been collected and no agent configuration has been changed.
+
+## Execution plan
+
+The detailed development plan is [development-plan.md](development-plan.md).
+The single task checklist is [todo.md](todo.md). These files expand the same
+phase-1 scope; this overview does not contain a second execution checklist.
+The plan is awaiting maintainer review. No feature task is marked complete.
 
 ## Implementation order
 

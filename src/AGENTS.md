@@ -91,6 +91,23 @@ Read `docs/frontend.md` before introducing a new frontend pattern.
   contrast, or complete accessibility. Honor reduced-motion preferences when
   adding animation. Never add decorative motion that interferes with work.
 
+## Internationalization
+
+- Phase 1 must support Simplified Chinese (`zh-CN`) and English (`en`). Complete
+  the i18n foundation before business screens. Do not hardcode user-facing text
+  in JSX, validation messages, status feedback, or accessible names.
+- Add both translations with each feature. Use stable keys grouped by feature,
+  complete sentences, interpolation, locale-aware plural/date/number formatting,
+  and matching placeholders. Do not translate model IDs, provider brands, URLs,
+  config keys, or user content.
+- Default to system language, allow manual choice, and persist preferences via
+  Rust; no browser storage. Language switching must preserve input/state and
+  synchronize HTML lang, accessible status, and localized window titles.
+- Rust returns safe structured error codes and parameters; UI translates them.
+  Do not display raw internal errors or unresolved translation keys.
+- Include key/placeholder completeness checks and bilingual behavior tests in
+  `check:frontend`. Inspect both languages, long content, and keyboard feedback.
+
 ## Comments, tests, and completion
 
 - Document exported components/hooks/services in English: their responsibility,

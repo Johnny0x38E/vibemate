@@ -7,7 +7,9 @@ Tauri 2, React, and TypeScript. Target macOS, Windows, and Linux.
 
 Phase 1 providers: Command Code GOAT, DeepSeek, and OpenRouter.
 Phase 1 agents: Pi and Grok Build.
-Phase 1 also includes shared skills, skill updates, and MCP configuration.
+Phase 1 also includes shared skills, skill updates, MCP configuration, and
+Simplified Chinese/English UI internationalization. Complete the i18n foundation
+before implementing business screens; add both translations with each feature.
 Read `docs/plans/phase-1.md` for the current implementation status. A planned
 integration must never appear as connected or supported in the interface.
 

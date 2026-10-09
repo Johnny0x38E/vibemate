@@ -266,7 +266,7 @@
 
 **执行记录（P04.a–P04.d，2026-10-09）：**
 
-- 实现提交：`2daff2a`（依赖、`test:ui`、App 行为测试与 Vite 测试环境）；`28368cb`（`check:frontend` 文档、Zed 锁文件规则、`.prettierignore`、CHANGELOG 与 README 旧链接）。两提交尚未推送，远端 CI 未运行。
+- 实现提交：`2daff2a`（依赖、`test:ui`、App 行为测试与 Vite 测试环境）；`28368cb`（`check:frontend` 文档、Zed 锁文件规则、`.prettierignore`、CHANGELOG 与 README 旧链接）。两提交已随 `18b0e4f` 推送，远端 CI 结果见 C06 记录。
 - 依赖（均为 MIT，已核对 registry 的 latest 稳定版）：Vitest `5.0.3`、React Testing Library `16.3.3`、DOM Testing Library `10.4.2`、jsdom `30.1.2`。RTL 的对等依赖支持 React 19 与 `@testing-library/dom ^10`；Vitest 5 的对等依赖包含 Vite `^8.0.0`，本项目 Vite `8.3.3` 满足。Vite 最新 `8.3.4` 尚未满足 pnpm 24 小时发布年龄策略，因此保持 `8.3.3`。jsdom 30 在 Node 24 线要求 `^24.15.0`，与 `package.json` engines 一致。
 - 环境：macOS（Darwin 27.0.0，arm64）；pnpm `12.10.1`；Node.js `24.16.0`（CI 使用的 24 线）与 `26.3.0`；Rust/Cargo `1.99.0`。
 - 完整检查：`pnpm install --frozen-lockfile` 通过；`pnpm run check:frontend` 在 Node 24.16.0 与 26.3.0 下均通过（Prettier、ESLint 与 oxlint 零警告、发布测试 8/8、UI 测试 5/5、双 tsconfig、Vite 构建）。
@@ -305,7 +305,7 @@
 
 **执行记录（2026-10-09）：**
 
-- 实现提交：`dab6344`（`feat: add private SQLite configuration storage`）；涉及 `Cargo.toml`、`Cargo.lock`、`src/storage.rs`、`src/lib.rs` 与 CHANGELOG。尚未推送，远端 CI 未运行。
+- 实现提交：`dab6344`（`feat: add private SQLite configuration storage`）；涉及 `Cargo.toml`、`Cargo.lock`、`src/storage.rs`、`src/lib.rs` 与 CHANGELOG。已随 `18b0e4f` 推送，远端 CI 结果见 C06 记录。
 - 依赖：`rusqlite 0.40.2`（MIT，与 `cargo info` 显示的最新版本一致），关闭默认特性，只启用 `bundled`，使三平台使用同一版 SQLite（`libsqlite3-sys 0.38.2`，MIT）。新增传递依赖 `fallible-iterator`、`fallible-streaming-iterator`、`vcpkg` 为 MIT/Apache-2.0。
 - 设计决定：
   - 连接：一个 `Connection` 放在 `Mutex` 中，每次短操作加锁；跨进程写入由 SQLite 串行化，`busy_timeout` 等待 5 秒；保留默认回滚日志，数据库是单个文件，便于 P19 的备份与恢复。
@@ -350,7 +350,7 @@
 
 **执行记录（2026-10-09）：**
 
-- 实现提交：`af5de68`（`feat: add OS credential store boundary`）；涉及 `Cargo.toml`、`Cargo.lock`、`src/credentials.rs`、`src/lib.rs`。尚未推送，远端 CI 未运行。
+- 实现提交：`af5de68`（`feat: add OS credential store boundary`）；涉及 `Cargo.toml`、`Cargo.lock`、`src/credentials.rs`、`src/lib.rs`。已随 `18b0e4f` 推送，远端 CI 结果见 C06 记录。
 - 维护者决定：Linux 使用 Secret Service；无密钥环服务时明确失败，不回退为明文。
 - 依赖：`keyring 4.2.0`（MIT OR Apache-2.0，registry 最新稳定版，最低 Rust 1.88，本机工具链 1.99）。使用默认 `v1` 特性：macOS Keychain、Windows Credential Manager、其他 Unix 的 Secret Service；首次 `Entry::new` 自动选择平台后端。新增 69 个锁定包，许可证扫描均属 MIT、Apache-2.0、Zlib、BSD 等兼容类别。MPL-2.0 项（cssparser、selectors 等）早于本任务即由 Tauri 依赖引入。
 - 设计：
@@ -375,6 +375,8 @@
 - [x] 本组任务验收与验证有实际证据；受阻项没有勾选为完成。
 - [x] 前端完整检查、Rust fmt/Clippy/测试与本机原生构建通过；基础没有扩张成完整框架。
 - [ ] 本组结果已报告维护者，审阅意见已记录；下一组必需的协议或范围决策已解决。
+
+**C06 执行记录：** 提交 `18b0e4f`（含 P04–P06）已推送，远端 [CI run 37923290123](https://github.com/Johnny0x38E/vibemate/actions/runs/37923290123) 的 Frontend checks、Desktop（ubuntu-24.04）、Desktop（macos-latest）与 Desktop（windows-latest）全部成功。远端 CI 只证明编译与自动测试通过；被忽略的真实钥匙串冒烟测试未在 CI 中运行，Linux Secret Service 与 Windows Credential Manager 的真实凭据行为仍待真机验证（P37）。维护者审阅结论尚未记录。
 
 ### Task P07: 建立中英文翻译资源
 

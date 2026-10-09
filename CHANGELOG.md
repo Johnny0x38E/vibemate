@@ -9,7 +9,7 @@ GitHub release notes are extracted from the matching version section only.
 ### Changed
 
 - Replaced the scope landing page with the desktop shell: a collapsible 188/88 px sidebar with the app icon and an SVG "vibemate" wordmark, an Overview destination, honest planned pages, a relationship home with reserved statistics, and Settings holding the language selector and an icon-only appearance cycle. The runtime status line was removed. Settings stays mounted so pending saves and input survive navigation.
-- On macOS, removed the separate native title-bar row with Tauri's overlay title bar while keeping the native traffic lights inside the sidebar. Unpainted 44 px top strips drag the window; the capability adds only `core:window:allow-start-dragging`. Verified with macOS release-build screenshots; content-strip dragging, double-click zoom, fullscreen, the startup gate, and Windows/Linux window controls are not yet verified or implemented.
+- On macOS, removed the separate native title-bar row with Tauri's overlay title bar while keeping the native traffic lights inside the sidebar. Unpainted 44 px top strips drag the window; the capability adds only `core:window:allow-start-dragging`. Verified with macOS release-build screenshots and maintainer checks (maximize, minimize, drag, edge resize, double-click zoom, fullscreen, startup-gate controls/drag, long English labels, and bilingual shell navigation). Windows/Linux window controls are not yet verified or implemented.
 - Restyled the language selector to match the 44 px controls, and stopped Vite from inlining assets as `data:` URIs, which the CSP blocks.
 
 - Established a sketch-based desktop-shell design baseline with a local light/dark preview, collapsible navigation, and an icon-only appearance cycle.

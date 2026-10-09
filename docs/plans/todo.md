@@ -1,6 +1,6 @@
 # vibemate 第一阶段执行清单
 
-状态：P00 包管理器迁移、P01–P03 接入证据、P04 UI 测试入口、P05 私有配置存储、P06 凭据接口与 P07 翻译基础、P08 语言偏好与 I01 配置精简/四空格迁移已完成；P09 暂停，先执行 I02 固定草图对应的桌面壳与窗口设计。业务功能尚未实现，首页草图与绿色启用语义已确认，修订桌面壳设计已获确认；I02.b 生产壳与 I02.c.1–c.2 macOS 覆盖式标题栏已实现并提交（`bf885d7`，同时包含此前未提交的 P07/P08/I01），文档记录（b.5/c.4）已完成。待办：b.2–b.4 的 ego-browser 双语/720×560 验收、c.1–c.2 的人工拖动/缩放/全屏确认、c.3 启动门禁拖动区、c.5 Windows/Linux 窗控决策与 I02.d「关于」。说明与设计见 [development-plan.md](development-plan.md)。
+状态：P00 包管理器迁移、P01–P03 接入证据、P04 UI 测试入口、P05 私有配置存储、P06 凭据接口与 P07 翻译基础、P08 语言偏好与 I01 配置精简/四空格迁移已完成；P09 暂停，先执行 I02 固定草图对应的桌面壳与窗口设计。业务功能尚未实现，首页草图与绿色启用语义已确认，修订桌面壳设计已获确认；I02.b 生产壳与 I02.c.1–c.2 macOS 覆盖式标题栏已实现并提交（`bf885d7`，同时包含此前未提交的 P07/P08/I01），文档记录（b.5/c.4）已完成。I02.b 与 I02.c（macOS）维护者验收已完成（见下方记录）。待办：c.5 Windows/Linux 窗控决策与 I02.d「关于」。P09 全站文案与资源校验仍暂停。说明与设计见 [development-plan.md](development-plan.md)。
 这里是唯一任务状态来源，不能在其他文件维护第二份勾选清单。
 
 ## 执行约定
@@ -671,9 +671,9 @@
 
 #### I02.b：生产桌面壳与设置入口
 
-- [ ] 开始前按实际边界拆分每组最多五个文件的子任务与测试；移除宣传式首页，而不是仅调整旧页面颜色。
-- [ ] 实现可折叠侧栏（188/88 px）与主区独立滚动，不设右侧标题栏；关系图/预留统计和未实现页明确标注，不能伪造连接或启用。
-- [ ] Startup 只负责偏好/译器门禁；语言选择器移入 Settings，保留保存、重读、输入与 HTML 语言行为。外观使用图标按钮按 system/light/dark 轮换，当前/下一模式提示与键盘操作齐全。新增屏幕同时补齐两种翻译。
+- [x] 开始前按实际边界拆分每组最多五个文件的子任务与测试；移除宣传式首页，而不是仅调整旧页面颜色。
+- [x] 实现可折叠侧栏（188/88 px）与主区独立滚动，不设右侧标题栏；关系图/预留统计和未实现页明确标注，不能伪造连接或启用。
+- [x] Startup 只负责偏好/译器门禁；语言选择器移入 Settings，保留保存、重读、输入与 HTML 语言行为。外观使用图标按钮按 system/light/dark 轮换，当前/下一模式提示与键盘操作齐全。新增屏幕同时补齐两种翻译。
 
 **Verification:** 实际 UI 行为测试、完整前端检查、720×560 双语/长内容/键盘验收。
 **Dependencies:** I02.a 的视觉确认。
@@ -699,24 +699,24 @@
 
 ##### I02.b.2：启动门禁与布局解耦
 
-- [ ] Startup 提供已校验的初始偏好与系统语言，由调用方组合设置入口，不再在 App 顶部插入选择器。
-- [ ] 保留启动等待、失败重试、StrictMode 过期响应、HTML lang 与真实输入保留测试。
+- [x] Startup 提供已校验的初始偏好与系统语言，由调用方组合设置入口，不再在 App 顶部插入选择器。
+- [x] 保留启动等待、失败重试、StrictMode 过期响应、HTML lang 与真实输入保留测试。
 
 **Files:** `src/features/settings/LocaleStartup.tsx`、`src/features/settings/LocaleStartup.module.css`、`src/features/settings/LocaleStartup.test.tsx`、`src/main.tsx`。
 **Verification:** P08 启动回归测试；main 同步更新函数式 children 契约，最终 Settings 组合属于 b.4。
 
 ##### I02.b.3：诚实的关系首页
 
-- [ ] 按草图排布 Provider/Agent/Skills/MCP，中性计划节点与虚线关系；下方明确统计未实现。
+- [x] 按草图排布 Provider/Agent/Skills/MCP，中性计划节点与虚线关系；下方明确统计未实现。
 
 **Files:** `src/features/overview/RelationshipOverview.tsx`、`src/features/overview/RelationshipOverview.module.css`。
 **Verification:** 在完整壳中检查双语、长名称与最小尺寸，不增加静态标签快照测试。
 
 ##### I02.b.4：实际桌面壳与入口组合
 
-- [ ] 实现 188/88 px 导航、内容区独立滚动、无右侧标题栏；品牌返回概览，业务页明确未实现。
-- [ ] Settings 保持挂载，用 hidden 控制可见性，避免导航丢失未知保存结果/输入；外观同样保留。
-- [ ] main 组合真实语言选择器；桌面 metadata 按状态在渲染时翻译，不保存过时翻译字符串。
+- [x] 实现 188/88 px 导航、内容区独立滚动、无右侧标题栏；品牌与「概览」返回关系首页，业务页明确未实现。
+- [x] Settings 保持挂载，用 hidden 控制可见性，避免导航丢失未知保存结果/输入；外观同样保留。
+- [x] main 组合真实语言选择器；壳层文案随译器切换，不再显示桌面 metadata 状态行。
 
 **Files:** `src/App.tsx`、`src/App.module.css`、`src/App.css`、`src/App.test.tsx`、`src/main.tsx`。
 **Verification:** 壳行为与真实 startup/selector 组合回归、完整前端/Rust 检查、本机构建/运行、ego-browser 双语和尺寸检查。
@@ -727,12 +727,14 @@
 
 **Files:** `docs/frontend.md`、`docs/plans/desktop-shell-design.md`、`docs/plans/development-plan.md`、`CHANGELOG.md`；本清单同步更新。
 
-**执行记录（2026-10-09）：** b.0–b.1 已勾选。b.2–b.4 的代码已在工作区（未提交）：启动门禁以函数式 children 传出偏好与系统语言；`App.tsx` 组合 188/88 px 壳、关系首页、设置与外观；`main.tsx` 组合真实语言选择器。自动化测试覆盖折叠、导航保留、设置输入与双语切换，`pnpm run check:frontend` 通过（格式、ESLint/Oxlint 零警告、67 条 UI 测试、8 条发布测试、双 tsconfig、构建）。ego-browser 的双语与 720×560 验收尚未记录，因此 b.2–b.4 暂不勾选；b.5 待补。
+**执行记录（2026-10-09）：** b.0–b.1 已勾选；实现见提交 `bf885d7`。
+
+**执行记录（2026-10-10）：** b.2–b.4 与父项三项验收勾选。自动化：`pnpm run check:frontend`（64 条 UI 测试、8 条发布测试）与 `App.test.tsx` 覆盖折叠、导航保留、设置输入、双语导航切换、拖动区不含控件。原生（macOS arm64 发布构建）：维护者确认壳层中英文切换、长英文标签、双击顶部缩放与全屏均正常；720×560 展开/折叠截图无整页溢出。未单独记录 ego-browser 双语截图与键盘全流程；P09 仍负责全站文案与资源校验。未宣称 Provider/Agent 已连接。
 
 #### I02.c：平台窗口壳
 
-- [ ] macOS 使用 Tauri 2 Overlay/hiddenTitle 与原生红黄绿位置配置；Windows/Linux 单独设计边框与自绘控件。
-- [ ] 拖动、关闭、最小化、缩放/最大化或全屏符合平台行为；顶部拖动区不画独立标题栏，不覆盖交互区；加载/失败门禁下保留窗控，侧栏折叠不改变原生红黄绿坐标。
+- [x] macOS 使用 Tauri 2 Overlay/hiddenTitle 与原生红黄绿位置配置；Windows/Linux 单独设计边框与自绘控件（后者未实现，见 c.5）。
+- [x] 拖动、关闭、最小化、缩放/最大化或全屏符合平台行为（macOS 本机维护者确认，含双击顶部缩放与全屏）；顶部拖动区不画独立标题栏，不覆盖交互区；加载/失败门禁下保留窗控且可拖动（见 c.3），侧栏折叠不改变原生红黄绿坐标。
 - [ ] 实现前拆分配置、IPC 封装、组件/双语资源/权限与测试文件；不增加无关插件或宽泛权限。
 
 **Verification:** Rust/前端检查、实际 Tauri 构建与窗控运行、截图；本机验收不能代表其他平台。
@@ -740,20 +742,22 @@
 
 **执行记录（2026-10-09）：** 原生检查（macOS arm64、发布构建、隔离 HOME）确认当前问题：系统标题栏仍占整行，侧栏 44 px 留白位于其下，红黄绿不在侧栏顶部；内容页在 zh-CN 下可渲染。窗口配置（`tauri.conf.json`）尚未修改，两处 diff 仅为缩进。上方验收条件由下列子任务分别覆盖，按依赖顺序实施，每项单独验证后再勾选。
 
-- [ ] **I02.c.1：应用壳拖动区与权限**：新增共享组件 `WindowDragRegion`；侧栏 44 px 留白与主区顶部 28 px 无绘制条作为拖动区；控件不放入拖动区；`capabilities/default.json` 仅增加 `core:window:allow-start-dragging`。
+- [x] **I02.c.1：应用壳拖动区与权限**：新增共享组件 `WindowDragRegion`；侧栏 44 px 留白与主区顶部无绘制条（后改为 44 px）作为拖动区；控件不放入拖动区；`capabilities/default.json` 仅增加 `core:window:allow-start-dragging`。
     - Files：`src/components/WindowDragRegion.tsx`、`src/App.tsx`、`src/App.module.css`、`src/App.test.tsx`、`src-tauri/capabilities/default.json`。
     - Verification：新增“拖动区不包含按钮/输入等交互控件”的行为测试；`pnpm run check:frontend`；原生运行截图；拖动是否生效如实记录。
-- [ ] **I02.c.2：macOS 覆盖式标题栏**：`tauri.conf.json` 设置 `titleBarStyle: Overlay`、`hiddenTitle: true` 与 `trafficLightPosition`，保留 `decorations: true`，以截图校准坐标。
+- [x] **I02.c.2：macOS 覆盖式标题栏**：`tauri.conf.json` 设置 `titleBarStyle: Overlay`、`hiddenTitle: true` 与 `trafficLightPosition`，保留 `decorations: true`，以截图校准坐标。
     - Files：`src-tauri/tauri.conf.json`。
     - Verification：原生截图确认整行系统标题栏消失、红黄绿位于侧栏顶部；展开/折叠前后坐标不变；Windows/Linux 仍为原生装饰，留给 I02.c.5。
-- [ ] **I02.c.3：加载与失败门禁的拖动区**：`LocaleStartup` 的门禁提供顶部拖动条，重试按钮位于拖动区之外，门禁中仍可拖动。
+- [x] **I02.c.3：加载与失败门禁的拖动区**：`LocaleStartup` 的门禁提供顶部拖动条，重试按钮位于拖动区之外，门禁中仍可拖动。
     - Files：`src/features/settings/LocaleStartup.tsx`、`LocaleStartup.module.css`、`LocaleStartup.test.tsx`。
     - Verification：门禁行为测试（重试仍可用）、`pnpm run check:frontend`、原生门禁截图（若能稳定触发）。
 - [x] **I02.c.4：记录实现与验收范围**：更新开发说明、设计实现状态、英文 CHANGELOG 与本清单，写明未验证项。
     - Files：`docs/frontend.md`、`docs/plans/desktop-shell-design.md`、`CHANGELOG.md`、`docs/plans/todo.md`。
 - [ ] **I02.c.5：Windows/Linux 边框与自绘控件**：等待维护者确认方案（无边框自绘或保留原生）后再拆分；决定前不声称跨平台窗控完成。
 
-**I02.c.1/c.2 进度（2026-10-09，未提交）：** c.1 的代码、拖动区不变量测试（变异验证：拖动属性放到侧栏后失败，还原后通过）与完整前端检查（68 条 UI 测试）已通过。c.2 已写入 `titleBarStyle: Overlay`、`hiddenTitle: true`、`trafficLightPosition {16, 22}`。macOS 发布构建截图确认整行系统标题栏消失，红黄绿位于侧栏顶部留白内。合成鼠标事件在侧栏顶部拖动后窗口确实移动；主区顶部条的合成拖动没有移动窗口。合成事件结束得早于异步的 `start_dragging`，这个结果不能算失败证据，需要人工拖动确认。折叠后坐标、双击缩放、全屏与门禁状态尚未验证，因此两项均不勾选。
+**I02.c.1/c.2 执行记录：** 代码与测试见 `bf885d7`；`trafficLightPosition` 现为 `{16, 24}`。截图确认无独立标题栏行；展开/折叠前后红黄绿中心均为 21.75 pt。
+
+**c.1–c.3 人工验收（2026-10-10，维护者，macOS 本机发布构建）：** 最大化、最小化、拖动窗口、窗口边缘缩放、双击顶部缩放、全屏、启动门禁期间窗控与拖动、长英文标签与壳层双语均正常。据此勾选 c.1–c.3 与上方 macOS 窗控两项。Windows/Linux 归 c.5；门禁页未单独截屏。
 
 **维护者调整（2026-10-09，未提交）：** 侧栏去掉运行状态文本；品牌为应用图标加 `vibemate` 文字（折叠时只显示图标，按钮名称以品牌名开头；展开时的 `vibemate` 为自绘单线条 SVG 字标 `BrandWordmark`，不依赖字体文件；曾试用的 `@fontsource/jost` 已移除）（直接引用 `src-tauri/icons/128x128@2x.png`，目前仍是 Tauri 模板图标）；新增“概览”导航，与点击品牌一样回到关系首页；折叠按钮改为仅图标，最终放在“设置”同一行最右端，折叠后叠在设置上方居中（试过红绿灯所在行后由维护者改回）；`trafficLightPosition` 调为 y=24，与 44 px 顶部行中心对齐，主区顶部拖动条为 44 px；设置中的语言下拉框改为 44 px 自绘外观。
 

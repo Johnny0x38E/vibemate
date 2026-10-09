@@ -25,9 +25,12 @@ Implementation status (2026-10-10): the production shell and the macOS overlay
 title bar are implemented and checked in the macOS release build with screenshots.
 Later maintainer adjustments: an Overview destination, the app icon plus an SVG
 "vibemate" wordmark (icon only when collapsed), no runtime status text, and the
-toggle placement below. Still unverified or unimplemented: a manual drag of the
-content-column strip, double-click zoom, fullscreen, drag regions in the startup
-gate, Windows/Linux window controls, and the Settings "About" section. See
+toggle placement below. Still unverified or unimplemented: Windows/Linux window controls and the Settings
+"About" section. macOS maintainer verification (2026-10-10): maximize, minimize,
+window drag, edge resize, double-click zoom on the drag strip, fullscreen, startup
+gate window controls/drag, long English labels, and bilingual shell navigation
+behave normally.
+See
 [todo.md](todo.md), I02.b–I02.d.
 
 ## Layout

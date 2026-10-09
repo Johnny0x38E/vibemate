@@ -1,0 +1,47 @@
+{
+  "languages": {
+    "Rust": {
+      "format_on_save": "on",
+      "formatter": "language_server",
+      "tab_size": 4
+    },
+    "TypeScript": {
+      "format_on_save": "on",
+      "formatter": "prettier",
+      "tab_size": 2,
+      "language_servers": ["eslint", "..."]
+    },
+    "TSX": {
+      "format_on_save": "on",
+      "formatter": "prettier",
+      "tab_size": 2,
+      "language_servers": ["eslint", "..."]
+    },
+    "JavaScript": {
+      "format_on_save": "on",
+      "formatter": "prettier",
+      "tab_size": 2,
+      "language_servers": ["eslint", "..."]
+    },
+    "CSS": {
+      "format_on_save": "on",
+      "formatter": "prettier",
+      "tab_size": 2
+    },
+    "JSON": {
+      "format_on_save": "on",
+      "formatter": "prettier",
+      "tab_size": 2
+    }
+  },
+  "lsp": {
+    "rust-analyzer": {
+      "initialization_options": {
+        "linkedProjects": ["./src-tauri/Cargo.toml"],
+        "check": {
+          "command": "clippy"
+        }
+      }
+    }
+  }
+}

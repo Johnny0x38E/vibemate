@@ -6,6 +6,10 @@ GitHub release notes are extracted from the matching version section only.
 
 ## [Unreleased]
 
+### Changed
+
+- Replaced editor extension recommendations with shared Zed settings, development tasks, and setup instructions.
+
 ### Added
 
 - Initial Rust, Tauri 2, React, and TypeScript desktop scaffold.

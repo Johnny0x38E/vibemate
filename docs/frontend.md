@@ -43,7 +43,35 @@ Use compatible current stable versions for both tools.
 
 ESLint checks TypeScript frontend/config files and Node release scripts.
 Formatting is handled by Prettier, so style rules must not conflict with it.
-Use the VS Code ESLint, Oxc, and Prettier extensions for feedback while editing.
+
+## Editing in Zed
+
+Open the repository root in Zed and run `npm ci` before editing the frontend.
+The project requires Node.js 24 or newer. Zed has native Rust, TypeScript, and
+TSX support; no separate extension is required for those languages.
+
+The shared `.zed/settings.json` enables Prettier formatting on save for frontend
+files and ESLint diagnostics for TypeScript, TSX, and JavaScript. Prettier reads
+`.prettierrc.json`; ESLint reads `eslint.config.mjs`. The `...` entry preserves
+Zed's other language servers, including its default TypeScript server.
+Rust files use the language server's formatter, backed by rustfmt. The explicit
+`src-tauri/Cargo.toml` path identifies the backend crate, and rust-analyzer runs
+Clippy on save. `rust-toolchain.toml` selects stable Rust with rustfmt and Clippy.
+
+Run `task: spawn` from Zed's command palette and select a `vibemate:` task to
+start desktop development, preview the frontend, or run the project checks.
+Tasks run from the repository root, even when a backend file is active.
+The frontend preview does not provide native Tauri operations.
+
+Editor diagnostics do not replace `npm run check:frontend`: the dedicated
+Oxlint accessibility checks and release-tool tests still run through that command.
+Keep themes, fonts, keybindings, and personal AI settings in Zed's user settings.
+Commit shared project settings and tasks so contributors use the same commands.
+
+See the official [Rust](https://zed.dev/docs/languages/rust),
+[TypeScript](https://zed.dev/docs/languages/typescript),
+[language configuration](https://zed.dev/docs/configuring-languages), and
+[tasks](https://zed.dev/docs/tasks) documentation for editor behavior.
 
 ## Internationalization is planned before business screens
 

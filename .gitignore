@@ -10,8 +10,7 @@ src-tauri/gen/
 !.env.example
 *.local
 .idea/
-.vscode/*
-!.vscode/extensions.json
+.vscode/
 
 # Application lockfiles belong in Git; generated build output does not.
 

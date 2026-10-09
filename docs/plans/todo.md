@@ -309,16 +309,20 @@
 - 依赖：`rusqlite 0.40.2`（MIT，与 `cargo info` 显示的最新版本一致），关闭默认特性，只启用 `bundled`，使三平台使用同一版 SQLite（`libsqlite3-sys 0.38.2`，MIT）。新增传递依赖 `fallible-iterator`、`fallible-streaming-iterator`、`vcpkg` 为 MIT/Apache-2.0。
 - 设计决定：
   - 连接：一个 `Connection` 放在 `Mutex` 中，每次短操作加锁；跨进程写入由 SQLite 串行化，`busy_timeout` 等待 5 秒；保留默认回滚日志，数据库是单个文件，便于 P19 的备份与恢复。
-  - 版本与迁移：版本号存于 SQLite `user_version`；每个迁移与版本更新在同一事务提交，失败则回滚。迁移器约 40 行，未引入 `rusqlite_migration`，因为当前只需要线性版本号。
+  - 版本与迁移：版本号存于 SQLite `user_version`；每个迁移与版本更新在同一事务提交，失败则回滚。事务使用 `BEGIN IMMEDIATE`，先取得写锁再读取版本，两个应用实例不会同时执行同一迁移。
+  - 迁移器：维护者委托判断后，决定保留自写迁移器，不引入 `rusqlite_migration`。`rusqlite_migration 2.6.0` 为 Apache-2.0、要求 Rust 1.95，依赖 `rusqlite ^0.40`，与本项目兼容，但会新增依赖；当前只需要线性版本号与事务升级，自写实现很短并由测试覆盖。若将来需要降级迁移或 Rust 数据改写，再评估引入。
   - 版本基线：版本 1 只标记数据库已版本化，不建业务表。
   - 更新版本的数据库：版本高于本构建时拒绝写入，避免误读未知表。
-  - 启动失败：数据库无法打开或升级时应用退出，并输出安全文案。当前阶段尚无用户数据，先采用明确失败；界面如何展示存储错误（错误码与翻译）留给 P09/P10，维护者可在 P10 前决定是否改为可启动并提示。
-- 测试：`cargo test --manifest-path src-tauri/Cargo.toml --locked storage` 执行 6 条，覆盖首次创建目录与数据库并到最新版本；重复打开保留数据且不重复执行迁移；失败迁移回滚、旧数据仍可读，错误文本不含 SQL 或路径；拒绝更新版本的数据库且不修改；迁移编号连续；存储可跨线程共享。完整 `cargo test --locked` 同为 6/6。
-- 变异验证：临时把迁移事务改为丢弃时提交（`DropBehavior::Commit`），失败迁移测试失败（退出码 101）；按字节恢复后 6/6 通过。
+  - 启动失败：维护者决定应用仍然打开。`StorageStatus` 将“已就绪的数据库”或“不可用原因”保存在 Tauri 托管状态中；失败原因以安全文案输出到 stderr（尽力写入，写入失败不影响启动）。不可读的文件不会被删除、重命名或改写，之后的备份导入与重建功能负责修复。界面中的存储状态提示随 P09/P10 的错误码与翻译一起实现。
+- 后续修正（同日，维护者要求）：`64a2f89` 让应用在存储不可用时仍然打开；`09ee8f5` 让迁移改用立即写锁。两次改动都有测试与真实 Tauri 检查，见下方。
+- 测试：`cargo test --manifest-path src-tauri/Cargo.toml --locked storage` 执行 9 条，覆盖：首次创建目录与数据库并到最新版本；重复打开保留数据且不重复执行迁移；多版本升级保留已有行；失败迁移回滚、旧数据仍可读，错误文本不含 SQL 或路径；拒绝更新版本的数据库且不修改；无法读取的文件返回不可用状态且字节不变；四个线程同时打开时每个迁移只执行一次；迁移编号连续；状态可跨线程共享。完整 `cargo test --locked` 为 17 条通过、1 条手动测试忽略。
+- 变异验证：(a) 临时把迁移事务改为丢弃时提交（`DropBehavior::Commit`），失败迁移测试失败（退出码 101）；(b) 临时把立即事务改回普通事务，并发打开测试连续 10 次全部失败（断言 `opened.iter().all(...)` 不成立）。两次都按字节恢复，恢复后测试通过。
 - 静态检查：`cargo fmt --check`、`cargo clippy --locked --all-targets -- -D warnings` 通过；`pnpm run format:check` 通过（CHANGELOG）；`pnpm run tauri build --no-bundle -- --locked` 通过。
 - 真实 Tauri（macOS arm64，发布构建产物）：
   - 首次启动在 `~/Library/Application Support/dev.vibemate.desktop/vibemate.sqlite3` 创建数据库；`PRAGMA user_version` 为 1，`integrity_check` 为 ok，无业务表；项目目录未生成数据库。
-  - 把版本改为 9 后启动：应用拒绝启动并输出安全文案（数据库版本 9，本构建支持到 1），数据库仍为版本 9。
+  - 把版本改为 9 后启动：应用保持运行，stderr 输出安全文案（数据库版本 9，本构建支持到 1），数据库仍为版本 9，文件 SHA-256 不变。
+  - 把数据库替换为无法读取的文件后启动：应用保持运行，stderr 输出“vibemate could not open its private configuration database.”，文件 SHA-256 不变。
+  - 三种情况都用 `perl -e 'alarm 12; exec @ARGV'` 限时运行，退出码 142 表示应用一直运行到闹钟触发；验证后删除了测试生成的数据目录。
   - 验证结束后删除了测试生成的数据目录（验证前该目录不存在）。
 - 限制：Windows/Linux 上的 bundled SQLite 编译与路径行为待远端三平台 CI 验证；数据库文件权限未额外收紧（位于用户私有的 Application Support 目录），备份权限留给 P19/P37 验证；错误文案目前为英文开发者文本，P09 改为错误码加翻译。本任务未接触 OS 凭据库，数据库中没有密钥字段。
 

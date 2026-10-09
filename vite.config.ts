@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import process from "node:process";
 
@@ -6,6 +6,12 @@ const host = process.env.TAURI_DEV_HOST;
 
 export default defineConfig({
   plugins: [react()],
+  test: {
+    // DOM tests exercise React without opening a native Tauri window.
+    environment: "jsdom",
+    // Keep Node release-tool tests on their own runner and import Vitest APIs explicitly.
+    include: ["src/**/*.test.{ts,tsx}"],
+  },
   // Keep Rust build errors visible while Vite updates the frontend.
   clearScreen: false,
   server: {

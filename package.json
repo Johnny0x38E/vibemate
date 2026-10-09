@@ -15,7 +15,8 @@
     "lint:code": "eslint src vite.config.ts eslint.config.mjs scripts --max-warnings 0 --no-inline-config",
     "lint:a11y": "oxlint --config .oxlintrc.json --deny-warnings src",
     "lint": "pnpm run lint:code && pnpm run lint:a11y",
-    "check:frontend": "pnpm run format:check && pnpm run lint && pnpm run test:release && pnpm run build"
+    "check:frontend": "pnpm run format:check && pnpm run lint && pnpm run test:release && pnpm run test:ui && pnpm run build",
+    "test:ui": "vitest run"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
@@ -25,6 +26,8 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@tauri-apps/cli": "^2",
+    "@testing-library/dom": "10.4.2",
+    "@testing-library/react": "16.3.3",
     "@types/node": "^24",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
@@ -33,17 +36,19 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.13.0",
+    "jsdom": "30.1.2",
     "oxlint": "^1.87.0",
     "prettier": "^3.6.2",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.71.1",
     "vite": "^8.0.16",
+    "vitest": "5.0.3",
     "yaml": "2.9.1"
   },
   "description": "A desktop configuration manager for coding agents.",
   "license": "MIT",
   "engines": {
-    "node": ">=24.0.0"
+    "node": "^24.15.0 || >=26.0.0"
   },
   "packageManager": "pnpm@12.10.1"
 }

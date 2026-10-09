@@ -3,7 +3,9 @@
 ## Confirmed choices
 
 - Name: vibemate. License: MIT.
-- Desktop: Rust + Tauri 2 + React + TypeScript.
+- Desktop: current stable Rust + stable Tauri + React + TypeScript.
+  Use the latest stable Rust edition and APIs; no nightly features.
+  The initial scaffold uses edition 2024 and Tauri 2.
 - Providers: Command Code GOAT, DeepSeek, OpenRouter.
 - Agents: Pi, Grok Build.
 - Shared skills with source tracking and updates; shared MCP definitions.

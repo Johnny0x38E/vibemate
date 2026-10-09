@@ -14,8 +14,12 @@ The first release targets **Command Code GOAT, DeepSeek, and OpenRouter** with
 
 ## Start developing
 
-Install Node.js 24 LTS, Rust through rustup, and the
+Install Node.js 24 LTS, the current stable Rust through rustup, and the
 [Tauri system prerequisites](https://v2.tauri.app/start/prerequisites/).
+
+The project follows stable Rust and uses edition 2024. Run `rustup update stable`
+to refresh an existing installation before development. Tauri dependencies are
+locked; compatible stable updates are validated before changing lockfiles.
 
 ```sh
 npm ci

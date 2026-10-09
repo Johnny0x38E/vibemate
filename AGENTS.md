@@ -25,6 +25,30 @@ integration must never appear as connected or supported in the interface.
 - Implement one reviewable behavior at a time. Explain the change, why it is
   needed, and what was actually verified.
 
+## Stable toolchains and modern APIs
+
+- Use the current stable Rust toolchain and latest stable Rust edition. The
+  repository follows `stable` through `rust-toolchain.toml`; an installed stable
+  toolchain still needs `rustup update stable` to receive newer releases.
+- Prefer current stable Rust language features, standard-library APIs, and
+  idioms. Check current official documentation before introducing unfamiliar
+  patterns. Do not copy deprecated APIs or older-edition workarounds from
+  tutorials. Modern code must remain understandable to a beginner.
+- Do not use nightly-only features or pre-release dependencies unless the user
+  explicitly requests them. Explain any required compatibility constraint.
+- Use current stable Tauri releases and Tauri 2 APIs while 2 is the stable major
+  version. Do not use Tauri 1 configuration, permissions, or plugin examples.
+  Evaluate future stable major releases before migrating and verify platform
+  support and API changes.
+- Keep Cargo and npm lockfiles for reproducible dependency resolution. Broad
+  version ranges do not update locked dependencies automatically. Check official
+  releases when adding/updating dependencies, update compatible stable versions,
+  and run the relevant checks. Keep Rust/JS Tauri packages compatible; their
+  individual version numbers do not need to match.
+- CI follows stable Rust. Toolchain and dependency upgrades must pass formatting,
+  Clippy, tests, and native desktop builds; do not silence warnings to conceal
+  obsolete code. Record actual versions and verification results when upgrading.
+
 ## Readability and comments
 
 The maintainer is learning Rust, Tauri, and React. Write code that they can

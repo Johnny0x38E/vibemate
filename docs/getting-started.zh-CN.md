@@ -5,15 +5,20 @@
 
 ## 启动
 
-需要 Node.js 24 LTS、Rust，以及 [Tauri 系统依赖](https://v2.tauri.app/start/prerequisites/)。
+需要 Node.js 24 LTS、当前稳定版 Rust，以及 [Tauri 系统依赖](https://v2.tauri.app/start/prerequisites/)。
 macOS 桌面开发通常从 Xcode Command Line Tools 开始；如构建报错，按官方文档
 检查 Xcode 环境。安装命令是 `xcode-select --install`。
 
 ```sh
 cd /Users/johnny/code/personal/vibemate
+rustup update stable
 npm ci
 npm run tauri dev
 ```
+
+仓库使用 Rust `stable` 工具链和 Edition 2024；`stable` 表示跟随稳定通道，
+本机仍需执行 `rustup update stable` 更新。代码优先使用当前稳定 API 和写法，
+不使用 nightly 功能。Tauri 依赖通过锁文件固定，升级后需要重新验证。
 
 第一次运行会下载并编译 Rust 依赖，耗时通常比后续启动长。
 `npm run dev` 仅预览网页；`npm run tauri dev` 同时启动网页开发服务器与 Rust 桌面程序。

@@ -1,6 +1,6 @@
 # vibemate 第一阶段执行清单
 
-状态：P00 包管理器迁移与 P01 接入证据已完成；业务功能尚未实现，首页方向等待维护者原型草图。说明与设计见 [development-plan.md](development-plan.md)。
+状态：P00 包管理器迁移与 P01 接入证据已完成；业务功能尚未实现，首页草图与绿色启用语义已确认，样式后续调整。说明与设计见 [development-plan.md](development-plan.md)。
 这里是唯一任务状态来源，不能在其他文件维护第二份勾选清单。
 
 ## 执行约定
@@ -134,14 +134,14 @@
 
 **Acceptance criteria:**
 
-- [ ] 确认全局/项目/环境变量优先级、Provider 协议、模型字段、认证方式及重启要求。
-- [ ] 记录 Skill 目录、格式与 MCP 支持情况；区分原生能力与第三方扩展。
-- [ ] 记录独立启动时密钥来源、配置文件权限与平台限制；不读取或输出真实密钥。
+- [x] 确认全局/项目/环境变量优先级、Provider 协议、模型字段、认证方式及重启要求。
+- [x] 记录 Skill 目录、格式与 MCP 支持情况；区分原生能力与第三方扩展。
+- [x] 记录独立启动时密钥来源、配置文件权限与平台限制；不读取或输出真实密钥。
 
 **Verification:**
 
-- [ ] 人工用官方资料与可用安装版本核对，未安装的平台标记待验。
-- [ ] 运行 `pnpm run format:check`。
+- [x] 人工用官方资料与可用安装版本核对，未安装的平台标记待验。
+- [x] 运行 `pnpm run format:check`。
 
 **Dependencies:** P01。
 
@@ -151,7 +151,14 @@
 
 **Estimated scope:** S：1 个建议主文件；如需额外文件先按执行约定拆分。
 
-**执行记录：** 尚未实施。
+**执行记录（2026-10-09）：**
+
+- macOS Apple Silicon，Pi `1.1.0`，准确包名 `@earendil-works/pi-coding-agent`；官网与安装包附带文档/源码交叉核对。
+- `docs/integrations/pi.md` 记录目录、认证优先级、模型字段、Skill 原生资源排除、原生 MCP enabled 与项目覆盖。
+- 临时纯解析检查通过：模型 schema 接受且不解析凭据、MCP 项目停用保留全局字段/未受信任项目被忽略、symlink Skill 发现；临时文件已清理。
+- JSON 示例解析、`pnpm run format:check`；仅文档改动不重复原生构建。
+- 未启动真实会话、MCP、Skill 脚本或模型请求，也未读取真实 auth.json；Windows/Linux 和运行中重载保持待验证。
+- 已将首页启停语义记录到 architecture/development-plan；下一项按依赖为 P03。本任务形成独立本地提交。
 
 ### Task P03: 核实 Grok Build 的配置能力
 

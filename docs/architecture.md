@@ -40,6 +40,31 @@ changes → recheck file state → back up → atomically write → verify → a
 A write may only take effect after an agent restarts. Report that clearly.
 Environment variables and project-local overrides can supersede global config.
 
+## Planned enablement relationships
+
+The maintainer's home-screen sketch shows providers above a configuration
+application point, agents below it, and shared skills/MCP definitions alongside.
+Green nodes and links mean enabled configuration or deployment; selection has
+its own visual treatment. The lines describe configuration relationships.
+Visual details can be refined after the behavior is implemented.
+
+Keep a shared resource's enabled state separate from each agent deployment's
+state. Disabling one deployment preserves the central definition and other
+agents' deployments. Disabling a shared resource prepares changes for its
+managed deployments and reports each target result; it cannot silently remove
+user-owned configuration or imply an atomic operation across all targets.
+
+Store requested enablement separately from the last applied state. Track
+configuration overrides, pending reload, unsupported mappings, and failures
+explicitly. A green link must not represent an unapplied request or claim a
+successful provider request. If the effective running-session state is unknown,
+show that alongside the enabled configuration instead of inventing runtime proof.
+
+Agent adapters translate a switch into the verified native operation. Pi 1.1.0
+has a per-server MCP `enabled` field, but provider/model and skill deployment
+need different operations. See [the Pi contract](integrations/pi.md). All
+mutations use preview, concurrent-change checks, backups, and rollback.
+
 ## Later extensions
 
 An optional localhost proxy may support routing, protocol conversion, and usage

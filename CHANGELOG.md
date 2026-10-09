@@ -14,6 +14,8 @@ GitHub release notes are extracted from the matching version section only.
 
 ### Added
 
+- Documented Grok Build 1.0.50 configuration and toggle behavior, with a provider/agent capability matrix that separates configuration evidence from runtime verification.
+
 - Documented Pi 1.1.0 configuration precedence, native MCP support, deployment toggles, and the home-screen enablement semantics.
 
 - Recorded official provider protocols, model metadata, parameter constraints, and the first documented Pi compatibility path.

@@ -166,14 +166,14 @@
 
 **Acceptance criteria:**
 
-- [ ] 记录官网/发行来源、配置位置、原生协议与可配置字段，避免混淆同名产品。
-- [ ] 记录独立启动认证、配置优先级、Skill/MCP 能力及跨平台支持。
-- [ ] 对需要启动器、桥接器或没有配置接口的功能明确列出缺口，保留维护者决策。
+- [x] 记录官网/发行来源、配置位置、原生协议与可配置字段，避免混淆同名产品。
+- [x] 记录独立启动认证、配置优先级、Skill/MCP 能力及跨平台支持。
+- [x] 对需要启动器、桥接器或没有配置接口的功能明确列出缺口，保留维护者决策。
 
 **Verification:**
 
-- [ ] 人工对照原始来源，检查脱敏示例可解析。
-- [ ] 运行 `pnpm run format:check`。
+- [x] 人工对照原始来源，检查脱敏示例可解析。
+- [x] 运行 `pnpm run format:check`。
 
 **Dependencies:** P01。
 
@@ -183,13 +183,22 @@
 
 **Estimated scope:** S：1 个建议主文件；如需额外文件先按执行约定拆分。
 
-**执行记录：** 尚未实施。
+**执行记录（2026-10-09）：**
+
+- macOS Apple Silicon，`grok 1.0.50 (c58f321264ba)`；官方产品、安装与协议文档核对，短提交在公开仓库未找到，版本差异明确保留。
+- `docs/integrations/grok-build.md` 记录五层配置、项目范围、认证、model backend、Skill/MCP 开关和 inspect 省略关闭 MCP 的本机行为。
+- 临时 GROK_HOME 的 inspect、symlink Skill disabled 发现、MCP enabled/disabled 发现差异与原生启停持久化/无关字段保留检查通过；未启动会话或 Server。
+- Python 3.11 tomllib 示例解析、`pnpm run format:check`；真实凭据、协议请求和 Windows/Linux 行为保持未验证。
+- `docs/integrations/compatibility.md` 完成 C03 能力矩阵；当前无必须新增代理/启动器的前置决策，进入 P04 测试基础。
+- 用户已有 `docs/getting-started.zh-CN.md` 删除保持原样，不纳入本任务提交。
 
 ### Checkpoint C03: 接入范围已明确（P01–P03）
 
-- [ ] 本组任务验收与验证有实际证据；受阻项没有勾选为完成。
-- [ ] 三家 Provider、两个 Agent 的协议/认证/Skill/MCP 支持矩阵已记录，缺项已提出。
-- [ ] 本组结果已报告维护者，审阅意见已记录；下一组必需的协议或范围决策已解决。
+- [x] 本组任务验收与验证有实际证据；受阻项没有勾选为完成。
+- [x] 三家 Provider、两个 Agent 的协议/认证/Skill/MCP 支持矩阵已记录，缺项已提出。
+- [ ] 本组结果随本轮报告维护者，后续审阅意见在此记录；当前无阻止 P04 的必需协议或范围决策。
+
+**C03 执行记录：** P01–P03 官方证据与本机隔离验证已记录；矩阵区分协议入口与真实接通。未实现业务能力保持未实现，本阶段没有额外桥接范围决策。
 
 ## 阶段 B：测试、存储与中英文基础
 

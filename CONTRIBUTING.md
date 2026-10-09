@@ -1,6 +1,7 @@
 # Contributing
 
 Read `AGENTS.md` and `docs/plans/phase-1.md` before changing the project.
+Frontend contributions must also follow `src/AGENTS.md` and `docs/frontend.md`.
 Keep changes focused on a single behavior. Write comments and public API
 documentation in English so contributors can follow the code.
 
@@ -8,10 +9,7 @@ documentation in English so contributors can follow the code.
 
 ```sh
 npm ci
-npm run format:check
-npm run typecheck
-npm run test:release
-npm run build
+npm run check:frontend
 cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 cargo clippy --manifest-path src-tauri/Cargo.toml --locked --all-targets -- -D warnings
 cargo test --manifest-path src-tauri/Cargo.toml --locked

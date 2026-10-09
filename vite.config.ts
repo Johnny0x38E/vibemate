@@ -13,7 +13,8 @@ export default defineConfig({
     port: 1420,
     strictPort: true,
     host: host || false,
-    hmr: host ? { protocol: "ws", host, port: 1421 } : undefined,
+    // Omit optional settings entirely when absent; do not assign undefined.
+    ...(host ? { hmr: { protocol: "ws", host, port: 1421 } } : {}),
     // Rust rebuilds are handled by Tauri rather than the frontend file watcher.
     watch: { ignored: ["**/src-tauri/**"] },
   },

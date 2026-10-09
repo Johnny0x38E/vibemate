@@ -33,6 +33,8 @@ builds a desktop executable without an installer.
 ## Find your way around
 
 - [`AGENTS.md`](AGENTS.md): coding rules, English comments, and verification.
+- [`src/AGENTS.md`](src/AGENTS.md): strict frontend rules.
+- [`docs/frontend.md`](docs/frontend.md): React/Tauri boundaries and automated checks.
 - [`docs/getting-started.zh-CN.md`](docs/getting-started.zh-CN.md): a beginner's
   guide to Rust, Tauri, React, and the files in this repository.
 - [`docs/architecture.md`](docs/architecture.md): responsibilities and extension points.

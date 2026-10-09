@@ -70,6 +70,13 @@ follow, debug, and extend.
 - Explain unfamiliar terms in documentation. Keep setup instructions runnable.
   Do not add noise by commenting every line.
 
+## Frontend requirements
+
+Read and follow `src/AGENTS.md` for React/TypeScript work and
+`docs/frontend.md` for the current structure and checks. These requirements also
+apply when changing frontend tooling or Tauri integration. Keep the enforced
+checks in CI and Release Actions; do not weaken them to bypass a failure.
+
 ## Architecture
 
 - React renders the interface and collects input. Rust owns credential access,
@@ -103,7 +110,8 @@ follow, debug, and extend.
 ## Verification and open source
 
 - Use npm and Cargo; commit both application lockfiles.
-- Frontend: `npm run format:check`, `npm run typecheck`, `npm run build`.
+- Frontend: `npm run check:frontend` (formatting, lint, both TypeScript configs,
+  release-tool tests, and build). Keep ESLint warnings at zero.
 - Rust: `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check`,
   `cargo clippy --manifest-path src-tauri/Cargo.toml --locked --all-targets -- -D warnings`,
   and `cargo test --manifest-path src-tauri/Cargo.toml --locked`.

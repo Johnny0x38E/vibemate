@@ -1,7 +1,25 @@
 :root {
+  --color-text: #e8eee9;
+  --color-background: #141a17;
+  --color-border: #344039;
+  --color-accent: #bbdf93;
+  --color-label: #acc0af;
+  --color-summary: #adbcb1;
+  --color-muted: #9faea4;
+  --color-surface: #1c251f;
+  --color-status: #c4d8b4;
+  --color-status-border: #526249;
+  --color-content: #dde5df;
+  --color-detail: #a8b8ad;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-page: 48px;
+  --radius-card: 10px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  color: #e8eee9;
-  background: #141a17;
+  color: var(--color-text);
+  background: var(--color-background);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -15,13 +33,13 @@ body {
 .workspace {
   max-width: 1120px;
   margin: auto;
-  padding: 32px 48px;
+  padding: var(--space-xl) var(--space-page);
 }
 .topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid #344039;
+  border-bottom: 1px solid var(--color-border);
   padding-bottom: 22px;
 }
 .brand {
@@ -30,18 +48,18 @@ body {
   letter-spacing: -1px;
 }
 .brand-dot {
-  color: #bbdf93;
+  color: var(--color-accent);
 }
 .stage,
 .eyebrow {
   font-size: 11px;
   letter-spacing: 1.8px;
-  color: #acc0af;
+  color: var(--color-label);
 }
 .intro {
   padding: 44px 0 34px;
 }
-h1 {
+.intro h1 {
   font-size: clamp(38px, 5vw, 62px);
   line-height: 1.06;
   letter-spacing: -2.5px;
@@ -49,7 +67,7 @@ h1 {
   font-weight: 550;
 }
 .summary {
-  color: #adbcb1;
+  color: var(--color-summary);
   max-width: 510px;
   line-height: 1.6;
   font-size: 16px;
@@ -67,7 +85,7 @@ h1 {
 }
 .section-heading span,
 .number {
-  color: #9faea4;
+  color: var(--color-muted);
   font-size: 12px;
 }
 .scope-grid {
@@ -77,9 +95,9 @@ h1 {
 }
 .scope-card {
   padding: 20px;
-  background: #1c251f;
-  border: 1px solid #344039;
-  border-radius: 10px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
 }
 .card-top {
   display: flex;
@@ -88,12 +106,12 @@ h1 {
 }
 .planned {
   font-size: 11px;
-  color: #c4d8b4;
-  border: 1px solid #526249;
+  color: var(--color-status);
+  border: 1px solid var(--color-status-border);
   border-radius: 4px;
   padding: 3px 7px;
 }
-h3 {
+.scope-card h3 {
   margin: 18px 0 8px;
   font-size: 20px;
   font-weight: 550;
@@ -102,33 +120,33 @@ h3 {
   font-size: 13px;
   line-height: 1.6;
   margin: 0;
-  color: #dde5df;
+  color: var(--color-content);
 }
 .detail {
   font-size: 13px;
-  color: #a8b8ad;
+  color: var(--color-detail);
   line-height: 1.6;
   margin: 8px 0 0;
 }
-footer {
+.workspace footer {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 8px;
   padding-top: 22px;
 }
-footer p {
-  color: #a8b8ad;
+.workspace footer p {
+  color: var(--color-detail);
   font-size: 12px;
   margin: 0;
   line-height: 1.5;
 }
 .runtime {
-  color: #c4d8b4;
+  color: var(--color-status);
 }
 @media (max-width: 650px) {
   .workspace {
-    padding: 24px;
+    padding: var(--space-lg);
   }
   .scope-grid {
     grid-template-columns: 1fr;

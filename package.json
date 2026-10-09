@@ -5,28 +5,39 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "npm run typecheck && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test:release": "node --test scripts/release-notes.test.mjs"
+    "test:release": "node --test scripts/release-notes.test.mjs",
+    "lint:code": "eslint src vite.config.ts eslint.config.mjs scripts --max-warnings 0 --no-inline-config",
+    "lint:a11y": "oxlint --config .oxlintrc.json --deny-warnings src",
+    "lint": "npm run lint:code && npm run lint:a11y",
+    "check:frontend": "npm run format:check && npm run lint && npm run test:release && npm run build"
   },
   "dependencies": {
+    "@tauri-apps/api": "^2",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "@tauri-apps/api": "^2"
+    "react-dom": "^19.1.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@tauri-apps/cli": "^2",
+    "@types/node": "^24",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^6.0.2",
-    "typescript": "~6.0.3",
-    "vite": "^8.0.16",
-    "@tauri-apps/cli": "^2",
+    "eslint": "^10.12.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.13.0",
+    "oxlint": "^1.87.0",
     "prettier": "^3.6.2",
-    "@types/node": "^24"
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.71.1",
+    "vite": "^8.0.16"
   },
   "description": "A desktop configuration manager for coding agents.",
   "license": "MIT",

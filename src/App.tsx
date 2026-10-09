@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { type JSX, useEffect, useState } from "react";
 import { getAppInfo } from "./lib/desktop";
 import "./App.css";
 
@@ -25,14 +25,16 @@ const scope = [
   },
 ];
 
-export default function App() {
+/** Compose the initial scope screen and display read-only desktop metadata. */
+export default function App(): JSX.Element {
   const [runtime, setRuntime] = useState("Checking desktop runtime…");
 
   useEffect(() => {
     // React may remount effects in development. Ignore results after cleanup so
     // an old request cannot update a component that is no longer mounted.
     let active = true;
-    getAppInfo().then(
+    // Both success and failure are handled before deliberately ignoring the promise.
+    void getAppInfo().then(
       (info) => {
         if (active)
           setRuntime(

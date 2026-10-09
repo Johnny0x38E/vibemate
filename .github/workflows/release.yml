@@ -28,9 +28,7 @@ jobs:
           node-version: "24"
           cache: npm
       - run: npm ci
-      - run: npm run format:check
-      - run: npm run typecheck
-      - run: npm run test:release
+      - run: npm run check:frontend
       - name: Validate versions and extract changelog entry
         id: notes
         run: node scripts/release-notes.mjs

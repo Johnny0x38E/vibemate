@@ -64,7 +64,7 @@ preview and retry states. Checklist: [todo.md](todo.md) I02.d.
 - Place language preferences and appearance inside Settings → General. Both use
   the same row pattern (label left, select right) inside one bordered group.
   Appearance is a three-option select (follow system, light, dark), alongside
-  Color theme with five paired palettes. Both now persist through Rust (I04).
+  Color theme with five paired palettes shown as clickable circles. Both now persist through Rust (I04).
   Language preference still saves through Rust when not in browser preview.
   Do not show redundant success or “current mode” copy when the UI updates
   immediately; keep error and reload messaging for uncertain outcomes.
@@ -156,8 +156,8 @@ cyan/yellow ring icon. I03 status is tracked only in `todo.md`.
 ## Theme and brand refinements
 
 Settings General includes Forest, Graphite, Linen, Iris, and Ocean, each with
-light/dark colors independent of the brightness choice. Small swatches preview
-the current sidebar, surface and accent. No new settings page or theme framework
+light/dark colors independent of the brightness choice. All five theme accent colors appear as native radio circles with a selected
+ring and check; the theme control no longer uses a dropdown. No new settings page or theme framework
 is introduced. I04 stores the paired choice through Rust and permits explicitly
 unsaved browser preview.
 

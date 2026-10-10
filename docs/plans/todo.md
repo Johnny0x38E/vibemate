@@ -676,6 +676,17 @@ I05.a.1 校正 `mark.svg` / `app-icon.svg` 与同母版生成的桌面图标集�
 **Files:** `src/App.tsx`、`src/App.module.css`、`src/App.test.tsx`；共享文档/本清单同步更新。
 **Verification:** 壳层行为测试、完整前端检查；ego-browser 展开/折叠、明暗、品牌 hover 与键盘返回首页。
 
+### 插队任务 I06：全部主题使用配色圆圈
+
+- [x] 把主题下拉改为全部五套配色同屏的原生 radio 圆圈，选中项有圆环与勾选标记。
+- [x] 沿用保存/失败/重新读取和双语名称；保留键盘操作、忙碌禁用与跨导航状态。
+
+**I06.a Files:** `AppearanceControl.tsx`、`AppearanceControl.module.css`、`AppearanceControl.test.tsx`、`src/App.test.tsx`、`src/themes.css`。
+**I06.b Files:** `docs/frontend.md`、`docs/plans/desktop-shell-design.md`、`CHANGELOG.md`；本清单同步更新。
+**Verification:** 目标 UI 测试、`check:frontend`；外观由维护者人工验收，本任务不运行浏览器/截图视觉检查。
+
+控件与自动检查已完成；圆圈间距、配色与焦点效果待维护者人工验收。
+
 ### Task P09: 让现有界面支持中英文
 
 **Description:** 把现有 App 的文本与 metadata 状态接入 i18n，并将翻译一致性和切换回归检查纳入完成标准。

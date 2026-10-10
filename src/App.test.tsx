@@ -171,9 +171,7 @@ test("keeps the same settings input and colors while navigating elsewhere", asyn
     fireEvent.change(screen.getByRole("combobox", { name: "Appearance" }), {
         target: { value: "light" },
     });
-    fireEvent.change(screen.getByRole("combobox", { name: "Color theme" }), {
-        target: { value: "iris" },
-    });
+    fireEvent.click(screen.getByRole("radio", { name: "Iris" }));
     fireEvent.click(screen.getByRole("button", { name: "Agents" }));
     expect(screen.queryByRole("textbox")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
@@ -184,9 +182,10 @@ test("keeps the same settings input and colors while navigating elsewhere", asyn
         "light",
     );
     expect(document.documentElement.dataset["appearance"]).toBe("light");
-    expect(
-        screen.getByRole("combobox", { name: "Color theme" }),
-    ).toHaveProperty("value", "iris");
+    expect(screen.getByRole("radio", { name: "Iris" })).toHaveProperty(
+        "checked",
+        true,
+    );
 });
 
 test("translates current navigation without resetting the selected page or collapse", async () => {

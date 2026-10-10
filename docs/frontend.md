@@ -329,7 +329,8 @@ Windows/Linux native icon display remains unverified.
 
 ## Built-in color themes
 
-Settings → General now has separate Appearance and Color theme dropdowns.
+Settings → General has an Appearance dropdown and a Color theme radio group.
+All five themes are shown together as clickable colored circles.
 Forest is the original calm green, Graphite is neutral monochrome, Linen uses
 warm paper/clay, Iris has violet accents, and Ocean uses cool blue accents.
 Each has both light and dark values in `src/themes.css`. `App.css` resolves those
@@ -379,3 +380,17 @@ text color is then painted through that mask. The reference dot is cleared and
 a separate orange circle is placed higher. This preserves the reference type
 without guessing a font family or maintaining approximate hand-drawn letters.
 The lettering is raster-derived within the SVG lockup; the V is vector artwork.
+
+I06 replaces the theme dropdown with native radio inputs styled as color circles.
+Each circle uses its own palette's accent token from `themes.css`; the palette
+values remain defined in one place. Translated accessible names and title hints
+identify the colors. A ring and check indicate the selected theme without relying
+on color alone. Native radios keep keyboard arrow navigation and single-selection
+semantics; pending/uncertain saves disable all choices. The existing persistence,
+preview and error/reload workflow is unchanged. Windows high-contrast mode can
+show the native radio instead of the styled circle.
+
+I06 was checked with UI behavior tests and `check:frontend`. Per the maintainer's
+instruction, visual inspection is manual: check circle spacing, selected/focus
+rings, theme colors, and wrapping in the minimum window. No browser screenshots
+or automated visual review were performed for this change.

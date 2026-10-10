@@ -1,5 +1,6 @@
 /* Palette values only. App.css resolves brightness into shared semantic tokens. */
-:root {
+:root,
+[data-palette="forest"] {
     --theme-text-light: #202621;
     --theme-background-light: #f7f8f7;
     --theme-sidebar-light: #ecefec;
@@ -22,7 +23,8 @@
     --theme-accent-dark: #b6c9bd;
 }
 
-:root[data-theme="graphite"] {
+:root[data-theme="graphite"],
+[data-palette="graphite"] {
     --theme-text-light: #25252a;
     --theme-background-light: #f7f7f8;
     --theme-sidebar-light: #ededf0;
@@ -45,7 +47,8 @@
     --theme-accent-dark: #c5c5d3;
 }
 
-:root[data-theme="linen"] {
+:root[data-theme="linen"],
+[data-palette="linen"] {
     --theme-text-light: #332e29;
     --theme-background-light: #faf8f3;
     --theme-sidebar-light: #f0eae0;
@@ -68,7 +71,8 @@
     --theme-accent-dark: #e1b784;
 }
 
-:root[data-theme="iris"] {
+:root[data-theme="iris"],
+[data-palette="iris"] {
     --theme-text-light: #2e2940;
     --theme-background-light: #f8f7fb;
     --theme-sidebar-light: #efecf5;
@@ -91,7 +95,8 @@
     --theme-accent-dark: #c7a2ef;
 }
 
-:root[data-theme="ocean"] {
+:root[data-theme="ocean"],
+[data-palette="ocean"] {
     --theme-text-light: #23343e;
     --theme-background-light: #f5f8fa;
     --theme-sidebar-light: #e9f0f3;

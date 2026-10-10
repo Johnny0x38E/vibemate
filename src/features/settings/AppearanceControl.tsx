@@ -12,7 +12,6 @@ import {
     getAppearancePreference,
     saveAppearancePreference,
     isAppearance,
-    isThemeId,
     THEME_IDS,
     type AppearancePreference,
 } from "../../lib/desktop/appearance";
@@ -205,40 +204,46 @@ export function AppearanceControl(): JSX.Element {
                 </div>
             </div>
             <div className={fieldStyles["row"]}>
-                <div className={styles["themeLabel"]}>
-                    <label
-                        className={fieldStyles["label"]}
-                        htmlFor={`${id}-theme`}
-                    >
-                        {t("settings.theme.label")}
-                    </label>
-                    <span className={styles["swatches"]} aria-hidden="true">
-                        <span />
-                        <span />
-                        <span />
-                    </span>
-                </div>
-                <div className={fieldStyles["field"]}>
-                    <select
-                        className={fieldStyles["select"]}
-                        id={`${id}-theme`}
-                        value={theme}
-                        disabled={blocked}
-                        onChange={(event) => {
-                            const value = event.currentTarget.value;
-                            if (isThemeId(value))
-                                void changePreference({
-                                    appearance,
-                                    theme: value,
-                                });
-                        }}
-                    >
-                        {THEME_IDS.map((palette) => (
-                            <option key={palette} value={palette}>
-                                {t(`settings.theme.names.${palette}`)}
-                            </option>
-                        ))}
-                    </select>
+                <span id={`${id}-theme-label`} className={fieldStyles["label"]}>
+                    {t("settings.theme.label")}
+                </span>
+                <div
+                    className={styles["themes"]}
+                    role="radiogroup"
+                    aria-labelledby={`${id}-theme-label`}
+                >
+                    {THEME_IDS.map((palette) => (
+                        <label
+                            className={styles["choice"]}
+                            key={palette}
+                            data-palette={palette}
+                            title={t(`settings.theme.names.${palette}`)}
+                        >
+                            {/* Native radios provide one selection and keyboard arrow
+                                navigation; styling changes only the visible circle. */}
+                            <input
+                                className={styles["radio"]}
+                                type="radio"
+                                name={`${id}-theme`}
+                                value={palette}
+                                aria-label={t(
+                                    `settings.theme.names.${palette}`,
+                                )}
+                                checked={theme === palette}
+                                disabled={blocked}
+                                onChange={() => {
+                                    void changePreference({
+                                        appearance,
+                                        theme: palette,
+                                    });
+                                }}
+                            />
+                            <span
+                                className={styles["swatch"]}
+                                aria-hidden="true"
+                            />
+                        </label>
+                    ))}
                 </div>
             </div>
             {message !== undefined && (

@@ -8,6 +8,8 @@ GitHub release notes are extracted from the matching version section only.
 
 ### Changed
 
+- Replaced the Color theme dropdown with five clickable palette circles shown together. Native radio inputs preserve keyboard selection; a ring and check mark identify the active choice. Colors reuse the theme tokens, while saved-choice confirmation, preview, disabled states, and failure/reload recovery are unchanged. Visual acceptance is left to the maintainer.
+
 - Combined the reference V and actual reference lettering into one expanded SVG logo, with a symbol-only collapsed version. Removed brand hover decoration while preserving keyboard focus and return-home behavior. Corrected the V proportions and lower turn against the maintainer's selected reference, kept its forest/sage colors, and regenerated desktop icons on an off-white tile. The i dot is a raised warm orange accent.
 
 - Replaced the default Tauri icon with vibemate's selected V identity: editable SVG masters, regenerated desktop PNG/ICO/ICNS assets, and a rounded sidebar wordmark without the old yellow dot. The app tile keeps the symbol visible in light and dark appearance.

@@ -54,8 +54,8 @@ async function mount(locale: "en" | "zh-CN" = "en") {
     );
     return { instance, ...view };
 }
-async function ready(label = "Color theme") {
-    const select = screen.getByRole("combobox", { name: label });
+async function ready(label = "Iris") {
+    const select = screen.getByRole("radio", { name: label });
     await waitFor(() => {
         expect(select).toHaveProperty("disabled", false);
     });
@@ -65,7 +65,7 @@ async function ready(label = "Color theme") {
 test("preview tries built-in palettes and brightness without invoking save", async () => {
     await mount();
     const themes = await ready();
-    fireEvent.change(themes, { target: { value: "iris" } });
+    fireEvent.click(themes);
     fireEvent.change(screen.getByRole("combobox", { name: "Appearance" }), {
         target: { value: "dark" },
     });
@@ -77,16 +77,16 @@ test("preview tries built-in palettes and brightness without invoking save", asy
 
 test("language changes retain selected colors and edited sibling input", async () => {
     const { instance } = await mount();
-    const select = await ready();
-    fireEvent.change(select, { target: { value: "linen" } });
+    const select = await ready("Linen");
+    fireEvent.click(select);
     fireEvent.change(screen.getByRole("textbox"), {
         target: { value: "editing" },
     });
     await act(async () => {
         await instance.changeLanguage("zh-CN");
     });
-    expect(screen.getByRole("combobox", { name: "主题配色" })).toBe(select);
-    expect(select).toHaveProperty("value", "linen");
+    expect(screen.getByRole("radio", { name: "亚麻" })).toBe(select);
+    expect(select).toHaveProperty("checked", true);
     expect(screen.getByDisplayValue("editing")).toBeDefined();
 });
 
@@ -112,10 +112,10 @@ test("loads the saved pair and applies changes only after confirmation", async (
     await mount();
     const select = await ready();
     expect(document.documentElement.dataset["theme"]).toBe("ocean");
-    fireEvent.change(select, { target: { value: "iris" } });
+    fireEvent.click(select);
     expect(select).toHaveProperty("disabled", true);
     expect(document.documentElement.dataset["theme"]).toBe("ocean");
-    fireEvent.change(select, { target: { value: "linen" } });
+    fireEvent.click(screen.getByRole("radio", { name: "Linen" }));
     expect(save).toHaveBeenCalledTimes(1);
     expect(save).toHaveBeenCalledWith({ appearance: "dark", theme: "iris" });
     await act(async () => {
@@ -133,12 +133,15 @@ test("known failed writes keep the previous pair and allow another attempt", asy
     });
     save.mockRejectedValue(new AppearanceRequestError("write_failed"));
     await mount("zh-CN");
-    const select = await ready("主题配色");
-    fireEvent.change(select, { target: { value: "linen" } });
+    const select = await ready("亚麻");
+    fireEvent.click(select);
     expect((await screen.findByRole("alert")).textContent).toContain(
         "原配色未改变",
     );
-    expect(select).toHaveProperty("value", "forest");
+    expect(screen.getByRole("radio", { name: "森林" })).toHaveProperty(
+        "checked",
+        true,
+    );
     expect(select).toHaveProperty("disabled", false);
 });
 
@@ -150,10 +153,10 @@ test("unknown saves block further writes until the persisted pair is reloaded", 
     save.mockRejectedValue(new AppearanceRequestError("invalid_response"));
     await mount();
     const select = await ready();
-    fireEvent.change(select, { target: { value: "iris" } });
+    fireEvent.click(select);
     await screen.findByRole("alert");
     expect(select).toHaveProperty("disabled", true);
-    fireEvent.change(select, { target: { value: "ocean" } });
+    fireEvent.click(screen.getByRole("radio", { name: "Ocean" }));
     expect(save).toHaveBeenCalledTimes(1);
     read.mockResolvedValue({
         kind: "desktop",
@@ -163,7 +166,7 @@ test("unknown saves block further writes until the persisted pair is reloaded", 
         screen.getByRole("button", { name: "Reload saved appearance" }),
     );
     await ready();
-    expect(select).toHaveProperty("value", "iris");
+    expect(select).toHaveProperty("checked", true);
 });
 
 test("read failures are safe and disable changes until retry succeeds", async () => {
@@ -171,9 +174,10 @@ test("read failures are safe and disable changes until retry succeeds", async ()
     await mount();
     await screen.findByRole("alert");
     expect(screen.queryByText(/private diagnostic/)).toBeNull();
-    expect(
-        screen.getByRole("combobox", { name: "Color theme" }),
-    ).toHaveProperty("disabled", true);
+    expect(screen.getByRole("radio", { name: "Iris" })).toHaveProperty(
+        "disabled",
+        true,
+    );
     read.mockResolvedValue({ kind: "preview" });
     fireEvent.click(
         screen.getByRole("button", { name: "Reload saved appearance" }),
@@ -213,11 +217,31 @@ test("late saves after unmount cannot change the document colors", async () => {
     save.mockReturnValue(request.promise);
     const view = await mount();
     const select = await ready();
-    fireEvent.change(select, { target: { value: "iris" } });
+    fireEvent.click(select);
     view.unmount();
     await act(async () => {
         request.resolve({ appearance: "system", theme: "iris" });
         await request.promise;
     });
     expect(document.documentElement.dataset["theme"]).toBeUndefined();
+});
+
+test("shows all built-in colors together and moves the single selection on click", async () => {
+    await mount();
+    await ready();
+    const group = screen.getByRole("radiogroup", { name: "Color theme" });
+    expect(group.querySelectorAll('input[type="radio"]')).toHaveLength(5);
+    expect(screen.getByRole("radio", { name: "Forest" })).toHaveProperty(
+        "checked",
+        true,
+    );
+    for (const name of ["Graphite", "Linen", "Iris", "Ocean"]) {
+        fireEvent.click(screen.getByRole("radio", { name }));
+        expect(screen.getByRole("radio", { name })).toHaveProperty(
+            "checked",
+            true,
+        );
+        expect(group.querySelectorAll("input:checked")).toHaveLength(1);
+    }
+    expect(save).not.toHaveBeenCalled();
 });

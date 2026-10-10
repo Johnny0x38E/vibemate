@@ -40,11 +40,26 @@
 
 Saved provider instances and selected models are configuration only: nothing writes
 agent configuration or claims a verified inference connection yet. Manual model
-add in the UI is the remaining P12 frontend item (P12.c.3); Rust
-`add_manual_provider_model` / `delete_manual_provider_model` are ready.
+add is implemented in the UI; its real desktop add/restart/delete acceptance
+remains pending.
 
 Keep one Rust crate while learning the framework. Create feature modules as
 behavior is implemented rather than adding empty abstractions now.
+
+The maintainer has requested planning for GitHub/Vercel integrations, more model
+providers and MCP capabilities, including GitHub configuration backups, source-based
+MCP/Skill installation, potential Agent installation and API forwarding to Agents. The [backend modularity plan](plans/backend-modularity.md)
+records current file sizes and dependency issues, incremental splits, and future
+extension boundaries. BR tasks in [todo.md](plans/todo.md) are planned; no source
+reorganization is implemented by this documentation change. Start with tests and
+commands, then provider/MCP responsibilities. Keep cloud-service accounts separate
+from model providers and central MCP definitions. Reuse credential storage and
+extract HTTP transport only when a concrete second use requires it. Planned
+`backup` owns snapshot/restore semantics; `sources` and `installation` own source
+resolution and managed Agent/MCP/Skill installs, while `agents` retains discovery
+and configuration management; `gateway` and `protocols` own local API service
+lifecycle and verified forwarding. Agent traffic reaches the local API directly,
+while Tauri manages its lifecycle. These modules remain unimplemented.
 
 ## Planned responsibilities
 

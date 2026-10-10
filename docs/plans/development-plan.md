@@ -77,6 +77,15 @@ Model 配置属于 Provider 实例，用实际模型 ID 标识；别名只用于
 ### 3. Rust 负责配置与系统操作
 
 一个 Rust crate 起步，按功能逐步增加模块；Tauri command 只做输入输出边界。
+维护者提出未来 GitHub/Vercel、更多 MCP 与模型服务商扩展后，新增
+[后端职责拆分计划](backend-modularity.md)，任务状态见 `todo.md` 的 BR 系列。
+近期建议先拆内联测试、命令入口和 Provider/MCP 职责，保留 IPC、schema、凭据引用
+与并发语义；本轮完成规划，尚未实施代码迁移。云服务账号/授权独立于模型服务商
+与 MCP 定义；后续业务实际接入时再抽取必要的通用 HTTP transport。
+维护者补充的配置备份到 GitHub、MCP/Skill 来源安装和给 Agent 的 API 转发，分别规划
+`backup`、`sources/installation` 和 `gateway/protocols`；这些是后续扩展意图，尚未实现，
+不因本次模块规划自动扩大现有第一阶段验收范围。Agent 直接安装也作为未来需求记录：
+安装/升级/卸载属于 installation；agents 继续负责发现、版本能力和配置管理。
 React 使用 `src/features/<feature>/`，通过 `src/lib/desktop/` 下的类型化封装调用 Rust。
 IPC 返回值要做运行时校验，复杂数据出现时再引入适合的 schema 工具。
 

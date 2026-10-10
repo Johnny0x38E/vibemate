@@ -1412,6 +1412,53 @@ D16（维护者批准，2026-10-10 完成）：2026-10-10 20:10（UTC+8）不带
 
 **Estimated scope:** M：5 个建议主文件；如需额外文件先按执行约定拆分。
 
+## 插入任务 BR：后端职责拆分
+
+维护者提出未来 GitHub 配置备份、MCP/Skill 来源安装、给 Agent 的 API 转发，可能直接安装 Agent，以及 Vercel/更多模型服务商接入，优先规划模块边界。
+设计见 [backend-modularity.md](backend-modularity.md)。本轮只完成规划，下面的代码迁移未实施。
+BR1–BR4 是建议的近期整理；BR5–BR7 按新增功能需求开展，不阻塞全部后续业务。
+表中范围包含本清单更新；若实际 import/测试 fixture 迁移超出五个文件，先继续拆批。
+
+- [x] **BR0：检查源码并记录规划。** 基线 `165e262`，记录大小、职责、实际耦合、扩展边界和兼容要求。Files：本清单、`backend-modularity.md`、`architecture.md`、`development-plan.md`；Verification：源码核对、Markdown 格式与 diff 检查；无业务代码变更。
+
+| 待办      | 一次迁移的职责                                                 | 建议实际文件范围（另含本清单）                                                               | 依赖  |
+| --------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ----- |
+| [ ] BR1.a | 原样迁出 Provider/Model 内联测试                               | `providers.rs`、`providers/tests.rs`、`models.rs`、`models/tests.rs`                         | BR0   |
+| [ ] BR1.b | 原样迁出 Fetch/Catalog 内联测试                                | `model_fetch.rs`、`model_fetch/tests.rs`、`model_catalog.rs`、`model_catalog/tests.rs`       | BR1.a |
+| [ ] BR1.c | 原样迁出 Storage/Credentials 测试；保留跨模块 fake helper 入口 | `storage.rs`、`storage/tests.rs`、`credentials.rs`、`credentials/tests.rs`                   | BR1.b |
+| [ ] BR1.d | 原样迁出 HTTP/Provider Secret 测试；保留本地服务 fixture       | `http_client.rs`、`http_client/tests.rs`、`provider_secrets.rs`、`provider_secrets/tests.rs` | BR1.c |
+| [ ] BR2.a | 命令状态/凭据锁和 app/log 入口拆分                             | `commands.rs`、`commands/state.rs`、`commands/app.rs`、`lib.rs`                              | BR1   |
+| [ ] BR2.b | Provider 和 Models 命令按功能拆分                              | `commands.rs`、`commands/providers.rs`、`commands/models.rs`、`lib.rs`                       | BR2.a |
+| [ ] BR2.c | 偏好和 MCP 命令按功能拆分                                      | `commands.rs`、`commands/preferences.rs`、`commands/mcp.rs`、`lib.rs`                        | BR2.b |
+| [ ] BR3.a | Provider 类型/错误从实现中提取；保留原入口                     | `providers.rs`、`providers/types.rs`、`providers/tests.rs`                                   | BR2   |
+| [ ] BR3.b | Provider 模板和专用校验拆分                                    | `providers.rs`、`providers/templates.rs`、`providers/validation.rs`、`providers/tests.rs`    | BR3.a |
+| [ ] BR3.c | Provider SQL 与保存编排拆分                                    | `providers.rs`、`providers/repository.rs`、`providers/service.rs`、`providers/tests.rs`      | BR3.b |
+| [ ] BR4.a | MCP DTO/错误和专用字段校验拆分                                 | `mcp.rs`、`mcp/types.rs`、`mcp/validation.rs`、`mcp/tests.rs`                                | BR3   |
+| [ ] BR4.b | MCP 查询/SQL 与凭据保存/清理编排拆分                           | `mcp.rs`、`mcp/repository.rs`、`mcp/service.rs`、`mcp/tests.rs`                              | BR4.a |
+| [ ] BR4.c | 提取共享文字校验，分别映射业务错误；保留 Provider 公开校验入口 | `providers/validation.rs`、`mcp/validation.rs`、`shared.rs`、`lib.rs`                        | BR4.b |
+| [ ] BR4.d | MCP 独立身份类型与通用 ID 格式校验，保持原有 ID 字符串         | `shared.rs`、`mcp/types.rs`、`mcp/validation.rs`、`mcp/repository.rs`                        | BR4.c |
+| [ ] BR4.e | 共享时间来源与业务错误映射，保留当前 Provider 时间入口         | `shared.rs`、`providers.rs`、`commands/state.rs`、`commands/models.rs`                       | BR4.d |
+
+BR1/BR2/BR3 等依赖名表示该组全部子任务。具体入口仍采用原有 `.rs` facade，
+本轮不要求同时改成所有 `mod.rs`。共享格式函数只做格式判断，不统一业务身份类型。
+BR4.e 若实际 MCP/Provider 命令调用点也需要编辑，按功能继续拆，不能超过文件范围。
+
+后续较大批次的细项在开始时按同样约定继续拆，不一次迁移全部相关文件：
+
+- [ ] **BR5：Models/Fetch。** 分出本地类型/错误、查询与选择 SQL，明确合并接口；拆获取注册/取消、快照、下载、缓存浏览与合并编排。保持现有 ModelError IPC 码，消除获取层对私有 `models::lock` 的借用。开始前按上述职责拆 BR5.a 等批次。
+- [ ] **BR6：Catalog/Storage/Credentials。** 各厂商解析局部化；迁移注册顺序和已发布 SQL 保持原样；按需要分离 OS store 实现和各业务补偿策略。开始前分别拆解析、迁移、凭据批次。
+- [ ] **BR7：外部服务适配。** GitHub 客户端/账号支持备份目标操作；Vercel 用途待确定。以真实复用需求提取 HTTP transport，保留服务专用权限/限流/错误语义。开始实施前按认证与客户端等职责拆细项。
+- [ ] **BR8：配置备份恢复设计。** 明确版本化非敏感快照、GitHub 目标/路径、远端修订冲突、本机身份/凭据重新关联与恢复差异；先显式备份恢复，自动同步另行规划。实施前拆导出、本地恢复、GitHub 存储和 UI 的具体小任务。
+- [ ] **BR9：MCP/Skill 来源安装设计。** 确定首个实际来源及契约，拆候选元数据、固定 revision、安装计划/执行/更新/卸载、受管路径和恢复；安装、运行与 Agent 部署状态分开。承接 P25–P30、P31–P33/P34，避免重复实现。
+- [ ] **BR10：API 转发设计。** 明确首条同协议转发、gateway 生命周期、Provider/Model 路由、协议适配、流式/工具调用/取消/错误验收；Agent 通过本地 API 访问，Tauri 只管理服务。连接 P15/P16/P18–P24，不扩大为云端多用户代理。实施前拆最小路径任务。
+
+- [ ] **BR11：Agent 安装设计。** 核实首个 Agent 的安装/升级/卸载契约、目标平台/架构与现有安装来源；受管安装记录与发现/能力/配置分开。承接 P17；安装完成后只检测，不自动启动或应用配置。按实际首条路径拆小任务，保护用户已有安装与配置。
+
+**各代码批次的共同验收：** 原有公开业务入口、IPC 命令名/serde/错误码、schema v8、
+OS credential service name/引用、并发和补偿行为不变；运行 Rust fmt、all-targets Clippy
+零警告、完整测试并核对基线 201 通过/1 项忽略。命令/导出/资源移动额外执行完整
+`check:frontend`、锁定桌面构建及适用隔离 IPC 验证。原平台待验项保持待验。
+
 ## 阶段 D：Pi 配置
 
 ### Task P17: 展示本机 Agent 状态

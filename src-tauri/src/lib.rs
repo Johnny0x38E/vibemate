@@ -46,6 +46,7 @@ pub fn run() {
             // Managed state is shared by all commands; `StorageStatus` is safe across threads.
             app.manage(status);
             app.manage(commands::CredentialLock::default());
+            app.manage(model_fetch::ModelFetchRegistry::new());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -65,6 +66,13 @@ pub fn run() {
             commands::update_provider,
             commands::get_provider_secret_status,
             commands::replace_provider_secret,
+            commands::fetch_provider_models,
+            commands::cancel_provider_model_fetch,
+            commands::get_provider_model_fetch_status,
+            commands::list_provider_models,
+            commands::set_provider_models_selected,
+            commands::add_manual_provider_model,
+            commands::delete_manual_provider_model,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|_| {

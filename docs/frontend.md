@@ -386,6 +386,35 @@ made and keeps each code list limited to what that request can actually return.
 More complex commands will need structured success/error results and documented
 payload schemas shared with Rust. Do not expose credentials in error messages.
 
+## Model IPC boundary
+
+`src/lib/desktop/models.ts` wraps the seven model commands registered in Rust.
+It does not fetch provider URLs or read credentials. Rust remains responsible
+for model validation, fuzzy search, persistence, cancellation and network limits.
+The model interface is not wired to these wrappers yet.
+
+Each response is received as `unknown`. The wrapper checks exact field sets,
+nullable metadata, enum values, non-negative safe integers, provider identity,
+duplicate model IDs and requested page limits before returning typed data.
+Selection acknowledgments must contain exactly the requested unique IDs and
+selection state. A manual-add acknowledgment must identify the normalized ID
+as a selected manual row; deletion requires a null acknowledgment. Ranked search
+results have a match count and no next-page cursor. A fetch summary reports list
+and merge counts, not proof of valid credentials or working inference.
+
+`ModelRequestError` keeps only Rust's model error-code allowlist, plus
+`invalid_response` and `desktop_required` generated here. Unknown strings,
+objects and exceptions become `operation_failed`; the original payload is
+not retained. After a mutation returns `invalid_response` or `operation_failed`,
+reload persisted data before retrying: IPC failure does not establish rollback.
+Browser reads return `{ kind: "preview" }`, mutations/fetch reject with
+`desktop_required`, and cancellation returns `{ wasRunning: false }` without IPC.
+
+The 85 boundary tests in `src/lib/desktop/models.test.ts` replace only Tauri's
+runtime check and invocation. They cover request shapes, missing/extra fields,
+malformed nested metadata, mismatched acknowledgments, safe errors and preview.
+They do not verify native WebView IPC, OS credential access or real providers.
+
 ## Settings logs
 
 `LogSettings` is a separate group below the General preference controls. It shows

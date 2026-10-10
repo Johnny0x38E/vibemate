@@ -1239,7 +1239,9 @@ D16（维护者批准，2026-10-10 完成）：2026-10-10 20:10（UTC+8）不带
 
 ### P12.b.1：Tauri 命令
 
-- [ ] 薄命令 `fetch_provider_models`（async，`select!` 取消；数据库与凭据操作放在 `spawn_blocking`）、`cancel_provider_model_fetch`、`get_provider_model_fetch_status`、`list_provider_models`、`set_provider_models_selected`、`add_manual_provider_model`、`delete_manual_provider_model` 与注册。
+- [x] 薄命令 `fetch_provider_models`（async，`select!` 取消；数据库与凭据操作放在 `spawn_blocking`）、`cancel_provider_model_fetch`、`get_provider_model_fetch_status`、`list_provider_models`、`set_provider_models_selected`、`add_manual_provider_model`、`delete_manual_provider_model` 与注册。
+
+验证：Rust fmt、Clippy（all-targets、零警告）与全量测试通过（182 通过、1 个真实 OS 凭据测试忽略）。获取前的凭据读取与替换共用进程内锁；合并任务持有注册令牌直到结束，避免调用方停止等待后提前允许第二次获取。未使用真实密钥或执行原生 IPC 验收；前端包装与模型界面仍待 P12.b.2–c.4。
 
 **Files:** `src-tauri/src/commands.rs`、`src-tauri/src/lib.rs`。
 **Verification:** Rust fmt/Clippy/全部测试。
@@ -1247,7 +1249,9 @@ D16（维护者批准，2026-10-10 完成）：2026-10-10 20:10（UTC+8）不带
 
 ### P12.b.2：模型 TS 包装
 
-- [ ] `models.ts` 运行时校验响应（严格键集合）、错误码白名单；浏览器预览列表返回 `{ kind: "preview" }`，写入与获取抛 `desktop_required`，取消返回 `{ wasRunning: false }`。
+- [x] `models.ts` 运行时校验响应（严格键集合）、错误码白名单；浏览器预览列表返回 `{ kind: "preview" }`，写入与获取抛 `desktop_required`，取消返回 `{ wasRunning: false }`。
+
+验证：新增 85 项模型 IPC 边界测试；`check:frontend` 通过（391 项 UI/边界测试、14 项翻译检查测试、8 项发布测试，格式、零警告 Lint、两份 TypeScript 配置与构建）。未改 Rust 或权限，未验证真实 WebView IPC、凭据库与上游请求；模型界面仍待 P12.c.1–c.4。
 
 **Files:** `src/lib/desktop/models.ts`（新）、`src/lib/desktop/models.test.ts`（新）。
 **Verification:** `pnpm run test:ui src/lib/desktop`、`pnpm run check:frontend`。

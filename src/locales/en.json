@@ -243,6 +243,17 @@
                 "response_too_large": "The provider response was too large.",
                 "invalid_response": "The app returned an unrecognized response. Try again.",
                 "desktop_required": "Model changes require the vibemate desktop app."
+            },
+            "manual": {
+                "title": "Add a model manually",
+                "modelId": "Model ID",
+                "alias": "Alias (optional)",
+                "hint": "Add and save selects this model immediately. Its capabilities are unverified. To remove it, uncheck it in the selected list and click Save.",
+                "add": "Add and save",
+                "check": "Check saved models",
+                "uncertain": "The save result is unknown. Check saved models before adding again. If the check fails, try checking again.",
+                "saved": "Manual model saved.",
+                "draft": "Save or discard checkbox changes before adding a manual model."
             }
         },
         "fields": {

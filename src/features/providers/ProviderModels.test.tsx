@@ -1,4 +1,5 @@
 import {
+    act,
     cleanup,
     fireEvent,
     render,
@@ -10,6 +11,7 @@ import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { createAppI18n } from "../../i18n";
 import {
+    addManualProviderModel,
     browseUpstreamModelsPage,
     cancelProviderModelFetch,
     getProviderModelFetchStatus,
@@ -22,6 +24,7 @@ import { ProviderModels } from "./ProviderModels";
 
 vi.mock(import("../../lib/desktop/models"), async (importOriginal) => ({
     ...(await importOriginal()),
+    addManualProviderModel: vi.fn(),
     listProviderModels: vi.fn(),
     saveProviderModelSelections: vi.fn(),
     browseUpstreamModelsPage: vi.fn(),
@@ -36,6 +39,7 @@ vi.mock(
     }),
 );
 
+const addManual = vi.mocked(addManualProviderModel);
 const list = vi.mocked(listProviderModels);
 const saveSelections = vi.mocked(saveProviderModelSelections);
 const browse = vi.mocked(browseUpstreamModelsPage);
@@ -97,6 +101,7 @@ afterEach(() => {
     cleanup();
 });
 beforeEach(() => {
+    addManual.mockReset();
     list.mockReset();
     saveSelections.mockReset().mockResolvedValue(undefined);
     browse.mockReset();
@@ -170,5 +175,109 @@ describe("ProviderModels", () => {
                 add: [],
             });
         });
+    });
+});
+
+test("manual creation updates the selected row and count without a provider request", async () => {
+    list.mockResolvedValue(desktopPage([]));
+    const manual = model({
+        modelId: "vendor/manual",
+        source: "manual",
+        alias: "Work",
+    });
+    addManual.mockResolvedValue(manual);
+    const count = vi.fn();
+    const i18n = await createAppI18n("en");
+    render(
+        <I18nextProvider i18n={i18n}>
+            <ProviderModels providerId={ID} onSelectedCountChange={count} />
+        </I18nextProvider>,
+    );
+    fireEvent.click(
+        await screen.findByText("Add a model manually", {
+            selector: "summary",
+        }),
+    );
+    fireEvent.change(screen.getByLabelText("Model ID"), {
+        target: { value: "vendor/manual" },
+    });
+    fireEvent.change(screen.getByLabelText("Alias (optional)"), {
+        target: { value: "Work" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add and save" }));
+    await screen.findByRole("checkbox", { name: "Deselect vendor/manual" });
+    expect(count).toHaveBeenCalledWith({ count: 1, hasMore: false });
+    expect(browse).not.toHaveBeenCalled();
+    expect(saveSelections).not.toHaveBeenCalled();
+    expect(
+        screen
+            .getByRole("button", { name: "Save" })
+            .getAttribute("aria-disabled"),
+    ).toBe("true");
+});
+
+test("manual rows are removed only when their checkbox draft is saved", async () => {
+    list.mockResolvedValue(
+        desktopPage([model({ source: "manual", alias: "Custom" })]),
+    );
+    await renderModels();
+    fireEvent.click(
+        await screen.findByRole("checkbox", { name: "Deselect deepseek-chat" }),
+    );
+    expect(saveSelections).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+        expect(saveSelections).toHaveBeenCalledWith({
+            providerId: ID,
+            removeModelIds: ["deepseek-chat"],
+            add: [],
+        });
+    });
+});
+
+test("pending checkbox drafts block manual creation", async () => {
+    list.mockResolvedValue(desktopPage([model()]));
+    await renderModels();
+    fireEvent.click(
+        await screen.findByRole("checkbox", { name: "Deselect deepseek-chat" }),
+    );
+    fireEvent.click(
+        screen.getByText("Add a model manually", { selector: "summary" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Add and save" }));
+    expect(addManual).not.toHaveBeenCalled();
+    expect(screen.getByText(/Save or discard checkbox changes/)).toBeDefined();
+});
+
+test("manual writes block browsing and late hidden replies do not add rows", async () => {
+    list.mockResolvedValue(desktopPage([]));
+    let resolve: (model: ProviderModel) => void = () => {};
+    addManual.mockImplementation(
+        () =>
+            new Promise((done) => {
+                resolve = done;
+            }),
+    );
+    const view = await renderModels();
+    fireEvent.click(
+        await screen.findByText("Add a model manually", {
+            selector: "summary",
+        }),
+    );
+    fireEvent.change(screen.getByLabelText("Model ID"), {
+        target: { value: "vendor/manual" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add and save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Fetch models" }));
+    expect(browse).not.toHaveBeenCalled();
+    view.rerenderHidden(true);
+    await act(async () => {
+        resolve(model({ source: "manual", modelId: "vendor/manual" }));
+        await Promise.resolve();
+    });
+    await waitFor(() => {
+        expect(
+            screen.queryByRole("checkbox", { name: "Deselect vendor/manual" }),
+        ).toBeNull();
     });
 });

@@ -103,10 +103,20 @@ does not apply draft checks.
 - `fetch_provider_models` — full merge path remains for tests and legacy callers;
   the Models tab hot path uses browse + save only.
 
-**Remaining (P12.c.3):** manual model add (`ManualModelForm`: model ID, optional
-alias, field errors, delete manual row). Rust commands `add_manual_provider_model`
-and `delete_manual_provider_model` already exist; wire into the selected view and
-the same draft/Save model where appropriate. Track in [todo.md](todo.md).
+## Manual models (P12.c.3)
+
+The selected list includes an expandable **Add a model manually** form with
+model ID and optional alias. **Add and save** immediately persists a selected
+manual row through `add_manual_provider_model`; the label distinguishes this
+from the draft checkbox **Save**. Addition is blocked while checkbox drafts or
+other model operations are pending. Manual rows retain unverified capability
+metadata. To delete a manual row, uncheck it and click the normal **Save**;
+`save_provider_model_selections` removes it with the rest of that atomic batch.
+
+An unknown addition result must be checked against saved cursor pages before
+another submission. This uses exact ID comparison, including IDs longer than the
+search limit. A failed check remains retryable. Automated coverage is implemented;
+real Tauri add/restart/delete and visual review remain pending in [todo.md](todo.md).
 
 ## Related docs
 

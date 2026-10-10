@@ -1,6 +1,6 @@
 # vibemate 第一阶段执行清单
 
-状态：P00–P09 与基础外观 I02–I14 已完成；维护者于 2026-10-10 确认基础外观本轮收尾，并人工确认 P09 双语界面。**进行中**：P10 自动检查与文档已完成，仅剩真实 Tauri 保存→重启的人工验证；之后是 P11。密钥、连接、Model 与 Agent 等业务功能未开始。当前设计见 [desktop-shell-design.md](desktop-shell-design.md)，实现与验证记录见 [frontend.md](../frontend.md)。
+状态：P00–P09 与基础外观 I02–I14 已完成。P10/P11 的真实保存→重启与凭据验收仍有待验项；P12 后端、模型页双视图和手动添加的代码/自动检查已完成，手动添加→重启→删除的真实 Tauri 与外观验证待维护者确认。Agent 等后续业务尚未开始。当前设计见 [desktop-shell-design.md](desktop-shell-design.md)，实现与验证记录见 [frontend.md](../frontend.md)。
 这里是唯一任务状态来源，不能在其他文件维护第二份勾选清单。
 
 ## 执行约定
@@ -1275,11 +1275,35 @@ D16（维护者批准，2026-10-10 完成）：2026-10-10 20:10（UTC+8）不带
 
 ### P12.c.3：手动添加（Frontend Developer）
 
-- [ ] `ManualModelForm`：模型 ID 与可选别名，字段级错误，删除手动行。
+- [ ] `ManualModelForm`：模型 ID 与可选别名，字段级错误，删除手动行。代码与自动检查已完成；真实 Tauri 手动添加→重启→取消勾选并保存删除、外观验证仍待维护者确认。
 
 **Files:** `src/features/providers/ManualModelForm.tsx`（新）、`ManualModelForm.test.tsx`（新）、`ProviderModels.tsx`、两份 locale。
 **Verification:** 同 P12.c.1。
 **Dependencies:** P12.c.2。
+
+### P12.c.3.a：手动添加表单
+
+- [x] 模型 ID、可选别名、字段错误、提交防重与未知结果重读；双语资源与行为测试。
+
+**Files:** `ManualModelForm.tsx`、`ManualModelForm.test.tsx`、两份 locale；复用现有表单样式。
+**Verification:** 目标行为测试、`check:frontend`。
+**Dependencies:** P12.c.2。
+
+### P12.c.3.b：已选列表接线与删除验证
+
+- [x] 已选视图添加并保存、刷新选中基线和数量；有草稿或请求时阻止添加；手动行取消勾选后沿用批量保存删除。
+
+**Files:** `ProviderModels.tsx`、`ProviderModels.test.tsx`。
+**Verification:** 列表行为测试、`check:frontend`。
+**Dependencies:** P12.c.3.a。
+
+### P12.c.3.c：说明与验收边界
+
+- [x] 更新前端说明、UX 约定与英文 changelog；真实 Tauri/外观验证单独保留待验。
+
+**Files:** `docs/frontend.md`、`docs/plans/models-tab-ux.md`、`CHANGELOG.md`；本清单随子任务更新。
+**Verification:** 格式与差异检查。
+**Dependencies:** P12.c.3.b。
 
 ### P12.c.5：模型 Tab 双视图与保存式勾选（维护者 2026-10-11 定稿）
 
@@ -1317,7 +1341,7 @@ D16（维护者批准，2026-10-10 完成）：2026-10-10 20:10（UTC+8）不带
 
 ### Checkpoint C12（P10–P12）
 
-- [ ] P10–P12 均已勾选（**Models 页 UI 仅剩 P12.c.3 手动添加**；P12.c.5 与 P12.d 获取/勾选 Tauri 验证已完成）。
+- [ ] P10–P12 均已勾选（**P12.c.3 手动添加代码/自动检查完成，真实 Tauri 验证待验**；P12.c.5 与 P12.d 获取/勾选 Tauri 验证已完成）。
 
 ### Task P13: 验证 DeepSeek 连接（已并入 P12）
 

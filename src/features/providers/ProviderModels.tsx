@@ -22,6 +22,8 @@ import {
     type UpstreamBrowseModel,
 } from "../../lib/desktop/models";
 import { getProviderSecretStatus } from "../../lib/desktop/providerSecrets";
+import { ManualModelForm } from "./ManualModelForm";
+import formStyles from "./ProviderForm.module.css";
 import { ModelCheckbox } from "../../components/ModelCheckbox";
 import buttons from "./providerButtons.module.css";
 import styles from "./ProviderModels.module.css";
@@ -235,6 +237,7 @@ export function ProviderModels({
     const [keyState, setKeyState] = useState<KeyState>({ kind: "loading" });
     const [browseRunning, setBrowseRunning] = useState(false);
     const [serverBrowseRunning, setServerBrowseRunning] = useState(false);
+    const [manualBusy, setManualBusy] = useState(false);
     const [saveState, setSaveState] = useState<SaveState>({ kind: "idle" });
 
     const loadGeneration = useRef(0);
@@ -634,6 +637,7 @@ export function ProviderModels({
               : null;
 
     const sectionBusy =
+        manualBusy ||
         browseActive ||
         saveState.kind === "running" ||
         (viewMode === "selected" && list.kind === "loading") ||
@@ -672,8 +676,43 @@ export function ProviderModels({
         browseActive,
     );
 
+    function manualSaved(model: ProviderModel): void {
+        // Addition is a separate, immediate save. It is blocked while checkbox
+        // drafts exist, so extending both sets cannot discard unsaved choices.
+        const next = new Set(baselineSelected);
+        next.add(model.modelId);
+        syncBaselineFromLoaded(next);
+        onSelectedCountChange?.({ count: next.size, hasMore: false });
+        if (list.kind === "ready") {
+            setList({ ...list, items: mergeModels(list.items, [model]) });
+        }
+        setSearchInput("");
+        setDebouncedQuery("");
+        notify({
+            tone: "success",
+            message: t("providers.models.manual.saved"),
+        });
+    }
+
     const listBody = (
         <>
+            {!hidden && viewMode === "selected" && list.kind === "ready" && (
+                <details className={formStyles["group"]}>
+                    <summary>{t("providers.models.manual.title")}</summary>
+                    {dirty && (
+                        <p className={formStyles["hint"]} role="status">
+                            {t("providers.models.manual.draft")}
+                        </p>
+                    )}
+                    <ManualModelForm
+                        key={providerId}
+                        providerId={providerId}
+                        blocked={sectionBusy || dirty}
+                        onSaved={manualSaved}
+                        onBusyChange={setManualBusy}
+                    />
+                </details>
+            )}
             {viewMode === "selected" &&
                 list.kind === "loading" &&
                 !browseActive && (
@@ -1018,6 +1057,7 @@ export function ProviderModels({
                         placeholder={t("providers.models.searchPlaceholder")}
                         aria-label={t("providers.models.searchPlaceholder")}
                         disabled={
+                            manualBusy ||
                             list.kind === "preview" ||
                             keyMissing ||
                             keyState.kind === "loading" ||
@@ -1039,14 +1079,14 @@ export function ProviderModels({
                                 styles["toolbarButton"],
                             ].join(" ")}
                             aria-disabled={
-                                browseActive ||
+                                sectionBusy ||
                                 list.kind === "preview" ||
                                 keyMissing ||
                                 keyState.kind === "loading"
                             }
                             onClick={() => {
                                 if (
-                                    browseActive ||
+                                    sectionBusy ||
                                     list.kind === "preview" ||
                                     keyMissing ||
                                     keyState.kind === "loading"
@@ -1111,9 +1151,9 @@ export function ProviderModels({
                             buttons["primary"],
                             styles["toolbarButton"],
                         ].join(" ")}
-                        aria-disabled={!dirty || saveState.kind === "running"}
+                        aria-disabled={!dirty || sectionBusy}
                         onClick={() => {
-                            if (!dirty || saveState.kind === "running") return;
+                            if (!dirty || sectionBusy) return;
                             void runSave();
                         }}
                     >

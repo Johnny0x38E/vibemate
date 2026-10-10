@@ -642,9 +642,30 @@ lazy-loaded result pages via `browse_upstream_models_page` (optional fuzzy
 on the selected list and **Save** removes rows from SQLite (`save_provider_model_selections`).
 Search applies to whichever view is active. One list footer line covers upstream
 scroll, loading-more, and end states. Dirty drafts block leaving with an unsaved
-prompt (API tab switch and **Back** on the provider page). Manual model add
-(P12.c.3, `ManualModelForm`) is not wired yet; Rust IPC for add/delete manual
-rows already exists.
+prompt (API tab switch and **Back** on the provider page).
+
+The selected list now has an expandable **Add a model manually** form
+(`ManualModelForm`): model ID and optional alias, followed by **Add and save**.
+This explicitly saves and selects one manual row through the existing Rust
+command; it does not stage an upstream checkbox draft. Pending checkbox drafts
+block creation until saved or discarded. The manual row is removed by unchecking
+it and using the normal selection **Save**. Route/capability metadata stays
+unverified; an alias is only a display label.
+
+Rust field errors are associated with the ID or alias input. Successful creation
+clears the form and extends the selected baseline, row list and tab count without
+a provider network request. Pending manual writes block fetching, checkbox saves
+and the detail-page Back action. Hiding the view unmounts the form; late replies are
+ignored, and the existing selected-list read reconciles persisted state on return.
+An unknown write acknowledgment blocks a second submission until **Check saved
+models** reads cursor pages for the exact ID. Similar IDs never confirm a write;
+a failed read leaves the check retryable. Cursor reads also support valid IDs
+longer than the 200-character fuzzy-search limit.
+
+Automated form and list tests cover creation, field errors, duplicate submission,
+unknown-result checks, pagination, bilingual feedback, draft protection, deletion
+requests and late replies. Real Tauri add/restart/delete and visual review remain
+manual checks; DOM tests do not establish native persistence.
 
 Rust validates submitted values: field codes appear next to their field and
 other codes at form level. After a successful save the page returns to the list,

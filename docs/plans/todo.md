@@ -1426,7 +1426,7 @@ BR1–BR4 是建议的近期整理；BR5–BR7 按新增功能需求开展，不
 | [x] BR1.a | 原样迁出 Provider/Model 内联测试                               | `providers.rs`、`providers/tests.rs`、`models.rs`、`models/tests.rs`                         | BR0   |
 | [x] BR1.b | 原样迁出 Fetch/Catalog 内联测试                                | `model_fetch.rs`、`model_fetch/tests.rs`、`model_catalog.rs`、`model_catalog/tests.rs`       | BR1.a |
 | [x] BR1.c | 原样迁出 Storage/Credentials 测试；保留跨模块 fake helper 入口 | `storage.rs`、`storage/tests.rs`、`credentials.rs`、`credentials/tests.rs`                   | BR1.b |
-| [ ] BR1.d | 原样迁出 HTTP/Provider Secret 测试；保留本地服务 fixture       | `http_client.rs`、`http_client/tests.rs`、`provider_secrets.rs`、`provider_secrets/tests.rs` | BR1.c |
+| [x] BR1.d | 原样迁出 HTTP/Provider Secret 测试；保留本地服务 fixture       | `http_client.rs`、`http_client/tests.rs`、`provider_secrets.rs`、`provider_secrets/tests.rs` | BR1.c |
 | [ ] BR2.a | 命令状态/凭据锁和 app/log 入口拆分                             | `commands.rs`、`commands/state.rs`、`commands/app.rs`、`lib.rs`                              | BR1   |
 | [ ] BR2.b | Provider 和 Models 命令按功能拆分                              | `commands.rs`、`commands/providers.rs`、`commands/models.rs`、`lib.rs`                       | BR2.a |
 | [ ] BR2.c | 偏好和 MCP 命令按功能拆分                                      | `commands.rs`、`commands/preferences.rs`、`commands/mcp.rs`、`lib.rs`                        | BR2.b |

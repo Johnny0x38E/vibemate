@@ -78,7 +78,6 @@
             "loading": "正在读取日志路径…",
             "preview": "浏览器预览无法读取或打开桌面日志。",
             "fileInactive": "启动时未能启用文件日志，请查看终端输出；已有日志文件可能只包含之前的记录。",
-            "hint": "使用本机文本工具打开（macOS 使用 TextEdit，Windows 使用记事本，Linux 使用默认关联应用）。日志文件路径可选中复制。",
             "openingFile": "正在请求打开文本工具…",
             "openingDirectory": "正在请求打开文件管理器…",
             "errors": {

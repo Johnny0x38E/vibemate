@@ -78,7 +78,6 @@
             "loading": "Reading log path…",
             "preview": "Browser preview cannot read or open desktop logs.",
             "fileInactive": "File logging was not enabled at startup. Check the terminal output; an existing log file may contain older entries.",
-            "hint": "Opens a local text tool (TextEdit on macOS, Notepad on Windows, or the default app on Linux). The log file path is selectable for copying.",
             "openingFile": "Requesting the text tool…",
             "openingDirectory": "Requesting the file manager…",
             "errors": {

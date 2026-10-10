@@ -72,12 +72,6 @@
     cursor: not-allowed;
 }
 
-.hint {
-    margin-bottom: 0;
-    color: var(--color-summary);
-    font-size: 0.75rem;
-}
-
 @media (max-width: 520px) {
     .pathCell {
         flex-direction: column;

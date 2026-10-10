@@ -145,7 +145,6 @@ export function LogSettings(): JSX.Element {
                                 {t("settings.logs.fileInactive")}
                             </p>
                         )}
-                    <p className={styles["hint"]}>{t("settings.logs.hint")}</p>
                     {openState.kind === "opening" && (
                         <p role="status">
                             {t(

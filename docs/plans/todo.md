@@ -1434,7 +1434,7 @@ D16（维护者批准，2026-10-10 完成）：2026-10-10 20:10（UTC+8）不带
 | [x] BR2.e   | 今日收尾：统一 README/阶段概览/架构与任务状态                  | `README.md`、`docs/plans/phase-1.md`、`docs/architecture.md`                                                 | BR2.d |
 | [x] BR3.a   | Provider 类型/错误从实现中提取；保留原入口                     | `providers.rs`、`providers/types.rs`、`providers/tests.rs`                                                   | BR2   |
 | [x] BR3.b.0 | Provider 类型通过公开模板访问器解耦                            | `providers/types.rs`                                                                                         | BR3.a |
-| [ ] BR3.b   | Provider 模板和专用校验拆分                                    | `providers.rs`、`providers/templates.rs`、`providers/validation.rs`、`providers/tests.rs`                    | BR3.a |
+| [x] BR3.b   | Provider 模板和专用校验拆分                                    | `providers.rs`、`providers/templates.rs`、`providers/validation.rs`、`providers/tests.rs`                    | BR3.a |
 | [ ] BR3.c   | Provider SQL 与保存编排拆分                                    | `providers.rs`、`providers/repository.rs`、`providers/service.rs`、`providers/tests.rs`                      | BR3.b |
 | [ ] BR4.a   | MCP DTO/错误和专用字段校验拆分                                 | `mcp.rs`、`mcp/types.rs`、`mcp/validation.rs`、`mcp/tests.rs`                                                | BR3   |
 | [ ] BR4.b   | MCP 查询/SQL 与凭据保存/清理编排拆分                           | `mcp.rs`、`mcp/repository.rs`、`mcp/service.rs`、`mcp/tests.rs`                                              | BR4.a |

@@ -1,6 +1,7 @@
 //! Behavior tests for the parent module, kept separate from runtime code.
 
 mod unified_save;
+use super::validation::{parse_protocol_for, validate_extensions};
 use super::*;
 use crate::credentials::fake::FakeStore;
 use crate::credentials::{CredentialError, InvalidSecret, Secret};

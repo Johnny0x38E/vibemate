@@ -8,6 +8,10 @@ GitHub release notes are extracted from the matching version section only.
 
 ### Changed
 
+- Removed the GitHub icon button’s tile background and reduced its footprint so the About repository row matches the version and license rows. Keyboard focus and browser-opening feedback remain available.
+
+- Renamed the Notion-inspired palette to Ink (纸墨) and placed it second after Forest, retaining its persisted identity. Removed temporary appearance-saving text to avoid a flashing feedback row while preserving save guards and failure recovery.
+
 - Redesigned Settings About to match General’s full content width, with the expanded brand logo and aligned metadata rows. Replaced the raw repository address with an accessible GitHub Octicons button that opens the fixed repository in the system browser, with pending and retryable failure feedback. The icon’s MIT notice is bundled. Verified with 99 UI tests, eight release-tool tests, frontend lint/type/build checks, Rust fmt/Clippy and 31 passing tests (the existing OS-keychain smoke test remains ignored), and a locked macOS build with an unsigned local app bundle. Visual and native browser-opening acceptance remains with the maintainer.
 
 - Cleared the original reference i dot in the rendered brand logo mask, preventing a dark remnant below the raised orange accent.

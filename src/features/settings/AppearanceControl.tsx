@@ -158,7 +158,7 @@ export function AppearanceControl(): JSX.Element {
                 state.operation === "saveUnconfirmed"));
     const message =
         state.kind === "desktop"
-            ? state.operation === "idle"
+            ? state.operation === "idle" || state.operation === "saving"
                 ? undefined
                 : state.operation
             : state.kind;

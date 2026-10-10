@@ -58,6 +58,9 @@
 }
 
 .details dd {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
     margin: 0;
     text-align: end;
     overflow-wrap: anywhere;
@@ -68,23 +71,25 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 2.5rem;
-    height: 2.5rem;
+    width: 1.5rem;
+    height: 1.5rem;
     padding: 0;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-control);
+    border: 0;
     color: var(--color-text);
-    background: var(--color-background);
+    background: none;
     cursor: pointer;
 }
 
-.repository:hover:not(:disabled),
+.repository:hover:not(:disabled) {
+    opacity: 0.8;
+}
+
 .retry:hover {
     background: var(--color-hover);
 }
 
 .repository:active:not(:disabled) {
-    background: var(--color-selected);
+    opacity: 0.65;
 }
 
 .repository:disabled {

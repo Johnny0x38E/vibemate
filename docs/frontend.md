@@ -410,7 +410,7 @@ Visual acceptance is performed by the maintainer.
 
 The repository opener uses the [official Rust `open_url` API](https://docs.rs/tauri-plugin-opener/2.7.0/tauri_plugin_opener/fn.open_url.html). The GitHub mark comes from [GitHub Octicons](https://github.com/primer/octicons/blob/main/icons/mark-github-16.svg).
 
-The sixth built-in palette, `notion` (Notion style / Notion 风格), is inspired by
+The built-in palette `notion` (Ink / 纸墨), shown second after Forest, is inspired by
 Notion's official public light/dark CSS observed on 2026-10-10:
 [theme stylesheet](https://www.notion.so/_assets/77281-c4b3c46f690b55b2.css),
 linked from its [login page](https://www.notion.so/login). Its primary text,
@@ -430,3 +430,12 @@ Notion palette token contrast was checked numerically against canvas, sidebar,
 surface, hover and selected backgrounds: light primary/secondary text minima
 11.41/4.74, dark primary/secondary minima 11.51/5.66, and focus minima
 5.30/8.83. These values do not replace visual acceptance.
+
+Theme saves retain the disabled controls and confirmed-choice behavior but
+render no temporary saving message, avoiding a flashing feedback row. Read,
+preview, failed-save and unconfirmed-save feedback remain available. The stored
+`notion` ID is unchanged so previously saved choices still load as Ink / 纸墨.
+
+The About repository action is a bare 24 px GitHub icon button. With no tile
+background, border or oversized button box, its row uses the same 56 px minimum
+height as version and license. Hover uses opacity; keyboard focus stays visible.

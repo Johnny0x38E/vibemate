@@ -744,6 +744,25 @@ I05.a.1 校正 `mark.svg` / `app-icon.svg` 与同母版生成的桌面图标集�
 **I11.c.1 Files:** `src/lib/desktop/appearance.test.ts`、`src/features/settings/AppearanceControl.test.tsx`。
 **I11.c.2 Files:** `docs/frontend.md`、`CHANGELOG.md`；本清单同步更新。
 
+### 插队任务 I12：主题命名、排序与无闪烁保存
+
+- [x] 「Notion 风格」改名为「纸墨 / Ink」，排列第二，保留已有保存 ID。
+- [x] 保存时不显示短暂提示文字，保持操作禁用、失败和未确认反馈。
+- [x] 完成前端检查（101 项 UI 测试、8 项发布测试、格式/Lint/类型与构建）和 locked macOS 构建、unsigned app 打包。
+- [ ] 外观由维护者人工验收，不运行浏览器或截图检查。
+
+**I12.a Files:** `src/lib/desktop/appearance.ts`、`src/features/settings/AppearanceControl.tsx`、`src/features/settings/AppearanceControl.test.tsx`、`src/locales/en.json`、`src/locales/zh-CN.json`。
+**I12.b Files:** `docs/frontend.md`、`CHANGELOG.md`、本清单。
+
+### 插队任务 I13：关于页仓库行与纯图标
+
+- [x] GitHub 按钮改为 24 px 无边框、无方块背景的纯图标，仓库行恢复与版本、许可证相同的 56 px 最小高度。
+- [x] 保持点击、键盘焦点、保存无关的打开状态与失败反馈。
+- [x] 前端检查（101 项 UI 测试、8 项发布测试、格式/Lint/类型与构建）和 locked macOS 构建、unsigned app 打包。
+- [ ] 关于页外观由维护者人工验收。
+
+**Files:** `src/features/settings/AboutPanel.module.css`、`CHANGELOG.md`、`docs/frontend.md`、本清单。
+
 ### Task P09: 让现有界面支持中英文
 
 **Description:** 把现有 App 的文本与 metadata 状态接入 i18n，并将翻译一致性和切换回归检查纳入完成标准。

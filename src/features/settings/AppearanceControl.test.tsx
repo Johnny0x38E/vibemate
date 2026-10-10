@@ -118,6 +118,7 @@ test("loads the saved pair and applies changes only after confirmation", async (
     fireEvent.click(screen.getByRole("radio", { name: "Linen" }));
     expect(save).toHaveBeenCalledTimes(1);
     expect(save).toHaveBeenCalledWith({ appearance: "dark", theme: "iris" });
+    expect(screen.queryByRole("status")).toBeNull();
     await act(async () => {
         request.resolve({ appearance: "dark", theme: "iris" });
         await request.promise;
@@ -235,7 +236,7 @@ test("shows all built-in colors together and moves the single selection on click
         "checked",
         true,
     );
-    for (const name of ["Graphite", "Linen", "Iris", "Ocean", "Notion style"]) {
+    for (const name of ["Graphite", "Linen", "Iris", "Ocean", "Ink"]) {
         fireEvent.click(screen.getByRole("radio", { name }));
         expect(screen.getByRole("radio", { name })).toHaveProperty(
             "checked",
@@ -246,7 +247,7 @@ test("shows all built-in colors together and moves the single selection on click
     expect(save).not.toHaveBeenCalled();
 });
 
-test("saves Notion with the current brightness and restores it after remount", async () => {
+test("saves Ink with the current brightness and restores it after remount", async () => {
     read.mockResolvedValue({
         kind: "desktop",
         preference: { appearance: "dark", theme: "forest" },
@@ -254,7 +255,9 @@ test("saves Notion with the current brightness and restores it after remount", a
     const choice = { appearance: "dark", theme: "notion" } as const;
     save.mockResolvedValue(choice);
     const view = await mount();
-    fireEvent.click(await ready("Notion style"));
+    const ink = await ready("Ink");
+    expect(screen.getAllByRole("radio")[1]).toBe(ink);
+    fireEvent.click(ink);
     await waitFor(() => {
         expect(document.documentElement.dataset["theme"]).toBe("notion");
     });
@@ -262,7 +265,7 @@ test("saves Notion with the current brightness and restores it after remount", a
     view.unmount();
     read.mockResolvedValue({ kind: "desktop", preference: choice });
     await mount("zh-CN");
-    const selected = await ready("Notion 风格");
+    const selected = await ready("纸墨");
     expect(selected).toHaveProperty("checked", true);
     expect(document.documentElement.dataset["appearance"]).toBe("dark");
     expect(document.documentElement.dataset["theme"]).toBe("notion");

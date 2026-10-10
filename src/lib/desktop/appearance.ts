@@ -6,11 +6,11 @@ export type Appearance = "system" | "light" | "dark";
 /** Stable palette IDs also used by bundled CSS and translation keys. */
 export const THEME_IDS = [
     "forest",
+    "notion",
     "graphite",
     "linen",
     "iris",
     "ocean",
-    "notion",
 ] as const;
 /** An installed built-in palette, never an arbitrary CSS value. */
 export type ThemeId = (typeof THEME_IDS)[number];

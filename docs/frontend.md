@@ -24,8 +24,8 @@ React describes the interface; Rust handles local system and provider operations
   `WindowControls` on Windows/Linux builds) implement drag strips and custom
   window chrome. Never place buttons or fields inside a drag region; an App test
   enforces this. Window IPC lives in `src/lib/desktop/window.ts`.
-- `src/components/BrandLogo.tsx` renders one SVG logo: the V tile and rounded
-  wordmark when expanded, and the V tile alone when collapsed. The wordmark uses
+- `src/components/BrandLogo.tsx` renders one SVG logo: the transparent V and rounded
+  wordmark when expanded, and the V symbol alone when collapsed. The wordmark uses
   a mask from the selected reference without a font dependency. `src/components/Icon.tsx` holds UI icons.
 - `src/lib/desktop.ts` checks runtime availability, calls Rust, and validates
   the returned data. Components never import Tauri APIs directly.
@@ -109,8 +109,8 @@ Resources are bundled rather than fetched, with English as the fallback.
 
 P08 connects Rust persistence, validated IPC, the startup gate, and the language
 selector. Saved English/Chinese choices override the captured system language;
-following system and browser preview use `resolveSystemLocale`. The existing App
-still has English literals, which P09 will translate. The window title remains
+following system and browser preview use `resolveSystemLocale`. The desktop shell and implemented settings have bilingual resources. P09
+remains open for whole-interface resource validation and acceptance. The window title remains
 the product name `vibemate`. The ready tree uses an explicit `I18nextProvider`.
 
 The i18next `CustomTypeOptions` declaration constrains translation keys using the
@@ -284,158 +284,114 @@ It uses `invoke<unknown>()` and checks the actual fields before returning an
 More complex commands will need structured success/error results and documented
 payload schemas shared with Rust. Do not expose credentials in error messages.
 
-## About metadata panel
+## Settings About
 
-`AboutPanel` reads `getAppInfo()` on its first mount, which Settings delays until
-About is first selected. It remains mounted across tab and sidebar navigation,
-so language switching translates feedback without repeating the request.
-A discriminated union represents loading, ready, preview, and error states.
-The ready version comes from Rust build metadata; preview never substitutes the
-JavaScript package version. Unknown IPC exceptions become bundled error feedback
-with a retry button. Each read effect has a cleanup flag so obsolete StrictMode
-requests cannot replace current results.
+About mounts on its first visit and stays mounted across tab and sidebar
+navigation. It uses General's full content width, with the expanded `BrandLogo`
+and description above version, license and repository rows. All three rows
+have a 56 px minimum height. The GitHub action is a bare 24 px icon button with
+no tile background or border, a translated name, visible focus, disabled opening
+state and retryable error feedback. Its Octicons MIT notice is bundled in
+`assets/licenses/octicons-MIT.txt`.
 
-The panel displays the expanded brand, MIT license, and an icon button for the
-repository verified against this checkout's Git remote. Activating it opens the
-fixed repository in the system browser. Settings tabs use one Tab stop with
-Left/Right, Home, and End selecting and focusing native tab buttons. Preference
-controls and loaded About metadata remain mounted while hidden.
+`getAppInfo()` reads Rust build metadata. Loading, ready, browser preview and
+error/retry states remain distinct; preview never invents a desktop version.
+Effect cleanup rejects obsolete StrictMode responses. Language changes translate
+feedback without rereading. Tabs use one Tab stop; arrows, Home and End select
+and focus native buttons.
 
-I02.d verification on macOS: `check:frontend` passed 80 UI tests and eight
-release-tool tests, including five About cases and three Settings tab cases.
-Temporarily disabling read cleanup failed both obsolete success/failure cases;
-the source was restored. ego-browser inspected English and Chinese at 720×560,
-including keyboard focus and long preview text without horizontal overflow.
-The existing macOS debug binary, placed in a temporary app bundle and connected
-to the current Vite frontend, returned version 0.1.0 through real WebView IPC.
-No new Rust command or desktop permission was added. Windows/Linux runtime
-verification and native error injection were not performed.
+`openProjectRepository()` calls a Rust command with no URL or executable input.
+Rust uses the [opener crate's API](https://docs.rs/tauri-plugin-opener/2.7.0/tauri_plugin_opener/fn.open_url.html)
+for the fixed `https://github.com/Johnny0x38E/vibemate` address. The opener plugin
+is not registered and no generic opener IPC permissions are granted. Browser
+preview opens the same URL with `noopener,noreferrer`; private OS errors become
+bundled feedback. The icon is from [GitHub Octicons](https://github.com/primer/octicons/blob/main/icons/mark-github-16.svg).
 
 ## Product branding
 
-`assets/brand/` contains the selected V concept and editable SVG masters.
-The app icon is a forest/sage V on an off-white tile. The sidebar references the transparent
-`mark.svg` master matching the desktop icon silhouette. `BrandLogo` uses the reference letter shapes and
-`currentColor` for light/dark contrast; it no longer uses Tauri's yellow dot.
-See `assets/brand/README.md` for the palette and the locked Tauri CLI icon command.
+`BrandLogo` renders the expanded V/wordmark in the sidebar and About, and only
+the V in the collapsed rail. The brand-home button has no hover decoration and
+retains keyboard focus. Its accessible name belongs to the button; the SVG is
+decorative.
 
-I03 verification on macOS: all 80 UI tests and eight release-tool tests passed
-in `check:frontend`; the native locked desktop build and an unsigned local `.app`
-bundle succeeded. The bundle's ICNS matches the generated source. The packaged
-app was opened and its sidebar inspected. ego-browser checked the new brand at
-720×560 in light/dark appearance, expanded/collapsed navigation, loaded image
-assets, no horizontal overflow, and keyboard activation of the brand-home button.
-Windows/Linux native icon display remains unverified.
+The V uses forest `#324e40` and sage `#a8b8a7`, with the reference's shallow lower
+turn. The wordmark uses reference letter shapes through an SVG mask: a color
+matrix removes the pale background and `currentColor` supplies text color.
+The original i dot is cleared before drawing the raised orange `#db915b` circle.
+The lettering is raster-derived; the V is vector artwork.
+
+The expanded/collapsed exports are in `assets/brand/`. The app icon uses an
+off-white tile. The macOS master has separate transparent padding, continuous
+corners and a slight downward V offset, leaving other platform icons and sidebar
+geometry unchanged. [Brand asset instructions](../assets/brand/README.md) record
+the masters, dimensions and locked Tauri generation commands.
 
 ## Built-in color themes
 
-Settings → General has an Appearance dropdown and a Color theme radio group.
-All five themes are shown together as clickable colored circles.
-Forest is the original calm green, Graphite is neutral monochrome, Linen uses
-warm paper/clay, Iris has violet accents, and Ocean uses cool blue accents.
-Each has both light and dark values in `src/themes.css`. `App.css` resolves those
-palette values into the existing semantic colors, so screens and focus feedback
-share the same palette. System mode still follows `prefers-color-scheme` in CSS;
-no React media-query subscription is needed. The brand icon retains its identity.
+General shows all six themes as native radio circles, in this order:
 
-`src-tauri/src/appearance.rs` owns validated brightness/palette pairs. Schema v3
-adds one constrained singleton table without changing language data. A missing
-row returns system/forest without writing a default. One UPSERT saves both
-fields atomically. The thin commands use the blocking worker pool and existing
-safe settings error codes; no dependency, permission or CSP change was needed.
-`src/lib/desktop/appearance.ts` validates runtime values and requires an exact
-save acknowledgment. Browser preview reads no saved choice and cannot invoke a
-save. It can still try colors locally, with an explicit unsaved-preview message.
+| English  | 简体中文 | Persisted ID | Palette                       |
+| -------- | -------- | ------------ | ----------------------------- |
+| Forest   | 森林     | `forest`     | Calm green                    |
+| Ink      | 纸墨     | `notion`     | White, warm gray and charcoal |
+| Graphite | 石墨     | `graphite`   | Neutral monochrome            |
+| Linen    | 亚麻     | `linen`      | Warm paper and clay           |
+| Iris     | 鸢尾     | `iris`       | Restrained violet             |
+| Ocean    | 海湾     | `ocean`      | Cool blue                     |
 
-`AppearanceControl` reads on mount, disabling changes until the pair is known.
-The default CSS is used while that read is pending. A confirmed save updates the
-root `data-appearance` and `data-theme`; unknown outcomes block more writes and
-offer a reload. Known failed writes retain the confirmed pair. Each read ignores
-obsolete effect responses; cleanup restores the document attributes. Language
-switching and navigation keep controls and input mounted.
+Each theme has light/dark values in `src/themes.css`; `App.css` maps them to
+shared semantic colors. Brightness is independent of theme. System brightness
+uses `prefers-color-scheme` in CSS. Circles reuse palette accents, with translated
+names, selected rings and checks. Native radios provide arrow-key selection;
+forced-colors mode can show the native input. Brand V colors remain fixed.
 
-I04/I05 verification on macOS: `check:frontend` passed 95 UI tests and eight
-release-tool tests. Rust tests passed 31 cases with the existing real-keychain
-smoke test ignored; formatting and all-target Clippy passed. The default locked
-release desktop build passed. A temporary app identifier isolated real WebView
-selection and restart: dark/Iris was restored, while system language was kept.
-The temporary app and its data were removed after verification. All ten theme
-palettes were inspected at 720×560, with English and Chinese feedback, system
-scheme changes, and native dropdown keyboard selection. Text/summary tokens
-exceeded 4.5:1 and focus tokens exceeded 3:1 against the five shared surfaces.
-These measurements cover those token pairs, not a comprehensive accessibility
-audit. Windows/Linux runtime acceptance remains pending.
+Rust validates and atomically saves brightness/theme pairs. Thin Tauri commands
+run SQLite work in a blocking worker so database waits do not stall the async
+executor. A missing row means
+system/forest without writing defaults. Schema v3 created the singleton table;
+v4 extends its CHECK constraint by rebuilding that owned table in a transaction.
+Tests preserve all five prior themes, language and unrelated rows, save Ink
+and reopen, reject unknown themes, and verify an invalid v3 row rolls back the
+upgrade without data loss.
 
-The brand button has no hover background or other hover decoration. A visible
-keyboard focus outline remains. The i dot is a warm orange accent with extra clearance above its stem.
-Expanded/collapsed artwork is exported as
-`assets/brand/logo-expanded.svg` and `logo-collapsed.svg`. Its V silhouette was
-corrected against the selected reference rather than retaining the earlier
-protruding lower turn. The logo is one SVG graphic in both states; its accessible
-name and return-home behavior come from the enclosing native button.
+The persisted `notion` ID remains unchanged after renaming the display label to
+Ink / 纸墨. Its neutral colors refer to Notion's [official public stylesheet](https://www.notion.so/_assets/77281-c4b3c46f690b55b2.css)
+linked from the [login page](https://www.notion.so/login), observed 2026-10-10.
+Hover, selection and focus/accent values are adapted to vibemate. Light secondary
+text is darkened from `#7d7a75` to `#686560` for contrast. This is a color
+reference, not an integration with Notion.
 
-The logo's SVG mask uses the actual selected reference letter shapes. A color
-matrix makes dark pixels opaque and the pale background transparent; the current
-text color is then painted through that mask. The reference dot is cleared and
-a separate orange circle is placed higher. This preserves the reference type
-without guessing a font family or maintaining approximate hand-drawn letters.
-The lettering is raster-derived within the SVG lockup; the V is vector artwork.
+`AppearanceControl` applies root attributes only after an exact saved-pair
+acknowledgment. Saves disable controls without showing temporary saving or
+success text. Known failed writes keep the previous choice and permit retry;
+uncertain saves block writes until reload. Read/loading, preview, error and
+reload feedback remains. Browser preview applies local colors without claiming
+they were saved. Cleanup restores root attributes; navigation retains mounted
+controls, pending operations and edited input.
 
-I06 replaces the theme dropdown with native radio inputs styled as color circles.
-Each circle uses its own palette's accent token from `themes.css`; the palette
-values remain defined in one place. Translated accessible names and title hints
-identify the colors. A ring and check indicate the selected theme without relying
-on color alone. Native radios keep keyboard arrow navigation and single-selection
-semantics; pending/uncertain saves disable all choices. The existing persistence,
-preview and error/reload workflow is unchanged. Windows high-contrast mode can
-show the native radio instead of the styled circle.
+## Appearance acceptance and verification
 
-I06 was checked with UI behavior tests and `check:frontend`. Per the maintainer's
-instruction, visual inspection is manual: check circle spacing, selected/focus
-rings, theme colors, and wrapping in the minimum window. No browser screenshots
-or automated visual review were performed for this change.
+The maintainer closed the current basic appearance iteration on 2026-10-10.
+Visual checking is manual unless requested. Automated formatting, lint, types,
+behavior tests and applicable builds remain required. This documentation cleanup
+does not rerun or extend the recorded verification below.
 
-The About panel uses the same full-width settings surface as General. Its
-header renders the expanded `BrandLogo`, followed by aligned version, license,
-and repository rows. The GitHub Octicons mark is an icon button with a
-translated accessible name, pending state, and retryable failure feedback.
-Octicons is MIT-licensed; its notice is in `assets/licenses/octicons-MIT.txt`.
+| Scope      | Latest recorded result                                                                                                                                                                                                                           |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Frontend   | `check:frontend`: 101 UI tests, eight release-tool tests, format, lint, accessibility lint, both TypeScript configs and production build passed. The final CSS baseline adjustment also passed formatting and the native build's frontend build. |
+| Rust       | fmt and Clippy passed; 33 tests passed; the existing real OS-keychain smoke test was ignored.                                                                                                                                                    |
+| macOS      | Locked release builds and unsigned local app bundles passed; the final generated ICNS matches the packaged icon.                                                                                                                                 |
+| Appearance | The maintainer closed the current shell, branding, settings, six palettes and Dock refinements.                                                                                                                                                  |
+| Pending    | Windows/Linux runtime and native icon display; actual system-browser opening; native Ink selection followed by restart; comprehensive accessibility testing.                                                                                     |
 
-`openProjectRepository` is the desktop boundary for explicit activation. Rust
-accepts no URL arguments and calls the stable Tauri opener crate's `open_url`
-with the fixed repository address. The opener plugin is not registered and no
-opener IPC permissions are granted: only the app's fixed command is exposed.
-Browser preview opens that same address in a tab with `noopener,noreferrer`.
-Visual acceptance is performed by the maintainer.
+Earlier checks retain their original scope: I02.d read version 0.1.0 in the
+macOS runtime and demonstrated obsolete-response test failures with cleanup
+disabled. I03 checked packaged macOS branding. I04/I05 checked real dark/Iris
+selection and restart with isolated app data and inspected the original ten
+light/dark palette variants. Those browser checks preceded the maintainer's
+manual-only visual-check preference.
 
-The repository opener uses the [official Rust `open_url` API](https://docs.rs/tauri-plugin-opener/2.7.0/tauri_plugin_opener/fn.open_url.html). The GitHub mark comes from [GitHub Octicons](https://github.com/primer/octicons/blob/main/icons/mark-github-16.svg).
-
-The built-in palette `notion` (Ink / 纸墨), shown second after Forest, is inspired by
-Notion's official public light/dark CSS observed on 2026-10-10:
-[theme stylesheet](https://www.notion.so/_assets/77281-c4b3c46f690b55b2.css),
-linked from its [login page](https://www.notion.so/login). Its primary text,
-canvas, sidebar and border colors reuse those neutral reference values. Hover,
-selection and neutral focus/accent values are adapted to vibemate; light
-secondary text is darkened from `#7d7a75` to `#686560` for contrast. This is an
-inspired palette, not a claim of identical rendering or a Notion integration.
-
-SQLite v4 rebuilds the owned appearance preference table within the existing
-migration transaction to extend its theme CHECK constraint. Saved brightness,
-existing themes, language and unrelated tables are preserved. Tests upgrade all
-five previous choices, save Notion and reopen, reject unknown themes, and verify
-that an invalid v3 row rolls back the migration without losing the original row.
-Visual acceptance remains with the maintainer.
-
-Notion palette token contrast was checked numerically against canvas, sidebar,
-surface, hover and selected backgrounds: light primary/secondary text minima
-11.41/4.74, dark primary/secondary minima 11.51/5.66, and focus minima
-5.30/8.83. These values do not replace visual acceptance.
-
-Theme saves retain the disabled controls and confirmed-choice behavior but
-render no temporary saving message, avoiding a flashing feedback row. Read,
-preview, failed-save and unconfirmed-save feedback remain available. The stored
-`notion` ID is unchanged so previously saved choices still load as Ink / 纸墨.
-
-The About repository action is a bare 24 px GitHub icon button. With no tile
-background, border or oversized button box, its row uses the same 56 px minimum
-height as version and license. Hover uses opacity; keyboard focus stays visible.
+Ink token contrast was measured against canvas, sidebar, surface, hover and
+selected backgrounds: light primary/secondary minima 11.41/4.74, dark minima
+11.51/5.66, and light/dark focus minima 5.30/8.83. These measurements cover the
+named token pairs, not all accessibility behavior.

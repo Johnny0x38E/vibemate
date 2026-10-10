@@ -2,96 +2,88 @@
 
 ## Decision and status
 
-P09 is paused; the desktop shell (I02) is largely complete. The maintainer's reference is
-`docs/local/程序首页原型草图.png`. That private sketch is the source of the layout;
-this shared document records its meaning without publishing the original image.
+The maintainer closed the current basic appearance iteration on 2026-10-10.
+The sole task checklist is [todo.md](todo.md): I02–I14 record the shell, branding,
+settings, themes and Dock refinements. P09 remains the next unfinished task.
+Provider and agent behavior remains unimplemented.
 
-The maintainer confirmed these choices:
-
-- Remove the separate native titlebar row.
-- On macOS, retain real native traffic-light controls inside the sidebar's top area.
-- Follow the system appearance; light and dark modes share the same structure.
-- Collapse the 200 px expanded sidebar to an approximately 88 px icon rail, not a
-  hidden drawer. Width is fixed; only the collapse control toggles layout.
-- Remove the independent right-hand page titlebar, including its preview utilities.
-- Settings uses top tabs (General and About; About may stay a placeholder until
-  `get_app_info` is wired). General lists Language and Appearance as grouped
-  rows with compact dropdowns, not icon-cycle controls.
-
-The [interactive preview](desktop-shell-preview.html) is a layout artifact only:
-it does not save language preferences, and its Settings UI is not kept in sync
-with production (tabs and dropdowns in the app). Business integrations remain
-unimplemented.
-
-**Production (I02):** shell, macOS overlay title bar, Windows/Linux undecorated
-window controls, and Settings General/About UX are implemented. Settings About now displays build metadata via `get_app_info`, with explicit
-preview and retry states. Checklist: [todo.md](todo.md) I02.d.
+The private sketch `docs/local/程序首页原型草图.png` supplied the original layout.
+The [interactive preview](desktop-shell-preview.html) is a historical layout
+artifact; its controls and persistence do not represent the current app.
+Current implementation details are in [frontend.md](../frontend.md).
 
 ## Layout
 
-```text
-┌──────────────────┬──────────────────────────────────────────────────────┐
-│ native controls  │                                                      │
-│ icon + vibemate  │               Provider nodes                         │
-│                  │                    ↓                                │
-│ Provider         │ Skills → configuration application point ← MCPs     │
-│ Agent            │                    ↓                                │
-│ Skills           │                 Agent nodes                         │
-│ MCPs             │                                                      │
-│                  │             reserved statistics area                 │
-│                  │                                                      │
-│ collapse / open  │                                                      │
-│ Settings         │                                                      │
-└──────────────────┴──────────────────────────────────────────────────────┘
-```
+The sidebar has a fixed 200 px expanded width and an 88 px collapsed rail.
+All navigation destinations and Settings remain available at the 720×560
+minimum window size. Collapse is controlled by the toggle; dragging does not
+change sidebar width.
 
-- Expanded sidebar: 200 px. Collapsed icon rail: approximately 88 px, including
-  enough room for all three native macOS controls. All navigation destinations
-  and Settings remain available at the 720×560 minimum size.
-- Reserve approximately 44 px above the brand for macOS controls. Their window
-  coordinates stay fixed across collapse/expand; never move them beside a title.
-- There is no independent right-hand header row, divider, or utility strip.
-  The home starts with the relationship section. Other pages may use compact
-  headings within their content, not a persistent titlebar.
-- Put the icon-only collapse/expand toggle at the right end of the Settings row
-  while expanded, and stack it above Settings, centered, in the collapsed rail
-  (maintainer decision, 2026-10-10, after trying the traffic-light row). Keep its keyboard focus, accessible name, and expanded state correct. Hidden
-  navigation text must not remove the icon buttons' accessible names or tooltips.
-- Clicking the brand returns to the relationship home. Keep the four feature
-  destinations and bottom-aligned Settings from the sketch.
-- Scroll long main content independently of the sidebar. Dialogs, long labels,
-  and keyboard focus must remain usable at the minimum size.
-- Place language preferences and appearance inside Settings → General. Both use
-  the same row pattern (label left, select right) inside one bordered group.
-  Appearance is a three-option select (follow system, light, dark), alongside
-  Color theme with five paired palettes shown as clickable circles. Both now persist through Rust (I04).
-  Language preference still saves through Rust when not in browser preview.
-  Do not show redundant success or “current mode” copy when the UI updates
-  immediately; keep error and reload messaging for uncertain outcomes.
-- Startup owns preference resolution, not page layout; it must not prepend a
-  language section to every page.
-- Use system fonts, restrained neutral surfaces, fine dividers, and compact
-  controls. No marketing hero, feature-card grid, large outer gutters, promotional
-  footer, decorative gradients, or new UI framework.
+- Reserve the top 44 px for native macOS traffic lights and blank drag areas.
+  Their coordinates stay fixed across sidebar collapse and expansion.
+- Use the expanded V/wordmark logo in the sidebar, and the V symbol in the
+  collapsed rail. Clicking the brand returns home. The brand has no hover
+  decoration; keyboard focus remains visible.
+- There is no separate right-hand titlebar or utility strip. Pages place their
+  headings inside the main content, which scrolls independently of the sidebar.
+- Settings stays at the bottom. Its collapse control sits beside it when
+  expanded and above it in the collapsed rail. Keep accessible names and
+  tooltips when navigation text is hidden.
+- Use system fonts, shared theme tokens, fine dividers and compact controls.
+  Preserve long labels, keyboard focus and minimum-window usability.
+
+## Settings
+
+General and About use top tabs and the same full content width. Both remain
+mounted while hidden, preserving pending requests, selected preferences and
+loaded metadata across navigation.
+
+General places Language, Appearance and Color theme inside one grouped surface.
+Language and brightness use dropdowns. Theme choices are native radio circles
+with a selected ring and check, in this order:
+
+| Position | English  | 简体中文 | Persisted ID |
+| -------- | -------- | -------- | ------------ |
+| 1        | Forest   | 森林     | `forest`     |
+| 2        | Ink      | 纸墨     | `notion`     |
+| 3        | Graphite | 石墨     | `graphite`   |
+| 4        | Linen    | 亚麻     | `linen`      |
+| 5        | Iris     | 鸢尾     | `iris`       |
+| 6        | Ocean    | 海湾     | `ocean`      |
+
+Each theme has light and dark palettes, with brightness independent of the
+selected theme. Ink uses white/warm-gray and charcoal neutrals inspired by
+Notion. Rust saves both choices together in schema v4. Controls are disabled
+while saving; no temporary saving or success text flashes below them. Read,
+preview, error and uncertain-save/reload feedback remains available.
+
+About has the expanded product logo and description above version, MIT license
+and repository rows. The three rows share a 56 px minimum height. The repository
+entry is a bare 24 px GitHub icon with no tile background or border. It opens
+only the fixed project repository and retains keyboard focus, pending and
+retryable error feedback. Preview never invents a desktop version.
+
+## Product identity
+
+The selected V uses forest `#324e40` and sage `#a8b8a7`; its lower turn follows
+the selected reference without an extended tail. The expanded wordmark uses
+the reference's letter shapes, with a raised orange `#db915b` i dot. The original
+i dot is removed from the lettering mask. Wordmark text follows the theme;
+the V retains its brand colors.
+
+The app icon uses an off-white `#f7f8f7` tile. The separate macOS master scales
+artwork to 85%, leaving a 408 px tile on its 512 px canvas. Continuous corner
+transitions span 160 px before scaling. The V has a slight downward optical
+offset of 6.8 px on the canvas. Other platforms retain their original master.
+See [brand assets](../../assets/brand/README.md) for files and regeneration.
 
 ## Relationship home and honest states
 
-Keep providers above the configuration application point, agents below it, and
-shared skills/MCP definitions alongside. The central area represents a
-configuration relationship, not a running proxy or a newly introduced service.
-
-- Green nodes and links mean confirmed enablement, subject to the architecture's
-  requested/applied/effective-state distinctions. Selection uses a separate
-  neutral highlight and accessible selected/current semantics.
-- Planned or unsupported items stay neutral and explicitly labeled. A design
-  sample cannot make Command Code GOAT, DeepSeek, OpenRouter, Pi, or Grok Build
-  look connected before their behavior exists.
-- Read-only relationship graphics are not clickable-looking controls. Add real
-  actions only as their tested behavior is implemented.
-- Reserve the lower statistics region without inventing counts, quota, spending,
-  activity, or a phase-1 telemetry feature. Show a clear unimplemented state.
-- Navigation can open truthful empty/planned screens; it must not imply that a
-  configuration was saved, enabled, or applied.
+Providers sit above the configuration application point, agents below it, with
+shared skills/MCP definitions alongside. This is a configuration relationship,
+not a running proxy. Planned screens remain labeled as planned. No diagram,
+node color or statistic may imply a connected integration, enabled agent,
+spending, quota or telemetry behavior before that behavior exists.
 
 ## Window behavior
 
@@ -126,47 +118,13 @@ and [Tauri configuration](https://v2.tauri.app/reference/config/).
 Some retrieved documentation examples still use a Tauri 1 `tauri.windows` root;
 implementation must use Tauri 2 `app.windows` and the installed current schema.
 
-## Implementation and acceptance
+## Verification and future changes
 
-The sole implementation checklist remains [todo.md](todo.md), under I02.
-Implement one reviewable behavior at a time, with file lists split before editing.
+Appearance checks belong to the maintainer. Do not run browser or screenshot
+visual checks unless requested. Automated formatting, lint, types, behavior
+tests and applicable builds remain required. The latest recorded checks and
+remaining native verification are in [frontend.md](../frontend.md).
 
-The first draft received provisional approval, then the maintainer requested
-collapse, removal of the right-hand header, and Settings tabs with grouped
-Language/Appearance dropdowns (the static preview may still show older controls).
-Review the updated preview expanded/collapsed in both appearances at 720×560,
-including invariant native-control coordinates. After
-visual approval, implement the shell, then move the language selector into Settings,
-then implement the native window chrome. Keep the existing startup, save/reload,
-and input-preservation behavior intact. Add both translations with each new view.
-
-Browser checks prove layout and DOM behavior, not native dragging or window
-controls. Acceptance requires actual Tauri runtime checks and screenshots.
-Do not claim Windows/Linux native behavior from local macOS checks.
-
-## Product identity
-
-The maintainer selected logo concept 1 on 2026-10-10: a rounded V symbol in
-forest/sage green and a rounded lowercase wordmark. Production SVG masters and
-the selected reference are in `assets/brand/`. The V keeps its forest/sage colors in the sidebar and desktop packaging;
-the app tile is off-white and the two strokes retain a separating gap.
-The wordmark follows light/dark text color. This replaces the default Tauri
-cyan/yellow ring icon. I03 status is tracked only in `todo.md`.
-
-## Theme and brand refinements
-
-Settings General includes Forest, Graphite, Linen, Iris, and Ocean, each with
-light/dark colors independent of the brightness choice. All five theme accent colors appear as native radio circles with a selected
-ring and check; the theme control no longer uses a dropdown. No new settings page or theme framework
-is introduced. I04 stores the paired choice through Rust and permits explicitly
-unsaved browser preview.
-
-I05 combines icon and lettering into one SVG logo while expanded, and uses its
-symbol-only version in the collapsed rail. The brand has no hover decoration;
-keyboard focus stays visible. The selected V reference governs both states and
-all generated desktop icons. The lower turn was corrected after maintainer
-feedback about the earlier redraw's protruding stroke.
-
-Final brand refinements follow the selected reference's actual lettering, with
-a warm orange i dot raised for more clearance. Expanded branding uses one SVG
-lockup with the transparent two-color V; the collapsed rail uses the V alone.
+The maintainer's appearance confirmation does not establish Windows/Linux
+runtime behavior, native browser launching or a comprehensive accessibility
+audit. Keep those limitations separate from completed visual refinements.

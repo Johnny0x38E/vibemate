@@ -15,9 +15,20 @@
 
 ## Current state
 
-The desktop scaffold, read-only version command, documentation, CI workflow,
-and changelog-driven draft release workflow are present. All provider and agent integrations remain unimplemented.
-No credentials have been collected and no agent configuration has been changed.
+The scaffold, private configuration storage, credential-storage foundation,
+Simplified Chinese/English startup preferences, desktop shell and basic appearance
+are implemented. The maintainer closed the current appearance iteration on
+2026-10-10: expanded/collapsed branding, macOS Dock refinements, six light/dark
+themes and full-width General/About settings. Theme order is Forest, Ink,
+Graphite, Linen, Iris, Ocean; schema v4 preserves existing preferences.
+
+CI and changelog-driven draft release workflows are present. Integration
+contracts are documented in `docs/integrations/`, but provider and agent business
+behavior remains unimplemented. No provider credentials have been collected and
+no agent configuration has been changed. P09 (whole-interface i18n/resource
+validation) remains the next unfinished task. [todo.md](todo.md) is the sole
+status source; current UI rules and verification are in
+[desktop-shell-design.md](desktop-shell-design.md) and [frontend.md](../frontend.md).
 
 ## Execution plan
 
@@ -26,7 +37,8 @@ The single task checklist is [todo.md](todo.md). These files expand the same
 phase-1 scope; this overview does not contain a second execution checklist.
 Implementation is authorized. The pnpm migration is recorded as P00, and
 P01 provider evidence is in [providers.md](../integrations/providers.md).
-Agent contracts and all business implementations remain pending.
+Provider and agent business implementations remain pending; documented contracts
+do not establish a working connection or runtime compatibility.
 
 ## Implementation order
 

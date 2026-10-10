@@ -1,11 +1,12 @@
 # vibemate 第一阶段执行清单
 
-状态：P00–P08、I02（桌面壳、窗控、设置 UX）、I03（自有品牌图标）、I04（主题）、I05（品牌组合）已完成。**未完成**：P09 全站 i18n/资源校验。业务 Provider/Agent 等功能未开始。勾选与文件范围见下文；设计见 [development-plan.md](development-plan.md)、[desktop-shell-design.md](desktop-shell-design.md)。
+状态：P00–P08 与基础外观 I02–I14 已完成；维护者于 2026-10-10 确认基础外观本轮收尾。**下一项**：P09 全站 i18n/资源校验，仍未完成。业务 Provider/Agent 等功能未开始。当前设计见 [desktop-shell-design.md](desktop-shell-design.md)，实现与验证记录见 [frontend.md](../frontend.md)。
 这里是唯一任务状态来源，不能在其他文件维护第二份勾选清单。
 
 ## 执行约定
 
 - 按依赖顺序实施，一次一个可检查的行为；默认不使用子代理。
+- 外观由维护者人工验证；未经另行要求，不运行浏览器或截图视觉检查。格式、Lint、类型、行为测试与适用构建检查照常执行。原生功能和跨平台验证单独记录，外观确认不代表这些检查通过。
 - 每个任务通常 1–5 个实际文件；建议路径不是强制架构。测试、注册、迁移和锁文件也计数。
   实际范围超过约五个文件或一个专注会话，先拆 Pxx.a/Pxx.b 子任务并补依赖。
 - 所有 UI 任务必须同时补齐中英文、可访问名称和错误文案；资源更新也计入文件范围，
@@ -685,14 +686,14 @@ I05.a.1 校正 `mark.svg` / `app-icon.svg` 与同母版生成的桌面图标集�
 **I06.b Files:** `docs/frontend.md`、`docs/plans/desktop-shell-design.md`、`CHANGELOG.md`；本清单同步更新。
 **Verification:** 目标 UI 测试、`check:frontend`；外观由维护者人工验收，本任务不运行浏览器/截图视觉检查。
 
-控件与自动检查已完成；圆圈间距、配色与焦点效果待维护者人工验收。
+2026-10-10 维护者确认基础外观本轮收尾；主题最终名称、顺序和保存交互见 I11/I12。
 
 ### 插队任务 I07：调整 macOS Dock 图标大小
 
 - [x] 增加 macOS 专用 SVG 留白，整体缩小至原来的 85%，保持 V 形状和配色。
 - [x] 从专用 SVG 重新生成 ICNS，其他平台图标使用原有母版。
 - [x] 检查 ICNS 与本地 macOS app 包中的图标资源一致。
-- [ ] Dock 外观由维护者重启应用后人工验收。
+- [x] Dock 外观随 2026-10-10 基础外观收尾确认。
 
 **Files:** `assets/brand/app-icon-macos.svg`、`assets/brand/README.md`、`src-tauri/icons/icon.icns`、`CHANGELOG.md`、本清单。
 **Verification:** 文档格式、图标生成与本地 app 打包资源检查；不运行浏览器或截图视觉检查。
@@ -701,7 +702,7 @@ I05.a.1 校正 `mark.svg` / `app-icon.svg` 与同母版生成的桌面图标集�
 
 - [x] 普通圆角矩形改为连续曲率轮廓，扩大圆角过渡至母版的 160 px，保持现有图标大小与留白。
 - [x] 重新生成 ICNS、打包 macOS app 并检查资源一致性。
-- [ ] Dock 圆角外观由维护者人工验收。
+- [x] Dock 圆角外观随基础外观收尾确认。
 
 **Files:** `assets/brand/app-icon-macos.svg`、`assets/brand/README.md`、`src-tauri/icons/icon.icns`、`CHANGELOG.md`、本清单。
 **Verification:** SVG 曲线接点、文档格式与 app 图标资源；不运行截图视觉检查。
@@ -711,7 +712,7 @@ I05.a.1 校正 `mark.svg` / `app-icon.svg` 与同母版生成的桌面图标集�
 - [x] 为界面 Logo 遮罩补上与展开 SVG 母版一致的原始圆点清除区域。
 - [x] 保持橙色圆点位置、大小与文字间距。
 - [x] 运行前端检查：96 项 UI 测试、8 项发布测试、格式、Lint、类型检查和构建通过。
-- [ ] 放大后的外观由维护者人工验收。
+- [x] i 圆点修正随基础外观收尾确认。
 
 **Files:** `src/components/BrandLogo.tsx`、`CHANGELOG.md`、本清单。
 **Verification:** `check:frontend`；不运行浏览器或截图视觉检查。
@@ -721,12 +722,12 @@ I05.a.1 校正 `mark.svg` / `app-icon.svg` 与同母版生成的桌面图标集�
 - [x] I10.a：与常规 Tab 同宽，展开 Logo、说明与信息行建立层次；GitHub 图标入口、打开中与失败反馈。
 - [x] I10.b：Rust 固定仓库打开命令，使用稳定 Tauri opener，仅暴露固定地址，不增加通用 URL/文件打开权限。
 - [x] I10.c：更新交互测试、中英资源、Octicons MIT 声明与前端文档；运行前端、Rust 和本地桌面构建检查。
-- [ ] 外观由维护者人工验收，不运行浏览器或截图检查。
+- [x] 维护者确认基础外观本轮收尾；未运行浏览器或截图检查。
 
 **I10.a Files:** `AboutPanel.tsx`、`AboutPanel.module.css`、`AboutPanel.test.tsx`。
 **I10.b.1 Files:** `src-tauri/src/commands.rs`、`src-tauri/src/lib.rs`、`src-tauri/Cargo.toml`、`src-tauri/Cargo.lock`。
 **I10.b.2 Files:** `src/lib/desktop.ts`、`src/lib/desktop/repository.test.ts`。
-**Verification:** `check:frontend` 通过 99 项 UI 测试和 8 项发布测试；Rust fmt/Clippy 通过、31 项测试通过（既有 OS 密钥库测试忽略）；locked macOS 桌面构建和本地 unsigned app 打包通过。外观及实际系统浏览器打开由维护者人工验收，Windows/Linux 未原生验收。
+**Verification:** `check:frontend` 通过 99 项 UI 测试和 8 项发布测试；Rust fmt/Clippy 通过、31 项测试通过（既有 OS 密钥库测试忽略）；locked macOS 桌面构建和本地 unsigned app 打包通过。外观已收尾；实际系统浏览器打开与 Windows/Linux 原生验收仍待验证。
 
 **I10.c Files:** `src/locales/en.json`、`src/locales/zh-CN.json`、`assets/licenses/octicons-MIT.txt`、`docs/frontend.md`、`CHANGELOG.md`；本清单同步更新。
 
@@ -735,9 +736,9 @@ I05.a.1 校正 `mark.svg` / `app-icon.svg` 与同母版生成的桌面图标集�
 - [x] I11.a：参照 Notion 官方公开浅/深色语义色，新增主题 token、ID 与中英文名称。
 - [x] I11.b：增加 Rust Theme 与 v4 迁移，保留 v3 外观、语言及无关数据；验证新增主题保存和重开读取。
 - [x] I11.c：更新选择/IPC 测试、文档及 CHANGELOG；完整前端/Rust 检查和本地 macOS 构建。
-- [ ] 外观由维护者人工验收，不运行浏览器或截图检查。
+- [x] 维护者确认基础外观本轮收尾；未运行浏览器或截图检查。
 
-**Verification:** 前端 101 项 UI 测试、8 项发布测试、格式/Lint/类型/构建通过；Rust fmt/Clippy、33 项测试通过（既有 OS 密钥库测试忽略）；locked macOS 构建与 unsigned app 打包通过。文字和焦点 token 数值对比度通过；外观及原生重启选择由维护者验收，Windows/Linux 未原生验收。
+**Verification:** 前端 101 项 UI 测试、8 项发布测试、格式/Lint/类型/构建通过；Rust fmt/Clippy、33 项测试通过（既有 OS 密钥库测试忽略）；locked macOS 构建与 unsigned app 打包通过。文字和焦点 token 数值对比度通过；外观已收尾；纸墨主题的原生重启选择与 Windows/Linux 验收仍待验证。
 
 **I11.a Files:** `src/themes.css`、`src/lib/desktop/appearance.ts`、`src/locales/en.json`、`src/locales/zh-CN.json`。
 **I11.b Files:** `src-tauri/src/appearance.rs`、`src-tauri/src/storage.rs`、`src-tauri/src/settings.rs`。
@@ -749,7 +750,7 @@ I05.a.1 校正 `mark.svg` / `app-icon.svg` 与同母版生成的桌面图标集�
 - [x] 「Notion 风格」改名为「纸墨 / Ink」，排列第二，保留已有保存 ID。
 - [x] 保存时不显示短暂提示文字，保持操作禁用、失败和未确认反馈。
 - [x] 完成前端检查（101 项 UI 测试、8 项发布测试、格式/Lint/类型与构建）和 locked macOS 构建、unsigned app 打包。
-- [ ] 外观由维护者人工验收，不运行浏览器或截图检查。
+- [x] 维护者确认基础外观本轮收尾；未运行浏览器或截图检查。
 
 **I12.a Files:** `src/lib/desktop/appearance.ts`、`src/features/settings/AppearanceControl.tsx`、`src/features/settings/AppearanceControl.test.tsx`、`src/locales/en.json`、`src/locales/zh-CN.json`。
 **I12.b Files:** `docs/frontend.md`、`CHANGELOG.md`、本清单。
@@ -759,7 +760,7 @@ I05.a.1 校正 `mark.svg` / `app-icon.svg` 与同母版生成的桌面图标集�
 - [x] GitHub 按钮改为 24 px 无边框、无方块背景的纯图标，仓库行恢复与版本、许可证相同的 56 px 最小高度。
 - [x] 保持点击、键盘焦点、保存无关的打开状态与失败反馈。
 - [x] 前端检查（101 项 UI 测试、8 项发布测试、格式/Lint/类型与构建）和 locked macOS 构建、unsigned app 打包。
-- [ ] 关于页外观由维护者人工验收。
+- [x] 关于页外观随基础外观收尾确认。
 
 **Files:** `src/features/settings/AboutPanel.module.css`、`CHANGELOG.md`、`docs/frontend.md`、本清单。
 
@@ -767,7 +768,7 @@ I05.a.1 校正 `mark.svg` / `app-icon.svg` 与同母版生成的桌面图标集�
 
 - [x] macOS 专用 V 向下偏移，512 px 画布上约 6.8 px；底板、大小、圆角与配色保持一致。
 - [x] 生成 ICNS、检查本地 app 包资源一致性和文档格式。
-- [ ] 视觉重心由维护者人工验收，不运行截图检查。
+- [x] Dock 视觉重心随基础外观收尾确认；未运行截图检查。
 
 **Files:** `assets/brand/app-icon-macos.svg`、`assets/brand/README.md`、`src-tauri/icons/icon.icns`、`CHANGELOG.md`、本清单。
 
@@ -785,7 +786,7 @@ I05.a.1 校正 `mark.svg` / `app-icon.svg` 与同母版生成的桌面图标集�
 
 - [ ] 运行 `pnpm run test:ui src/App.test.tsx`，覆盖双语、切换、回退、启动偏好及错误状态。
 - [ ] 运行 `check:frontend`；按需把资源校验/脚本/CI接线拆成 P09 子任务后验证。
-- [ ] ego-browser 和 Tauri 检查两种语言、720×560、长英文/中文、日期/数字及可访问名称；确认不会改变模型 ID 或配置内容。
+- [ ] 维护者人工检查双语布局、720×560 与长文本；适用的 Tauri 功能验证检查日期/数字、可访问名称及模型 ID/配置内容保留。未经要求不运行浏览器或截图视觉检查。
 
 **Dependencies:** P04,P07,P08。
 

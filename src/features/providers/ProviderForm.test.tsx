@@ -93,8 +93,8 @@ function providerKindValue(label = "Provider"): string {
     return fieldSelectValue(providerCombobox(label));
 }
 
-function chooseProvider(kind: string, label = "Provider"): void {
-    setFieldSelectValue(providerCombobox(label), kind);
+async function chooseProvider(kind: string, label = "Provider"): Promise<void> {
+    await setFieldSelectValue(providerCombobox(label), kind);
 }
 
 const saved: ProviderRecord = {
@@ -182,7 +182,7 @@ function fieldValue(label: string): string {
     throw new Error(`${label} is not a supported field`);
 }
 
-function setField(label: string, value: string): void {
+async function setField(label: string, value: string): Promise<void> {
     const element = input(label);
     if (
         element instanceof HTMLInputElement ||
@@ -192,14 +192,14 @@ function setField(label: string, value: string): void {
         return;
     }
     if (element.getAttribute("role") === "combobox") {
-        setFieldSelectValue(element, value);
+        await setFieldSelectValue(element, value);
         return;
     }
     throw new Error(`${label} is not a supported field`);
 }
 
 function type(label: string, value: string): void {
-    setField(label, value);
+    fireEvent.change(input(label), { target: { value } });
 }
 
 /**
@@ -276,19 +276,19 @@ test("starts with the first template selected and its defaults filled", async ()
 
 test("switching provider replaces untouched defaults and only allowed protocols are listed", async () => {
     await mount();
-    chooseProvider("openrouter");
+    await chooseProvider("openrouter");
     expect(fieldValue("Name")).toBe("OpenRouter");
     expect(fieldValue("Base URL")).toBe("https://openrouter.ai/api/v1");
     expect(fieldValue("Protocol")).toBe("chat_completions");
-    expect(fieldSelectOptionLabels(input("Protocol"))).toEqual([
+    expect(await fieldSelectOptionLabels(input("Protocol"))).toEqual([
         "Chat Completions",
         "Responses",
     ]);
 
-    chooseProvider("deepseek");
+    await chooseProvider("deepseek");
     expect(fieldValue("Name")).toBe("DeepSeek");
     expect(fieldValue("Base URL")).toBe("https://api.deepseek.com");
-    expect(fieldSelectOptionLabels(input("Protocol"))).toEqual([
+    expect(await fieldSelectOptionLabels(input("Protocol"))).toEqual([
         "Chat Completions",
     ]);
 });
@@ -296,14 +296,14 @@ test("switching provider replaces untouched defaults and only allowed protocols 
 test("switching provider keeps the fields the user edited", async () => {
     await mount();
     type("Name", "My router");
-    chooseProvider("openrouter");
+    await chooseProvider("openrouter");
     // The edited name stays; the untouched URL follows the new provider.
     expect(fieldValue("Name")).toBe("My router");
     expect(fieldValue("Base URL")).toBe("https://openrouter.ai/api/v1");
     type("Base URL", "https://proxy.example.com/v1");
-    setField("Protocol", "responses");
+    await setField("Protocol", "responses");
 
-    chooseProvider("deepseek");
+    await chooseProvider("deepseek");
     expect(fieldValue("Name")).toBe("My router");
     expect(fieldValue("Base URL")).toBe("https://proxy.example.com/v1");
     // A chosen protocol the new provider does not allow falls back to its default.
@@ -321,10 +321,10 @@ test("creates for the selected provider and reports the normalized record Rust r
     };
     create.mockResolvedValue(normalized);
     const { onSaved } = await mount();
-    chooseProvider("openrouter");
+    await chooseProvider("openrouter");
     type("Name", "  Team router  ");
     type("Base URL", "HTTPS://OpenRouter.ai/api/v1/");
-    setField("Protocol", "responses");
+    await setField("Protocol", "responses");
     await submit();
 
     expect(create).toHaveBeenCalledTimes(1);
@@ -407,7 +407,7 @@ test("keeps focus on Save, announces saving and ignores a second submit while pe
     const request = deferred<ProviderRecord>();
     create.mockReturnValue(request.promise);
     const { onBusyChange } = await mount();
-    chooseProvider("openrouter");
+    await chooseProvider("openrouter");
     const save = screen.getByRole("button", { name: "Save" });
     save.focus();
     await submit();
@@ -419,10 +419,10 @@ test("keeps focus on Save, announces saving and ignores a second submit while pe
     // Blocked fields stay focusable but cannot change.
     expect(input("Name")).toHaveProperty("readOnly", true);
     expect(input("Protocol").getAttribute("aria-disabled")).toBe("true");
-    setField("Protocol", "responses");
+    await setField("Protocol", "responses");
     expect(fieldValue("Protocol")).toBe("chat_completions");
     expect(providerCombobox().getAttribute("aria-disabled")).toBe("true");
-    chooseProvider("deepseek");
+    await chooseProvider("deepseek");
     expect(providerKindValue()).toBe("openrouter");
     expect(fieldValue("Name")).toBe("OpenRouter");
     // The page blocks its back control while this is reported.

@@ -8,6 +8,7 @@ import {
 } from "@testing-library/react";
 import { StrictMode } from "react";
 import { I18nextProvider } from "react-i18next";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { NotificationProvider } from "../../components/Notifications";
 import {
@@ -361,7 +362,10 @@ test("New opens the form with the first template, in Rust's order, selected and 
     const kind = screen.getByRole("combobox", { name: "Provider" });
     expect(screen.getAllByRole("combobox")[0]).toBe(kind);
     expect(fieldSelectValue(kind)).toBe("openrouter");
-    expect(fieldSelectOptionValues(kind)).toEqual(["openrouter", "deepseek"]);
+    expect(await fieldSelectOptionValues(kind)).toEqual([
+        "openrouter",
+        "deepseek",
+    ]);
     expect(screen.getByLabelText("Name")).toHaveProperty("value", "OpenRouter");
     expect(screen.getByLabelText("Base URL")).toHaveProperty(
         "value",
@@ -733,7 +737,7 @@ test("the detail page and the create form show the provider icon next to the pro
         name: "OpenRouter",
     });
     expect(openRouterOption.querySelectorAll("img")).toHaveLength(2);
-    fireEvent.click(openRouterOption);
+    await userEvent.setup().click(openRouterOption);
     expect(triggerIcon()).toMatch(/\/openrouter\.svg$/);
 });
 

@@ -2047,3 +2047,40 @@ D16（维护者批准，2026-10-10 完成）：2026-10-10 20:10（UTC+8）不带
 ### Checkpoint C39（P37–P39）
 
 - [ ] P37–P39 均已勾选；可打第一阶段 release 标签。
+
+## 插队任务 I15：Base UI 下拉交互
+
+维护者批准引入无样式 Base UI，先只替换共享 FieldSelect，不重写整站。
+设计与风险见 [base-ui-select.md](base-ui-select.md)。
+
+### I15.a：稳定依赖
+
+- [x] 核对稳定 `@base-ui/react 1.9.0`、MIT 许可证、React 19 兼容性与 Select API；固定版本并更新锁文件，不安装可选日期依赖，不降低发布年龄策略。
+
+**Files:** `package.json`、`pnpm-lock.yaml`；迁移方案与本清单同步记录。
+**Verification:** 官方文档、npm 元数据、已安装许可证和类型声明；冻结安装。
+
+### I15.b：共享组件与回归测试
+
+- [x] 保留控件外观、图标、语言属性和受控值；用 Base UI 处理键盘、焦点、定位与外部关闭。保存期间原生禁用与保留焦点的 blocked 语义不变。
+- [x] 弹层通过 Portal 避免卡片裁切；更新共享测试辅助函数，补键盘、关闭、锁状态变化和多实例测试。
+
+迁移测试发现单次合成 click 不能表示 Base UI 的完整指针选择和异步焦点恢复，因此增加仅测试用 `@testing-library/user-event 14.6.7`（稳定、MIT），并将操作辅助函数改为可等待。按实际影响拆分：
+
+- I15.b.1：共享组件、菜单样式、弹层层级 token 和组件行为测试（`FieldSelect.tsx`、`FieldSelect.module.css`、`FieldSelect.test.tsx`、`src/App.css`）。
+- I15.b.2：测试依赖、Portal 辅助函数和服务商调用方回归（`package.json`、`pnpm-lock.yaml`、`src/test/fieldSelect.ts`、`ProviderForm.test.tsx`、`ProvidersView.test.tsx`）。
+- I15.b.3：等待真实选择操作的设置/启动/壳层回归（`LanguageSelector.test.tsx`、`AppearanceControl.test.tsx`、`LocaleStartup.test.tsx`、`src/App.test.tsx`）；不修改业务保存行为。
+
+**Verification:** 组件与调用方行为测试、严格类型与 Lint。
+**Dependencies:** I15.a；b.2 在 b.1 后，b.3 在 b.2 后。
+
+### I15.c：完整检查与说明
+
+- [x] 完整前端检查、适用 Rust 检查和 macOS 桌面构建；更新前端说明与英文 changelog，仅记录实际验证。
+- [x] 维护者人工确认本轮下拉迁移无问题；该确认不代替专门的读屏或 Windows/Linux 验证。未经另行要求不运行浏览器或截图视觉检查。
+
+**Files:** `docs/frontend.md`、`CHANGELOG.md`；迁移方案与本清单同步记录。
+**Verification:** `check:frontend`、冻结安装、Rust fmt/Clippy/tests、locked no-bundle build；原生人工验收单独记录。
+**Dependencies:** I15.b。
+
+自动检查通过：405 项 UI/边界测试（FieldSelect 14 项）、14 项翻译检查测试、8 项发布测试；冻结安装、格式、零警告 Lint、两份 TypeScript 配置、Rust fmt/Clippy、182 项 Rust 测试（1 项真实凭据测试忽略）和 locked macOS no-bundle build。维护者已人工确认本轮迁移无问题；未运行截图检查，专门的读屏和 Windows/Linux 运行验证仍待验。

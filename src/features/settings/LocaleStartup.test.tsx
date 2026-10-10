@@ -267,7 +267,7 @@ test("updates HTML language only after a confirmed save and preserves the same i
     await screen.findByRole("combobox", { name: "Language" });
     const input = screen.getByRole("textbox");
     fireEvent.change(input, { target: { value: "Unsubmitted draft" } });
-    setFieldSelectValue(screen.getByRole("combobox"), "zh-CN");
+    await setFieldSelectValue(screen.getByRole("combobox"), "zh-CN");
     expect(document.documentElement.lang).toBe("en");
     await act(async () => {
         finishSave("zh-CN");

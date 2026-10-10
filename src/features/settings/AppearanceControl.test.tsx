@@ -67,7 +67,7 @@ test("preview tries built-in palettes and brightness without invoking save", asy
     await mount();
     const themes = await ready();
     fireEvent.click(themes);
-    setFieldSelectValue(
+    await setFieldSelectValue(
         screen.getByRole("combobox", { name: "Appearance" }),
         "dark",
     );

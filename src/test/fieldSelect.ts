@@ -1,4 +1,5 @@
-import { fireEvent, within } from "@testing-library/react";
+import { waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
 /** Current value of a native select or {@link FieldSelect} trigger. */
 export function fieldSelectValue(element: Element): string {
@@ -17,66 +18,71 @@ export function fieldSelectDisabled(element: Element): boolean {
     return false;
 }
 
-/**
- * Choose an option by value. Works with native `<select>` and {@link FieldSelect}.
- */
-export function setFieldSelectValue(
+/** Choose by value using real pointer/focus sequences; wait for popup cleanup. */
+export async function setFieldSelectValue(
     combobox: HTMLElement,
     value: string,
-): void {
+): Promise<void> {
+    if (fieldSelectDisabled(combobox)) return;
+    const user = userEvent.setup();
     if (combobox instanceof HTMLSelectElement) {
-        fireEvent.change(combobox, { target: { value } });
+        await user.selectOptions(combobox, value);
         return;
     }
-    if (
-        combobox instanceof HTMLButtonElement &&
-        (combobox.disabled || combobox.getAttribute("aria-disabled") === "true")
-    ) {
-        return;
-    }
-    const root = combobox.closest("[data-field-select]");
-    if (root === null) {
-        throw new Error("FieldSelect root not found");
-    }
-    fireEvent.click(combobox);
-    const option = (root as HTMLElement).querySelector(
-        `[role="option"][data-value="${value}"]`,
-    );
-    if (option === null) {
+    await user.click(combobox);
+    const list = await waitFor(() => selectList(combobox));
+    const option = within(list)
+        .getAllByRole("option")
+        .find((entry) => entry.getAttribute("data-value") === value);
+    if (option === undefined)
         throw new Error(`FieldSelect option not found: ${value}`);
-    }
-    fireEvent.click(option);
+    await user.click(option);
+    await waitFor(() => {
+        if (combobox.getAttribute("aria-expanded") === "true")
+            throw new Error("FieldSelect did not close");
+    });
 }
 
-/** Visible labels for each option (opens the list briefly). */
-export function fieldSelectOptionLabels(combobox: HTMLElement): string[] {
+/** Visible labels for each option, dismissing the popup before returning. */
+export async function fieldSelectOptionLabels(
+    combobox: HTMLElement,
+): Promise<string[]> {
     if (combobox instanceof HTMLSelectElement) {
-        return Array.from(combobox.querySelectorAll("option"), (option) =>
+        return Array.from(combobox.options, (option) =>
             option.textContent.trim(),
         );
     }
-    fireEvent.click(combobox);
-    const root = combobox.closest("[data-field-select]");
-    if (root === null) return [];
-    const labels = within(root as HTMLElement)
+    const user = userEvent.setup();
+    await user.click(combobox);
+    const list = await waitFor(() => selectList(combobox));
+    const labels = within(list)
         .getAllByRole("option")
         .map((option) => option.textContent.trim());
-    fireEvent.click(combobox);
+    await user.keyboard("{Escape}");
     return labels;
 }
 
-export function fieldSelectOptionValues(combobox: HTMLElement): string[] {
+/** Option identities, independent of translated labels or DOM ancestry. */
+export async function fieldSelectOptionValues(
+    combobox: HTMLElement,
+): Promise<string[]> {
     if (combobox instanceof HTMLSelectElement) {
-        return Array.from(
-            combobox.querySelectorAll("option"),
-            (option) => option.value,
-        );
+        return Array.from(combobox.options, (option) => option.value);
     }
-    fireEvent.click(combobox);
-    const root = combobox.closest("[data-field-select]");
-    if (root === null) return [];
-    return Array.from(
-        within(root as HTMLElement).getAllByRole("option"),
-        (option) => option.getAttribute("data-value") ?? "",
-    );
+    const user = userEvent.setup();
+    await user.click(combobox);
+    const list = await waitFor(() => selectList(combobox));
+    const values = within(list)
+        .getAllByRole("option")
+        .map((option) => option.getAttribute("data-value") ?? "");
+    await user.keyboard("{Escape}");
+    return values;
+}
+
+/** Follow the accessible popup relationship; a portal is not a DOM descendant. */
+function selectList(combobox: HTMLElement): HTMLElement {
+    const listId = combobox.getAttribute("aria-controls");
+    const list = listId === null ? null : document.getElementById(listId);
+    if (list === null) throw new Error("FieldSelect list not found");
+    return list;
 }

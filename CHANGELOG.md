@@ -8,6 +8,10 @@ GitHub release notes are extracted from the matching version section only.
 
 ### Changed
 
+- Replaced the hand-written shared dropdown interaction with Base UI Select 1.9.0 (MIT), retaining vibemate's 36 px fields, provider icons, CSS Modules and theme tokens. Menus are portaled to avoid card clipping, with viewport-aware positioning and bounded scrolling. Keyboard navigation, typeahead and focus management use Base UI; saved values remain controlled by the parent, and both native disabled and focusable blocked fields keep their existing behavior. Added user-event-based interaction tests without changing business persistence, translations or desktop permissions. Verified with 405 frontend tests, complete frontend checks, Rust fmt/Clippy, 182 passing Rust tests (one OS-credential test ignored) and a locked macOS no-bundle build. The maintainer confirmed the migration has no issues after manual review; dedicated screen-reader and Windows/Linux runtime verification remain pending.
+
+- Vertically centered the log-file path beside its action icons in Settings, removing the icons' upward offset while preserving long-path wrapping and the narrow-window stacked layout.
+
 - Settings and provider single-choice fields now use a shared custom dropdown with a consistent trigger and list panel (language, appearance, protocol, and provider kind with brand icons in the menu).
 - Settings → General logs now show only the log file path (no Refresh log paths) with compact icon actions beside the path for View logs and Open log folder.
 - The Providers list and edit form no longer display provider instance IDs; rows remain distinct internally.

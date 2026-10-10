@@ -228,7 +228,7 @@ test("keeps the same settings input and colors while navigating elsewhere", asyn
     });
     const input = screen.getByRole("textbox", { name: "Unsubmitted note" });
     fireEvent.change(input, { target: { value: "Still editing" } });
-    setFieldSelectValue(
+    await setFieldSelectValue(
         screen.getByRole("combobox", { name: "Appearance" }),
         "light",
     );
@@ -307,7 +307,7 @@ test("keeps an uncertain language save blocked across navigation until a real se
     const selector = screen.getByRole("combobox", {
         name: "Language",
     });
-    setFieldSelectValue(selector, "zh-CN");
+    await setFieldSelectValue(selector, "zh-CN");
     const reload = await screen.findByRole("button", {
         name: "Reload saved preference",
     });
@@ -348,7 +348,7 @@ test("finishes a pending save while Settings is hidden and retains its confirmed
     const selector = screen.getByRole("combobox", {
         name: "Language",
     });
-    setFieldSelectValue(selector, "zh-CN");
+    await setFieldSelectValue(selector, "zh-CN");
     fireEvent.click(screen.getByRole("button", { name: "Providers" }));
     await act(async () => {
         finishSave("zh-CN");
@@ -480,7 +480,7 @@ test("switching language through the real selector keeps page, tab, collapse, in
     fireEvent.change(input, { target: { value: "Still editing" } });
     const selector = screen.getByRole("combobox", { name: "Language" });
 
-    setFieldSelectValue(selector, "zh-CN");
+    await setFieldSelectValue(selector, "zh-CN");
     await screen.findByRole("combobox", { name: "语言" });
     expect(saveLocalePreference).toHaveBeenCalledExactlyOnceWith("zh-CN");
     expect(document.documentElement.lang).toBe("zh-CN");
@@ -507,7 +507,7 @@ test("switching language through the real selector keeps page, tab, collapse, in
     expect(getAppInfo).toHaveBeenCalledTimes(metadataReads);
 
     fireEvent.click(screen.getByRole("tab", { name: "常规" }));
-    setFieldSelectValue(selector, "en");
+    await setFieldSelectValue(selector, "en");
     await screen.findByRole("combobox", { name: "Language" });
     expect(document.documentElement.lang).toBe("en");
     expect(input).toHaveProperty("value", "Still editing");
@@ -855,7 +855,7 @@ test.each([
         renderDesktopStartup("en-US");
         fireEvent.click(await screen.findByRole("button", { name: settings }));
         const selector = screen.getByRole("combobox", { name: label });
-        setFieldSelectValue(selector, next);
+        await setFieldSelectValue(selector, next);
         // Appearance preview has its own status line, so find this one by text.
         const feedback = await screen.findByText(message);
         expect(feedback.getAttribute("role")).toBe("status");

@@ -69,14 +69,14 @@ test("keeps the previous choice and offers another attempt after a definite writ
         new SettingsRequestError("write_failed"),
     );
     const { instance } = await renderSelector();
-    setFieldSelectValue(screen.getByRole("combobox"), "zh-CN");
+    await setFieldSelectValue(screen.getByRole("combobox"), "zh-CN");
     await screen.findByText(
         "The language preference could not be saved. Your previous choice is unchanged; try again.",
     );
     expect(fieldSelectValue(screen.getByRole("combobox"))).toBe("en");
     expect(instance.resolvedLanguage).toBe("en");
     vi.mocked(saveLocalePreference).mockResolvedValueOnce("zh-CN");
-    setFieldSelectValue(screen.getByRole("combobox"), "zh-CN");
+    await setFieldSelectValue(screen.getByRole("combobox"), "zh-CN");
     await screen.findByRole("combobox", { name: "语言" });
     expect(fieldSelectValue(screen.getByRole("combobox"))).toBe("zh-CN");
 });
@@ -86,7 +86,7 @@ test("blocks further writes after an unknown outcome until the saved choice is r
         new Error("Synthetic private diagnostic"),
     );
     const { instance } = await renderSelector();
-    setFieldSelectValue(screen.getByRole("combobox"), "zh-CN");
+    await setFieldSelectValue(screen.getByRole("combobox"), "zh-CN");
     await screen.findByText(
         "The saved language preference could not be confirmed. Reload it before making another change.",
     );
@@ -113,7 +113,7 @@ test("prevents browser preview writes and translates its explanation", async () 
     expect(screen.getByRole("status").textContent).toBe(
         "Browser preview cannot save language preferences.",
     );
-    setFieldSelectValue(screen.getByRole("combobox"), "zh-CN");
+    await setFieldSelectValue(screen.getByRole("combobox"), "zh-CN");
     expect(saveLocalePreference).not.toHaveBeenCalled();
     await act(async () => {
         await instance.changeLanguage("zh-CN");
@@ -130,16 +130,16 @@ test("prevents browser preview writes and translates its explanation", async () 
 test("explicit choices override the system and follow system resolves Chinese variants", async () => {
     await renderSelector({ kind: "desktop", preference: "en" }, "zh-Hant-HK");
     vi.mocked(saveLocalePreference).mockResolvedValueOnce("zh-CN");
-    setFieldSelectValue(screen.getByRole("combobox"), "zh-CN");
+    await setFieldSelectValue(screen.getByRole("combobox"), "zh-CN");
     await screen.findByRole("combobox", { name: "语言" });
     vi.mocked(saveLocalePreference).mockResolvedValueOnce("en");
-    setFieldSelectValue(screen.getByRole("combobox"), "en");
+    await setFieldSelectValue(screen.getByRole("combobox"), "en");
     await screen.findByRole("combobox", { name: "Language" });
     expect(
         fieldSelectValue(screen.getByRole("combobox", { name: "Language" })),
     ).toBe("en");
     vi.mocked(saveLocalePreference).mockResolvedValueOnce("system");
-    setFieldSelectValue(screen.getByRole("combobox"), "system");
+    await setFieldSelectValue(screen.getByRole("combobox"), "system");
     await screen.findByRole("combobox", { name: "语言" });
     expect(
         fieldSelectValue(screen.getByRole("combobox", { name: "语言" })),
@@ -148,7 +148,7 @@ test("explicit choices override the system and follow system resolves Chinese va
 
 test("does not save when the current choice is selected again", async () => {
     await renderSelector();
-    setFieldSelectValue(screen.getByRole("combobox"), "en");
+    await setFieldSelectValue(screen.getByRole("combobox"), "en");
     expect(saveLocalePreference).not.toHaveBeenCalled();
 });
 
@@ -157,7 +157,7 @@ test("keeps writes blocked after a reload failure and permits a later reload", a
         new SettingsRequestError("invalid_response"),
     );
     const { instance } = await renderSelector();
-    setFieldSelectValue(screen.getByRole("combobox"), "zh-CN");
+    await setFieldSelectValue(screen.getByRole("combobox"), "zh-CN");
     const retry = await screen.findByRole("button", {
         name: "Reload saved preference",
     });
@@ -199,7 +199,7 @@ test("distinguishes a committed save from a translator failure", async () => {
         </I18nextProvider>,
     );
     vi.mocked(saveLocalePreference).mockResolvedValue("zh-CN");
-    setFieldSelectValue(screen.getByRole("combobox"), "zh-CN");
+    await setFieldSelectValue(screen.getByRole("combobox"), "zh-CN");
     await screen.findByText(
         "The preference is saved, but the interface language could not be changed. Reload the saved preference to retry.",
     );
@@ -229,7 +229,10 @@ test("keeps the Chinese choice and gives a Chinese explanation after a failed sa
             />
         </I18nextProvider>,
     );
-    setFieldSelectValue(screen.getByRole("combobox", { name: "语言" }), "en");
+    await setFieldSelectValue(
+        screen.getByRole("combobox", { name: "语言" }),
+        "en",
+    );
     await screen.findByText("无法保存语言偏好，原选择未改变，请重试。");
     expect(fieldSelectValue(screen.getByRole("combobox"))).toBe("zh-CN");
     expect(instance.resolvedLanguage).toBe("zh-CN");
@@ -240,7 +243,7 @@ test("stops saving if the desktop boundary becomes unavailable", async () => {
         new SettingsRequestError("desktop_required"),
     );
     await renderSelector();
-    setFieldSelectValue(screen.getByRole("combobox"), "zh-CN");
+    await setFieldSelectValue(screen.getByRole("combobox"), "zh-CN");
     await screen.findByText(
         "Browser preview cannot save language preferences.",
     );
@@ -253,7 +256,7 @@ test("prevents duplicate reloads and ignores a reload completed after unmount", 
         new SettingsRequestError("operation_failed"),
     );
     const { instance, unmount } = await renderSelector();
-    setFieldSelectValue(screen.getByRole("combobox"), "zh-CN");
+    await setFieldSelectValue(screen.getByRole("combobox"), "zh-CN");
     const retry = await screen.findByRole("button", {
         name: "Reload saved preference",
     });
@@ -280,7 +283,7 @@ test("does not change the shared translator after unmounting during a save", asy
     const response = pendingPreference();
     vi.mocked(saveLocalePreference).mockReturnValue(response.promise);
     const { instance, unmount } = await renderSelector();
-    setFieldSelectValue(screen.getByRole("combobox"), "zh-CN");
+    await setFieldSelectValue(screen.getByRole("combobox"), "zh-CN");
     unmount();
     await act(async () => {
         response.resolve("zh-CN");
@@ -313,12 +316,12 @@ test("waits for a saved choice before switching language and keeps other input",
     const model = screen.getByRole("textbox", { name: "Unsubmitted model ID" });
     fireEvent.change(model, { target: { value: "custom-model-id" } });
     const select = screen.getByRole("combobox", { name: "Language" });
-    setFieldSelectValue(select, "zh-CN");
+    await setFieldSelectValue(select, "zh-CN");
     expect(select).toHaveProperty("disabled", true);
     expect(fieldSelectValue(select)).toBe("system");
     expect(instance.resolvedLanguage).toBe("en");
     // Even a second dispatched change must not produce a concurrent write.
-    setFieldSelectValue(select, "en");
+    await setFieldSelectValue(select, "en");
     expect(saveLocalePreference).toHaveBeenCalledTimes(1);
     await act(async () => {
         response.resolve("zh-CN");

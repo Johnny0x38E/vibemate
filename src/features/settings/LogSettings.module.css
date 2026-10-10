@@ -15,7 +15,7 @@
 .pathCell {
     display: flex;
     flex: 1 1 11rem;
-    align-items: flex-start;
+    align-items: center;
     justify-content: flex-end;
     gap: var(--space-sm);
     min-width: 0;
@@ -37,7 +37,6 @@
     display: inline-flex;
     flex-shrink: 0;
     gap: 2px;
-    margin-top: -2px;
 }
 
 .iconButton {
@@ -91,6 +90,5 @@
 
     .pathActions {
         align-self: flex-end;
-        margin-top: 0;
     }
 }

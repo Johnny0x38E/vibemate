@@ -24,8 +24,9 @@ React describes the interface; Rust handles local system and provider operations
   composed in `src/main.tsx`. Tab switches and leaving Settings keep preference
   controls mounted so pending saves and input survive.
 - `src/components/FieldSelect.tsx` is the shared single-choice dropdown (36 px
-  trigger, chevron from `settingsField.field`, custom list panel). Settings and
-  provider forms use it instead of a native `<select>`.
+  trigger, chevron from `settingsField.field`, Base UI Select interaction and
+  a portaled list). Settings and provider forms use it instead of a native
+  `<select>`; CSS Modules and existing theme tokens still own its appearance.
 - `src/features/settings/settingsField.module.css` shares the grouped-card row
   layout (label left, control right) for language and appearance.
 - Sidebar width is fixed at 200/88 px (`--sidebar-width`, `data-collapsed`); only
@@ -118,6 +119,54 @@ Shared repo config only:
   keybindings stay in user settings.
 
 Editor diagnostics do not replace `pnpm run check:frontend`.
+
+## Shared dropdown interaction
+
+`FieldSelect` uses the stable MIT-licensed `@base-ui/react` 1.9.0 Select. Base UI
+is headless: it supplies behavior without a visual theme or a Tailwind requirement.
+Only the Select entry point is imported. Existing buttons, inputs, theme radios,
+layout, notifications and business state are not migrated to a new framework.
+Future complex controls can use Base UI when an implemented behavior needs them.
+
+The parent still owns `value` and `onChange`. Selecting a language or appearance
+requests a save; the widget cannot treat that request as a confirmed saved value.
+Base UI handles item focus, arrow keys, Home/End, character-based navigation,
+Enter/Space selection and dismissal. The wrapper controls only whether the popup
+is open and whether a business operation has locked the field.
+
+`disabled` remains a native disabled button. `blocked` keeps the provider field
+focusable with `aria-disabled`, uses Base UI's read-only value protection, and
+refuses opening or value callbacks. A conditional state reset during the field's
+own render closes an already-open menu when it becomes locked. The next render
+has `open = false`, so unlocking cannot reopen an old menu. This is a guarded
+update of the same component, not an effect that repeatedly derives state.
+
+`Select.Portal` renders the menu outside the card's DOM subtree while retaining
+React composition. This avoids card/scroll-container clipping. Tokens on `:root`
+still supply the palette. The named `--layer-popover` token places menus above
+ordinary app content. Positioning uses the trigger width, a 4 px gap and viewport
+collision handling; the list scrolls within the available height. A hidden anchor
+also hides its portaled popup. `alignItemWithTrigger={false}` prevents the menu
+from overlapping the selected value.
+
+Tests use MIT-licensed `@testing-library/user-event` 14.6.7 for complete pointer
+and keyboard sequences. The shared helpers follow `aria-controls`, not DOM
+parentage, and are asynchronous because pointer opening and focus restoration
+can wait for animation frames. Callers must await them. Fourteen FieldSelect
+cases cover selection, actual focus movement/restoration, Home/End, typeahead,
+Escape, Tab, outside clicks, both lock transitions, labels/icons, multiple fields
+and StrictMode. The Tab test supplies visible-button rectangles because jsdom
+has no layout; it does not establish real viewport placement.
+
+Verification: frozen install, `check:frontend` (405 UI/boundary tests, 14 i18n
+checker tests and eight release-tool tests), Rust fmt/Clippy, 182 Rust tests
+(one real OS-credential test ignored), and a locked macOS no-bundle desktop build
+passed. Production license metadata for the new runtime dependencies is MIT.
+The main JavaScript bundle changed from 359.95 kB / 109.65 kB gzip to
+471.90 kB / 149.42 kB gzip in these local builds. No CSP, capability, translation
+resource or Rust code changes were needed. Visual checks follow the maintainer's
+manual-review policy; the maintainer confirmed this migration has no issues.
+Dedicated screen-reader and Windows/Linux runtime verification remain pending.
 
 ## Internationalization foundation
 
@@ -334,7 +383,8 @@ and resizing. For desktop behavior, also run the real Tauri app.
 Run `pnpm run test:ui` once, or `pnpm run test:ui src/App.test.tsx` for the
 desktop-shell and bilingual behavior. Vitest shares the Vite configuration and uses jsdom to supply
 a DOM inside Node.js. React Testing Library renders the real component. DOM
-Testing Library is an explicit peer dependency; all four test packages are MIT.
+Testing Library is an explicit peer dependency; the five test packages, including
+user-event for dropdown interactions, are MIT.
 Vitest 5 supports this project's Vite 8 and React Testing Library supports React 19.
 jsdom 30 requires Node 24.15 or newer on the supported Node 24 line.
 

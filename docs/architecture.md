@@ -7,7 +7,10 @@
   (`src/features/providers/`), the MCP page (`src/features/mcp/`), planned pages for Agents/Skills, and Settings
   (`src/features/settings/`). UI code calls Rust only through the typed wrappers
   in `src/lib/desktop.ts` and `src/lib/desktop/`, which validate every response.
-- **Commands.** `src-tauri/src/commands.rs` holds thin Tauri commands for app
+- **Commands.** `src-tauri/src/commands.rs` declares feature-specific command
+  modules under `commands/` (app, preferences, providers, models and mcp).
+  `commands/state.rs` holds managed-state lookups and the existing credential lock.
+  These thin Tauri commands handle app
   metadata, the repository link, language and appearance preferences, provider
   instances, provider API keys, and provider model fetch/list/selection (user-triggered
   only). The Models tab uses `browse_upstream_models_page` (in-memory browse
@@ -50,9 +53,10 @@ The maintainer has requested planning for GitHub/Vercel integrations, more model
 providers and MCP capabilities, including GitHub configuration backups, source-based
 MCP/Skill installation, potential Agent installation and API forwarding to Agents. The [backend modularity plan](plans/backend-modularity.md)
 records current file sizes and dependency issues, incremental splits, and future
-extension boundaries. BR tasks in [todo.md](plans/todo.md) are planned; no source
-reorganization is implemented by this documentation change. Start with tests and
-commands, then provider/MCP responsibilities. Keep cloud-service accounts separate
+extension boundaries. BR1/BR2 in [todo.md](plans/todo.md) are implemented:
+eight modules have separate behavior-test files and commands are grouped by
+feature. Provider/MCP internal responsibilities remain the next planned batch.
+The layout uses `feature.rs` plus a matching `feature/` directory. Keep cloud-service accounts separate
 from model providers and central MCP definitions. Reuse credential storage and
 extract HTTP transport only when a concrete second use requires it. Planned
 `backup` owns snapshot/restore semantics; `sources` and `installation` own source

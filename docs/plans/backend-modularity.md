@@ -12,6 +12,12 @@
 业务混合文件和内联测试，采用小批迁移；每批保持现有行为可运行。
 扩展能力用实际业务接入来验证，不提前引入动态插件、统一连接器框架或多 crate workspace。
 
+BR1/BR2 已实施：八个大文件的内联测试原样迁出，命令分为 app、preferences、providers、models、mcp 与 state。`commands.rs` 从 692 行变成 11 行的模块声明/锁导出入口；功能命令文件为 82–221 行。Provider/Model 主文件变为 1184/940 行，内部职责仍待 BR3 等后续批次拆分。
+
+测试模块路径不变，例如 `providers::tests::unified_save`。Rust 从 `providers.rs` 的 `mod tests;` 查找 `providers/tests.rs`，其子模块继续查找 `providers/tests/unified_save.rs`。测试 fixture 的 `include_bytes!` 路径按新文件位置调整；测试清单与迁移前完全一致。共享的测试 fake 和 TCP fixture 仍保持原有入口。
+
+29 个 Tauri 命令的 wire name 和注册顺序保留，只改变 Rust 注册路径。凭据锁在 `commands/state.rs`，仅在 commands 内部开放字段访问，并保留 root 的类型导出供启动注册；服务商和模型仍采用原来的 poisoning 处理，MCP 仍返回原有安全失败码。没有修改调度、锁顺序、协议、数据格式、前端组件或能力权限。
+
 源码规模如下；行数包含空行、注释和测试，不作为强制拆分阈值。
 “测试前”指文件首个 `#[cfg(test)]` 标记之前，属于粗略规模指标。
 
@@ -65,25 +71,28 @@ MCP 的测试已经独立放在 `mcp/tests.rs`，所以运行时代码仍然较�
 | `sources` / `installation`（未来） | Agent/MCP/Skill 来源、固定版本、安装计划、执行与卸载/更新 | 来源内容为数据；安装依赖与 Agent 部署是不同操作                |
 | `gateway` / `protocols`（未来）    | 本地 API 服务生命周期、模型路由与协议请求/响应转换        | 调用 Provider/Model 配置；长时间转发不持数据库或凭据写锁       |
 
-近期开拆时保持现有顶层模块路径，例如把 `providers.rs` 转成 `providers/mod.rs`，
-由 `mod.rs` 明确导出当前入口。业务内部函数优先私有或 `pub(super)`；跨功能需要的
-小接口才用 `pub(crate)`，不为了编译到处开放实现细节。
-`commands` 可以使用新的子模块注册路径，Tauri 对外命令名保持原样。
-当前部分类型已通过 `pub mod` 暴露，移动时保持公开入口，不宣称兼容路径已被删除。
+模块布局统一使用 Rust 的文件加同名目录方式：`providers.rs` 声明入口和导出，
+`providers/types.rs` 等文件实现子模块。规划与实施都不引入 `mod.rs`。
+沿用当前 stable Rust 和 edition 2024；模块布局之外，也避免引入弃用 API 或旧版
+Tauri 写法。模块内部函数优先私有或 `pub(super)`；跨功能需要的小接口才用
+`pub(crate)`，不为了编译到处开放实现细节。
+`commands` 使用新的子模块注册路径，Tauri 对外命令名保持原样。
+当前部分类型已通过 `pub mod` 暴露，移动时保持公开入口。
 
 一个功能可采用这样的结构，具体文件由迁移批次按需产生：
 
 ```text
+providers.rs       # 声明子模块与原有公开入口
 providers/
-  mod.rs           # 原有公开入口
   types.rs         # 实例、请求、协议类型和安全错误
   templates.rs     # 支持的品牌及其声明
   validation.rs    # Provider 专用规则
   repository.rs    # SQLite 读写
   service.rs       # 保存及凭据补偿协调
+  tests.rs
   tests/
+commands.rs        # 声明功能命令与共享状态模块
 commands/
-  mod.rs
   state.rs         # 状态访问和进程内凭据锁
   app.rs
   preferences.rs

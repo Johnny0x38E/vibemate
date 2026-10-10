@@ -80,7 +80,8 @@ Model 配置属于 Provider 实例，用实际模型 ID 标识；别名只用于
 维护者提出未来 GitHub/Vercel、更多 MCP 与模型服务商扩展后，新增
 [后端职责拆分计划](backend-modularity.md)，任务状态见 `todo.md` 的 BR 系列。
 近期建议先拆内联测试、命令入口和 Provider/MCP 职责，保留 IPC、schema、凭据引用
-与并发语义；本轮完成规划，尚未实施代码迁移。云服务账号/授权独立于模型服务商
+与并发语义；BR1/BR2 已完成测试及命令入口迁移，BR3/BR4 的业务职责拆分尚未实施。
+模块布局统一使用 `feature.rs` + `feature/`。云服务账号/授权独立于模型服务商
 与 MCP 定义；后续业务实际接入时再抽取必要的通用 HTTP transport。
 维护者补充的配置备份到 GitHub、MCP/Skill 来源安装和给 Agent 的 API 转发，分别规划
 `backup`、`sources/installation` 和 `gateway/protocols`；这些是后续扩展意图，尚未实现，

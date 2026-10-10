@@ -6,10 +6,17 @@ import {
     screen,
 } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
-import { afterEach, expect, test } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { createAppI18n } from "../../i18n";
+import { getAppInfo } from "../../lib/desktop";
 import { SettingsView } from "./SettingsView";
 
+vi.mock("../../lib/desktop", () => ({ getAppInfo: vi.fn() }));
+const readInfo = vi.mocked(getAppInfo);
+beforeEach(() => {
+    readInfo.mockReset();
+    readInfo.mockResolvedValue(null);
+});
 afterEach(cleanup);
 
 test("switches between general and about settings tabs", async () => {
@@ -28,9 +35,11 @@ test("switches between general and about settings tabs", async () => {
         "General preferences stub",
     );
     fireEvent.click(screen.getByRole("tab", { name: "About" }));
-    expect(screen.queryByRole("status")).toBeNull();
+    await screen.findByText(
+        "Browser preview cannot read the desktop application version.",
+    );
     expect(
-        screen.getByRole("heading", { name: "Not implemented", level: 2 }),
+        screen.getByRole("heading", { name: "vibemate", level: 2 }),
     ).toBeDefined();
     fireEvent.click(screen.getByRole("tab", { name: "General" }));
     expect(screen.getByRole("status").textContent).toBe(
@@ -38,7 +47,7 @@ test("switches between general and about settings tabs", async () => {
     );
 });
 
-test("translates settings tabs and the about placeholder", async () => {
+test("translates settings tabs and about feedback", async () => {
     const instance = await createAppI18n("zh-CN");
     render(
         <I18nextProvider i18n={instance}>
@@ -52,11 +61,44 @@ test("translates settings tabs and the about placeholder", async () => {
     expect(screen.getByRole("tab", { name: "关于" })).toBeDefined();
     fireEvent.click(screen.getByRole("tab", { name: "关于" }));
     expect(
-        screen.getByRole("heading", { name: "功能尚未实现", level: 2 }),
+        screen.getByRole("heading", { name: "vibemate", level: 2 }),
     ).toBeDefined();
     await act(async () => {
         await instance.changeLanguage("en");
     });
     expect(screen.getByRole("tab", { name: "General" })).toBeDefined();
     expect(screen.getByRole("tab", { name: "About" })).toBeDefined();
+});
+
+test("keyboard tabs lazily load metadata and preserve general inputs and loaded results", async () => {
+    readInfo.mockResolvedValue({ name: "vibemate", version: "0.1.0" });
+    const instance = await createAppI18n("en");
+    render(
+        <I18nextProvider i18n={instance}>
+            <SettingsView
+                languageSettings={
+                    <input aria-label="Draft" defaultValue="unsaved" />
+                }
+            />
+        </I18nextProvider>,
+    );
+    fireEvent.change(screen.getByRole("textbox", { name: "Draft" }), {
+        target: { value: "edited draft" },
+    });
+    expect(readInfo).not.toHaveBeenCalled();
+    const general = screen.getByRole("tab", { name: "General" });
+    general.focus();
+    fireEvent.keyDown(general, { key: "ArrowRight" });
+    const about = screen.getByRole("tab", { name: "About" });
+    expect(document.activeElement).toBe(about);
+    expect(about.getAttribute("aria-selected")).toBe("true");
+    await screen.findByText("0.1.0");
+    fireEvent.keyDown(about, { key: "Home" });
+    expect(document.activeElement).toBe(general);
+    expect(screen.getByDisplayValue("edited draft")).toBeDefined();
+    fireEvent.keyDown(general, { key: "End" });
+    expect(screen.getByText("0.1.0")).toBeDefined();
+    expect(readInfo).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(about, { key: "ArrowLeft" });
+    expect(document.activeElement).toBe(general);
 });

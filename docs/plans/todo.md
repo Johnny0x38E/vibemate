@@ -1,6 +1,6 @@
 # vibemate 第一阶段执行清单
 
-状态：P00–P08、I02（桌面壳、窗控、设置 UX）已完成。**未完成**：I02.d「关于」实质内容（`get_app_info`）、P09 全站 i18n/资源校验。业务 Provider/Agent 等功能未开始。勾选与文件范围见下文；设计见 [development-plan.md](development-plan.md)、[desktop-shell-design.md](desktop-shell-design.md)。
+状态：P00–P08、I02（桌面壳、窗控、设置 UX）已完成。**未完成**：P09 全站 i18n/资源校验。业务 Provider/Agent 等功能未开始。勾选与文件范围见下文；设计见 [development-plan.md](development-plan.md)、[desktop-shell-design.md](desktop-shell-design.md)。
 这里是唯一任务状态来源，不能在其他文件维护第二份勾选清单。
 
 ## 执行约定
@@ -544,10 +544,36 @@ Windows/Linux 为无边框与顶栏自绘窗控。设计基准见
     - Files：`docs/frontend.md`、`docs/plans/desktop-shell-design.md`、`CHANGELOG.md`、`docs/plans/todo.md`。
 - [x] **I02.c.5：Windows/Linux 无边框窗控**：`tauri.windows.conf.json` / `tauri.linux.conf.json`（`decorations: false`）；`TitlebarChrome`、`WindowControls`、`src/lib/desktop/window.ts`；启动门禁顶栏。
 
-#### I02.d：设置中的「关于」（页签占位完成，内容未开始）
+#### I02.d：设置中的「关于」（已完成）
 
 - [x] Settings 顶栏「关于」页签与诚实占位文案（与计划页同源键，非真实版本信息）。
-- [ ] 展示品牌、版本、GitHub 仓库等信息；可复用现有 `get_app_info` 命令与 `getAppInfo` 包装（当前未被调用）。实施前拆分文件并补齐中英文。
+- [x] 展示品牌、真实版本、MIT 许可证与可选中复制的 GitHub 仓库地址；复用 `get_app_info` / `getAppInfo`，包含双语加载、预览、失败重试。
+
+##### I02.d.1：关于页元数据行为与双语
+
+- [x] 新增独立 AboutPanel，复用 getAppInfo；加载、真实版本、预览、失败重试与过期响应均明确处理。
+- [x] 双语资源与行为测试随组件实现；品牌、版本和仓库地址保持原值。
+
+**Files:** `AboutPanel.tsx`、`AboutPanel.module.css`、`AboutPanel.test.tsx`、`src/locales/en.json`、`src/locales/zh-CN.json`。
+**Verification:** 目标 UI 测试；完整前端检查在 d.2 接线后执行。
+**Dependencies:** I02.b.6。
+
+##### I02.d.2：设置接线与键盘操作
+
+- [x] 替换占位内容；关于页首次打开才读取，离开后保持已加载状态。
+- [x] 页签支持左右方向键、Home/End；验证页签切换保留设置输入。
+
+**Files:** `SettingsView.tsx`、`SettingsView.test.tsx`、`SettingsView.module.css`。
+**Verification:** 目标测试、`check:frontend`、ego-browser 双语/720×560/键盘；macOS Tauri 真实版本查询。
+**Dependencies:** I02.d.1。
+
+##### I02.d.3：记录验收与学习说明
+
+- [x] 更新 frontend 文档、设计实施状态、开发计划与英文 changelog；只记录实际验证结果。
+
+**Files:** `docs/frontend.md`、`docs/plans/desktop-shell-design.md`、`docs/plans/development-plan.md`、`CHANGELOG.md`；本清单随任务更新。
+**Verification:** 格式与差异检查。
+**Dependencies:** I02.d.2。
 
 #### I02.e：侧栏拖动调宽（已取消）
 

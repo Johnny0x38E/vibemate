@@ -24,8 +24,8 @@ with production (tabs and dropdowns in the app). Business integrations remain
 unimplemented.
 
 **Production (I02):** shell, macOS overlay title bar, Windows/Linux undecorated
-window controls, and Settings General/About UX are implemented. **Still open:**
-Settings About content via `get_app_info`. Checklist: [todo.md](todo.md) I02.d.
+window controls, and Settings General/About UX are implemented. Settings About now displays build metadata via `get_app_info`, with explicit
+preview and retry states. Checklist: [todo.md](todo.md) I02.d.
 
 ## Layout
 

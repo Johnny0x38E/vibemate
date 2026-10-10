@@ -1,0 +1,68 @@
+.card {
+    margin-top: var(--space-lg);
+    max-width: 36rem;
+    padding: var(--space-lg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    background: var(--color-surface);
+}
+
+.brand {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.description {
+    margin: var(--space-sm) 0 var(--space-lg);
+    color: var(--color-summary);
+    font-size: 0.8125rem;
+    line-height: 1.7;
+}
+
+.details {
+    margin: 0;
+    font-size: 0.8125rem;
+    line-height: 1.7;
+}
+
+.details > div {
+    display: grid;
+    grid-template-columns: 6rem minmax(0, 1fr);
+    gap: var(--space-sm);
+    margin-top: var(--space-md);
+}
+
+.details dt {
+    color: var(--color-summary);
+}
+
+.details dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.repository {
+    user-select: text;
+}
+
+.retry {
+    display: block;
+    margin-top: var(--space-sm);
+    padding: 6px 10px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    color: var(--color-text);
+    background: var(--color-surface);
+    font: inherit;
+    cursor: pointer;
+}
+
+.retry:hover {
+    background: var(--color-hover);
+}
+
+.retry:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+}

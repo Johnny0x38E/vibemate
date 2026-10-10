@@ -99,6 +99,16 @@
             "reload": "Reload saved preference",
             "reloadFailed": "The saved language preference could not be read. Try reloading it again.",
             "applyFailed": "The preference is saved, but the interface language could not be changed. Reload the saved preference to retry."
+        },
+        "about": {
+            "description": "A desktop configuration manager for coding agents.",
+            "version": "Version",
+            "license": "License",
+            "repository": "GitHub repository",
+            "loading": "Reading application information…",
+            "preview": "Browser preview cannot read the desktop application version.",
+            "failed": "Application information could not be read. Try again.",
+            "retry": "Reload application information"
         }
     }
 }

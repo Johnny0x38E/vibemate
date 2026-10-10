@@ -99,6 +99,16 @@
             "reload": "重新读取已保存的偏好",
             "reloadFailed": "无法读取已保存的语言偏好，请再次尝试重新读取。",
             "applyFailed": "偏好已保存，但无法切换界面语言，请重新读取已保存的偏好后重试。"
+        },
+        "about": {
+            "description": "集中管理编程 Agent 配置的桌面工具。",
+            "version": "版本",
+            "license": "许可证",
+            "repository": "GitHub 仓库",
+            "loading": "正在读取应用信息…",
+            "preview": "浏览器预览无法读取桌面应用版本。",
+            "failed": "无法读取应用信息，请重试。",
+            "retry": "重新读取应用信息"
         }
     }
 }

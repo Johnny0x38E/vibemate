@@ -277,10 +277,35 @@ are implemented; keep synthetic credentials out of production fixtures.
 
 ## Safe IPC example
 
-`getAppInfo()` returns typed metadata or `null` for a browser-only preview. The
-shell no longer shows this metadata; it is kept for the planned Settings "About"
-section (todo I02.d).
+`getAppInfo()` returns typed metadata or `null` for a browser-only preview. Settings → About reads it on the first visit (I02.d).
 It uses `invoke<unknown>()` and checks the actual fields before returning an
 `AppInfo`. A TypeScript generic alone cannot check data received at runtime.
 More complex commands will need structured success/error results and documented
 payload schemas shared with Rust. Do not expose credentials in error messages.
+
+## About metadata panel
+
+`AboutPanel` reads `getAppInfo()` on its first mount, which Settings delays until
+About is first selected. It remains mounted across tab and sidebar navigation,
+so language switching translates feedback without repeating the request.
+A discriminated union represents loading, ready, preview, and error states.
+The ready version comes from Rust build metadata; preview never substitutes the
+JavaScript package version. Unknown IPC exceptions become bundled error feedback
+with a retry button. Each read effect has a cleanup flag so obsolete StrictMode
+requests cannot replace current results.
+
+The panel displays the brand, MIT license, and the repository address verified
+against this checkout's Git remote. The address is selectable text; opening an
+external browser is not implemented. Settings tabs use one Tab stop with
+Left/Right, Home, and End selecting and focusing native tab buttons. Preference
+controls and loaded About metadata remain mounted while hidden.
+
+I02.d verification on macOS: `check:frontend` passed 80 UI tests and eight
+release-tool tests, including five About cases and three Settings tab cases.
+Temporarily disabling read cleanup failed both obsolete success/failure cases;
+the source was restored. ego-browser inspected English and Chinese at 720×560,
+including keyboard focus and long preview text without horizontal overflow.
+The existing macOS debug binary, placed in a temporary app bundle and connected
+to the current Vite frontend, returned version 0.1.0 through real WebView IPC.
+No new Rust command or desktop permission was added. Windows/Linux runtime
+verification and native error injection were not performed.

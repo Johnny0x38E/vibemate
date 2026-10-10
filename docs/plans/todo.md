@@ -697,6 +697,15 @@ I05.a.1 校正 `mark.svg` / `app-icon.svg` 与同母版生成的桌面图标集�
 **Files:** `assets/brand/app-icon-macos.svg`、`assets/brand/README.md`、`src-tauri/icons/icon.icns`、`CHANGELOG.md`、本清单。
 **Verification:** 文档格式、图标生成与本地 app 打包资源检查；不运行浏览器或截图视觉检查。
 
+### 插队任务 I08：平滑 macOS 图标圆角
+
+- [x] 普通圆角矩形改为连续曲率轮廓，扩大圆角过渡，保持现有图标大小与留白。
+- [x] 重新生成 ICNS、打包 macOS app 并检查资源一致性。
+- [ ] Dock 圆角外观由维护者人工验收。
+
+**Files:** `assets/brand/app-icon-macos.svg`、`assets/brand/README.md`、`src-tauri/icons/icon.icns`、`CHANGELOG.md`、本清单。
+**Verification:** SVG 曲线接点、文档格式与 app 图标资源；不运行截图视觉检查。
+
 ### Task P09: 让现有界面支持中英文
 
 **Description:** 把现有 App 的文本与 metadata 状态接入 i18n，并将翻译一致性和切换回归检查纳入完成标准。

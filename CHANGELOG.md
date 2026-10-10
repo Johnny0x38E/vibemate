@@ -8,6 +8,8 @@ GitHub release notes are extracted from the matching version section only.
 
 ### Changed
 
+- Smoothed the macOS icon tile with continuous corner curves and a broader corner transition, keeping its existing Dock footprint and logo artwork.
+
 - Reduced the macOS Dock icon artwork to 85% of its previous size with transparent padding, preserving the selected V shape and colors. Added a separate macOS SVG master so other platform icons retain their existing dimensions.
 
 - Replaced the Color theme dropdown with five clickable palette circles shown together. Native radio inputs preserve keyboard selection; a ring and check mark identify the active choice. Colors reuse the theme tokens, while saved-choice confirmation, preview, disabled states, and failure/reload recovery are unchanged. Visual acceptance is left to the maintainer.

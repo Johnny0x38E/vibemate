@@ -24,8 +24,9 @@ React describes the interface; Rust handles local system and provider operations
   `WindowControls` on Windows/Linux builds) implement drag strips and custom
   window chrome. Never place buttons or fields inside a drag region; an App test
   enforces this. Window IPC lives in `src/lib/desktop/window.ts`.
-- `src/components/BrandWordmark.tsx` draws the "vibemate" wordmark as SVG paths,
-  so the brand needs no font file. `src/components/Icon.tsx` holds UI icons.
+- `src/components/BrandLogo.tsx` renders one SVG logo: the V tile and rounded
+  wordmark when expanded, and the V tile alone when collapsed. The wordmark uses
+  a mask from the selected reference without a font dependency. `src/components/Icon.tsx` holds UI icons.
 - `src/lib/desktop.ts` checks runtime availability, calls Rust, and validates
   the returned data. Components never import Tauri APIs directly.
 - `src/App.css` contains shared design variables and app-scoped scaffold styles.
@@ -313,9 +314,8 @@ verification and native error injection were not performed.
 ## Product branding
 
 `assets/brand/` contains the selected V concept and editable SVG masters.
-The app icon is an off-white V on a forest-green tile. The sidebar reuses the
-bundled `128x128@2x.png`, so it follows the desktop icon rather than maintaining
-a second raster asset. `BrandWordmark` uses custom rounded SVG letter paths and
+The app icon is a forest/sage V on an off-white tile. The sidebar references the transparent
+`mark.svg` master matching the desktop icon silhouette. `BrandLogo` uses the reference letter shapes and
 `currentColor` for light/dark contrast; it no longer uses Tauri's yellow dot.
 See `assets/brand/README.md` for the palette and the locked Tauri CLI icon command.
 
@@ -326,3 +326,56 @@ app was opened and its sidebar inspected. ego-browser checked the new brand at
 720×560 in light/dark appearance, expanded/collapsed navigation, loaded image
 assets, no horizontal overflow, and keyboard activation of the brand-home button.
 Windows/Linux native icon display remains unverified.
+
+## Built-in color themes
+
+Settings → General now has separate Appearance and Color theme dropdowns.
+Forest is the original calm green, Graphite is neutral monochrome, Linen uses
+warm paper/clay, Iris has violet accents, and Ocean uses cool blue accents.
+Each has both light and dark values in `src/themes.css`. `App.css` resolves those
+palette values into the existing semantic colors, so screens and focus feedback
+share the same palette. System mode still follows `prefers-color-scheme` in CSS;
+no React media-query subscription is needed. The brand icon retains its identity.
+
+`src-tauri/src/appearance.rs` owns validated brightness/palette pairs. Schema v3
+adds one constrained singleton table without changing language data. A missing
+row returns system/forest without writing a default. One UPSERT saves both
+fields atomically. The thin commands use the blocking worker pool and existing
+safe settings error codes; no dependency, permission or CSP change was needed.
+`src/lib/desktop/appearance.ts` validates runtime values and requires an exact
+save acknowledgment. Browser preview reads no saved choice and cannot invoke a
+save. It can still try colors locally, with an explicit unsaved-preview message.
+
+`AppearanceControl` reads on mount, disabling changes until the pair is known.
+The default CSS is used while that read is pending. A confirmed save updates the
+root `data-appearance` and `data-theme`; unknown outcomes block more writes and
+offer a reload. Known failed writes retain the confirmed pair. Each read ignores
+obsolete effect responses; cleanup restores the document attributes. Language
+switching and navigation keep controls and input mounted.
+
+I04/I05 verification on macOS: `check:frontend` passed 95 UI tests and eight
+release-tool tests. Rust tests passed 31 cases with the existing real-keychain
+smoke test ignored; formatting and all-target Clippy passed. The default locked
+release desktop build passed. A temporary app identifier isolated real WebView
+selection and restart: dark/Iris was restored, while system language was kept.
+The temporary app and its data were removed after verification. All ten theme
+palettes were inspected at 720×560, with English and Chinese feedback, system
+scheme changes, and native dropdown keyboard selection. Text/summary tokens
+exceeded 4.5:1 and focus tokens exceeded 3:1 against the five shared surfaces.
+These measurements cover those token pairs, not a comprehensive accessibility
+audit. Windows/Linux runtime acceptance remains pending.
+
+The brand button has no hover background or other hover decoration. A visible
+keyboard focus outline remains. The i dot is a warm orange accent with extra clearance above its stem.
+Expanded/collapsed artwork is exported as
+`assets/brand/logo-expanded.svg` and `logo-collapsed.svg`. Its V silhouette was
+corrected against the selected reference rather than retaining the earlier
+protruding lower turn. The logo is one SVG graphic in both states; its accessible
+name and return-home behavior come from the enclosing native button.
+
+The logo's SVG mask uses the actual selected reference letter shapes. A color
+matrix makes dark pixels opaque and the pale background transparent; the current
+text color is then painted through that mask. The reference dot is cleared and
+a separate orange circle is placed higher. This preserves the reference type
+without guessing a font family or maintaining approximate hand-drawn letters.
+The lettering is raster-derived within the SVG lockup; the V is vector artwork.

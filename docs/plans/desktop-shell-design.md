@@ -63,8 +63,8 @@ preview and retry states. Checklist: [todo.md](todo.md) I02.d.
   and keyboard focus must remain usable at the minimum size.
 - Place language preferences and appearance inside Settings → General. Both use
   the same row pattern (label left, select right) inside one bordered group.
-  Appearance is a three-option select (follow system, light, dark); it sets
-  `data-appearance` on the document for this window only and does not persist.
+  Appearance is a three-option select (follow system, light, dark), alongside
+  Color theme with five paired palettes. Both now persist through Rust (I04).
   Language preference still saves through Rust when not in browser preview.
   Do not show redundant success or “current mode” copy when the UI updates
   immediately; keep error and reload messaging for uncertain outcomes.
@@ -148,7 +148,25 @@ Do not claim Windows/Linux native behavior from local macOS checks.
 
 The maintainer selected logo concept 1 on 2026-10-10: a rounded V symbol in
 forest/sage green and a rounded lowercase wordmark. Production SVG masters and
-the selected reference are in `assets/brand/`. Desktop packaging and the sidebar
-use the off-white V on a green tile; the two strokes retain a separating gap.
+the selected reference are in `assets/brand/`. The V keeps its forest/sage colors in the sidebar and desktop packaging;
+the app tile is off-white and the two strokes retain a separating gap.
 The wordmark follows light/dark text color. This replaces the default Tauri
 cyan/yellow ring icon. I03 status is tracked only in `todo.md`.
+
+## Theme and brand refinements
+
+Settings General includes Forest, Graphite, Linen, Iris, and Ocean, each with
+light/dark colors independent of the brightness choice. Small swatches preview
+the current sidebar, surface and accent. No new settings page or theme framework
+is introduced. I04 stores the paired choice through Rust and permits explicitly
+unsaved browser preview.
+
+I05 combines icon and lettering into one SVG logo while expanded, and uses its
+symbol-only version in the collapsed rail. The brand has no hover decoration;
+keyboard focus stays visible. The selected V reference governs both states and
+all generated desktop icons. The lower turn was corrected after maintainer
+feedback about the earlier redraw's protruding stroke.
+
+Final brand refinements follow the selected reference's actual lettering, with
+a warm orange i dot raised for more clearance. Expanded branding uses one SVG
+lockup with the transparent two-color V; the collapsed rail uses the V alone.

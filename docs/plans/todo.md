@@ -1,6 +1,6 @@
 # vibemate 第一阶段执行清单
 
-状态：P00–P08、I02（桌面壳、窗控、设置 UX）、I03（自有品牌图标）已完成。**未完成**：P09 全站 i18n/资源校验。业务 Provider/Agent 等功能未开始。勾选与文件范围见下文；设计见 [development-plan.md](development-plan.md)、[desktop-shell-design.md](desktop-shell-design.md)。
+状态：P00–P08、I02（桌面壳、窗控、设置 UX）、I03（自有品牌图标）、I04（主题）、I05（品牌组合）已完成。**未完成**：P09 全站 i18n/资源校验。业务 Provider/Agent 等功能未开始。勾选与文件范围见下文；设计见 [development-plan.md](development-plan.md)、[desktop-shell-design.md](desktop-shell-design.md)。
 这里是唯一任务状态来源，不能在其他文件维护第二份勾选清单。
 
 ## 执行约定
@@ -606,6 +606,75 @@ Windows/Linux 为无边框与顶栏自绘窗控。设计基准见
 
 **Files:** `docs/frontend.md`、`docs/plans/desktop-shell-design.md`、`CHANGELOG.md`；本清单随任务更新。
 **Verification:** 格式与差异检查。
+
+### 插队任务 I04：内置主题配色与持久化
+
+维护者要求同时提供简约、时尚和有设计感的主题。内置 forest/graphite/linen/iris/ocean，
+每套有浅/深色；外观 system/light/dark 独立选择，通过 Rust 保存，浏览器仅窗口内预览。
+
+#### I04.a：外观与主题存储
+
+- [x] schema v3 单行保存 appearance/theme，保留语言与其他数据；校验未知值，读默认不写入。
+- [x] Rust 类型化领域边界覆盖重启恢复、迁移保留、失败写入和损坏读取。
+
+**Files:** `src-tauri/src/appearance.rs`、`storage.rs`、`settings.rs`（迁移版本断言）、`lib.rs`（模块注册）。
+**Verification:** 目标/完整 Rust 测试、fmt/Clippy。
+
+#### I04.b：IPC 接线
+
+- [x] 注册只读/保存命令，返回安全错误；TypeScript 校验真实响应、匹配保存确认，预览不请求保存。
+
+**Files:** `src-tauri/src/commands.rs`、`lib.rs`（命令注册）、`src/lib/desktop/appearance.ts`、`appearance.test.ts`。
+**Verification:** IPC 包装测试、完整 Rust/前端检查与桌面构建。
+
+#### I04.c：主题令牌
+
+- [x] 新增五套浅/深色令牌，复用全站语义颜色；系统外观变化仍通过 CSS 生效。
+
+**Files:** `src/themes.css`、`src/App.css`。
+**Verification:** 浏览器全主题/明暗计算颜色、文字对比度与系统外观检查。
+
+#### I04.d：设置控件与双语反馈
+
+- [x] 扩展 AppearanceControl：读取、保存、失败、未知结果重新读取；保持输入与导航状态。
+- [x] 中英文名称、加载/失败/预览提示与原生下拉键盘交互完整。
+
+**Files:** `AppearanceControl.tsx`、`AppearanceControl.test.tsx`、`AppearanceControl.module.css`、`src/locales/en.json`、`src/locales/zh-CN.json`。
+**Verification:** UI 行为测试、`check:frontend`、ego-browser 720×560/双语/明暗/键盘；真实 macOS 选择后重启。
+
+##### I04.d.1：控件、样式与双语行为测试
+
+**Files:** I04.d 上述五个文件。
+
+##### I04.d.2：壳层导航回归
+
+- [x] 壳层测试在偏好读取完成后操作，并覆盖主题、外观、已编辑输入一起跨导航保留。
+
+**Files:** `src/App.test.tsx`；`App.tsx` 同步持久化说明。
+**Verification:** 壳层 UI 测试与完整前端检查。
+
+#### I04.e：验收说明
+
+- [x] 更新英文 changelog、前端说明、设计状态，保留平台与运行限制。
+
+**Files:** `CHANGELOG.md`、`docs/frontend.md`、`docs/plans/desktop-shell-design.md`；本清单随任务更新。
+**Verification:** 格式与差异检查。
+
+### 插队任务 I05：品牌组合 Logo 与无 hover
+
+- [x] 展开时用一体化 V 图形/字标 SVG，折叠时用图形版；两种状态保留品牌返回首页与可访问名称。
+- [x] 移除品牌 hover 背景，保留键盘焦点轮廓。
+
+#### I05.a：两种 Logo 母版与组合组件
+
+**Files:** `assets/brand/logo-expanded.svg`、`logo-collapsed.svg`、`selected-reference.jpg`、`README.md`、`src/components/BrandLogo.tsx`；移除 `BrandWordmark.tsx`。
+
+I05.a.1 校正 `mark.svg` / `app-icon.svg` 与同母版生成的桌面图标集：忠实双色 V，不保留先前突出底笔画。
+
+#### I05.b：桌面壳接线与验收
+
+**Files:** `src/App.tsx`、`src/App.module.css`、`src/App.test.tsx`；共享文档/本清单同步更新。
+**Verification:** 壳层行为测试、完整前端检查；ego-browser 展开/折叠、明暗、品牌 hover 与键盘返回首页。
 
 ### Task P09: 让现有界面支持中英文
 

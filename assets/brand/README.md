@@ -7,10 +7,11 @@ Image Gen reference. SVG files are the manually redrawn production masters;
 they remove raster shading and use flat, scalable shapes.
 
 - `mark.svg`: transparent two-color symbol for light surfaces.
-- `app-icon.svg`: off-white symbol on a forest-green tile, with transparent
-  outside corners. The silhouette remains visible on light and dark surfaces.
-- `src/components/BrandWordmark.tsx`: custom SVG letter paths, with round
-  terminals and no external font dependency. Its color follows the UI theme.
+- `app-icon.svg`: the selected forest/sage V on an off-white app tile, with
+  transparent outside corners. The V colors stay faithful to the reference.
+- `logo-expanded.svg` / `logo-collapsed.svg`: full horizontal lockup and symbol-only artwork.
+- `src/components/BrandLogo.tsx`: one inline SVG lockup with a lettering mask from the actual selected reference, with no external font
+  dependency. Lettering follows UI text color; the raised i dot is warm orange.
 
 Desktop PNG, ICO, and ICNS files in `src-tauri/icons/` are generated from the
 app icon by the repository's locked Tauri CLI:
@@ -26,6 +27,19 @@ current scope. Do not edit generated icon geometry independently of the SVG.
 The selected reference was generated with the built-in Image Gen tool. Its
 brief was a convergent V with broad rounded strokes, forest/sage colors, a
 rounded lowercase vibemate wordmark, and monochrome/app-icon applications.
-The SVGs and custom wordmark are project artwork distributed under the
+The SVGs and reference-based wordmark are project artwork distributed under the
 repository's MIT license. The old cyan/yellow Tauri rings are not part of the
 vibemate identity.
+
+The production V was corrected against the maintainer's selected reference on
+2026-10-10: its lower turn is shallow and stays within the silhouette, rather
+than extending into the earlier redraw's long tail. Both logo lockups embed the
+same corrected icon artwork. The React lockup references the transparent two-color `mark.svg` directly
+and lets the lettering follow the active theme's text color.
+
+`selected-reference.jpg` is the maintainer's supplied copy of the selected
+concept. The wordmark uses its actual letter shapes instead of a substitute
+font: a cropped SVG mask turns pale background pixels transparent and fills
+letter pixels with the current text color. The original i dot is masked out;
+a separate `#db915b` circle has extra clearance above its stem. The expanded
+export embeds that lettering reference; the collapsed export is pure SVG.

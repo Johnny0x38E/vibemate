@@ -1,13 +1,11 @@
 import { useId, useState, type JSX, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { BrandWordmark } from "./components/BrandWordmark";
+import { BrandLogo } from "./components/BrandLogo";
 import { Icon } from "./components/Icon";
 import { TitlebarChrome } from "./components/TitlebarChrome";
 import { WindowDragRegion } from "./components/WindowDragRegion";
 import { RelationshipOverview } from "./features/overview/RelationshipOverview";
 import { SettingsView } from "./features/settings/SettingsView";
-// Use the bundled application icon so the sidebar follows future icon changes.
-import appIcon from "../src-tauri/icons/128x128@2x.png";
 import styles from "./App.module.css";
 import "./App.css";
 
@@ -19,7 +17,7 @@ interface AppProps {
 
 /**
  * Compose the approved desktop shell around a caller-supplied language control.
- * Navigation and appearance are window-local. Settings stays mounted while hidden
+ * Navigation is window-local; Rust persists appearance. Settings stays mounted while hidden
  * so pending saves, uncertain outcomes, and unsubmitted input survive navigation.
  */
 export default function App({ languageSettings }: AppProps): JSX.Element {
@@ -76,14 +74,10 @@ export default function App({ languageSettings }: AppProps): JSX.Element {
                 >
                     {/* The logo is decorative; the label starts with the visible brand
                         name so voice control can target the button by what it shows. */}
-                    <img
-                        className={styles["brandIcon"]}
-                        src={appIcon}
-                        alt=""
-                        width={32}
-                        height={32}
+                    <BrandLogo
+                        collapsed={collapsed}
+                        className={styles["brandLogo"]}
                     />
-                    <BrandWordmark className={styles["brandName"]} />
                 </button>
                 <nav
                     className={styles["navigation"]}

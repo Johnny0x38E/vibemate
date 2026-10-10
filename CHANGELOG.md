@@ -8,6 +8,8 @@ GitHub release notes are extracted from the matching version section only.
 
 ### Changed
 
+- Combined the reference V and actual reference lettering into one expanded SVG logo, with a symbol-only collapsed version. Removed brand hover decoration while preserving keyboard focus and return-home behavior. Corrected the V proportions and lower turn against the maintainer's selected reference, kept its forest/sage colors, and regenerated desktop icons on an off-white tile. The i dot is a raised warm orange accent.
+
 - Replaced the default Tauri icon with vibemate's selected V identity: editable SVG masters, regenerated desktop PNG/ICO/ICNS assets, and a rounded sidebar wordmark without the old yellow dot. The app tile keeps the symbol visible in light and dark appearance.
 - Verified branding with full frontend checks (80 UI and eight release-tool tests), 720×560 light/dark and collapsed-sidebar ego-browser checks, the locked macOS desktop build, and an unsigned local app bundle with the expected ICNS. Windows/Linux native icon display remains pending.
 
@@ -26,6 +28,9 @@ GitHub release notes are extracted from the matching version section only.
 - Migrated development, CI, desktop commands, and release validation to pinned pnpm with a frozen dependency lockfile. Tauri API 2.12.1 and Vite 8.3.3 satisfy pnpm's default release-age policy.
 
 ### Added
+
+- Added five built-in color themes (Forest, Graphite, Linen, Iris, Ocean), each with light/dark palettes. Settings General saves appearance and theme together through validated Rust IPC and schema v3 SQLite storage, restoring them after restart. Browser preview can try colors locally without claiming a saved preference; failures and uncertain saves have translated recovery paths.
+- Verified themes with 95 UI tests and eight release-tool tests in frontend checks, 31 passing Rust tests (the existing OS-keychain smoke test remains ignored), fmt/Clippy, a locked macOS desktop build, and real native dark/Iris selection followed by restart using isolated app-data. All ten palettes were inspected at 720×560 and shared text/focus token contrast was measured. Windows/Linux runtime acceptance remains pending.
 
 - Added Settings About with desktop build metadata, the MIT license, and a selectable GitHub repository address. Metadata loads on first visit and stays mounted across navigation. Browser preview does not invent a desktop version; failures have translated retry feedback. Settings tabs now support arrow keys, Home, and End.
 - Verified About with 80 passing UI tests and eight release-tool tests in the full frontend checks, bilingual 720×560 ego-browser previews, and real metadata IPC returning 0.1.0 in the existing macOS debug runtime. Disabling read cleanup made both obsolete-request tests fail. Windows/Linux runtime checks remain pending.

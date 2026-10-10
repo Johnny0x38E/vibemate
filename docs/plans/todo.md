@@ -1442,6 +1442,8 @@ D16（维护者批准，2026-10-10 完成）：2026-10-10 20:10（UTC+8）不带
 | [x] BR4.d   | MCP 独立身份类型与通用 ID 格式校验，保持原有 ID 字符串         | `shared.rs`、`mcp/types.rs`、`mcp/validation.rs`、`providers/types.rs`                                       | BR4.c |
 | [x] BR4.e   | 共享时间来源与业务错误映射，保留当前 Provider 时间入口         | `shared.rs`、`providers.rs`、`commands/state.rs`、`commands/mcp.rs`                                          | BR4.d |
 
+| [x] BR4.f | 收紧拆分后内部 helper 的可见性 | `providers/templates.rs`、`providers/repository.rs`、`mcp/repository.rs` | BR4.e |
+
 BR1/BR2/BR3 等依赖名表示该组全部子任务。具体入口仍采用原有 `.rs` facade，
 统一使用 `feature.rs` + `feature/` 的模块布局，不引入 `mod.rs`。共享格式函数只做格式判断，不统一业务身份类型。
 BR4.e 若实际 MCP/Provider 命令调用点也需要编辑，按功能继续拆，不能超过文件范围。

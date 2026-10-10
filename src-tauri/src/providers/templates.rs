@@ -7,7 +7,7 @@ use super::types::*;
 /// Every kind allows only Chat Completions for now. DeepSeek and OpenRouter use it
 /// as the documented first path. Command Code routes by model, so a per-model
 /// override is left to the model tasks (P12/P15) rather than guessed here.
-pub(super) const TEMPLATES: [ProviderTemplate; 3] = [
+const TEMPLATES: [ProviderTemplate; 3] = [
     ProviderTemplate {
         kind: ProviderKind::CommandCode,
         brand_name: "Command Code",

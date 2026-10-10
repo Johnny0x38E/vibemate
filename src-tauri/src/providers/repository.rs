@@ -349,7 +349,7 @@ pub(super) fn read_selected_model_count(
     u32::try_from(count).map_err(|_| ProviderError::ReadFailed)
 }
 
-pub(super) fn enrich_selected_model_count(
+fn enrich_selected_model_count(
     connection: &Connection,
     mut record: ProviderRecord,
 ) -> Result<ProviderRecord, ProviderError> {

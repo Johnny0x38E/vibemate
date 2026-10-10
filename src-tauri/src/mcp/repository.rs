@@ -12,13 +12,13 @@ pub(super) fn lock(
     storage.lock().map_err(|_| McpError::StorageUnavailable)
 }
 
-pub(super) fn random_id(connection: &rusqlite::Connection) -> Result<String, McpError> {
+fn random_id(connection: &rusqlite::Connection) -> Result<String, McpError> {
     connection
         .query_row("SELECT lower(hex(randomblob(16)))", [], |row| row.get(0))
         .map_err(|_| McpError::WriteFailed)
 }
 
-pub(super) fn references(
+fn references(
     connection: &rusqlite::Connection,
     id: &str,
 ) -> Result<BTreeMap<(String, String), String>, McpError> {
@@ -30,10 +30,7 @@ pub(super) fn references(
         .map_err(|_| McpError::ReadFailed)
 }
 
-pub(super) fn read_record(
-    connection: &rusqlite::Connection,
-    id: &str,
-) -> Result<McpRecord, McpError> {
+fn read_record(connection: &rusqlite::Connection, id: &str) -> Result<McpRecord, McpError> {
     let row: Option<(String,String,bool,i64,String,i64,i64)> = connection.query_row(
         "SELECT display_name,server_name,enabled,revision,connection,created_at,updated_at FROM mcp_definition WHERE id=?1", [id],
         |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?,r.get(4)?,r.get(5)?,r.get(6)?))).optional().map_err(|_| McpError::ReadFailed)?;

@@ -1,0 +1,82 @@
+.group {
+    margin-top: var(--space-lg);
+    padding: 14px var(--space-md);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-size: 0.8125rem;
+}
+
+.title {
+    margin: 0;
+    font-size: 0.8125rem;
+    font-weight: 600;
+}
+
+.paths {
+    margin: var(--space-md) 0;
+}
+
+.paths > div {
+    display: grid;
+    grid-template-columns: 8rem minmax(0, 1fr);
+    gap: var(--space-md);
+    margin-top: var(--space-sm);
+}
+
+.paths dd {
+    margin: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    user-select: text;
+}
+
+.paths code {
+    font-size: 0.75rem;
+}
+
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+    margin-top: var(--space-md);
+}
+
+.button {
+    min-height: 36px;
+    padding: 0 var(--space-md);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    color: var(--color-text);
+    background: transparent;
+    font: inherit;
+    cursor: pointer;
+}
+
+.button:hover:not([aria-disabled="true"]) {
+    background: var(--color-hover);
+}
+
+.button:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+}
+
+.button[aria-disabled="true"] {
+    color: var(--color-summary);
+    cursor: not-allowed;
+}
+
+.hint {
+    margin-bottom: 0;
+    color: var(--color-summary);
+    font-size: 0.75rem;
+}
+
+@media (max-width: 520px) {
+    .paths > div {
+        grid-template-columns: minmax(0, 1fr);
+        gap: var(--space-sm);
+    }
+}

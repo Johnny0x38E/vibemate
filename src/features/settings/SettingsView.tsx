@@ -7,6 +7,7 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { AboutPanel } from "./AboutPanel";
+import { LogSettings } from "./LogSettings";
 import styles from "./SettingsView.module.css";
 
 type SettingsTab = "general" | "about";
@@ -107,6 +108,7 @@ export function SettingsView({
                 hidden={tab !== "general"}
             >
                 {languageSettings}
+                <LogSettings />
             </div>
             <div
                 className={styles["panel"]}

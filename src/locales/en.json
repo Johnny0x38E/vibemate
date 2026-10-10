@@ -70,6 +70,28 @@
             "reloadFailed": "The saved language preference could not be read. Try reloading it again.",
             "applyFailed": "The preference is saved, but the interface language could not be changed. Reload the saved preference to retry."
         },
+        "logs": {
+            "title": "Logs",
+            "filePath": "Log file",
+            "directoryPath": "Log folder",
+            "view": "View logs",
+            "openDirectory": "Open log folder",
+            "refresh": "Refresh log paths",
+            "loading": "Reading log paths…",
+            "preview": "Browser preview cannot read or open desktop logs.",
+            "fileInactive": "File logging was not enabled at startup. Check the terminal output; an existing log file may contain older entries.",
+            "hint": "Opens a local text tool (TextEdit on macOS, Notepad on Windows, or the default app on Linux). Log paths are selectable for copying.",
+            "openingFile": "Requesting the text tool…",
+            "openingDirectory": "Requesting the file manager…",
+            "errors": {
+                "path_unavailable": "The log path could not be resolved. Refresh or restart vibemate.",
+                "log_unavailable": "The log file or folder does not exist or cannot be accessed. Refresh the paths or restart vibemate.",
+                "open_failed": "The system could not accept the open request. Check that a text tool or file manager is available; on Linux, set a default app for .log files, then try again.",
+                "operation_failed": "The log request could not finish. Try again.",
+                "invalid_response": "The app returned an unrecognized log response. Refresh the paths before trying again.",
+                "desktop_required": "Use the vibemate desktop app to view local logs."
+            }
+        },
         "about": {
             "description": "A desktop configuration manager for coding agents.",
             "version": "Version",

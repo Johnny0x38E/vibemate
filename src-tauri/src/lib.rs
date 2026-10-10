@@ -4,6 +4,8 @@ pub mod appearance;
 mod commands;
 pub mod credentials;
 pub mod http_client;
+mod log_access;
+mod logging;
 pub mod model_catalog;
 pub mod model_fetch;
 pub mod model_search;
@@ -12,8 +14,6 @@ pub mod provider_secrets;
 pub mod providers;
 pub mod settings;
 pub mod storage;
-
-use std::io::Write;
 
 use tauri::Manager;
 
@@ -25,18 +25,23 @@ use tauri::Manager;
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
+            let file_logging_active = logging::initialize(app.handle());
+            app.manage(log_access::LogAccess::new(
+                app.path().app_log_dir().ok(),
+                file_logging_active,
+            ));
             // The database lives in the platform app-data folder, never in the project.
             let status = match app.path().app_data_dir() {
                 Ok(data_directory) => storage::StorageStatus::open_in_directory(&data_directory),
-                Err(error) => {
-                    report_startup_problem(&format!(
-                        "vibemate could not locate its app-data folder: {error}"
-                    ));
+                Err(_) => {
                     storage::StorageStatus::Unavailable(storage::StorageError::LocateDataDirectory)
                 }
             };
             if let Err(error) = status.storage() {
-                report_startup_problem(&error.to_string());
+                // Display is intentionally safe; never format Debug or the error source.
+                log::error!(target: "vibemate", "event=storage_unavailable reason={error}");
+            } else {
+                log::info!(target: "vibemate", "event=storage_ready");
             }
             // Managed state is shared by all commands; `StorageStatus` is safe across threads.
             app.manage(status);
@@ -45,6 +50,9 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_app_info,
+            commands::get_log_location,
+            commands::open_log_file,
+            commands::open_log_directory,
             commands::open_project_repository,
             commands::get_locale_preference,
             commands::save_locale_preference,
@@ -59,13 +67,11 @@ pub fn run() {
             commands::replace_provider_secret,
         ])
         .run(tauri::generate_context!())
-        .expect("failed to start vibemate desktop runtime");
-}
-
-/// Write a startup problem to stderr so a developer running from a terminal can see it.
-///
-/// Writing is best effort. A GUI launch may have no terminal, and a failed log line
-/// must not stop the app. Messages must never contain secrets.
-fn report_startup_problem(message: &str) {
-    let _ = writeln!(std::io::stderr(), "{message}");
+        .unwrap_or_else(|_| {
+            log::error!(target: "vibemate", "event=desktop_runtime_failed");
+            log::logger().flush();
+            panic!("failed to start vibemate desktop runtime");
+        });
+    log::info!(target: "vibemate", "event=application_exit");
+    log::logger().flush();
 }

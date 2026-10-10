@@ -5,6 +5,7 @@
 
 use crate::appearance::{self, AppearancePreference};
 use crate::credentials::OsCredentialStore;
+use crate::log_access::{self, LogAccess, LogAccessError, LogLocation};
 use crate::provider_secrets::{self, ProviderSecretStatus, ReplaceProviderSecretRequest};
 use crate::providers::{
     self, CreateProviderRequest, ListProvidersRequest, ProviderError, ProviderPage, ProviderRecord,
@@ -46,6 +47,52 @@ pub(crate) fn get_app_info() -> AppInfo {
     }
 }
 
+/// Return the configured log paths and startup file-logging status without I/O.
+#[tauri::command]
+pub(crate) fn get_log_location(
+    access: tauri::State<'_, LogAccess>,
+) -> Result<LogLocation, LogAccessError> {
+    access.location()
+}
+
+/// Open only the fixed app log file with a platform text tool.
+/// No frontend path or executable is accepted. Files are never created here.
+#[tauri::command]
+pub(crate) async fn open_log_file(app: tauri::AppHandle) -> Result<(), LogAccessError> {
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let access = app
+            .try_state::<LogAccess>()
+            .ok_or(LogAccessError::PathUnavailable)?;
+        access.open_file_with(log_access::open_in_text_tool)
+    })
+    .await
+    .map_err(|_| LogAccessError::OperationFailed)
+    .and_then(|result| result);
+    if let Err(error) = result {
+        log::warn!(target: "vibemate", "event=command_failed operation=open_log_file code={error:?}");
+    }
+    result
+}
+
+/// Open only the fixed app log directory with the system file manager.
+/// Returns safe error codes without creating a missing directory.
+#[tauri::command]
+pub(crate) async fn open_log_directory(app: tauri::AppHandle) -> Result<(), LogAccessError> {
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let access = app
+            .try_state::<LogAccess>()
+            .ok_or(LogAccessError::PathUnavailable)?;
+        access.open_directory_with(log_access::open_in_file_manager)
+    })
+    .await
+    .map_err(|_| LogAccessError::OperationFailed)
+    .and_then(|result| result);
+    if let Err(error) = result {
+        log::warn!(target: "vibemate", "event=command_failed operation=open_log_directory code={error:?}");
+    }
+    result
+}
+
 /// Read the saved language choice without writing defaults. Returns safe error
 /// codes if startup storage or the read fails; never exposes SQLite diagnostics.
 #[tauri::command]
@@ -54,7 +101,7 @@ pub(crate) async fn get_locale_preference(
 ) -> Result<LocalePreference, SettingsError> {
     // SQLite can wait for another process's lock. Keep that blocking wait off both
     // the window thread and async executor; the owned handle lives until it ends.
-    tauri::async_runtime::spawn_blocking(move || {
+    let result = tauri::async_runtime::spawn_blocking(move || {
         let status = app
             .try_state::<StorageStatus>()
             .ok_or(SettingsError::StorageUnavailable)?;
@@ -64,7 +111,9 @@ pub(crate) async fn get_locale_preference(
         settings::load_locale_preference(storage)
     })
     .await
-    .map_err(|_| SettingsError::OperationFailed)?
+    .map_err(|_| SettingsError::OperationFailed)
+    .and_then(|result| result);
+    crate::logging::settings_outcome("get_locale_preference", result)
 }
 
 /// Save a validated language choice, returning it after the single-row commit.
@@ -75,7 +124,7 @@ pub(crate) async fn save_locale_preference(
     app: tauri::AppHandle,
     preference: LocalePreference,
 ) -> Result<LocalePreference, SettingsError> {
-    tauri::async_runtime::spawn_blocking(move || {
+    let result = tauri::async_runtime::spawn_blocking(move || {
         let status = app
             .try_state::<StorageStatus>()
             .ok_or(SettingsError::StorageUnavailable)?;
@@ -85,7 +134,9 @@ pub(crate) async fn save_locale_preference(
         settings::save_locale_preference(storage, preference)
     })
     .await
-    .map_err(|_| SettingsError::OperationFailed)?
+    .map_err(|_| SettingsError::OperationFailed)
+    .and_then(|result| result);
+    crate::logging::settings_outcome("save_locale_preference", result)
 }
 
 /// Read the validated appearance/theme pair without writing a default row.
@@ -94,7 +145,7 @@ pub(crate) async fn save_locale_preference(
 pub(crate) async fn get_appearance_preference(
     app: tauri::AppHandle,
 ) -> Result<AppearancePreference, SettingsError> {
-    tauri::async_runtime::spawn_blocking(move || {
+    let result = tauri::async_runtime::spawn_blocking(move || {
         let status = app
             .try_state::<StorageStatus>()
             .ok_or(SettingsError::StorageUnavailable)?;
@@ -104,7 +155,9 @@ pub(crate) async fn get_appearance_preference(
         appearance::load_appearance_preference(storage)
     })
     .await
-    .map_err(|_| SettingsError::OperationFailed)?
+    .map_err(|_| SettingsError::OperationFailed)
+    .and_then(|result| result);
+    crate::logging::settings_outcome("get_appearance_preference", result)
 }
 
 /// Save a typed pair atomically, returning the committed choice. A task failure
@@ -114,7 +167,7 @@ pub(crate) async fn save_appearance_preference(
     app: tauri::AppHandle,
     preference: AppearancePreference,
 ) -> Result<AppearancePreference, SettingsError> {
-    tauri::async_runtime::spawn_blocking(move || {
+    let result = tauri::async_runtime::spawn_blocking(move || {
         let status = app
             .try_state::<StorageStatus>()
             .ok_or(SettingsError::StorageUnavailable)?;
@@ -124,7 +177,9 @@ pub(crate) async fn save_appearance_preference(
         appearance::save_appearance_preference(storage, preference)
     })
     .await
-    .map_err(|_| SettingsError::OperationFailed)?
+    .map_err(|_| SettingsError::OperationFailed)
+    .and_then(|result| result);
+    crate::logging::settings_outcome("save_appearance_preference", result)
 }
 
 /// Open the project's fixed GitHub repository in the system browser.
@@ -157,11 +212,13 @@ pub(crate) async fn list_providers(
 ) -> Result<ProviderPage, ProviderError> {
     // Same reasoning as the preference commands: SQLite may wait for a lock, so
     // the work runs on the blocking pool and owns `app` until it finishes.
-    tauri::async_runtime::spawn_blocking(move || {
+    let result = tauri::async_runtime::spawn_blocking(move || {
         with_provider_storage(&app, |storage| providers::list_providers(storage, &request))
     })
     .await
-    .map_err(|_| ProviderError::OperationFailed)?
+    .map_err(|_| ProviderError::OperationFailed)
+    .and_then(|result| result);
+    crate::logging::provider_outcome("list_providers", result)
 }
 
 /// Read one provider instance by its stable ID.
@@ -170,11 +227,13 @@ pub(crate) async fn get_provider(
     app: tauri::AppHandle,
     id: String,
 ) -> Result<ProviderRecord, ProviderError> {
-    tauri::async_runtime::spawn_blocking(move || {
+    let result = tauri::async_runtime::spawn_blocking(move || {
         with_provider_storage(&app, |storage| providers::get_provider(storage, &id))
     })
     .await
-    .map_err(|_| ProviderError::OperationFailed)?
+    .map_err(|_| ProviderError::OperationFailed)
+    .and_then(|result| result);
+    crate::logging::provider_outcome("get_provider", result)
 }
 
 /// Validate and save a new provider instance and its API key, returning the
@@ -186,7 +245,7 @@ pub(crate) async fn create_provider(
     app: tauri::AppHandle,
     request: CreateProviderRequest,
 ) -> Result<ProviderRecord, ProviderError> {
-    tauri::async_runtime::spawn_blocking(move || {
+    let result = tauri::async_runtime::spawn_blocking(move || {
         with_provider_storage(&app, |storage| {
             with_credential_writes(&app, || {
                 let now_ms = providers::current_unix_millis()?;
@@ -195,7 +254,9 @@ pub(crate) async fn create_provider(
         })
     })
     .await
-    .map_err(|_| ProviderError::OperationFailed)?
+    .map_err(|_| ProviderError::OperationFailed)
+    .and_then(|result| result);
+    crate::logging::provider_outcome("create_provider", result)
 }
 
 /// Edit a provider instance if its revision still matches, returning the
@@ -205,14 +266,16 @@ pub(crate) async fn update_provider(
     app: tauri::AppHandle,
     request: UpdateProviderRequest,
 ) -> Result<ProviderRecord, ProviderError> {
-    tauri::async_runtime::spawn_blocking(move || {
+    let result = tauri::async_runtime::spawn_blocking(move || {
         with_provider_storage(&app, |storage| {
             let now_ms = providers::current_unix_millis()?;
             providers::update_provider(storage, &request, now_ms)
         })
     })
     .await
-    .map_err(|_| ProviderError::OperationFailed)?
+    .map_err(|_| ProviderError::OperationFailed)
+    .and_then(|result| result);
+    crate::logging::provider_outcome("update_provider", result)
 }
 
 /// Read whether a provider has an API key. Reads SQLite only: this never touches
@@ -222,13 +285,15 @@ pub(crate) async fn get_provider_secret_status(
     app: tauri::AppHandle,
     provider_id: String,
 ) -> Result<ProviderSecretStatus, ProviderError> {
-    tauri::async_runtime::spawn_blocking(move || {
+    let result = tauri::async_runtime::spawn_blocking(move || {
         with_provider_storage(&app, |storage| {
             provider_secrets::get_secret_status(storage, &provider_id)
         })
     })
     .await
-    .map_err(|_| ProviderError::OperationFailed)?
+    .map_err(|_| ProviderError::OperationFailed)
+    .and_then(|result| result);
+    crate::logging::provider_outcome("get_provider_secret_status", result)
 }
 
 /// Replace a provider's API key (or set a missing one) and return the new status.
@@ -239,7 +304,7 @@ pub(crate) async fn replace_provider_secret(
     app: tauri::AppHandle,
     request: ReplaceProviderSecretRequest,
 ) -> Result<ProviderSecretStatus, ProviderError> {
-    tauri::async_runtime::spawn_blocking(move || {
+    let result = tauri::async_runtime::spawn_blocking(move || {
         with_provider_storage(&app, |storage| {
             with_credential_writes(&app, || {
                 let now_ms = providers::current_unix_millis()?;
@@ -253,7 +318,9 @@ pub(crate) async fn replace_provider_secret(
         })
     })
     .await
-    .map_err(|_| ProviderError::OperationFailed)?
+    .map_err(|_| ProviderError::OperationFailed)
+    .and_then(|result| result);
+    crate::logging::provider_outcome("replace_provider_secret", result)
 }
 
 /// Run `operation` while holding the app-wide `CredentialLock`.

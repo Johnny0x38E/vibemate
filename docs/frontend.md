@@ -386,6 +386,38 @@ made and keeps each code list limited to what that request can actually return.
 More complex commands will need structured success/error results and documented
 payload schemas shared with Rust. Do not expose credentials in error messages.
 
+## Settings logs
+
+`LogSettings` is a separate group below the General preference controls. It shows
+the actual Rust-owned log file and folder paths without abbreviating them, with
+wrapping and text selection for long paths. View logs / 「查看日志」 requests a
+local text tool; Open log folder / 「打开日志文件夹」 requests the system file
+manager. Refresh log paths / 「重新读取日志路径」 reloads metadata, not the logger.
+
+`src/lib/desktop/logs.ts` validates both paths and the startup active flag,
+rejects malformed responses, and keeps only safe error codes. Browser preview
+shows no invented path or OS actions. An inactive startup file logger gets a
+warning; an older log can still be opened. Raw errors are never rendered.
+
+The component keeps read and open states separate. Each read has a generation
+number, so StrictMode cleanup, refresh and unmount invalidate stale results.
+A synchronous ref blocks rapid duplicate or competing open requests; rendered
+buttons use `aria-disabled` rather than dropping focus with `disabled`.
+The group remains mounted across settings/sidebar navigation, preserving paths
+and pending actions. It never launches a tool just because it was displayed.
+
+Rust accepts no frontend path or executable. It checks the fixed paths and uses
+the existing opener's Rust functions, with TextEdit on macOS, Notepad on Windows
+and the default file association on Linux. No opener/plugin capability or CSP
+change is needed. Dispatch acknowledgment is not proof that a viewer displayed
+the file, so the UI makes no success claim. See
+[logging access and safety rules](plans/logging.md).
+
+Verified after integrating main `4e4233f` with 327 UI tests, the full frontend
+check, Rust fmt/Clippy, 174 passing Rust tests (one ignored real credential-store test), and a locked macOS no-bundle
+release build. Actual native editor/file-manager opening and visual review remain
+manual checks; no external tools were launched by the automated tests.
+
 ## Settings About
 
 About mounts on its first visit and stays mounted across tab and sidebar

@@ -126,9 +126,7 @@ export function Icon({ name }: { name: IconName }): JSX.Element {
             break;
         case "folder":
             content = (
-                <path
-                    d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7l-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2Z"
-                />
+                <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7l-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2Z" />
             );
             break;
     }

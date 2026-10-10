@@ -37,10 +37,7 @@ export function ProviderPage({
         <div className={styles["page"]}>
             <div className={styles["header"]}>
                 <button
-                    className={[
-                        buttons["secondary"],
-                        buttons["withIcon"],
-                    ]
+                    className={[buttons["secondary"], buttons["withIcon"]]
                         .filter((value): value is string => value !== undefined)
                         .join(" ")}
                     type="button"

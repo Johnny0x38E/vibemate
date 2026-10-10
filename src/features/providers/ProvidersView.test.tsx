@@ -13,7 +13,6 @@ import { NotificationProvider } from "../../components/Notifications";
 import {
     fieldSelectOptionValues,
     fieldSelectValue,
-    setFieldSelectValue,
 } from "../../test/fieldSelect";
 import { createAppI18n } from "../../i18n";
 import {
@@ -730,12 +729,11 @@ test("the detail page and the create form show the provider icon next to the pro
         combobox.querySelector("img")?.getAttribute("src");
     expect(triggerIcon()).toMatch(/\/deepseek\.svg$/);
     fireEvent.click(combobox);
-    expect(
-        screen
-            .getByRole("option", { name: "OpenRouter" })
-            .querySelectorAll("img"),
-    ).toHaveLength(2);
-    setFieldSelectValue(combobox, "openrouter");
+    const openRouterOption = screen.getByRole("option", {
+        name: "OpenRouter",
+    });
+    expect(openRouterOption.querySelectorAll("img")).toHaveLength(2);
+    fireEvent.click(openRouterOption);
     expect(triggerIcon()).toMatch(/\/openrouter\.svg$/);
 });
 

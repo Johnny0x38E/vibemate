@@ -350,7 +350,9 @@ export function ProvidersView({
                             page.kind === "edit" ? (
                                 <span className={pageStyles["titleBrand"]}>
                                     <ProviderIcon kind={page.record.kind} />
-                                    <span className={pageStyles["titleBrandText"]}>
+                                    <span
+                                        className={pageStyles["titleBrandText"]}
+                                    >
                                         {brandFor(page.record)}
                                     </span>
                                 </span>

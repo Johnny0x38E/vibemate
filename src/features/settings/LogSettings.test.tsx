@@ -123,9 +123,7 @@ test("loading blocks actions and sanitizes read failures", async () => {
     read.mockReturnValue(request.promise);
     await mount("zh-CN");
     expect(screen.getByRole("status").textContent).toBe("正在读取日志路径…");
-    expect(
-        screen.queryByRole("button", { name: "查看日志" }),
-    ).toBeNull();
+    expect(screen.queryByRole("button", { name: "查看日志" })).toBeNull();
     expect(viewFile).not.toHaveBeenCalled();
     await act(async () => {
         request.reject(new Error("private filesystem details"));

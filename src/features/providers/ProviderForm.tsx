@@ -23,7 +23,6 @@ import { FieldSelect } from "../../components/FieldSelect";
 import { Icon } from "../../components/Icon";
 import fieldStyles from "../settings/settingsField.module.css";
 import { ProviderIcon } from "./ProviderIcon";
-import { ProviderKindSelect } from "./ProviderKindSelect";
 import buttons from "./providerButtons.module.css";
 import styles from "./ProviderForm.module.css";
 

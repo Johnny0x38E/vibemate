@@ -706,6 +706,16 @@ I05.a.1 校正 `mark.svg` / `app-icon.svg` 与同母版生成的桌面图标集�
 **Files:** `assets/brand/app-icon-macos.svg`、`assets/brand/README.md`、`src-tauri/icons/icon.icns`、`CHANGELOG.md`、本清单。
 **Verification:** SVG 曲线接点、文档格式与 app 图标资源；不运行截图视觉检查。
 
+### 插队任务 I09：清除 i 点缀色下方残留
+
+- [x] 为界面 Logo 遮罩补上与展开 SVG 母版一致的原始圆点清除区域。
+- [x] 保持橙色圆点位置、大小与文字间距。
+- [x] 运行前端检查：96 项 UI 测试、8 项发布测试、格式、Lint、类型检查和构建通过。
+- [ ] 放大后的外观由维护者人工验收。
+
+**Files:** `src/components/BrandLogo.tsx`、`CHANGELOG.md`、本清单。
+**Verification:** `check:frontend`；不运行浏览器或截图视觉检查。
+
 ### Task P09: 让现有界面支持中英文
 
 **Description:** 把现有 App 的文本与 metadata 状态接入 i18n，并将翻译一致性和切换回归检查纳入完成标准。

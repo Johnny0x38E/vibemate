@@ -65,6 +65,15 @@ export function BrandLogo({
                                 height="1254"
                                 filter={`url(#${id}-alpha)`}
                             />
+                            {/* Clear the reference dot before drawing its raised accent;
+                                otherwise the original dot shows below the orange circle. */}
+                            <rect
+                                x="118"
+                                y="8"
+                                width="48"
+                                height="42"
+                                fill="black"
+                            />
                         </mask>
                     </defs>
                     <g transform="translate(40 6) scale(0.112)">

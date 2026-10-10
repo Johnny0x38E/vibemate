@@ -1431,7 +1431,7 @@ D16（维护者批准，2026-10-10 完成）：2026-10-10 20:10（UTC+8）不带
 | [x] BR2.b   | Provider 和 Models 命令按功能拆分                              | `commands.rs`、`commands/providers.rs`、`commands/models.rs`、`lib.rs`                                       | BR2.a |
 | [x] BR2.c   | 偏好和 MCP 命令按功能拆分                                      | `commands.rs`、`commands/preferences.rs`、`commands/mcp.rs`、`lib.rs`                                        | BR2.b |
 | [x] BR2.d   | 记录模块布局偏好、原生回归与本轮完成边界                       | `CHANGELOG.md`、`docs/architecture.md`、`docs/plans/backend-modularity.md`、`docs/plans/development-plan.md` | BR2.c |
-| [x] BR2.e   | 今日收尾：统一 README/阶段概览/架构与任务状态                  | `README.md`、`docs/plans/phase-1.md`、`docs/architecture.md`                                                 | BR2.d |
+| [x] BR2.e   | 统一 README/阶段概览/架构与任务状态                            | `README.md`、`docs/plans/phase-1.md`、`docs/architecture.md`                                                 | BR2.d |
 | [x] BR3.a   | Provider 类型/错误从实现中提取；保留原入口                     | `providers.rs`、`providers/types.rs`、`providers/tests.rs`                                                   | BR2   |
 | [x] BR3.b.0 | Provider 类型通过公开模板访问器解耦                            | `providers/types.rs`                                                                                         | BR3.a |
 | [x] BR3.b   | Provider 模板和专用校验拆分                                    | `providers.rs`、`providers/templates.rs`、`providers/validation.rs`、`providers/tests.rs`                    | BR3.a |
@@ -1441,14 +1441,13 @@ D16（维护者批准，2026-10-10 完成）：2026-10-10 20:10（UTC+8）不带
 | [x] BR4.c   | 提取共享文字校验，分别映射业务错误；保留 Provider 公开校验入口 | `providers/validation.rs`、`mcp/validation.rs`、`shared.rs`、`lib.rs`                                        | BR4.b |
 | [x] BR4.d   | MCP 独立身份类型与通用 ID 格式校验，保持原有 ID 字符串         | `shared.rs`、`mcp/types.rs`、`mcp/validation.rs`、`providers/types.rs`                                       | BR4.c |
 | [x] BR4.e   | 共享时间来源与业务错误映射，保留当前 Provider 时间入口         | `shared.rs`、`providers.rs`、`commands/state.rs`、`commands/mcp.rs`                                          | BR4.d |
-
-| [x] BR4.f | 收紧拆分后内部 helper 的可见性 | `providers/templates.rs`、`providers/repository.rs`、`mcp/repository.rs` | BR4.e |
+| [x] BR4.f   | 收紧拆分后内部 helper 的可见性                                 | `providers/templates.rs`、`providers/repository.rs`、`mcp/repository.rs`                                     | BR4.e |
 
 BR1/BR2/BR3 等依赖名表示该组全部子任务。具体入口仍采用原有 `.rs` facade，
 统一使用 `feature.rs` + `feature/` 的模块布局，不引入 `mod.rs`。共享格式函数只做格式判断，不统一业务身份类型。
 BR4.e 若实际 MCP/Provider 命令调用点也需要编辑，按功能继续拆，不能超过文件范围。
 
-BR1/BR2 验证：测试清单与基线完全相同，Rust fmt/Clippy 与 201 项测试通过（1 项忽略）；29 个注册命令名/顺序不变。完整前端 468 项 UI/边界、8 项 release、14 项 i18n checker 和锁定 debug/release 桌面构建通过。隔离 Linux Tauri 用无密钥 Provider fixture 完成偏好/Provider 编辑、手动模型添加与批量删除、缺密钥/取消状态、MCP 保存编辑与重启重读；未执行服务器命令。真实 OS 凭据与其他平台待验项保持原状态。
+本轮 BR1–BR4 验证：测试清单与基线完全相同，Rust fmt/Clippy 与 201 项测试通过（1 项忽略）；29 个注册命令名/顺序不变；Provider/MCP SQL 字符串与基线一致。完整前端 468 项 UI/边界、8 项 release、14 项 i18n checker 和锁定 debug/release 桌面构建通过。隔离 Linux Tauri 用无密钥 Provider fixture 完成偏好/Provider 编辑、手动模型添加与批量删除、缺密钥/取消状态、MCP 保存编辑与重启重读；未执行服务器命令。真实 OS 凭据与其他平台待验项保持原状态。
 
 后续较大批次的细项在开始时按同样约定继续拆，不一次迁移全部相关文件：
 

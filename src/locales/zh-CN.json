@@ -1,35 +1,4 @@
 {
-    "app": {
-        "stage": "开发初期",
-        "eyebrow": "集中管理你的 Agent",
-        "title": "集中管理 Agent 配置。",
-        "summary": "在一个桌面工作区中管理服务商、模型、技能和 MCP 服务器。",
-        "scopeTitle": "首个版本的范围",
-        "areaCount_one": "{{count, number}} 个领域",
-        "areaCount_other": "{{count, number}} 个领域",
-        "planned": "计划中",
-        "foundation": "基础已就绪，接入功能将在后续实现。",
-        "scope": {
-            "providers": {
-                "title": "服务商",
-                "detail": "使用你自己的 API 访问凭据和模型偏好。"
-            },
-            "agents": {
-                "title": "Agent",
-                "detail": "应用配置前先预览变更。"
-            },
-            "skills": {
-                "title": "技能",
-                "items": "共享技能库",
-                "detail": "记录来源、检查更新，并同步到你的 Agent。"
-            },
-            "mcp": {
-                "title": "MCP 服务器",
-                "items": "共享服务器定义",
-                "detail": "按各 Agent 支持的选项管理连接。"
-            }
-        }
-    },
     "desktop": {
         "home": "配置概览",
         "brandHome": "{{name}} · 配置概览",
@@ -57,8 +26,9 @@
         "overview": {
             "title": "配置关系",
             "state": "未接入 · 计划中",
-            "diagram": "Provider 在上，Agent 在下，两侧为共享技能和 MCP 定义",
-            "providers": "计划中的 Provider",
+            "planned": "计划中",
+            "diagram": "服务商在上，Agent 在下，两侧为共享技能和 MCP 服务器定义",
+            "providers": "计划中的服务商",
             "agents": "计划中的 Agent",
             "applicationPoint": "配置应用关系",
             "caption": "虚线仅表示计划中的关系，不表示已连接或已应用配置。",

@@ -1,35 +1,4 @@
 {
-    "app": {
-        "stage": "Early development",
-        "eyebrow": "Your agents, together",
-        "title": "A home for your agent configuration.",
-        "summary": "Providers, models, skills, and MCP servers — managed in one desktop workspace.",
-        "scopeTitle": "First release scope",
-        "areaCount_one": "{{count, number}} area",
-        "areaCount_other": "{{count, number}} areas",
-        "planned": "Planned",
-        "foundation": "Foundation ready. Integrations will be added next.",
-        "scope": {
-            "providers": {
-                "title": "Providers",
-                "detail": "Bring your own API access and model preferences."
-            },
-            "agents": {
-                "title": "Agents",
-                "detail": "Preview configuration changes before applying them."
-            },
-            "skills": {
-                "title": "Skills",
-                "items": "One shared collection",
-                "detail": "Track sources, review updates, and sync to your agents."
-            },
-            "mcp": {
-                "title": "MCP servers",
-                "items": "Shared server definitions",
-                "detail": "Manage connections with each agent's supported options."
-            }
-        }
-    },
     "desktop": {
         "home": "Configuration overview",
         "brandHome": "{{name}} · Configuration overview",
@@ -57,7 +26,8 @@
         "overview": {
             "title": "Configuration relationships",
             "state": "Not connected · planned",
-            "diagram": "Providers above agents, with shared skills and MCP definitions alongside",
+            "planned": "Planned",
+            "diagram": "Providers above agents, with shared skills and MCP server definitions alongside",
             "providers": "Planned providers",
             "agents": "Planned agents",
             "applicationPoint": "Configuration application",

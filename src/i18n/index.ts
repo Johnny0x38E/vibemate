@@ -7,7 +7,8 @@ import zhCN from "../locales/zh-CN.json";
 export type AppLocale = "zh-CN" | "en";
 
 // JSON imports retain key shapes, but not literal strings. This constrains keys;
-// interpolation names are checked against both resources by tests, not inferred.
+// values, interpolation names and plural forms are checked by
+// `pnpm run check:i18n` (scripts/i18n-resources.mjs), not inferred.
 declare module "i18next" {
     interface CustomTypeOptions {
         defaultNS: "translation";

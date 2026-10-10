@@ -20,30 +20,11 @@ describe("system locale resolution", () => {
     });
 });
 
-// Flatten only translation data, not configuration or user content. P09 will
-// extend this check with empty-value and plural validation for all future UI.
-function placeholders(resource: object, prefix = ""): Record<string, string[]> {
-    const result: Record<string, string[]> = {};
-    for (const [key, entry] of Object.entries(resource)) {
-        const value: unknown = entry;
-        const path = prefix ? `${prefix}.${key}` : key;
-        if (typeof value === "string") {
-            result[path] = Array.from(value.matchAll(/{{\s*([^},\s]+)[^}]*}}/g))
-                .map((match) => match[1] ?? "")
-                .sort();
-        } else if (typeof value === "object" && value !== null) {
-            Object.assign(result, placeholders(value, path));
-        } else {
-            throw new Error(`Invalid translation at ${path}`);
-        }
-    }
-    return result;
-}
-
 describe("bundled translations", () => {
-    it("keeps keys and interpolation names aligned across resources", () => {
+    it("gives both resources the same TypeScript key shape", () => {
+        // Type-level only: `pnpm run typecheck` fails if the JSON shapes differ.
+        // Values, parameters and plural forms are checked by `pnpm run check:i18n`.
         expectTypeOf(zhCN).toEqualTypeOf(en);
-        expect(placeholders(zhCN)).toEqual(placeholders(en));
     });
 
     it("initializes the requested language before returning a ready instance", async () => {
@@ -55,7 +36,7 @@ describe("bundled translations", () => {
         );
     });
 
-    it("preserves interpolated values inside translated sentences", async () => {
+    it("resolves nested message keys in Chinese", async () => {
         const instance = await createAppI18n("zh-CN");
         expect(instance.t("settings.appearance.modes.light")).toBe("浅色");
     });
@@ -74,15 +55,43 @@ describe("bundled translations", () => {
     });
 
     it("uses locale-aware plural rules and Intl number formatting", async () => {
+        // The bundled UI has no plural message yet, so this adds temporary
+        // fixture messages to one independent instance. Fixture keys are not in
+        // the bundled resource type; a string-keyed view of the bound translator
+        // calls them without weakening the typed keys used by application code.
         const instance = await createAppI18n("en");
-        expect(instance.t("app.areaCount", { count: 1 })).toBe("1 area");
-        expect(instance.t("app.areaCount", { count: 1200 })).toBe(
-            "1,200 areas",
+        const fixtures = {
+            en: {
+                itemCount_one: "{{count, number}} item",
+                itemCount_other: "{{count, number}} items",
+            },
+            "zh-CN": { itemCount_other: "{{count, number}} 项" },
+        } as const;
+        for (const [locale, messages] of Object.entries(fixtures))
+            instance.addResourceBundle(
+                locale,
+                "translation",
+                { fixture: messages },
+                true,
+                true,
+            );
+        const english: (key: string, options: { count: number }) => string =
+            instance.getFixedT("en");
+        const chinese: (key: string, options: { count: number }) => string =
+            instance.getFixedT("zh-CN");
+        expect(english("fixture.itemCount", { count: 1 })).toBe("1 item");
+        expect(english("fixture.itemCount", { count: 1200 })).toBe(
+            "1,200 items",
         );
-        await instance.changeLanguage("zh-CN");
-        expect(instance.t("app.areaCount", { count: 1 })).toBe("1 个领域");
-        expect(instance.t("app.areaCount", { count: 1200 })).toBe(
-            "1,200 个领域",
+        // Chinese has only the "other" category, including for a count of one.
+        expect(chinese("fixture.itemCount", { count: 1 })).toBe("1 项");
+        expect(chinese("fixture.itemCount", { count: 1200 })).toBe("1,200 项");
+        // Fixtures stay inside this instance; a new translator has none of them.
+        const fresh: (key: string, options: { count: number }) => string = (
+            await createAppI18n("en")
+        ).getFixedT("en");
+        expect(fresh("fixture.itemCount", { count: 1 })).toBe(
+            "fixture.itemCount",
         );
     });
 

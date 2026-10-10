@@ -8,6 +8,8 @@ GitHub release notes are extracted from the matching version section only.
 
 ### Changed
 
+- Simplified Chinese now uses one term set throughout the interface: 服务商, Agent, 技能 and MCP 服务器. The overview no longer mixes in "Provider". English text is unchanged; brand names, model IDs and URLs stay untranslated. Unused strings from the former landing page were removed.
+- Application metadata and repository-opening failures now reach the interface only as stable codes (`invalid_response`, `operation_failed`, `open_failed`); raw runtime errors are discarded at the desktop boundary.
 - Replaced the scope landing page with a desktop shell: fixed 200/88 px sidebar, Overview, honest planned feature pages, and bottom-aligned Settings. Panels stay mounted across navigation to preserve pending operations and input.
 - On macOS, used an overlay title bar with native traffic lights in the sidebar and blank 44 px drag strips. Windows/Linux builds use undecorated windows with in-app window controls, including during startup.
 - Replaced the Tauri icon with the forest/sage V and reference lettering. Expanded branding combines the V and wordmark; collapsed branding uses the V alone. Brand hover decoration is removed while keyboard focus remains. The raised orange i dot has clearance above its stem, with the original reference dot cleared.
@@ -25,6 +27,8 @@ GitHub release notes are extracted from the matching version section only.
 
 ### Added
 
+- Added `pnpm run check:i18n`, run by `check:frontend` in CI and release checks. It reports missing or extra keys, empty or non-string values, mismatched, malformed or unnamed interpolation parameters (including unescaped `{{- name}}`), plural forms missing for a locale's `Intl.PluralRules` categories, and not-yet-supported ordinal plural keys; `_zero` forms are optional. The checker has its own passing and failing fixture tests (`test:i18n`).
+- Added bilingual desktop-shell tests: saved and system Chinese startup, switching language through the real selector while keeping page, tab, collapsed sidebar, unsaved input and loaded metadata, English fallback for an untranslated Chinese entry, and translated startup, About and save failures with retry. Verified with 119 UI tests (18 in `src/App.test.tsx`), 14 translation-checker tests, eight release-tool tests and the full frontend check. The maintainer reviewed the bilingual interface by hand on 2026-10-10.
 - Added six light/dark themes with independent system/light/dark brightness. Ink uses Notion-inspired neutral colors; its stored `notion` identity survives the name change. Rust atomically saves validated pairs in schema v4, with migration preservation and restart tests. Browser preview makes no persistence claim.
 - Added About build metadata, MIT license and a fixed GitHub repository action. Metadata loads on first visit and remains mounted, with translated loading, preview, retry and error states. Tabs support arrows, Home and End. Rust accepts no arbitrary repository URL or executable.
 - Verified the latest appearance work with 101 UI tests, eight release-tool tests, frontend checks, Rust fmt/Clippy and 33 passing tests (the existing OS-keychain smoke test remains ignored), numeric palette contrast checks and locked macOS builds with unsigned local app bundles. Final ICNS resources match the packaged icon. Actual GitHub browser opening, native Ink restart behavior, Windows/Linux runtime checks and comprehensive accessibility testing remain pending. Earlier macOS metadata and dark/Iris restart checks are recorded in `docs/frontend.md`.
@@ -33,7 +37,7 @@ GitHub release notes are extracted from the matching version section only.
 
 - Added language-preference persistence with a schema v2 migration, safe Rust error codes, and validated desktop IPC. Browser preview explicitly disables saving. Language selection and restart recovery were verified in the macOS desktop runtime using temporary app-data.
 
-- Added the English and Simplified Chinese translation foundation with typed keys, system-language mapping, plural and Intl formatting, and fallback tests. Existing page translation remains pending.
+- Added the English and Simplified Chinese translation foundation with typed keys, system-language mapping, plural and Intl formatting, and fallback tests.
 
 - Added a private SQLite configuration database in the app-data folder. It records a schema version and upgrades inside transactions. If it cannot be opened or upgraded, the app still opens, logs a safe reason, and leaves the file unchanged for later recovery.
 

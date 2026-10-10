@@ -62,7 +62,8 @@ pnpm run check:frontend
 ```
 
 This runs Prettier, ESLint with zero allowed warnings, TypeScript for both the
-UI and Vite configuration, release-tool tests, UI behavior tests, and a production frontend build.
+UI and Vite configuration, release-tool tests, the translation-resource check and
+its tests, UI behavior tests, and a production frontend build.
 CI and the release workflow run the same command before continuing.
 
 TypeScript enables strict, exact optional properties, and unchecked-index checks.
@@ -72,7 +73,7 @@ set of JSX accessibility checks. This avoids holding ESLint on an unsupported
 major version because of a JavaScript accessibility plugin's peer constraints.
 Use compatible current stable versions for both tools.
 
-ESLint checks TypeScript frontend/config files and Node release scripts.
+ESLint checks TypeScript frontend/config files and the Node release and translation scripts.
 Formatting is handled by Prettier, so style rules must not conflict with it.
 
 ## Editing in Zed
@@ -109,28 +110,77 @@ Resources are bundled rather than fetched, with English as the fallback.
 
 P08 connects Rust persistence, validated IPC, the startup gate, and the language
 selector. Saved English/Chinese choices override the captured system language;
-following system and browser preview use `resolveSystemLocale`. The desktop shell and implemented settings have bilingual resources. P09
-remains open for whole-interface resource validation and acceptance. The window title remains
+following system and browser preview use `resolveSystemLocale`. P09 moved every
+existing navigation label, heading, state, hint, error and accessible name onto
+grouped keys in both languages. Chinese uses one term set everywhere: 服务商,
+Agent, 技能 and MCP 服务器. Brand names (`vibemate`, providers and agents), the
+`MIT` license name, model IDs and URLs stay untranslated. The window title remains
 the product name `vibemate`. The ready tree uses an explicit `I18nextProvider`.
 
 The i18next `CustomTypeOptions` declaration constrains translation keys using the
-English JSON shape. JSON string values are not literal types, so TypeScript alone
-does not enforce interpolation names or required parameters. Tests compare keys
-and placeholders across both resources; P09 will extend validation to empty
-translations and required plural forms. Both checks and behavior tests use the
-existing `test:ui` command, already included in `check:frontend`.
+English JSON shape, and `src/i18n/index.test.ts` asserts at the type level that
+the Chinese JSON has the same shape, so `pnpm run typecheck` fails on a missing
+or extra key. JSON string values are not literal types, so TypeScript alone does
+not check values, interpolation names or plural forms; the resource check below does.
 
 For example, `instance.t("desktop.brandHome", { name: "vibemate" })` translates a
-whole label while preserving the supplied product name.
-`instance.t("app.areaCount", { count: 1200 })` uses plural rules and the built-in
-Intl number formatter. Dates can use `{{date, datetime}}` with explicit timezone
+whole label while preserving the supplied product name. A plural message such as
+`itemCount_one`/`itemCount_other` with `{{count, number}}`, called as
+`t("feature.itemCount", { count: 1200 })`, uses plural rules and the built-in
+Intl number formatter. The current UI has no plural message, so the i18n tests
+add temporary fixture messages to one translator instead of keeping an unused key. Dates can use `{{date, datetime}}` with explicit timezone
 options where needed; standalone values can use `Intl.DateTimeFormat` and
 `Intl.NumberFormat` with the resolved locale. React escapes rendered text, so
 i18next interpolation escaping is disabled; never render these strings as raw HTML.
 
 Add both translations, accessible names, and error messages with every feature.
-Rust will return safe error codes; React translates messages rather than raw
+Rust returns safe error codes; React translates messages rather than raw
 internal errors. Do not use browser storage for language preferences.
+
+### Translation resource check
+
+```sh
+pnpm run check:i18n   # validate src/locales/*.json
+pnpm run test:i18n    # the checker's own tests, with passing and failing fixtures
+```
+
+`scripts/i18n-resources.mjs` uses only Node built-ins and runs in
+`check:frontend` before the UI tests. It compares every locale with English and
+prints each problem with its key path, then exits with status 1. It reports:
+
+- keys missing from, or not present in, the English reference;
+- empty or whitespace-only values, non-string values and empty groups;
+- `{{ }}` markers that are not closed or name no parameter (`{{}}`), and
+  interpolation names that differ from English. The unescaped form `{{- name}}`
+  passes the same `name` parameter as `{{name}}`. Plural forms of one key are
+  compared as one message, so an English singular may omit `{{count}}`;
+- plural keys without every form that `Intl.PluralRules` selects for that locale
+  (English `one`/`other`, Chinese `other`), or with a form no bundled locale uses;
+- ordinal plural keys (`_ordinal_*`), which fail with "ordinal plurals are not
+  supported yet" until the check learns ordinal rules.
+
+The suffixes `_zero`, `_one`, `_two`, `_few`, `_many` and `_other` are reserved
+for i18next cardinal plurals; do not end an ordinary key with them. `_zero` is
+always optional: i18next uses `key_zero` for a count of 0 in every language, even
+though `Intl.PluralRules` never selects "zero" for English or Chinese.
+Chinese may keep an `_one` form because English needs it and the TypeScript
+shape check requires identical keys; Chinese never selects it.
+
+The check does not cover single-brace text such as `{name}` (i18next ignores it,
+so it renders literally), conflicts between a dotted key name and a nested group
+(`"a.b"` next to `"a": { "b": … }`), or whether a nested `$t(other.key)`
+reference points to an existing key. Review those by hand if they are introduced.
+
+There is deliberately no unused-key detection. Components build some keys from
+typed values, such as ``t(`desktop.nav.${page}`)`` and
+``t(`settings.theme.names.${palette}`)``, so a text search would report those
+messages as unused or need a list of exceptions. Remove keys when the UI that used
+them is removed, as P09 did for the former landing page's `app.*` group.
+
+`LocaleStartup` does not use the translator: it must explain loading and failure
+before any translator exists, so it reads `settings.startup` directly from the
+bundled JSON for the system language. Those messages therefore have no English
+fallback at runtime; the empty-value check is what keeps them from rendering blank.
 
 Official references: [i18next configuration](https://www.i18next.com/overview/configuration-options),
 [TypeScript](https://www.i18next.com/overview/typescript),
@@ -215,6 +265,8 @@ then mounts the selector and App. Startup never saves a default. Until the saved
 choice is known, bundled system-language messages explain loading or failure;
 reading failure and translator initialization failure have separate messages and
 a keyboard-accessible retry. Private exception text is never rendered.
+These messages come from the bundled JSON rather than the translator; see
+"Translation resource check" above.
 
 The read effect has its own cleanup flag for each attempt. This is important in
 StrictMode: a response from its discarded first effect must not replace the ready
@@ -254,7 +306,7 @@ and resizing. For desktop behavior, also run the real Tauri app.
 ## UI behavior tests
 
 Run `pnpm run test:ui` once, or `pnpm run test:ui src/App.test.tsx` for the
-metadata behavior. Vitest shares the Vite configuration and uses jsdom to supply
+desktop-shell and bilingual behavior. Vitest shares the Vite configuration and uses jsdom to supply
 a DOM inside Node.js. React Testing Library renders the real component. DOM
 Testing Library is an explicit peer dependency; all four test packages are MIT.
 Vitest 5 supports this project's Vite 8 and React Testing Library supports React 19.
@@ -265,12 +317,21 @@ needed. Both existing TypeScript configurations and strict ESLint remain in forc
 Only `src/**/*.test.{ts,tsx}` runs in Vitest; release-tool tests retain Node's runner.
 Cleanup is registered explicitly because Vitest globals are disabled.
 
-`src/App.test.tsx` replaces only `src/lib/desktop` and verifies loading to ready,
-safe failure feedback, browser-only preview, and stale success/failure responses.
-The lifecycle cases use StrictMode's effect cleanup and restart: the first request
-settles after the second, and must not replace the current visible status.
-Temporarily disabling the cleanup guard caused both lifecycle cases to fail;
-restoring the original source made all five cases pass.
+`src/App.test.tsx` replaces only the desktop boundary modules (`src/lib/desktop`
+and its settings/appearance wrappers) and composes `LocaleStartup`, the real
+selector and App as `main.tsx` does. Its 18 cases cover navigation, collapse and
+drag regions, and P09's bilingual behavior: a saved Chinese choice over an English
+system, following a Chinese system, switching through the real selector while
+keeping the page, settings tab, collapsed sidebar, unsaved input and loaded About
+metadata, English fallback for an untranslated Chinese entry, and startup-read,
+About-metadata and language-save failures with retry in both languages. A helper
+checks visible text, `aria-label` and `title` for unresolved keys and private
+diagnostics. Temporarily rendering a raw key in About's error, or allowing empty
+translations, made the matching cases fail.
+
+Component-level metadata states (loading, preview, obsolete StrictMode responses)
+are covered in `AboutPanel.test.tsx`; IPC validation is covered by
+`src/lib/desktop/*.test.ts`.
 
 These DOM tests do not verify Rust, the Tauri WebView, or provider connectivity.
 Add behavior tests for new forms and mutations at their desktop boundary as they
@@ -281,6 +342,26 @@ are implemented; keep synthetic credentials out of production fixtures.
 `getAppInfo()` returns typed metadata or `null` for a browser-only preview. Settings → About reads it on the first visit (I02.d).
 It uses `invoke<unknown>()` and checks the actual fields before returning an
 `AppInfo`. A TypeScript generic alone cannot check data received at runtime.
+
+Failures from both `getAppInfo()` and `openProjectRepository()` reject with
+`MetadataRequestError`, whose `code` is one of:
+
+| Code               | Meaning                                                      |
+| ------------------ | ------------------------------------------------------------ |
+| `invalid_response` | The command answered with data of the wrong shape.           |
+| `operation_failed` | IPC itself failed; `get_app_info` cannot fail in Rust.       |
+| `open_failed`      | Rust's repository command could not open the system browser. |
+
+The original runtime error is discarded rather than wrapped, so paths and OS
+messages cannot reach the UI. About shows one translated message per action.
+
+Each desktop boundary module defines its own `XRequestError` class and code union
+type: `SettingsRequestError` with `SettingsErrorCode` in `settings.ts`,
+`AppearanceRequestError` in `appearance.ts`, and `MetadataRequestError` with
+`MetadataErrorCode` in `desktop.ts`. Appearance reuses `SettingsErrorCode`
+because Rust returns the same `SettingsError` for both preference commands.
+Keeping one class per module lets UI code check `instanceof` for the request it
+made and keeps each code list limited to what that request can actually return.
 More complex commands will need structured success/error results and documented
 payload schemas shared with Rust. Do not expose credentials in error messages.
 

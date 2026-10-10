@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { openProjectRepository } from "../desktop";
+import { MetadataRequestError, openProjectRepository } from "../desktop";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn(), isTauri: vi.fn() }));
 const invokeCommand = vi.mocked(invoke);
@@ -20,13 +20,26 @@ test("desktop opens only the fixed repository command and validates its acknowle
         "open_project_repository",
     );
     invokeCommand.mockResolvedValueOnce("invalid");
-    await expect(openProjectRepository()).rejects.toThrow(
-        "Could not open the project repository.",
-    );
+    await expect(openProjectRepository()).rejects.toMatchObject({
+        code: "invalid_response",
+    });
+});
+
+test("desktop failures expose only stable codes", async () => {
+    desktopAvailable.mockReturnValue(true);
+    // Rust's documented code is preserved so the UI can rely on it.
+    invokeCommand.mockRejectedValueOnce("open_failed");
+    await expect(openProjectRepository()).rejects.toMatchObject({
+        code: "open_failed",
+    });
+    // Any other rejection is a transport failure; its details are discarded.
     invokeCommand.mockRejectedValueOnce(new Error("private OS error"));
-    await expect(openProjectRepository()).rejects.toThrow(
-        "Could not open the project repository.",
+    const error: unknown = await openProjectRepository().catch(
+        (reason: unknown) => reason,
     );
+    expect(error).toBeInstanceOf(MetadataRequestError);
+    expect(error).toMatchObject({ code: "operation_failed" });
+    expect(String(error)).not.toContain("private");
 });
 
 test("preview opens the fixed HTTPS repository with no opener access or desktop IPC", async () => {

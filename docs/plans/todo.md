@@ -1,6 +1,6 @@
 # vibemate 第一阶段执行清单
 
-状态：P00–P08 与基础外观 I02–I14 已完成；维护者于 2026-10-10 确认基础外观本轮收尾。**下一项**：P09 全站 i18n/资源校验，仍未完成。业务 Provider/Agent 等功能未开始。当前设计见 [desktop-shell-design.md](desktop-shell-design.md)，实现与验证记录见 [frontend.md](../frontend.md)。
+状态：P00–P09 与基础外观 I02–I14 已完成；维护者于 2026-10-10 确认基础外观本轮收尾，并人工确认 P09 双语界面。**下一项**：P10（阶段 C 的第一个 Provider/Model 任务）。业务 Provider/Agent 等功能未开始。当前设计见 [desktop-shell-design.md](desktop-shell-design.md)，实现与验证记录见 [frontend.md](../frontend.md)。
 这里是唯一任务状态来源，不能在其他文件维护第二份勾选清单。
 
 ## 执行约定
@@ -778,15 +778,15 @@ I05.a.1 校正 `mark.svg` / `app-icon.svg` 与同母版生成的桌面图标集�
 
 **Acceptance criteria:**
 
-- [ ] 现有导航/标题/状态/提示、可访问名称均有中英文；语言偏好入口可用，语言切换保留页面状态。
-- [ ] Rust 后续返回稳定错误 code + 安全参数，由前端翻译；当前已有 metadata 错误按边界处理，不向用户直接显示未知原始错误或翻译 key。
-- [ ] 自动检查缺失 key、空翻译和插值参数不一致，接入 `check:frontend`；后续业务 UI 必须随功能同时补齐中英文。
+- [x] 现有导航/标题/状态/提示、可访问名称均有中英文；语言偏好入口可用，语言切换保留页面状态。
+- [x] Rust 后续返回稳定错误 code + 安全参数，由前端翻译；当前已有 metadata 错误按边界处理，不向用户直接显示未知原始错误或翻译 key。
+- [x] 自动检查缺失 key、空翻译和插值参数不一致，接入 `check:frontend`；后续业务 UI 必须随功能同时补齐中英文。
 
 **Verification:**
 
-- [ ] 运行 `pnpm run test:ui src/App.test.tsx`，覆盖双语、切换、回退、启动偏好及错误状态。
-- [ ] 运行 `check:frontend`；按需把资源校验/脚本/CI接线拆成 P09 子任务后验证。
-- [ ] 维护者人工检查双语布局、720×560 与长文本；适用的 Tauri 功能验证检查日期/数字、可访问名称及模型 ID/配置内容保留。未经要求不运行浏览器或截图视觉检查。
+- [x] 运行 `pnpm run test:ui src/App.test.tsx`，覆盖双语、切换、回退、启动偏好及错误状态。
+- [x] 运行 `check:frontend`；按需把资源校验/脚本/CI接线拆成 P09 子任务后验证。
+- [x] 维护者人工检查双语布局、720×560 与长文本；适用的 Tauri 功能验证检查日期/数字、可访问名称及模型 ID/配置内容保留。未经要求不运行浏览器或截图视觉检查。
 
 **Dependencies:** P04,P07,P08。
 
@@ -800,9 +800,63 @@ I05.a.1 校正 `mark.svg` / `app-icon.svg` 与同母版生成的桌面图标集�
 
 **Estimated scope:** M：5 个建议主文件；额外校验脚本、包命令和注册接线先拆子任务。
 
+P09 超过五个文件，按以下顺序拆分；每个子任务单独检查。全部子任务通过完整检查后勾选上方自动验收项；维护者人工检查项与 C09 待人工确认后再勾选。
+盘点结论：现有 JSX 可见文本与可访问名称均已走翻译键；未翻译的仅有品牌 `vibemate`、`MIT` 与
+Provider/Agent 品牌名（按规则保留原值）。缺口在资源校验、metadata 边界错误形状、遗留 key/术语与 App 级双语回归。
+预计不改 Rust（`get_app_info` 不会失败，`open_project_repository` 已返回 `open_failed`），不新增依赖。
+
+### P09.a：翻译资源自动校验
+
+- [x] 以 Node 内置能力检查两份资源：key 集合一致、无空/纯空白值、叶子只能是字符串、插值参数集合一致、复数后缀覆盖 `Intl.PluralRules` 要求的形式。
+- [x] 用错误样例证明每类问题都会报出 key 路径；`check:frontend` 在 UI 测试前运行该检查，CI/Release 沿用同一入口不另改工作流。
+- [x] 移除 `src/i18n/index.test.ts` 中被取代的插值比对，保留类型等同与运行时行为测试。
+
+**Files:** `scripts/i18n-resources.mjs`、`scripts/i18n-resources.test.mjs`、`package.json`（`test:i18n`、`check:i18n`）、`src/i18n/index.test.ts`。
+**Verification:** `pnpm run check:i18n`、脚本测试（`test:i18n`）、`pnpm run check:frontend`。
+**Dependencies:** P07,P08。
+
+### P09.b：metadata 错误在桌面边界收敛
+
+- [x] `getAppInfo` 把 invoke 拒绝与畸形响应转为稳定 code（如 `operation_failed`/`invalid_response`），不保留原始诊断；仓库打开失败同样只暴露 code。
+- [x] 补边界测试：预览、有效响应、畸形响应、带原始诊断的拒绝；关于页继续只显示翻译后的失败与重试文案。
+
+**Files:** `src/lib/desktop.ts`（`MetadataRequestError`）、`src/lib/desktop/metadata.test.ts`（新）、`src/lib/desktop/repository.test.ts`；关于页每个操作只有一条失败文案，无需按 code 区分，`AboutPanel.tsx` 未改。
+**Verification:** 目标边界测试、`AboutPanel.test.tsx`、`pnpm run check:frontend`；不改 Rust。
+**Dependencies:** P09.a。
+
+### P09.c：清理遗留资源与统一术语
+
+- [x] 删除已不使用的旧首页 `app.*` key；`app.planned` 迁到 `desktop.overview` 分组，复数/Intl 测试改用测试内资源而不是保留无用 key。
+- [x] 按维护者决定，中文统一使用导航术语「服务商 / Agent / 技能 / MCP 服务器」，英文不变；品牌、模型 ID 与 URL 不翻译。顺带更正 `index.test.ts` 中名不副实的测试名。
+
+**Files:** `src/locales/en.json`、`src/locales/zh-CN.json`、`src/features/overview/RelationshipOverview.tsx`、`src/i18n/index.test.ts`。
+**Verification:** `pnpm run check:i18n`、`pnpm run check:frontend`。
+**Dependencies:** P09.a。
+
+### P09.d：App 级双语回归测试
+
+- [x] 在 `src/App.test.tsx` 覆盖：已保存中文/跟随中文系统启动、经真实选择器切换后保留页面/页签/折叠与输入、缺失中文条目回退英文而不显示 key。
+- [x] 覆盖中英文错误状态：启动读取失败与重试、关于页 metadata 失败与重试、语言保存失败；断言界面不出现原始诊断或翻译 key。
+- [x] 若测试暴露组件缺陷，修复所在组件并计入本子任务文件数（本次未发现缺陷，未改组件）。
+
+**Files:** `src/App.test.tsx`（仅替换 desktop 边界，React 与译器保持真实）。
+**Verification:** `pnpm run test:ui src/App.test.tsx`（记录条数）、`pnpm run check:frontend`。
+**Dependencies:** P09.b,P09.c。
+
+### P09.e：验收记录与勾选
+
+- [x] 更新 i18n 说明（校验命令、metadata 错误 code、过时的 App 测试描述）、开发计划基础现状与英文 changelog `Unreleased`。
+- [x] 完整检查通过后勾选自动验收项；维护者人工双语/720×560/长文本检查完成前不勾选该项与 C09。
+
+**Files:** `docs/frontend.md`、`CHANGELOG.md`、`docs/plans/development-plan.md`；本清单随子任务更新。
+**Verification:** `pnpm run check:frontend`、格式与差异检查；无 Rust 变更则不跑 Rust 检查。
+**Dependencies:** P09.d。
+
+备注：自动检查通过（119 项 UI 测试，其中 App 18 项；i18n 校验 14 项；发布 8 项）；未改 Rust。维护者于 2026-10-10 人工确认双语界面。
+
 ### Checkpoint C09（P07–P09）
 
-- [ ] P07–P08 已勾选；P09 完成后勾选本检查点。
+- [x] P07–P08 已勾选；P09 完成后勾选本检查点。
 
 ## 阶段 C：Provider 与 Model
 

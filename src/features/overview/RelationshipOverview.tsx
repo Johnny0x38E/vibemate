@@ -29,7 +29,7 @@ export function RelationshipOverview(): JSX.Element {
                             <li className={styles["node"]} key={name}>
                                 <span className={styles["name"]}>{name}</span>
                                 <span className={styles["state"]}>
-                                    {t("app.planned")}
+                                    {t("desktop.overview.planned")}
                                 </span>
                             </li>
                         ),
@@ -49,7 +49,7 @@ export function RelationshipOverview(): JSX.Element {
                             {t("desktop.nav.skills")}
                         </span>
                         <span className={styles["state"]}>
-                            {t("app.planned")}
+                            {t("desktop.overview.planned")}
                         </span>
                     </div>
                     <div className={styles["applicationPoint"]}>
@@ -60,7 +60,7 @@ export function RelationshipOverview(): JSX.Element {
                             {t("desktop.nav.mcp")}
                         </span>
                         <span className={styles["state"]}>
-                            {t("app.planned")}
+                            {t("desktop.overview.planned")}
                         </span>
                     </div>
                 </div>
@@ -80,7 +80,7 @@ export function RelationshipOverview(): JSX.Element {
                         <li className={styles["node"]} key={name}>
                             <span className={styles["name"]}>{name}</span>
                             <span className={styles["state"]}>
-                                {t("app.planned")}
+                                {t("desktop.overview.planned")}
                             </span>
                         </li>
                     ))}

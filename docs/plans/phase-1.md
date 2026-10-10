@@ -26,7 +26,7 @@ CI and changelog-driven draft release workflows are present. Integration
 contracts are documented in `docs/integrations/`, but provider and agent business
 behavior remains unimplemented. No provider credentials have been collected and
 no agent configuration has been changed. P09 (whole-interface i18n/resource
-validation) remains the next unfinished task. [todo.md](todo.md) is the sole
+validation) is complete; P10 (saving a provider configuration) is next. [todo.md](todo.md) is the sole
 status source; current UI rules and verification are in
 [desktop-shell-design.md](desktop-shell-design.md) and [frontend.md](../frontend.md).
 

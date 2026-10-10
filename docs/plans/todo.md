@@ -763,6 +763,14 @@ I05.a.1 校正 `mark.svg` / `app-icon.svg` 与同母版生成的桌面图标集�
 
 **Files:** `src/features/settings/AboutPanel.module.css`、`CHANGELOG.md`、`docs/frontend.md`、本清单。
 
+### 插队任务 I14：微调 Dock 图标 V 的视觉重心
+
+- [x] macOS 专用 V 向下偏移，512 px 画布上约 6.8 px；底板、大小、圆角与配色保持一致。
+- [x] 生成 ICNS、检查本地 app 包资源一致性和文档格式。
+- [ ] 视觉重心由维护者人工验收，不运行截图检查。
+
+**Files:** `assets/brand/app-icon-macos.svg`、`assets/brand/README.md`、`src-tauri/icons/icon.icns`、`CHANGELOG.md`、本清单。
+
 ### Task P09: 让现有界面支持中英文
 
 **Description:** 把现有 App 的文本与 metadata 状态接入 i18n，并将翻译一致性和切换回归检查纳入完成标准。

@@ -8,6 +8,8 @@ GitHub release notes are extracted from the matching version section only.
 
 ### Changed
 
+- Shifted the V slightly downward in the macOS Dock icon to balance its visual center, preserving the tile size, continuous corners, and selected colors.
+
 - Removed the GitHub icon button’s tile background and reduced its footprint so the About repository row matches the version and license rows. Keyboard focus and browser-opening feedback remain available.
 
 - Renamed the Notion-inspired palette to Ink (纸墨) and placed it second after Forest, retaining its persisted identity. Removed temporary appearance-saving text to avoid a flashing feedback row while preserving save guards and failure recovery.

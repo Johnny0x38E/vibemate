@@ -6,6 +6,10 @@ GitHub release notes are extracted from the matching version section only.
 
 ## [Unreleased]
 
+### Fixed
+
+- Kept the TLS-failure test server open while draining client handshake bytes, preventing an early socket close from surfacing as a connection failure on Windows before rustls rejects the response. Production error classification and the strict TLS assertion are unchanged; regression tests cover wrapped TLS causes, transport errors and refused HTTPS connections.
+
 ### Changed
 
 - Replaced the hand-written shared dropdown interaction with Base UI Select 1.9.0 (MIT), retaining vibemate's 36 px fields, provider icons, CSS Modules and theme tokens. Menus are portaled to avoid card clipping, with viewport-aware positioning and bounded scrolling. Keyboard navigation, typeahead and focus management use Base UI; saved values remain controlled by the parent, and both native disabled and focusable blocked fields keep their existing behavior. Added user-event-based interaction tests without changing business persistence, translations or desktop permissions. Verified with 405 frontend tests, complete frontend checks, Rust fmt/Clippy, 182 passing Rust tests (one OS-credential test ignored) and a locked macOS no-bundle build. The maintainer confirmed the migration has no issues after manual review; dedicated screen-reader and Windows/Linux runtime verification remain pending.

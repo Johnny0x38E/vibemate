@@ -388,7 +388,8 @@ pub(crate) mod test_server {
         Hang,
         /// Read the request, then close without answering.
         Close,
-        /// Write these bytes immediately without reading (for the TLS test).
+        /// Write these bytes immediately, then drain incoming data until the client
+        /// closes the connection (for the TLS test).
         Raw(Vec<u8>),
     }
 
@@ -472,6 +473,11 @@ pub(crate) mod test_server {
         let _ = stream.set_read_timeout(Some(Duration::from_secs(10)));
         if let Reply::Raw(bytes) = reply {
             let _ = stream.write_all(&bytes);
+            // Closing with unread ClientHello bytes can reset the connection on
+            // Windows before rustls rejects the response. Keep the socket open and
+            // discard incoming bytes until the client closes it after the TLS error.
+            // The read timeout above still bounds the wait if the client stalls.
+            let _ = std::io::copy(&mut stream, &mut std::io::sink());
             return;
         }
         if let Some(head) = read_head(&mut stream) {
@@ -520,6 +526,7 @@ pub(crate) mod test_server {
 
 #[cfg(test)]
 mod tests {
+    use std::io;
     use std::time::{Duration, Instant};
 
     use tokio::sync::oneshot;
@@ -702,9 +709,12 @@ mod tests {
             .local_addr()
             .unwrap()
             .port();
-        let url = Url::parse(&format!("http://127.0.0.1:{port}/models")).unwrap();
-        let error = mock_client().get_bounded(&url, &key()).await.unwrap_err();
-        assert_eq!(error, HttpError::ConnectionFailed);
+        // An HTTPS URL alone does not make a TCP refusal a TLS failure.
+        for scheme in ["http", "https"] {
+            let url = Url::parse(&format!("{scheme}://127.0.0.1:{port}/models")).unwrap();
+            let error = mock_client().get_bounded(&url, &key()).await.unwrap_err();
+            assert_eq!(error, HttpError::ConnectionFailed);
+        }
 
         let server = MockServer::start(vec![Reply::Close]);
         let error = mock_client()
@@ -723,6 +733,36 @@ mod tests {
             .await
             .expect_err("TLS failure");
         assert_eq!(error, HttpError::TlsFailed);
+        assert_redacted(error);
+    }
+
+    #[test]
+    fn recognizes_tls_causes_wrapped_in_io_errors() {
+        let tls_error = rustls::Error::AlertReceived(rustls::AlertDescription::HandshakeFailure);
+        assert!(caused_by_tls(&tls_error));
+
+        // io::Error::source skips its own payload, so checking source() alone
+        // would miss this rustls error, including behind another I/O wrapper.
+        let io_error = io::Error::new(io::ErrorKind::InvalidData, tls_error);
+        assert!(caused_by_tls(&io_error));
+        assert!(caused_by_tls(&io::Error::other(io_error)));
+    }
+
+    #[test]
+    fn does_not_treat_transport_errors_as_tls_failures() {
+        for kind in [
+            io::ErrorKind::ConnectionReset,
+            io::ErrorKind::ConnectionRefused,
+            io::ErrorKind::UnexpectedEof,
+            io::ErrorKind::TimedOut,
+        ] {
+            let error = io::Error::from(kind);
+            assert!(!caused_by_tls(&error), "transport error: {kind:?}");
+            assert!(
+                !caused_by_tls(&io::Error::other(error)),
+                "wrapped transport error: {kind:?}"
+            );
+        }
     }
 
     #[tokio::test]

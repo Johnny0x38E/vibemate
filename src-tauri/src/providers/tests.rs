@@ -3,6 +3,8 @@
 mod unified_save;
 use super::*;
 use crate::credentials::fake::FakeStore;
+use crate::credentials::{CredentialError, InvalidSecret, Secret};
+use serde::Deserialize;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};

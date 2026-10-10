@@ -1,6 +1,6 @@
 # vibemate 第一阶段执行清单
 
-状态：P00–P09 与基础外观 I02–I14 已完成。P10/P11 的真实保存→重启与凭据验收仍有待验项；P12 后端、模型页双视图和手动添加的代码/自动检查已完成，手动添加→重启→删除的真实 Tauri 与外观验证待维护者确认。Agent 等后续业务尚未开始。当前设计见 [desktop-shell-design.md](desktop-shell-design.md)，实现与验证记录见 [frontend.md](../frontend.md)。
+状态：P00–P09 与基础外观 I02–I14 已完成。P10/P11 的真实凭据验收仍有待验项；P12 模型页和手动添加、P31 中央 MCP 管理的代码/自动检查已完成。BR1/BR2 已完成测试与命令入口拆分，隔离 Linux 原生 IPC 已验证无密钥 fixture 的模型/MCP 保存与重启；真实服务商 UI、凭据库及其他平台验收按各任务继续待验。Agent 部署等后续业务尚未开始。当前设计见 [desktop-shell-design.md](desktop-shell-design.md)，实现与验证记录见 [frontend.md](../frontend.md) 和 [backend-modularity.md](backend-modularity.md)。
 这里是唯一任务状态来源，不能在其他文件维护第二份勾选清单。
 
 ## 执行约定
@@ -1416,7 +1416,7 @@ D16（维护者批准，2026-10-10 完成）：2026-10-10 20:10（UTC+8）不带
 
 维护者提出未来 GitHub 配置备份、MCP/Skill 来源安装、给 Agent 的 API 转发，可能直接安装 Agent，以及 Vercel/更多模型服务商接入，优先规划模块边界。
 设计见 [backend-modularity.md](backend-modularity.md)。规划已推送，按下列小批任务迁移；勾选仅表示该批次已实施并完成适用回归。
-BR1/BR2 已完成测试与命令入口拆分；BR3/BR4 是后续近期整理，BR5–BR11 按新增功能需求开展。
+本轮完成 BR1–BR4；BR1/BR2 已完成，BR3/BR4 继续拆分 Provider/MCP 与共享校验。BR5–BR11 按新增功能需求开展。
 表中范围包含本清单更新；若实际 import/测试 fixture 迁移超出五个文件，先继续拆批。
 
 - [x] **BR0：检查源码并记录规划。** 基线 `165e262`，记录大小、职责、实际耦合、扩展边界和兼容要求。Files：本清单、`backend-modularity.md`、`architecture.md`、`development-plan.md`；Verification：源码核对、Markdown 格式与 diff 检查；无业务代码变更。
@@ -1431,7 +1431,8 @@ BR1/BR2 已完成测试与命令入口拆分；BR3/BR4 是后续近期整理，B
 | [x] BR2.b | Provider 和 Models 命令按功能拆分                              | `commands.rs`、`commands/providers.rs`、`commands/models.rs`、`lib.rs`                                       | BR2.a |
 | [x] BR2.c | 偏好和 MCP 命令按功能拆分                                      | `commands.rs`、`commands/preferences.rs`、`commands/mcp.rs`、`lib.rs`                                        | BR2.b |
 | [x] BR2.d | 记录模块布局偏好、原生回归与本轮完成边界                       | `CHANGELOG.md`、`docs/architecture.md`、`docs/plans/backend-modularity.md`、`docs/plans/development-plan.md` | BR2.c |
-| [ ] BR3.a | Provider 类型/错误从实现中提取；保留原入口                     | `providers.rs`、`providers/types.rs`、`providers/tests.rs`                                                   | BR2   |
+| [x] BR2.e | 今日收尾：统一 README/阶段概览/架构与任务状态                  | `README.md`、`docs/plans/phase-1.md`、`docs/architecture.md`                                                 | BR2.d |
+| [x] BR3.a | Provider 类型/错误从实现中提取；保留原入口                     | `providers.rs`、`providers/types.rs`、`providers/tests.rs`                                                   | BR2   |
 | [ ] BR3.b | Provider 模板和专用校验拆分                                    | `providers.rs`、`providers/templates.rs`、`providers/validation.rs`、`providers/tests.rs`                    | BR3.a |
 | [ ] BR3.c | Provider SQL 与保存编排拆分                                    | `providers.rs`、`providers/repository.rs`、`providers/service.rs`、`providers/tests.rs`                      | BR3.b |
 | [ ] BR4.a | MCP DTO/错误和专用字段校验拆分                                 | `mcp.rs`、`mcp/types.rs`、`mcp/validation.rs`、`mcp/tests.rs`                                                | BR3   |

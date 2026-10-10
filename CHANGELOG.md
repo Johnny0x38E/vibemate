@@ -8,9 +8,9 @@ GitHub release notes are extracted from the matching version section only.
 
 ### Added
 
-- Provider edit pages use **API** and **Models** tabs (Settings-style keyboard navigation). API holds URL, protocol, and key; Models holds fetch, local filter, and selection. Both panels stay mounted while switching tabs.
-- Provider **Models** tab: user-triggered fetch into local storage, then fuzzy filter across the saved catalog (not the provider API), with all/selected views, pagination, per-row selection, and route/upstream badges.
-- Rust model commands and typed frontend wrappers (`models.ts`) for fetch, cancel, list, search, selection, and manual add/delete, with strict response validation and browser-preview guards.
+- Provider edit pages use **API** and **Models** tabs (Settings-style keyboard navigation). API holds URL, protocol, and key; Models holds search, upstream browse, and draft selection. Both panels stay mounted while switching tabs.
+- Provider **Models** tab (P12.c.5): default **Selected** list (only persisted choices), **Save** for draft checkboxes, and **Fetch models** for lazy upstream browse without merging the full catalog until Save. Uncheck + Save removes rows from local storage.
+- Rust commands `browse_upstream_models_page` and `save_provider_model_selections`, plus typed frontend wrappers in `models.ts`, with strict response validation and browser-preview guards.
 
 ### Fixed
 
@@ -21,6 +21,9 @@ GitHub release notes are extracted from the matching version section only.
 - Reworked the Providers list into two-line rows (brand icon, protocol and selected-model pills, then display name) without base URL; returning from edit refreshes that row from storage.
 - Provider create and edit share tabbed API / Models pages: brand title on the right of the secondary header, Save on the first card row, Back-only exit (form Cancel removed), and a surface back control with arrow plus "Back" / 「返回」. Save and fetch outcomes use toned notifications with icons.
 - Moved model **Fetch models** beside the search field (36 px toolbar row). Secondary provider pages use tighter tab/content spacing and 2 px top margin under the title strip (Windows/Linux window controls).
+- Provider **Models** tab scrolls inside the tab panel; upstream pages load on demand while browsing; end-of-list hints reflect selected vs upstream browse state (English and Simplified Chinese).
+- Upstream model search uses `browse_upstream_models_page` with a fuzzy `query` over the same session cache as the full browse list (ranked result pages for every vendor). Append loads show a footer status instead of a top loading banner that shifted the list.
+- Maintainer verified the P12.c.5 Models tab flow (selected → upstream browse → save → deselect on selected) for Command Code, DeepSeek, and OpenRouter in Tauri on macOS (2026-10-11). Manual model add (P12.c.3) remains open.
 - Main module pages share `PageModuleHeader` (sidebar nav icon, 1 rem title, 36 px minimum row height, optional trailing slot). Overview uses the nav label ("Overview" / 「概览」).
 - Settings → General keeps logs in a separate titled section below language and appearance (unchanged behavior).
 - Replaced the hand-written shared dropdown with Base UI Select 1.9.0 (MIT), keeping 36 px fields, provider icons, CSS Modules and theme tokens; menus are portaled with viewport-aware positioning.

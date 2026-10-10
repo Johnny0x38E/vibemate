@@ -10,11 +10,39 @@
 }
 
 .group[data-layout="tabPanel"] {
-    margin-top: var(--space-sm);
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    margin-top: 0;
+}
+
+.group[data-layout="tabPanel"] form {
+    flex: 1;
+    min-height: 0;
+}
+
+/* settingsField `.group` adds margin-top; tab panels already pad below the tabs. */
+.fieldCard {
+    margin-top: 0;
 }
 
 .saveRow {
     justify-content: flex-end;
+}
+
+.tabToolbar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: var(--space-md);
+}
+
+.tabToolbarButton {
+    flex-shrink: 0;
+    height: 36px;
+    min-height: 36px;
+    padding-block: 0;
+    white-space: nowrap;
 }
 
 .groupTitle {

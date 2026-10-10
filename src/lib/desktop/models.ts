@@ -98,6 +98,43 @@ export interface SetModelsSelectedInput {
     selected: boolean;
 }
 
+/** Upstream metadata for one model kept on Save (P12.c.5). */
+export interface SaveProviderModelEntry {
+    modelId: string;
+    upstreamName: string | null;
+    contextWindow: number | null;
+    maxOutputTokens: number | null;
+    inputModalities: string[] | null;
+    outputModalities: string[] | null;
+    supportedEndpoints: string[] | null;
+}
+
+/** Remove unchecked rows and upsert newly checked ones in one transaction. */
+export interface SaveProviderModelSelectionsInput {
+    providerId: string;
+    removeModelIds: string[];
+    add: SaveProviderModelEntry[];
+}
+
+/** One row from upstream browse (not yet persisted). */
+export interface UpstreamBrowseModel {
+    modelId: string;
+    upstreamName: string | null;
+    contextWindow: number | null;
+    maxOutputTokens: number | null;
+    inputModalities: string[] | null;
+    outputModalities: string[] | null;
+    supportedEndpoints: string[] | null;
+    routeSupport: ProviderModel["routeSupport"];
+}
+
+/** One lazy upstream page for the Models tab browse view. */
+export interface UpstreamBrowsePage {
+    items: UpstreamBrowseModel[];
+    nextOffset: number | null;
+    morePages: boolean;
+}
+
 /** Rust trims the model ID and validates the optional alias. */
 export interface AddManualModelInput {
     providerId: string;
@@ -356,6 +393,82 @@ export async function deleteManualProviderModel(
     requireDesktop();
     if (
         (await call("delete_manual_provider_model", { request: input })) !==
+        null
+    )
+        throw invalidResponse();
+}
+
+/**
+ * Download one upstream browse page without writing SQLite (P12.c.5).
+ * `offset` is the next result index (full list or ranked search). Optional
+ * `query` uses the same fuzzy rules as `listProviderModels`.
+ */
+export async function browseUpstreamModelsPage(input: {
+    providerId: string;
+    offset: number | null;
+    query?: string;
+}): Promise<UpstreamBrowsePage> {
+    requireDesktop();
+    const request: Record<string, unknown> = {
+        providerId: input.providerId,
+        offset: input.offset,
+    };
+    const trimmedQuery = input.query?.trim();
+    if (trimmedQuery !== undefined && trimmedQuery.length > 0) {
+        request["query"] = trimmedQuery;
+    }
+    const data = object(
+        await call("browse_upstream_models_page", {
+            request,
+        }),
+        ["items", "nextOffset", "morePages"],
+    );
+    if (!Array.isArray(data["items"])) throw invalidResponse();
+    const items = data["items"].map((entry: unknown) => {
+        const row = object(entry, [
+            "modelId",
+            "upstreamName",
+            "contextWindow",
+            "maxOutputTokens",
+            "inputModalities",
+            "outputModalities",
+            "supportedEndpoints",
+            "routeSupport",
+        ]);
+        if (typeof row["modelId"] !== "string" || row["modelId"].length === 0)
+            throw invalidResponse();
+        return {
+            modelId: row["modelId"],
+            upstreamName: nullableString(row["upstreamName"]),
+            contextWindow: nullableInteger(row["contextWindow"]),
+            maxOutputTokens: nullableInteger(row["maxOutputTokens"]),
+            inputModalities: stringList(row["inputModalities"]),
+            outputModalities: stringList(row["outputModalities"]),
+            supportedEndpoints: stringList(row["supportedEndpoints"]),
+            routeSupport: choice(row["routeSupport"], [
+                "supported",
+                "unsupported",
+                "unknown",
+                "not_applicable",
+            ]),
+        };
+    });
+    const nextOffset =
+        data["nextOffset"] === null ? null : integer(data["nextOffset"]);
+    return {
+        items,
+        nextOffset,
+        morePages: boolean(data["morePages"]),
+    };
+}
+
+/** Persist draft checkbox changes on the Models tab. */
+export async function saveProviderModelSelections(
+    input: SaveProviderModelSelectionsInput,
+): Promise<void> {
+    requireDesktop();
+    if (
+        (await call("save_provider_model_selections", { request: input })) !==
         null
     )
         throw invalidResponse();

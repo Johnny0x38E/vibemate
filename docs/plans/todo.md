@@ -1281,9 +1281,25 @@ D16（维护者批准，2026-10-10 完成）：2026-10-10 20:10（UTC+8）不带
 **Verification:** 同 P12.c.1。
 **Dependencies:** P12.c.2。
 
+### P12.c.5：模型 Tab 双视图与保存式勾选（维护者 2026-10-11 定稿）
+
+完整交互见 [models-tab-ux.md](models-tab-ux.md)。取代 c.1 的「全部/已选」、逐行保存与获取后整表 merge 的 UI 语义。
+
+- [x] **已选视图（默认）**：只读持久化勾选；一次加载全部；工具栏「已选」+ **保存** + **获取模型**；去掉「全部」筛选。
+- [x] **上游视图**：点「获取模型」进入；上游分页懒加载；已持久化的 ID 自动钩上；勾选仅 draft，**保存** 后写库并回到已选视图。
+- [x] **已选视图保存**：取消勾选 → 保存 → 从本地删除对应模型行（`save_provider_model_selections` + `remove_model_ids`）。
+- [x] **未保存离开**：draft 勾选时切 Tab / 返回 → 双语「未保存」确认（`modelsBusy` 仍阻塞进行中请求）。
+- [x] **搜索**：已选 = `list_provider_models` + `query`；上游 = `browse_upstream_models_page` + `query`（Rust 会话缓存内排序分页，与已选同一套模糊规则）。
+- [x] Rust：`browse_upstream_models_page`、`save_provider_model_selections`；`fetch_provider_models` merge 仍供测试/旧路径，UI 热路径走 browse+save。
+- [x] 文档与 `architecture.md` 反映 browse+save 热路径；维护者 Tauri 三家走通 models-tab-ux 流程 1→2→3（已选 → 获取上游 → 保存 → 已选取消勾选保存；含搜索与懒加载）。（2026-10-11 macOS，维护者确认。）
+
+**Files:** `ProviderModels.tsx`、`ProviderModels.test.tsx`、`src-tauri/src/models.rs`、`model_fetch.rs`、`commands.rs`、`src/lib/desktop/models.ts`、locale、`docs/plans/models-tab-ux.md`。
+**Verification:** 同 P12.c.1 + 新行为测试；维护者三家 Tauri 走通 1→2→3 流程（已完成）。
+**Dependencies:** P12.c.2（c.3 手动添加可并行或稍后接入同一保存模型）。
+
 ### P12.c.4：接入详情页（Frontend Developer）
 
-- [x] 新建/编辑共用 `ProviderTabbedView`（API / 模型页签、创建门闩、Save 在配置卡片首行、返回刷新列表行）；二级页头（返回 + 右对齐品牌标题）与各模块主页 `PageModuleHeader` 已统一。页面隐藏或返回时取消获取（c.2）。手动添加模型仍待 c.3。
+- [x] 新建/编辑共用 `ProviderTabbedView`（API / 模型页签、创建门闩、API 页 Save 在卡片上方工具栏、返回刷新列表行）；二级页头（返回 + 右对齐品牌标题）与各模块主页 `PageModuleHeader` 已统一。页面隐藏或返回时取消获取（c.2）。手动添加模型仍待 c.3。
 
 **Files:** `src/features/providers/ProvidersView.tsx`、`ProvidersView.test.tsx`、`src/App.test.tsx`。
 **Verification:** 同 P12.c.1。
@@ -1301,7 +1317,7 @@ D16（维护者批准，2026-10-10 完成）：2026-10-10 20:10（UTC+8）不带
 
 ### Checkpoint C12（P10–P12）
 
-- [ ] P10–P12 均已勾选。
+- [ ] P10–P12 均已勾选（**Models 页 UI 仅剩 P12.c.3 手动添加**；P12.c.5 与 P12.d 获取/勾选 Tauri 验证已完成）。
 
 ### Task P13: 验证 DeepSeek 连接（已并入 P12）
 

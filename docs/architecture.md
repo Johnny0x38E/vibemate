@@ -10,7 +10,11 @@
 - **Commands.** `src-tauri/src/commands.rs` holds thin Tauri commands for app
   metadata, the repository link, language and appearance preferences, provider
   instances, provider API keys, and provider model fetch/list/selection (user-triggered
-  only). `src-tauri/src/lib.rs` opens storage and registers them.
+  only). The Models tab uses `browse_upstream_models_page` (in-memory browse
+  catalog, optional fuzzy `query`, no SQLite merge) and
+  `save_provider_model_selections` (batch persist/removal); `fetch_provider_models`
+  remains for full-catalog merge and tests. `src-tauri/src/lib.rs` opens storage
+  and registers them.
 - **Persistence.** `src-tauri/src/storage.rs` owns the private SQLite database in
   the app-data folder and its forward-only migrations (currently schema v7).
   `settings.rs` and `appearance.rs` store preferences; `providers.rs` validates
@@ -28,7 +32,8 @@
 
 Saved provider instances and selected models are configuration only: nothing writes
 agent configuration or claims a verified inference connection yet. Manual model
-add in the UI is still pending (P12.c.3).
+add in the UI is the remaining P12 frontend item (P12.c.3); Rust
+`add_manual_provider_model` / `delete_manual_provider_model` are ready.
 
 Keep one Rust crate while learning the framework. Create feature modules as
 behavior is implemented rather than adding empty abstractions now.

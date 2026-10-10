@@ -43,7 +43,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use rusqlite::{OptionalExtension, TransactionBehavior, params};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tokio::sync::oneshot;
 
 use crate::credentials::{CredentialStore, Secret};
@@ -51,9 +51,15 @@ use crate::http_client::{
     HttpClient, HttpSettings, OPERATION_DEADLINE, run_cancellable, with_deadline,
 };
 use crate::model_catalog::{
-    Catalog, CatalogCollector, IncompleteReason, OpenRouterPager, PageStep, models_url,
-    openrouter_page_url, parse_page,
+    Catalog, CatalogCollector, CatalogModel, IncompleteReason, OpenRouterPager, PageStep,
+    RouteSupport, models_url, openrouter_page_url, openrouter_page_url_with_limit, parse_page,
+    route_support,
 };
+use crate::model_search::{MatchScore, SearchQuery, sort_ranked};
+
+/// Upstream browse returns this many models per lazy-load page (UI + OpenRouter `limit`).
+pub const UPSTREAM_BROWSE_PAGE_SIZE: usize = 50;
+
 use crate::models::{ModelError, lock, parse_provider_id};
 use crate::providers::{ProviderId, ProviderKind, ProviderProtocol};
 use crate::storage::Storage;
@@ -143,11 +149,37 @@ impl ModelFetcher {
     }
 }
 
+/// Upstream models accumulated for one browse session (all vendors).
+#[derive(Debug, Clone)]
+struct CachedVendorBrowseList {
+    revision: i64,
+    base_url: String,
+    models: Vec<CatalogModel>,
+    /// When true, another provider API page may be downloaded into `models`.
+    upstream_more: bool,
+    /// Next OpenRouter API offset; ignored once the vendor returns a single page.
+    upstream_api_offset: usize,
+}
+
+impl CachedVendorBrowseList {
+    fn fresh(revision: i64, base_url: String) -> Self {
+        Self {
+            revision,
+            base_url,
+            models: Vec::new(),
+            upstream_more: true,
+            upstream_api_offset: 0,
+        }
+    }
+}
+
 /// Running fetches, one per provider. Clones share the same registry.
 #[derive(Debug, Clone, Default)]
 pub struct ModelFetchRegistry {
     /// Provider ID → the cancel sender, or `None` once the fetch is merging.
     running: Arc<Mutex<HashMap<String, Option<oneshot::Sender<()>>>>>,
+    /// Provider ID → catalog accumulated across lazy browse requests.
+    browse_lists: Arc<Mutex<HashMap<String, CachedVendorBrowseList>>>,
 }
 
 /// Proof that a fetch is registered. Dropping it unregisters the fetch.
@@ -198,6 +230,37 @@ impl ModelFetchRegistry {
             Some(sender) => sender.send(()).is_ok(),
             None => false,
         }
+    }
+
+    /// Read browse cache for this provider, or an empty session when stale or missing.
+    fn load_browse_cache(
+        &self,
+        provider_id: &ProviderId,
+        revision: i64,
+        base_url: &str,
+    ) -> Result<CachedVendorBrowseList, ModelError> {
+        let lists = self
+            .browse_lists
+            .lock()
+            .map_err(|_| ModelError::OperationFailed)?;
+        Ok(lists
+            .get(provider_id.as_str())
+            .filter(|entry| entry.revision == revision && entry.base_url == base_url)
+            .cloned()
+            .unwrap_or_else(|| CachedVendorBrowseList::fresh(revision, base_url.to_owned())))
+    }
+
+    fn save_browse_cache(
+        &self,
+        provider_id: &ProviderId,
+        cache: &CachedVendorBrowseList,
+    ) -> Result<(), ModelError> {
+        let mut lists = self
+            .browse_lists
+            .lock()
+            .map_err(|_| ModelError::OperationFailed)?;
+        lists.insert(provider_id.as_str().to_owned(), cache.clone());
+        Ok(())
     }
 
     /// Whether a fetch for this provider is registered.
@@ -287,6 +350,266 @@ pub async fn download_catalog(
 ) -> Result<Catalog, ModelError> {
     let work = with_deadline(fetcher.deadline, download(&fetcher.client, prepared));
     run_cancellable(work, cancel).await
+}
+
+/// One upstream model for browse-only UI (no SQLite write).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpstreamBrowseModel {
+    pub model_id: String,
+    pub upstream_name: Option<String>,
+    pub context_window: Option<i64>,
+    pub max_output_tokens: Option<i64>,
+    pub input_modalities: Option<Vec<String>>,
+    pub output_modalities: Option<Vec<String>>,
+    pub supported_endpoints: Option<Vec<String>>,
+    pub route_support: RouteSupport,
+}
+
+/// One lazy upstream page for the Models tab browse view (P12.c.5).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpstreamBrowsePage {
+    pub items: Vec<UpstreamBrowseModel>,
+    pub next_offset: Option<usize>,
+    pub more_pages: bool,
+}
+
+/// Request the next upstream browse page without merging into SQLite.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BrowseUpstreamModelsRequest {
+    pub provider_id: String,
+    /// Index into the full browse list, or into ranked search matches when `query`
+    /// is set. Omit or `0` for the first page of results.
+    pub offset: Option<usize>,
+    /// Fuzzy search over model ID and upstream name (same rules as the selected list).
+    pub query: Option<String>,
+}
+
+fn catalog_search_score(model: &CatalogModel, query: &SearchQuery) -> Option<MatchScore> {
+    let fields = [
+        Some(model.model_id.as_str()),
+        model.upstream_name.as_deref(),
+    ];
+    query.score(fields.into_iter().flatten())
+}
+
+fn ranked_catalog_matches<'a>(
+    models: &'a [CatalogModel],
+    query: &SearchQuery,
+) -> Vec<&'a CatalogModel> {
+    let mut scored: Vec<(MatchScore, &CatalogModel)> = models
+        .iter()
+        .filter_map(|model| catalog_search_score(model, query).map(|score| (score, model)))
+        .collect();
+    sort_ranked(&mut scored, |model| model.model_id.as_str());
+    scored.into_iter().map(|(_, model)| model).collect()
+}
+
+fn browse_page_slice_searched(
+    models: &[CatalogModel],
+    offset: usize,
+    query: &SearchQuery,
+    snapshot: &ProviderSnapshot,
+    catalog_may_grow: bool,
+) -> UpstreamBrowsePage {
+    let ranked = ranked_catalog_matches(models, query);
+    if offset >= ranked.len() {
+        return UpstreamBrowsePage {
+            items: Vec::new(),
+            next_offset: catalog_may_grow.then_some(offset),
+            more_pages: catalog_may_grow,
+        };
+    }
+    let end = offset
+        .saturating_add(UPSTREAM_BROWSE_PAGE_SIZE)
+        .min(ranked.len());
+    let items = ranked[offset..end]
+        .iter()
+        .map(|model| upstream_browse_model(model, snapshot))
+        .collect();
+    let more_in_ranked = end < ranked.len();
+    let more_pages = more_in_ranked || catalog_may_grow;
+    let next_offset = if more_pages {
+        Some(if more_in_ranked { end } else { ranked.len() })
+    } else {
+        None
+    };
+    UpstreamBrowsePage {
+        items,
+        next_offset,
+        more_pages,
+    }
+}
+
+fn browse_page_slice(
+    models: &[CatalogModel],
+    offset: usize,
+    snapshot: &ProviderSnapshot,
+    catalog_may_grow: bool,
+) -> UpstreamBrowsePage {
+    if offset >= models.len() {
+        return UpstreamBrowsePage {
+            items: Vec::new(),
+            next_offset: catalog_may_grow.then_some(offset),
+            more_pages: catalog_may_grow,
+        };
+    }
+    let end = offset
+        .saturating_add(UPSTREAM_BROWSE_PAGE_SIZE)
+        .min(models.len());
+    let items = models[offset..end]
+        .iter()
+        .map(|model| upstream_browse_model(model, snapshot))
+        .collect();
+    let more_in_cache = end < models.len();
+    let more_pages = more_in_cache || catalog_may_grow;
+    let next_offset = if more_pages {
+        Some(if more_in_cache { end } else { models.len() })
+    } else {
+        None
+    };
+    UpstreamBrowsePage {
+        items,
+        next_offset,
+        more_pages,
+    }
+}
+
+fn browse_cache_covers_request(
+    cache: &CachedVendorBrowseList,
+    query: Option<&SearchQuery>,
+    result_offset: usize,
+) -> bool {
+    let need = result_offset.saturating_add(UPSTREAM_BROWSE_PAGE_SIZE);
+    match query {
+        Some(query) => ranked_catalog_matches(&cache.models, query).len() >= need,
+        None => cache.models.len() >= need,
+    }
+}
+
+async fn extend_browse_catalog(
+    fetcher: &ModelFetcher,
+    prepared: &PreparedFetch,
+    cancel: oneshot::Receiver<()>,
+    cache: &mut CachedVendorBrowseList,
+) -> Result<(), ModelError> {
+    if !cache.upstream_more {
+        return Ok(());
+    }
+    let snapshot = &prepared.snapshot;
+    let api_offset = cache.upstream_api_offset;
+    let openrouter_limit =
+        (snapshot.kind == ProviderKind::OpenRouter).then_some(UPSTREAM_BROWSE_PAGE_SIZE);
+    let work = with_deadline(
+        fetcher.deadline,
+        download_single_page(&fetcher.client, prepared, api_offset, openrouter_limit),
+    );
+    let page = run_cancellable(work, cancel).await?;
+    for model in page.models {
+        if !cache
+            .models
+            .iter()
+            .any(|existing| existing.model_id == model.model_id)
+        {
+            cache.models.push(model);
+        }
+    }
+    if snapshot.kind == ProviderKind::OpenRouter {
+        cache.upstream_api_offset = api_offset.saturating_add(page.entries);
+        cache.upstream_more = page.has_more && page.entries > 0;
+    } else {
+        cache.upstream_more = false;
+    }
+    Ok(())
+}
+
+fn upstream_browse_model(model: &CatalogModel, snapshot: &ProviderSnapshot) -> UpstreamBrowseModel {
+    UpstreamBrowseModel {
+        model_id: model.model_id.clone(),
+        upstream_name: model.upstream_name.clone(),
+        context_window: model.context_window,
+        max_output_tokens: model.max_output_tokens,
+        input_modalities: model.input_modalities.clone(),
+        output_modalities: model.output_modalities.clone(),
+        supported_endpoints: model.supported_endpoints.clone(),
+        route_support: route_support(
+            snapshot.kind,
+            snapshot.protocol,
+            model.supported_endpoints.as_deref(),
+        ),
+    }
+}
+
+/// Download one upstream browse page for the Models tab. Does not touch SQLite.
+///
+/// Each provider keeps one in-memory catalog in `ModelFetchRegistry` for the
+/// browse session. A call may download at most one provider API page into that
+/// catalog, then returns a slice (or ranked search slice). `next_offset` and
+/// `more_pages` refer to result rows, not raw OpenRouter API offsets.
+///
+/// # Errors
+/// Same network and credential errors as `download_catalog`, without merge or stale
+/// checks (the UI saves selections via `save_provider_model_selections`).
+pub async fn browse_upstream_page(
+    fetcher: &ModelFetcher,
+    registry: &ModelFetchRegistry,
+    prepared: &PreparedFetch,
+    cancel: oneshot::Receiver<()>,
+    offset: Option<usize>,
+    query: Option<&SearchQuery>,
+) -> Result<UpstreamBrowsePage, ModelError> {
+    let snapshot = &prepared.snapshot;
+    let result_offset = offset.unwrap_or(0);
+    let provider_id = &snapshot.provider_id;
+    let mut cache =
+        registry.load_browse_cache(provider_id, snapshot.revision, &snapshot.base_url)?;
+
+    let needs_fetch = cache.models.is_empty()
+        || (!browse_cache_covers_request(&cache, query, result_offset) && cache.upstream_more);
+    if needs_fetch && cache.upstream_more {
+        extend_browse_catalog(fetcher, prepared, cancel, &mut cache).await?;
+        registry.save_browse_cache(provider_id, &cache)?;
+    }
+
+    let catalog_may_grow = cache.upstream_more;
+    if let Some(query) = query {
+        Ok(browse_page_slice_searched(
+            &cache.models,
+            result_offset,
+            query,
+            snapshot,
+            catalog_may_grow,
+        ))
+    } else {
+        Ok(browse_page_slice(
+            &cache.models,
+            result_offset,
+            snapshot,
+            catalog_may_grow,
+        ))
+    }
+}
+
+async fn download_single_page(
+    client: &HttpClient,
+    prepared: &PreparedFetch,
+    offset: usize,
+    openrouter_limit: Option<usize>,
+) -> Result<crate::model_catalog::CatalogPage, ModelError> {
+    let snapshot = &prepared.snapshot;
+    if snapshot.kind != ProviderKind::OpenRouter {
+        let url = models_url(&snapshot.base_url)?;
+        let body = client.get_bounded(&url, &prepared.key).await?;
+        return Ok(parse_page(snapshot.kind, &body)?);
+    }
+    let url = match openrouter_limit {
+        Some(limit) => openrouter_page_url_with_limit(&snapshot.base_url, offset, limit)?,
+        None => openrouter_page_url(&snapshot.base_url, offset)?,
+    };
+    let body = client.get_bounded(&url, &prepared.key).await?;
+    Ok(parse_page(snapshot.kind, &body)?)
 }
 
 async fn download(client: &HttpClient, prepared: &PreparedFetch) -> Result<Catalog, ModelError> {

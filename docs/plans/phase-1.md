@@ -25,12 +25,15 @@ Graphite, Linen, Iris, Ocean; schema v4 preserves existing preferences.
 CI and changelog-driven draft release workflows are present. Integration
 contracts are documented in `docs/integrations/`. P10–P11 deliver the Providers
 page with API keys and unified save. P12 adds Rust-side model fetch, storage,
-search and IPC. The tabbed Models UI, list fetch toolbar, and create gate are
-implemented; manual model add and P12.d verification remain in
-[todo.md](todo.md). Agent configuration and all non-provider features remain
-unimplemented. [todo.md](todo.md) is the sole status
-source; current UI rules and verification are in
-[desktop-shell-design.md](desktop-shell-design.md) and [frontend.md](../frontend.md).
+search and IPC. The tabbed Models UI, create gate, and P12.c.5 dual-view browse
+
+- save UX are implemented per [models-tab-ux.md](models-tab-ux.md); the maintainer
+  verified the three providers in Tauri (2026-10-11). **Manual model add (P12.c.3)**
+  is the remaining Models-tab frontend work; see [todo.md](todo.md). Agent
+  configuration and all non-provider features remain
+  unimplemented. [todo.md](todo.md) is the sole status
+  source; current UI rules and verification are in
+  [desktop-shell-design.md](desktop-shell-design.md) and [frontend.md](../frontend.md).
 
 ## Execution plan
 

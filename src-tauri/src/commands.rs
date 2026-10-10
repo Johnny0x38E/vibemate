@@ -439,6 +439,68 @@ pub(crate) async fn list_provider_models(
     .map_err(|_| ModelError::OperationFailed)?
 }
 
+/// Download one upstream models page without merging into SQLite (P12.c.5).
+#[tauri::command]
+pub(crate) async fn browse_upstream_models_page(
+    app: tauri::AppHandle,
+    request: model_fetch::BrowseUpstreamModelsRequest,
+) -> Result<model_fetch::UpstreamBrowsePage, ModelError> {
+    let id = models::parse_provider_id(&request.provider_id)?;
+    let registry = app
+        .try_state::<ModelFetchRegistry>()
+        .ok_or(ModelError::OperationFailed)?
+        .inner()
+        .clone();
+    let (registration, cancel) = registry.begin(&id)?;
+    let prepare_app = app.clone();
+    let offset = request.offset;
+    let (prepared, fetcher) = tauri::async_runtime::spawn_blocking(move || {
+        with_model_storage(&prepare_app, |storage| {
+            let lock = prepare_app
+                .try_state::<CredentialLock>()
+                .ok_or(ModelError::OperationFailed)?;
+            let _credential_access = lock.0.lock().unwrap_or_else(PoisonError::into_inner);
+            let prepared = model_fetch::prepare_fetch(storage, &OsCredentialStore, &id)?;
+            Ok((prepared, ModelFetcher::production()?))
+        })
+    })
+    .await
+    .map_err(|_| ModelError::OperationFailed)??;
+    let query = match request.query.as_deref() {
+        Some(raw) => {
+            crate::model_search::SearchQuery::parse(raw).map_err(|_| ModelError::InvalidRequest)?
+        }
+        None => None,
+    };
+    let page = model_fetch::browse_upstream_page(
+        &fetcher,
+        &registry,
+        &prepared,
+        cancel,
+        offset,
+        query.as_ref(),
+    )
+    .await?;
+    drop(prepared);
+    drop(registration);
+    Ok(page)
+}
+
+/// Save checked models and delete unchecked ones in one transaction (P12.c.5).
+#[tauri::command]
+pub(crate) async fn save_provider_model_selections(
+    app: tauri::AppHandle,
+    request: models::SaveProviderModelSelectionsRequest,
+) -> Result<(), ModelError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        with_model_storage(&app, |storage| {
+            models::save_provider_model_selections(storage, &request, model_timestamp()?)
+        })
+    })
+    .await
+    .map_err(|_| ModelError::OperationFailed)?
+}
+
 /// Persist a selection batch atomically; unsupported routes return a safe code.
 #[tauri::command]
 pub(crate) async fn set_provider_models_selected(

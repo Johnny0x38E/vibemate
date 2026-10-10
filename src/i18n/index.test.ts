@@ -95,6 +95,35 @@ describe("bundled translations", () => {
         );
     });
 
+    it("exposes provider models list titles and footer hints in both locales", async () => {
+        const enInstance = await createAppI18n("en");
+        expect(enInstance.t("providers.models.filter.selected")).toBe(
+            "Selected",
+        );
+        expect(enInstance.t("providers.models.filter.all")).toBe("All");
+        expect(enInstance.t("providers.models.allSelectedLoaded")).toBe(
+            "All selected models are shown.",
+        );
+        expect(enInstance.t("providers.models.upstreamAllLoaded")).toBe(
+            "All loaded upstream models are shown.",
+        );
+        expect(enInstance.t("providers.models.unsavedLeave")).toBe(
+            "You have unsaved model checkbox changes. Leave without saving?",
+        );
+        const zhInstance = await createAppI18n("zh-CN");
+        expect(zhInstance.t("providers.models.filter.selected")).toBe("已选");
+        expect(zhInstance.t("providers.models.filter.all")).toBe("全部");
+        expect(zhInstance.t("providers.models.allSelectedLoaded")).toBe(
+            "已展示全部已选模型",
+        );
+        expect(zhInstance.t("providers.models.upstreamAllLoaded")).toBe(
+            "已展示全部已加载的上游模型",
+        );
+        expect(zhInstance.t("providers.models.unsavedLeave")).toBe(
+            "模型勾选尚未保存，确定要离开吗？",
+        );
+    });
+
     it("provides Intl date formatting for both locales", async () => {
         const date = new Date("2026-10-09T12:00:00Z");
         const options = {

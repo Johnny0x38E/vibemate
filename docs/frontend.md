@@ -623,17 +623,28 @@ Create updates the title when the provider field changes.
 Tab layout (Settings-style tabs: **API** / 「API 配置」 and **Models** with
 optional selected count). Panels stay mounted while
 switching tabs. Create shows a Models gate until the instance is saved. API fields
-live in a grouped card: the first row is a right-aligned **Save**; the provider
-row follows (select when creating, read-only brand when editing), then display
+live in a grouped card below a right-aligned **Save** on the tab toolbar; the
+provider row follows (select when creating, read-only brand when editing), then display
 name, base URL, protocol and API key. Recovery actions ("Save again", "Refresh
 list", "Reload latest settings") stay at the bottom of the form when needed.
 There is no form Cancel; **Back** leaves the page. One Save submits settings and
 an optional replacement key together.
 
-The Models tab fetches on user action (primary **Fetch models** after the search
-field, 36 px row height with filter toggles), filters the saved catalog locally,
-and saves checkbox changes per row. Fetch summaries use app notifications with
-tone and icon. Hiding the page or leaving cancels in-flight fetches.
+The Models tab follows [models-tab-ux.md](plans/models-tab-ux.md) (P12.c.5). In
+brief: the default **Selected** view lists only persisted checked models (full
+load, scroll inside the tab panel). A fixed list title (**Selected** / **All**)
+sits above the scroll region. The toolbar has a narrow search field on the left;
+**Fetch models** (secondary) and **Save** (primary, 36 px) on the right in the
+selected view; upstream adds **Cancel** (while downloading) and **Back to
+selected** before **Save**. **Fetch models** opens **upstream** browse with
+lazy-loaded result pages via `browse_upstream_models_page` (optional fuzzy
+`query`; session catalog in Rust). Checkboxes are draft until **Save**. Uncheck
+on the selected list and **Save** removes rows from SQLite (`save_provider_model_selections`).
+Search applies to whichever view is active. One list footer line covers upstream
+scroll, loading-more, and end states. Dirty drafts block leaving with an unsaved
+prompt (API tab switch and **Back** on the provider page). Manual model add
+(P12.c.3, `ManualModelForm`) is not wired yet; Rust IPC for add/delete manual
+rows already exists.
 
 Rust validates submitted values: field codes appear next to their field and
 other codes at form level. After a successful save the page returns to the list,

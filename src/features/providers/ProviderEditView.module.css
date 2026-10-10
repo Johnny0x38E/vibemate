@@ -53,15 +53,32 @@
 }
 
 .panel {
-    flex: 1;
     min-width: 0;
+}
+
+/*
+ * Inactive tab panels must not participate in layout. Relying on the `hidden`
+ * attribute alone can fail to collapse flex children in some hosts, which made
+ * Models toolbar/list content appear below the API form on the same scroll.
+ */
+.panel[hidden] {
+    display: none !important;
+}
+
+.edit > .panel:not([hidden]) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
     min-height: 0;
+    padding-top: var(--space-md);
+    overflow: hidden;
+}
+
+/* API form scrolls inside the panel; Models scrolls the list region only. */
+.edit > .panelApi:not([hidden]) {
     overflow: auto;
 }
 
-/* Models tab: toolbar stays fixed; ProviderModels scrolls the list region only. */
-.panelModels {
-    display: flex;
-    flex-direction: column;
+.edit > .panelModels:not([hidden]) {
     overflow: hidden;
 }

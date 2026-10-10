@@ -226,10 +226,19 @@ pub fn models_url(base_url: &str) -> Result<Url, CatalogError> {
 /// The URL of one OpenRouter page. Query values are set through the `url` crate,
 /// never by joining strings.
 pub fn openrouter_page_url(base_url: &str, offset: usize) -> Result<Url, CatalogError> {
+    openrouter_page_url_with_limit(base_url, offset, OPENROUTER_PAGE_LIMIT)
+}
+
+/// OpenRouter page URL with an explicit page size (upstream browse uses a smaller limit).
+pub fn openrouter_page_url_with_limit(
+    base_url: &str,
+    offset: usize,
+    limit: usize,
+) -> Result<Url, CatalogError> {
     let mut url = models_url(base_url)?;
     url.query_pairs_mut()
         .append_pair("offset", &offset.to_string())
-        .append_pair("limit", &OPENROUTER_PAGE_LIMIT.to_string());
+        .append_pair("limit", &limit.to_string());
     Ok(url)
 }
 

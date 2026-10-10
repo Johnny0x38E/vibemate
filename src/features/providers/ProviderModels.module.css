@@ -1,5 +1,5 @@
 /*
- * Model list: fetch first, then local filter. Checkbox rows with badges.
+ * Models tab (P12.c.5): toolbar, fixed list title, scroll region, checkbox rows.
  */
 .section {
     width: 100%;
@@ -11,10 +11,18 @@
     flex-direction: column;
     flex: 1;
     min-height: 0;
-    margin-top: var(--space-md);
+    margin-top: 0;
 }
 
 .listRegion {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.listScroll {
     flex: 1;
     min-height: 0;
     overflow: auto;
@@ -27,25 +35,76 @@
     font-weight: 600;
 }
 
-.filterBlock {
+.toolbarRow {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: var(--space-md);
+    justify-content: space-between;
+    gap: var(--space-sm) var(--space-md);
     margin-bottom: var(--space-md);
 }
 
-.searchToolbar {
-    display: flex;
-    flex: 1 1 12rem;
-    align-items: center;
-    gap: var(--space-sm);
+.searchField {
+    flex: 0 1 auto;
+    width: min(100%, 16rem);
     min-width: 0;
 }
 
-.searchInput {
-    flex: 1;
+.toolbarActions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-sm);
+    flex: 1 1 auto;
     min-width: 0;
+}
+
+.toolbarButton {
+    flex-shrink: 0;
+    height: 36px;
+    min-height: 36px;
+    padding-block: 0;
+    white-space: nowrap;
+}
+
+.listShell {
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+    border-top: 0;
+    border-radius: 0 0 var(--radius-card) var(--radius-card);
+    background: var(--color-surface);
+}
+
+.listHeader {
+    flex-shrink: 0;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 8px var(--space-md);
+    box-sizing: border-box;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card) var(--radius-card) 0 0;
+    border-bottom: 1px solid var(--color-border);
+    color: var(--color-text);
+    background: var(--color-surface);
+    font: inherit;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    line-height: 1.45;
+}
+
+.loadSentinel {
+    height: 1px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.searchInput {
+    display: block;
+    width: 100%;
     height: 36px;
     min-height: 36px;
     padding: 0 10px;
@@ -57,9 +116,11 @@
     font-size: 0.8125rem;
 }
 
+/* Inset ring: the Models tab panel uses overflow:hidden, so an outer outline
+   would clip on the left edge of the search field. */
 .searchInput:focus-visible {
     outline: 2px solid var(--color-focus);
-    outline-offset: 1px;
+    outline-offset: -2px;
 }
 
 .searchInput:disabled {
@@ -122,10 +183,32 @@
     margin: 0;
     padding: 0;
     overflow: hidden;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-card);
-    background: var(--color-surface);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
     list-style: none;
+}
+
+.listShell .empty {
+    margin: 0;
+    padding: 8px var(--space-md);
+    min-height: 44px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    font-size: 0.8125rem;
+    line-height: 1.45;
+}
+
+.listShell .message {
+    margin: 0;
+    padding: 8px var(--space-md);
+    min-height: 44px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    font-size: 0.8125rem;
+    line-height: 1.45;
 }
 
 .item {
@@ -220,18 +303,35 @@
     overflow-wrap: anywhere;
 }
 
-.more {
-    margin-top: var(--space-md);
+.listFooter {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 44px;
+    padding: 8px var(--space-md);
+    box-sizing: border-box;
+    border-top: 1px solid var(--color-border);
+    color: var(--color-summary);
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    text-align: center;
 }
 
 @media (max-width: 520px) {
-    .filterBlock {
+    .toolbarRow {
         flex-direction: column;
         align-items: stretch;
     }
 
-    .searchToolbar {
-        flex-wrap: wrap;
+    .searchField {
+        width: 100%;
+    }
+
+    .toolbarActions {
+        justify-content: flex-end;
+        width: 100%;
     }
 
     .filter {

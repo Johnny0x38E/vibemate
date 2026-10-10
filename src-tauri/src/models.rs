@@ -312,6 +312,28 @@ pub struct DeleteManualModelRequest {
     pub model_id: String,
 }
 
+/// Upstream metadata for a model the user wants to keep selected (P12.c.5).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SaveProviderModelEntry {
+    pub model_id: String,
+    pub upstream_name: Option<String>,
+    pub context_window: Option<i64>,
+    pub max_output_tokens: Option<i64>,
+    pub input_modalities: Option<Vec<String>>,
+    pub output_modalities: Option<Vec<String>>,
+    pub supported_endpoints: Option<Vec<String>>,
+}
+
+/// Atomically remove deselected models and upsert newly selected ones.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SaveProviderModelSelectionsRequest {
+    pub provider_id: String,
+    pub remove_model_ids: Vec<String>,
+    pub add: Vec<SaveProviderModelEntry>,
+}
+
 /// The columns read for a `ProviderModel`, in `StoredModel::read` order.
 const MODEL_COLUMNS: &str = "provider_id, model_id, source, selected, alias, upstream_name, \
      context_window, max_output_tokens, input_modalities, output_modalities, \
@@ -617,6 +639,158 @@ pub fn delete_manual_model(
     transaction.commit().map_err(|_| ModelError::WriteFailed)
 }
 
+/// Apply a Save on the Models tab: delete unchecked rows and upsert checked ones.
+///
+/// Only rows the user keeps selected remain in `provider_model`. Manual rows follow
+/// the same rule when the user removes them from the selected list.
+///
+/// # Errors
+/// `InvalidRequest` for malformed IDs, overlapping remove/add sets, or oversized
+/// batches; `ModelRouteNotSupported` when an added fetched model does not support
+/// the instance protocol; storage errors otherwise.
+pub fn save_provider_model_selections(
+    storage: &Storage,
+    request: &SaveProviderModelSelectionsRequest,
+    now_ms: i64,
+) -> Result<(), ModelError> {
+    let provider_id = parse_provider_id(&request.provider_id)?;
+    let remove: BTreeSet<&str> = request
+        .remove_model_ids
+        .iter()
+        .map(String::as_str)
+        .collect();
+    if remove.len() != request.remove_model_ids.len()
+        || remove.len() > MAX_SELECTION_BATCH
+        || !remove.iter().all(|id| is_valid_model_id(id))
+    {
+        return Err(ModelError::InvalidRequest);
+    }
+    if request.add.len() > MAX_SELECTION_BATCH {
+        return Err(ModelError::InvalidRequest);
+    }
+    let mut add_ids = BTreeSet::new();
+    for entry in &request.add {
+        if !is_valid_model_id(&entry.model_id) || !add_ids.insert(entry.model_id.as_str()) {
+            return Err(ModelError::InvalidRequest);
+        }
+        if remove.contains(entry.model_id.as_str()) {
+            return Err(ModelError::InvalidRequest);
+        }
+    }
+    if remove.is_empty() && request.add.is_empty() {
+        return Err(ModelError::InvalidRequest);
+    }
+
+    let mut connection = lock(storage)?;
+    let transaction = connection
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|_| ModelError::WriteFailed)?;
+    let provider = read_provider(&transaction, &provider_id)?;
+
+    for model_id in remove {
+        transaction
+            .execute(
+                "DELETE FROM provider_model WHERE provider_id = ?1 AND model_id = ?2",
+                params![provider_id.as_str(), model_id],
+            )
+            .map_err(|_| ModelError::WriteFailed)?;
+    }
+
+    for entry in &request.add {
+        let endpoints = json_column(&entry.supported_endpoints)?;
+        let route = route_support(
+            provider.kind,
+            provider.protocol,
+            entry.supported_endpoints.as_deref(),
+        );
+        if !matches!(route, RouteSupport::Supported | RouteSupport::NotApplicable) {
+            return Err(ModelError::ModelRouteNotSupported);
+        }
+        let input = json_column(&entry.input_modalities)?;
+        let output = json_column(&entry.output_modalities)?;
+        let existing = read_model(&transaction, &provider_id, &entry.model_id)?;
+        if let Some(stored) = existing {
+            if stored.source == ModelSource::Manual.as_str() {
+                transaction
+                    .execute(
+                        "UPDATE provider_model SET
+                             selected = 1, upstream_name = ?3, context_window = ?4,
+                             max_output_tokens = ?5, input_modalities = ?6,
+                             output_modalities = ?7, supported_endpoints = ?8,
+                             last_seen_at = ?9, missing_since = NULL,
+                             updated_at = max(updated_at, ?9)
+                         WHERE provider_id = ?1 AND model_id = ?2",
+                        params![
+                            provider_id.as_str(),
+                            entry.model_id,
+                            entry.upstream_name,
+                            entry.context_window,
+                            entry.max_output_tokens,
+                            input,
+                            output,
+                            endpoints,
+                            now_ms
+                        ],
+                    )
+                    .map_err(|_| ModelError::WriteFailed)?;
+            } else {
+                transaction
+                    .execute(
+                        "UPDATE provider_model SET
+                             selected = 1, upstream_name = ?3, context_window = ?4,
+                             max_output_tokens = ?5, input_modalities = ?6,
+                             output_modalities = ?7, supported_endpoints = ?8,
+                             last_seen_at = ?9, missing_since = NULL,
+                             updated_at = max(updated_at, ?9)
+                         WHERE provider_id = ?1 AND model_id = ?2",
+                        params![
+                            provider_id.as_str(),
+                            entry.model_id,
+                            entry.upstream_name,
+                            entry.context_window,
+                            entry.max_output_tokens,
+                            input,
+                            output,
+                            endpoints,
+                            now_ms
+                        ],
+                    )
+                    .map_err(|_| ModelError::WriteFailed)?;
+            }
+        } else {
+            transaction
+                .execute(
+                    "INSERT INTO provider_model
+                         (provider_id, model_id, source, selected, upstream_name, context_window,
+                          max_output_tokens, input_modalities, output_modalities,
+                          supported_endpoints, created_at, updated_at, last_seen_at)
+                     VALUES (?1, ?2, 'fetched', 1, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9, ?9)",
+                    params![
+                        provider_id.as_str(),
+                        entry.model_id,
+                        entry.upstream_name,
+                        entry.context_window,
+                        entry.max_output_tokens,
+                        input,
+                        output,
+                        endpoints,
+                        now_ms
+                    ],
+                )
+                .map_err(|_| ModelError::WriteFailed)?;
+        }
+    }
+
+    transaction.commit().map_err(|_| ModelError::WriteFailed)
+}
+
+fn json_column(items: &Option<Vec<String>>) -> Result<Option<String>, ModelError> {
+    items
+        .as_ref()
+        .map(|values| serde_json::to_string(values).map_err(|_| ModelError::WriteFailed))
+        .transpose()
+}
+
 /// The provider fields that decide how its models are shown.
 #[derive(Debug, Clone, Copy)]
 struct ProviderContext {
@@ -876,6 +1050,40 @@ mod tests {
             },
             200,
         )
+    }
+
+    #[test]
+    fn save_selections_deletes_removed_rows_and_inserts_new_ones() {
+        let directory = TestDirectory::new();
+        let storage = directory.open();
+        insert_provider(&storage, PROVIDER, "deepseek", "chat_completions");
+        insert_fetched(&storage, PROVIDER, "keep-me", None);
+        select(&storage, &["keep-me"], true).expect("select");
+        insert_fetched(&storage, PROVIDER, "drop-me", None);
+        select(&storage, &["drop-me"], true).expect("select");
+
+        save_provider_model_selections(
+            &storage,
+            &SaveProviderModelSelectionsRequest {
+                provider_id: PROVIDER.to_owned(),
+                remove_model_ids: vec!["drop-me".to_owned()],
+                add: vec![SaveProviderModelEntry {
+                    model_id: "new-model".to_owned(),
+                    upstream_name: Some("New".to_owned()),
+                    context_window: Some(1000),
+                    max_output_tokens: None,
+                    input_modalities: None,
+                    output_modalities: None,
+                    supported_endpoints: None,
+                }],
+            },
+            300,
+        )
+        .expect("save");
+
+        let page = list(&storage, None, 50, "selected");
+        let ids: Vec<_> = page.items.iter().map(|m| m.model_id.as_str()).collect();
+        assert_eq!(ids, ["keep-me", "new-model"]);
     }
 
     #[test]

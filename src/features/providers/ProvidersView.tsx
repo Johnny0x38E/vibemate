@@ -120,6 +120,7 @@ export function ProvidersView({
     const [page, setPage] = useState<ProvidersPage>({ kind: "list" });
     const [formBusy, setFormBusy] = useState(false);
     const [modelsBusy, setModelsBusy] = useState(false);
+    const [modelsDirty, setModelsDirty] = useState(false);
     /** Create-page title tracks the provider chosen in the form, like edit. */
     const [createTitleKind, setCreateTitleKind] = useState<
         ProviderKind | undefined
@@ -307,6 +308,9 @@ export function ProvidersView({
     const reportModelsBusy = useCallback((busy: boolean) => {
         setModelsBusy(busy);
     }, []);
+    const reportModelsDirty = useCallback((dirty: boolean) => {
+        setModelsDirty(dirty);
+    }, []);
     const reportCreateKind = useCallback((kind: ProviderKind) => {
         setCreateTitleKind(kind);
     }, []);
@@ -341,6 +345,13 @@ export function ProvidersView({
 
     /** Back to the list, focusing the control that started this flow. */
     function backToList(): void {
+        if (
+            modelsDirty &&
+            !window.confirm(t("providers.models.unsavedLeave"))
+        ) {
+            return;
+        }
+        setModelsDirty(false);
         const editingId = page.kind === "edit" ? page.record.id : undefined;
         focusTarget.current =
             editingId !== undefined
@@ -417,6 +428,7 @@ export function ProvidersView({
                             onRefresh={refreshList}
                             onFormBusyChange={reportFormBusy}
                             onModelsBusyChange={reportModelsBusy}
+                            onModelsDirtyChange={reportModelsDirty}
                             hidden={hidden}
                         />
                     </ProviderPage>

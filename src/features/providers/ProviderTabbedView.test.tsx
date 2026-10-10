@@ -56,6 +56,11 @@ test("edit: switches between API and Models tabs with keyboard and keeps both pa
     expect(api.getAttribute("aria-selected")).toBe("true");
     expect(screen.getByTestId("provider-form")).toBeDefined();
     expect(screen.getByTestId("provider-models")).toBeDefined();
+    const modelsPanel = document.getElementById(
+        `provider-${record.id}-panel-models`,
+    );
+    expect(modelsPanel?.hasAttribute("hidden")).toBe(true);
+    expect(modelsPanel?.hasAttribute("inert")).toBe(true);
 
     fireEvent.click(models);
     expect(models.getAttribute("aria-selected")).toBe("true");

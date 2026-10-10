@@ -23,6 +23,7 @@ export interface ProviderTabbedViewProps {
     onRefresh: () => Promise<boolean>;
     onFormBusyChange: (busy: boolean) => void;
     onModelsBusyChange: (busy: boolean) => void;
+    onModelsDirtyChange?: (dirty: boolean) => void;
     /** Keeps the create-page title aligned with the provider field. */
     onCreateKindChange?: (kind: ProviderKind) => void;
     hidden?: boolean;
@@ -53,6 +54,7 @@ export function ProviderTabbedView({
     onRefresh,
     onFormBusyChange,
     onModelsBusyChange,
+    onModelsDirtyChange,
     onCreateKindChange,
     hidden = false,
 }: ProviderTabbedViewProps): JSX.Element {
@@ -66,7 +68,13 @@ export function ProviderTabbedView({
     const tabIdPrefix =
         mode.kind === "edit" ? `provider-${mode.record.id}` : "provider-create";
 
+    const [modelsDirty, setModelsDirty] = useState(false);
+
     function selectTab(next: ProviderTab): void {
+        if (tab !== next && modelsDirty) {
+            const ok = window.confirm(t("providers.models.unsavedLeave"));
+            if (!ok) return;
+        }
         setTab(next);
     }
 
@@ -136,11 +144,14 @@ export function ProviderTabbedView({
                 </button>
             </div>
             <div
-                className={styles["panel"]}
+                className={[styles["panel"], styles["panelApi"]]
+                    .filter((value): value is string => value !== undefined)
+                    .join(" ")}
                 role="tabpanel"
                 id={`${tabIdPrefix}-panel-api`}
                 aria-labelledby={`${tabIdPrefix}-tab-api`}
                 hidden={tab !== "api"}
+                inert={tab !== "api"}
             >
                 <ProviderForm
                     templates={templates}
@@ -166,6 +177,7 @@ export function ProviderTabbedView({
                 id={`${tabIdPrefix}-panel-models`}
                 aria-labelledby={`${tabIdPrefix}-tab-models`}
                 hidden={tab !== "models"}
+                inert={tab !== "models"}
             >
                 {mode.kind === "edit" ? (
                     <ProviderModels
@@ -173,6 +185,10 @@ export function ProviderTabbedView({
                         layout="tabPanel"
                         hidden={modelsPanelHidden}
                         onBusyChange={onModelsBusyChange}
+                        onDirtyChange={(dirty) => {
+                            setModelsDirty(dirty);
+                            onModelsDirtyChange?.(dirty);
+                        }}
                         onSelectedCountChange={setSelectedCount}
                     />
                 ) : (

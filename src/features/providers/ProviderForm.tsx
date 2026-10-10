@@ -62,8 +62,8 @@ export interface ProviderFormProps {
     /** Stable id for the `<form>` when callers associate external controls with it. */
     formId?: string;
     /**
-     * Primary Save placement: the first row of the settings-style card (`external`)
-     * or the form footer (`footer`, default).
+     * Primary Save placement: tab toolbar above the card (`external` on API tab),
+     * first card row on a full page (`external` + `page`), or form footer (`footer`, default).
      */
     primaryActionPlacement?: "footer" | "external";
     /** Create mode only: sync the page title with the provider field. */
@@ -566,6 +566,10 @@ export function ProviderForm({
     const showStoredIndicator = configured && secret === "";
 
     const formLabel = layout === "page" ? groupId : t("providers.tabs.api");
+    const saveInTabToolbar =
+        layout === "tabPanel" && primaryActionPlacement === "external";
+    const saveInCardRow =
+        layout !== "tabPanel" && primaryActionPlacement === "external";
 
     return (
         <section
@@ -593,8 +597,30 @@ export function ProviderForm({
                         </p>
                     </div>
                 )}
-                <div className={fieldStyles["group"]}>
-                    {primaryActionPlacement === "external" && (
+                {saveInTabToolbar && (
+                    <div className={styles["tabToolbar"]}>
+                        <button
+                            className={[
+                                buttons["primary"],
+                                styles["tabToolbarButton"],
+                            ].join(" ")}
+                            type="submit"
+                            ref={submitRef}
+                            aria-disabled={saveBlocked}
+                        >
+                            {t("providers.form.save")}
+                        </button>
+                    </div>
+                )}
+                <div
+                    className={[
+                        fieldStyles["group"],
+                        layout === "tabPanel" ? styles["fieldCard"] : undefined,
+                    ]
+                        .filter((value): value is string => value !== undefined)
+                        .join(" ")}
+                >
+                    {saveInCardRow && (
                         <div
                             className={[
                                 fieldStyles["row"],

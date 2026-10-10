@@ -3,8 +3,15 @@
  * the brand (not the icon). The list title uses PageModuleHeader.
  */
 .view {
+    display: flex;
+    flex-direction: column;
     width: 100%;
     max-width: none;
+    min-height: 0;
+}
+
+.view:has(.page) {
+    flex: 1;
 }
 
 .notice {

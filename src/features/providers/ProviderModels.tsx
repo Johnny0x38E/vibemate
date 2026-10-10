@@ -1,32 +1,36 @@
 import {
     useCallback,
     useEffect,
+    useMemo,
     useRef,
     useState,
     type JSX,
     type ChangeEvent,
 } from "react";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { useNotify } from "../../components/Notifications";
 import {
+    browseUpstreamModelsPage,
     cancelProviderModelFetch,
-    fetchProviderModels,
     getProviderModelFetchStatus,
     listProviderModels,
     ModelRequestError,
-    setProviderModelsSelected,
+    saveProviderModelSelections,
     type ModelErrorCode,
-    type ModelFetchStatus,
-    type ModelFetchSummary,
     type ProviderModel,
+    type UpstreamBrowseModel,
 } from "../../lib/desktop/models";
 import { getProviderSecretStatus } from "../../lib/desktop/providerSecrets";
 import { ModelCheckbox } from "../../components/ModelCheckbox";
 import buttons from "./providerButtons.module.css";
 import styles from "./ProviderModels.module.css";
 
-/** Rows per request; matches the desktop boundary tests and stays under Rust's cap. */
+/** Search results cap; fuzzy search returns at most this many rows per query. */
 export const MODEL_PAGE_SIZE = 50;
+
+/** Matches Rust `MAX_MODEL_PAGE_SIZE`; internal chunks when reading all selected rows. */
+const SAVED_CATALOG_CHUNK = 200;
 
 /** Selected rows for tab labels and quick filters. */
 export interface SelectedModelCount {
@@ -36,8 +40,7 @@ export interface SelectedModelCount {
 
 const SEARCH_DEBOUNCE_MS = 300;
 
-type MoreState =
-    { kind: "idle" | "loading" } | { kind: "error"; code: ModelErrorCode };
+type ViewMode = "selected" | "upstream";
 
 type ListState =
     | { kind: "loading" }
@@ -46,16 +49,14 @@ type ListState =
     | {
           kind: "ready";
           items: ProviderModel[];
-          nextCursor: string | null;
           totalMatches: number | null;
-          more: MoreState;
       };
 
-type FetchStatusState =
+type UpstreamListState =
+    | { kind: "idle" }
     | { kind: "loading" }
-    | { kind: "preview" }
-    | { kind: "ready"; status: ModelFetchStatus }
-    | { kind: "error"; code: ModelErrorCode };
+    | { kind: "error"; code: ModelErrorCode }
+    | { kind: "ready"; items: UpstreamBrowseModel[] };
 
 type KeyState =
     | { kind: "loading" }
@@ -66,7 +67,7 @@ type KeyState =
           configured: boolean;
       };
 
-type FetchActionState =
+type SaveState =
     | { kind: "idle" }
     | { kind: "running" }
     | { kind: "error"; code: ModelErrorCode };
@@ -74,13 +75,10 @@ type FetchActionState =
 /** Inputs for {@link ProviderModels}. */
 export interface ProviderModelsProps {
     providerId: string;
-    /** When the parent page is hidden, in-flight reads and fetches are cancelled. */
     hidden?: boolean;
-    /** Omit the section heading when this panel sits under the Models tab. */
     layout?: "section" | "tabPanel";
-    /** Reports fetch or list work so the page can block navigation. */
     onBusyChange?: (busy: boolean) => void;
-    /** Updates the Models tab label with how many models are selected. */
+    onDirtyChange?: (dirty: boolean) => void;
     onSelectedCountChange?: (count: SelectedModelCount | null) => void;
 }
 
@@ -98,20 +96,67 @@ function mergeModels(
     return [...existing, ...appended];
 }
 
-function replaceModel(
-    items: ProviderModel[],
-    updated: ProviderModel,
-): ProviderModel[] {
-    return items.map((model) =>
-        model.modelId === updated.modelId ? updated : model,
-    );
+function mergeUpstream(
+    existing: UpstreamBrowseModel[],
+    incoming: UpstreamBrowseModel[],
+): UpstreamBrowseModel[] {
+    const seen = new Set(existing.map((model) => model.modelId));
+    const appended = incoming.filter((model) => !seen.has(model.modelId));
+    return [...existing, ...appended];
 }
 
-function selectionBlocked(model: ProviderModel): boolean {
-    return model.source === "fetched" && model.routeSupport === "unsupported";
+function setsEqual(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
+    if (a.size !== b.size) return false;
+    for (const id of a) {
+        if (!b.has(id)) return false;
+    }
+    return true;
 }
 
-function displayTitle(model: ProviderModel): string {
+type SelectedCatalogLoad =
+    | { kind: "preview" }
+    | { kind: "desktop"; items: ProviderModel[]; ids: Set<string> };
+
+/** Read every persisted selected row (paged in Rust, one list in the UI). */
+async function listAllSelected(
+    providerId: string,
+): Promise<SelectedCatalogLoad> {
+    let after: string | null = null;
+    let items: ProviderModel[] = [];
+    for (;;) {
+        const chunk = await listProviderModels({
+            providerId,
+            after,
+            limit: SAVED_CATALOG_CHUNK,
+            filter: "selected",
+        });
+        if (chunk.kind === "preview") {
+            return { kind: "preview" };
+        }
+        items = mergeModels(items, chunk.page.items);
+        after = chunk.page.nextCursor;
+        if (after === null) break;
+    }
+    return {
+        kind: "desktop",
+        items,
+        ids: new Set(items.map((model) => model.modelId)),
+    };
+}
+
+function selectionBlocked(
+    routeSupport: ProviderModel["routeSupport"],
+    source?: ProviderModel["source"],
+): boolean {
+    if (source === "manual") return false;
+    return routeSupport === "unsupported";
+}
+
+function displayTitle(model: {
+    modelId: string;
+    alias?: string | null;
+    upstreamName?: string | null;
+}): string {
     const trimmed = model.alias?.trim();
     if (trimmed) return trimmed;
     if (model.upstreamName?.trim()) return model.upstreamName.trim();
@@ -124,66 +169,105 @@ function formatMissingDate(ms: number, locale: string): string {
     );
 }
 
+/** One centered footer line under the list (selected end, upstream scroll/load/end). */
+function resolveEndOfListMessage(
+    t: TFunction,
+    viewMode: ViewMode,
+    list: ListState,
+    debouncedQuery: string,
+    upstream: UpstreamListState,
+    upstreamMorePages: boolean,
+    browseActive: boolean,
+): string | null {
+    if (viewMode === "selected") {
+        if (
+            list.kind !== "ready" ||
+            debouncedQuery !== "" ||
+            list.items.length === 0
+        ) {
+            return null;
+        }
+        return t("providers.models.allSelectedLoaded");
+    }
+    if (upstream.kind !== "ready" || upstream.items.length === 0) {
+        return null;
+    }
+    if (upstreamMorePages) {
+        if (browseActive) {
+            return t("providers.models.upstreamLoadingMore");
+        }
+        return t("providers.models.upstreamScrollForMore");
+    }
+    return t("providers.models.upstreamAllLoaded");
+}
+
 /**
- * Models for one provider: fetch the upstream catalog into local storage,
- * browse or paginate it, and fuzzy-filter the saved rows (never the API).
+ * Models tab (P12.c.5): selected list by default, upstream browse via Fetch models,
+ * draft checkboxes until Save.
  */
 export function ProviderModels({
     providerId,
     hidden = false,
     layout = "section",
     onBusyChange,
+    onDirtyChange,
     onSelectedCountChange,
 }: ProviderModelsProps): JSX.Element {
     const { t, i18n } = useTranslation();
     const notify = useNotify();
-    const [filter, setFilter] = useState<"all" | "selected">("all");
+    const [viewMode, setViewMode] = useState<ViewMode>("selected");
     const [searchInput, setSearchInput] = useState("");
     const [debouncedQuery, setDebouncedQuery] = useState("");
     const [list, setList] = useState<ListState>({ kind: "loading" });
-    const [fetchStatus, setFetchStatus] = useState<FetchStatusState>({
-        kind: "loading",
-    });
-    const [keyState, setKeyState] = useState<KeyState>({ kind: "loading" });
-    const [fetchAction, setFetchAction] = useState<FetchActionState>({
+    const [upstream, setUpstream] = useState<UpstreamListState>({
         kind: "idle",
     });
-    const [rowBusy, setRowBusy] = useState<ReadonlySet<string>>(
+    const [upstreamNextOffset, setUpstreamNextOffset] = useState<number | null>(
+        null,
+    );
+    const [upstreamMorePages, setUpstreamMorePages] = useState(false);
+    const [baselineSelected, setBaselineSelected] = useState<
+        ReadonlySet<string>
+    >(() => new Set());
+    const [draftSelected, setDraftSelected] = useState<ReadonlySet<string>>(
         () => new Set(),
     );
-    const [rowErrors, setRowErrors] = useState<
-        Readonly<Record<string, ModelErrorCode>>
-    >(() => ({}));
+    const [keyState, setKeyState] = useState<KeyState>({ kind: "loading" });
+    const [browseRunning, setBrowseRunning] = useState(false);
+    const [serverBrowseRunning, setServerBrowseRunning] = useState(false);
+    const [saveState, setSaveState] = useState<SaveState>({ kind: "idle" });
 
     const loadGeneration = useRef(0);
-    const fetchGeneration = useRef(0);
-    const loadingMore = useRef(false);
-    const wasPanelHidden = useRef(true);
-    const [selectedSummary, setSelectedSummary] =
-        useState<SelectedModelCount | null>(null);
+    const browseGeneration = useRef(0);
+    const listScrollRef = useRef<HTMLDivElement>(null);
+    const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
+    const upstreamLoadingMore = useRef(false);
+    /** Last upstream search query we already started a full reload for. */
+    const upstreamSearchQueryRef = useRef(debouncedQuery);
+
+    const dirty = useMemo(
+        () => !setsEqual(baselineSelected, draftSelected),
+        [baselineSelected, draftSelected],
+    );
+    const dirtyRef = useRef(dirty);
+    useEffect(() => {
+        dirtyRef.current = dirty;
+    }, [dirty]);
 
     const refreshSelectedCount = useCallback(async (): Promise<void> => {
         if (hidden) return;
         try {
-            const result = await listProviderModels({
-                providerId,
-                after: null,
-                limit: MODEL_PAGE_SIZE,
-                filter: "selected",
-            });
-            if (result.kind !== "desktop") {
-                setSelectedSummary(null);
+            const loaded = await listAllSelected(providerId);
+            if (loaded.kind === "preview") {
                 onSelectedCountChange?.(null);
                 return;
             }
             const next: SelectedModelCount = {
-                count: result.page.items.length,
-                hasMore: result.page.nextCursor !== null,
+                count: loaded.ids.size,
+                hasMore: false,
             };
-            setSelectedSummary(next);
             onSelectedCountChange?.(next);
         } catch {
-            setSelectedSummary(null);
             onSelectedCountChange?.(null);
         }
     }, [providerId, hidden, onSelectedCountChange]);
@@ -197,52 +281,9 @@ export function ProviderModels({
         };
     }, [searchInput]);
 
-    const refreshFetchStatus = useCallback(async (): Promise<void> => {
-        const generation = fetchGeneration.current;
-        try {
-            const result = await getProviderModelFetchStatus(providerId);
-            if (hidden || generation !== fetchGeneration.current) return;
-            if (result.kind === "preview") {
-                setFetchStatus({ kind: "preview" });
-                return;
-            }
-            setFetchStatus({ kind: "ready", status: result.status });
-        } catch (error: unknown) {
-            if (hidden || generation !== fetchGeneration.current) return;
-            setFetchStatus({ kind: "error", code: errorCode(error) });
-        }
-    }, [providerId, hidden]);
-
-    const loadFirstPage = useCallback(async (): Promise<void> => {
-        const generation = ++loadGeneration.current;
-        setList({ kind: "loading" });
-        setRowErrors({});
-        try {
-            const result = await listProviderModels({
-                providerId,
-                after: null,
-                limit: MODEL_PAGE_SIZE,
-                filter,
-                ...(debouncedQuery ? { query: debouncedQuery } : {}),
-            });
-            if (hidden || generation !== loadGeneration.current) return;
-            if (result.kind === "preview") {
-                setList({ kind: "preview" });
-                return;
-            }
-            setList({
-                kind: "ready",
-                items: result.page.items,
-                nextCursor: result.page.nextCursor,
-                totalMatches: result.page.totalMatches,
-                more: { kind: "idle" },
-            });
-            void refreshSelectedCount();
-        } catch (error: unknown) {
-            if (hidden || generation !== loadGeneration.current) return;
-            setList({ kind: "error", code: errorCode(error) });
-        }
-    }, [providerId, filter, debouncedQuery, hidden, refreshSelectedCount]);
+    useEffect(() => {
+        onDirtyChange?.(!hidden && dirty);
+    }, [onDirtyChange, dirty, hidden]);
 
     const loadKeyStatus = useCallback(async (): Promise<void> => {
         try {
@@ -262,199 +303,302 @@ export function ProviderModels({
         }
     }, [providerId, hidden]);
 
-    useEffect(() => {
-        if (hidden) {
-            loadGeneration.current += 1;
-            fetchGeneration.current += 1;
-            void cancelProviderModelFetch(providerId);
-            return;
-        }
-        setFetchStatus({ kind: "loading" });
-        setKeyState({ kind: "loading" });
-        void refreshFetchStatus();
-        void loadKeyStatus();
-        void refreshSelectedCount();
-    }, [
-        hidden,
-        providerId,
-        refreshFetchStatus,
-        loadKeyStatus,
-        refreshSelectedCount,
-    ]);
+    const syncBaselineFromLoaded = useCallback((ids: ReadonlySet<string>) => {
+        setBaselineSelected(ids);
+        setDraftSelected(new Set(ids));
+    }, []);
 
-    useEffect(() => {
-        if (hidden) return;
-        void loadFirstPage();
-    }, [hidden, loadFirstPage]);
-
-    async function loadMore(): Promise<void> {
-        if (list.kind !== "ready" || list.nextCursor === null) return;
-        if (debouncedQuery !== "") return;
-        if (loadingMore.current) return;
-        loadingMore.current = true;
-        const generation = loadGeneration.current;
-        const after = list.nextCursor;
-        setList({ ...list, more: { kind: "loading" } });
+    const loadSelectedList = useCallback(async (): Promise<void> => {
+        const generation = ++loadGeneration.current;
+        setList({ kind: "loading" });
         try {
-            const result = await listProviderModels({
-                providerId,
-                after,
-                limit: MODEL_PAGE_SIZE,
-                filter,
-            });
+            if (debouncedQuery) {
+                const result = await listProviderModels({
+                    providerId,
+                    after: null,
+                    limit: MODEL_PAGE_SIZE,
+                    filter: "selected",
+                    query: debouncedQuery,
+                });
+                if (hidden || generation !== loadGeneration.current) return;
+                if (result.kind === "preview") {
+                    setList({ kind: "preview" });
+                    return;
+                }
+                setList({
+                    kind: "ready",
+                    items: result.page.items,
+                    totalMatches: result.page.totalMatches,
+                });
+                return;
+            }
+            const loaded = await listAllSelected(providerId);
             if (hidden || generation !== loadGeneration.current) return;
-            if (result.kind === "preview") {
+            if (loaded.kind === "preview") {
                 setList({ kind: "preview" });
                 return;
             }
-            setList((previous) =>
-                previous.kind === "ready"
-                    ? {
-                          kind: "ready",
-                          items: mergeModels(previous.items, result.page.items),
-                          nextCursor: result.page.nextCursor,
-                          totalMatches: result.page.totalMatches,
-                          more: { kind: "idle" },
-                      }
-                    : previous,
-            );
-        } catch (error: unknown) {
-            if (hidden || generation !== loadGeneration.current) return;
-            setList((previous) =>
-                previous.kind === "ready"
-                    ? {
-                          ...previous,
-                          more: { kind: "error", code: errorCode(error) },
-                      }
-                    : previous,
-            );
-        } finally {
-            loadingMore.current = false;
-        }
-    }
-
-    async function toggleSelection(
-        model: ProviderModel,
-        nextSelected: boolean,
-    ): Promise<void> {
-        if (selectionBlocked(model)) return;
-        if (rowBusy.has(model.modelId)) return;
-        if (list.kind !== "ready") return;
-        if (model.selected === nextSelected) return;
-        const previousItems = list.items;
-        setList({
-            ...list,
-            items: replaceModel(list.items, {
-                ...model,
-                selected: nextSelected,
-            }),
-        });
-        setRowErrors((errors) => {
-            const next: Record<string, ModelErrorCode> = {};
-            for (const [key, code] of Object.entries(errors)) {
-                if (key !== model.modelId) next[key] = code;
+            if (!dirtyRef.current) {
+                syncBaselineFromLoaded(loaded.ids);
             }
-            return next;
-        });
-        setRowBusy((busy) => new Set(busy).add(model.modelId));
-
-        try {
-            const updated = await setProviderModelsSelected({
-                providerId,
-                modelIds: [model.modelId],
-                selected: nextSelected,
-            });
-            const record = updated[0];
-            if (record === undefined)
-                throw new ModelRequestError("invalid_response");
-            setList((current) =>
-                current.kind === "ready"
-                    ? {
-                          ...current,
-                          items: replaceModel(current.items, record),
-                      }
-                    : current,
-            );
-        } catch (error: unknown) {
-            setList((current) =>
-                current.kind === "ready"
-                    ? { ...current, items: previousItems }
-                    : current,
-            );
-            setRowErrors((errors) => ({
-                ...errors,
-                [model.modelId]: errorCode(error),
-            }));
-        } finally {
-            setRowBusy((busy) => {
-                const next = new Set(busy);
-                next.delete(model.modelId);
-                return next;
+            setList({
+                kind: "ready",
+                items: loaded.items,
+                totalMatches: null,
             });
             void refreshSelectedCount();
+        } catch (error: unknown) {
+            if (hidden || generation !== loadGeneration.current) return;
+            setList({ kind: "error", code: errorCode(error) });
         }
-    }
+    }, [
+        providerId,
+        debouncedQuery,
+        hidden,
+        refreshSelectedCount,
+        syncBaselineFromLoaded,
+    ]);
+
+    const refreshBrowseRunning = useCallback(async (): Promise<void> => {
+        try {
+            const result = await getProviderModelFetchStatus(providerId);
+            if (hidden) return;
+            if (result.kind === "desktop") {
+                setServerBrowseRunning(result.status.running);
+            }
+        } catch {
+            if (hidden) return;
+            setServerBrowseRunning(false);
+        }
+    }, [providerId, hidden]);
+
+    const loadUpstreamPage = useCallback(
+        async (offset: number | null, append: boolean): Promise<void> => {
+            const generation = ++browseGeneration.current;
+            const query =
+                debouncedQuery.length > 0 ? debouncedQuery : undefined;
+            if (!append) {
+                setUpstream({ kind: "loading" });
+            }
+            setBrowseRunning(true);
+            try {
+                const page = await browseUpstreamModelsPage({
+                    providerId,
+                    offset,
+                    ...(query !== undefined ? { query } : {}),
+                });
+                if (hidden || generation !== browseGeneration.current) return;
+                setUpstream((current) => {
+                    const previous =
+                        append && current.kind === "ready" ? current.items : [];
+                    return {
+                        kind: "ready",
+                        items: mergeUpstream(previous, page.items),
+                    };
+                });
+                setUpstreamNextOffset(page.nextOffset);
+                setUpstreamMorePages(page.morePages);
+            } catch (error: unknown) {
+                if (hidden || generation !== browseGeneration.current) return;
+                if (!append) {
+                    setUpstream({ kind: "error", code: errorCode(error) });
+                } else {
+                    notify({
+                        tone: "error",
+                        message: t(
+                            `providers.models.errors.${errorCode(error)}`,
+                        ),
+                    });
+                }
+            } finally {
+                if (generation === browseGeneration.current) {
+                    setBrowseRunning(false);
+                    void refreshBrowseRunning();
+                }
+            }
+        },
+        [providerId, hidden, notify, t, refreshBrowseRunning, debouncedQuery],
+    );
 
     useEffect(() => {
-        if (wasPanelHidden.current && !hidden && selectedSummary !== null) {
-            if (selectedSummary.count > 0) {
-                setFilter("selected");
-            }
-        }
-        wasPanelHidden.current = hidden;
-    }, [hidden, selectedSummary]);
-
-    function notifyFetchSummary(summary: ModelFetchSummary): void {
-        if (summary.complete) {
-            notify({
-                tone: "success",
-                message: t("providers.models.fetchNotice.complete", {
-                    listed: summary.listed,
-                }),
-            });
+        if (hidden || viewMode !== "upstream") return;
+        if (upstream.kind === "idle") {
+            upstreamSearchQueryRef.current = debouncedQuery;
             return;
         }
-        const reasonKey =
-            summary.incompleteReason === null
-                ? "model_limit"
-                : summary.incompleteReason;
-        const tone = reasonKey === "empty_list" ? "error" : "success";
-        notify({
-            tone,
-            message: t(`providers.models.fetchNotice.incomplete.${reasonKey}`, {
-                listed: summary.listed,
-            }),
-        });
-    }
+        if (upstreamSearchQueryRef.current === debouncedQuery) return;
+        upstreamSearchQueryRef.current = debouncedQuery;
+        setUpstreamNextOffset(null);
+        setUpstreamMorePages(false);
+        const handle = window.setTimeout(() => {
+            void loadUpstreamPage(null, false);
+        }, 0);
+        return () => {
+            clearTimeout(handle);
+        };
+    }, [hidden, viewMode, debouncedQuery, upstream.kind, loadUpstreamPage]);
 
-    async function runFetch(): Promise<void> {
-        if (fetchAction.kind === "running") return;
-        setFetchAction({ kind: "running" });
-        const generation = fetchGeneration.current;
-        try {
-            const summary = await fetchProviderModels(providerId);
-            if (hidden || generation !== fetchGeneration.current) return;
-            notifyFetchSummary(summary);
-            setFetchAction({ kind: "idle" });
-            await refreshFetchStatus();
-            await loadFirstPage();
-            await refreshSelectedCount();
-        } catch (error: unknown) {
-            if (hidden || generation !== fetchGeneration.current) return;
-            setFetchAction({ kind: "error", code: errorCode(error) });
-            await refreshFetchStatus();
+    useEffect(() => {
+        if (hidden) {
+            loadGeneration.current += 1;
+            browseGeneration.current += 1;
+            void cancelProviderModelFetch(providerId);
+            return;
         }
+        const handle = window.setTimeout(() => {
+            void loadKeyStatus();
+            void refreshSelectedCount();
+            void refreshBrowseRunning();
+        }, 0);
+        return () => {
+            clearTimeout(handle);
+        };
+    }, [
+        hidden,
+        providerId,
+        loadKeyStatus,
+        refreshSelectedCount,
+        refreshBrowseRunning,
+    ]);
+
+    useEffect(() => {
+        if (hidden || viewMode !== "selected") return;
+        // Defer so the effect body does not synchronously enter list loading state.
+        const handle = window.setTimeout(() => {
+            void loadSelectedList();
+        }, 0);
+        return () => {
+            clearTimeout(handle);
+        };
+    }, [hidden, viewMode, loadSelectedList]);
+
+    useEffect(() => {
+        if (
+            hidden ||
+            viewMode !== "upstream" ||
+            upstream.kind !== "ready" ||
+            !upstreamMorePages ||
+            upstreamNextOffset === null
+        ) {
+            return;
+        }
+        const root = listScrollRef.current;
+        const sentinel = loadMoreSentinelRef.current;
+        if (root === null || sentinel === null) return;
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                const visible = entries.some((entry) => entry.isIntersecting);
+                if (
+                    !visible ||
+                    upstreamLoadingMore.current ||
+                    browseRunning ||
+                    serverBrowseRunning
+                ) {
+                    return;
+                }
+                upstreamLoadingMore.current = true;
+                void loadUpstreamPage(upstreamNextOffset, true).finally(() => {
+                    upstreamLoadingMore.current = false;
+                });
+            },
+            { root, rootMargin: "120px" },
+        );
+        observer.observe(sentinel);
+        return () => {
+            observer.disconnect();
+        };
+    }, [
+        hidden,
+        viewMode,
+        upstream,
+        upstreamMorePages,
+        upstreamNextOffset,
+        browseRunning,
+        serverBrowseRunning,
+        loadUpstreamPage,
+    ]);
+
+    async function startUpstreamBrowse(): Promise<void> {
+        if (browseRunning || serverBrowseRunning) return;
+        const resetDraft = new Set(baselineSelected);
+        setDraftSelected(resetDraft);
+        setViewMode("upstream");
+        setSearchInput("");
+        setDebouncedQuery("");
+        setUpstreamNextOffset(null);
+        setUpstreamMorePages(false);
+        upstreamSearchQueryRef.current = "";
+        await loadUpstreamPage(null, false);
     }
 
-    async function runCancelFetch(): Promise<void> {
+    async function runCancelBrowse(): Promise<void> {
         try {
             await cancelProviderModelFetch(providerId);
         } catch {
-            // Cancellation is best-effort; status refresh shows the truth.
+            // Best-effort; status refresh shows the truth.
         }
-        await refreshFetchStatus();
-        if (fetchAction.kind === "running") {
-            setFetchAction({ kind: "idle" });
+        setBrowseRunning(false);
+        await refreshBrowseRunning();
+    }
+
+    function toggleDraft(modelId: string, nextSelected: boolean): void {
+        setDraftSelected((current) => {
+            const next = new Set(current);
+            if (nextSelected) next.add(modelId);
+            else next.delete(modelId);
+            return next;
+        });
+    }
+
+    async function runSave(): Promise<void> {
+        if (!dirty || saveState.kind === "running") return;
+        setSaveState({ kind: "running" });
+        const upstreamById = new Map<string, UpstreamBrowseModel>();
+        if (upstream.kind === "ready") {
+            for (const row of upstream.items) {
+                upstreamById.set(row.modelId, row);
+            }
+        }
+        const removeModelIds: string[] = [];
+        for (const id of baselineSelected) {
+            if (!draftSelected.has(id)) removeModelIds.push(id);
+        }
+        const add = [];
+        for (const id of draftSelected) {
+            if (baselineSelected.has(id)) continue;
+            const row = upstreamById.get(id);
+            add.push({
+                modelId: id,
+                upstreamName: row?.upstreamName ?? null,
+                contextWindow: row?.contextWindow ?? null,
+                maxOutputTokens: row?.maxOutputTokens ?? null,
+                inputModalities: row?.inputModalities ?? null,
+                outputModalities: row?.outputModalities ?? null,
+                supportedEndpoints: row?.supportedEndpoints ?? null,
+            });
+        }
+        try {
+            await saveProviderModelSelections({
+                providerId,
+                removeModelIds,
+                add,
+            });
+            setSaveState({ kind: "idle" });
+            const nextBaseline = new Set(draftSelected);
+            setBaselineSelected(nextBaseline);
+            notify({
+                tone: "success",
+                message: t("providers.models.saveNotice"),
+            });
+            if (viewMode === "upstream") {
+                setViewMode("selected");
+                setUpstream({ kind: "idle" });
+            }
+            await loadSelectedList();
+            await refreshSelectedCount();
+        } catch (error: unknown) {
+            setSaveState({ kind: "error", code: errorCode(error) });
         }
     }
 
@@ -462,30 +606,18 @@ export function ProviderModels({
         setSearchInput(event.currentTarget.value);
     }
 
-    const serverFetchRunning =
-        fetchStatus.kind === "ready" && fetchStatus.status.running;
-    const fetchRunning = fetchAction.kind === "running" || serverFetchRunning;
+    function confirmDiscardDraft(): boolean {
+        if (!dirty) return true;
+        return window.confirm(t("providers.models.unsavedLeave"));
+    }
 
-    const hasFetchedBefore =
-        fetchStatus.kind === "ready" && fetchStatus.status.lastFetch !== null;
-
+    const browseActive = browseRunning || serverBrowseRunning;
     const keyMissing = keyState.kind === "ready" && !keyState.configured;
 
-    /** Local fuzzy filter only applies after a catalog exists on disk. */
-    const canFilterLocally =
-        hasFetchedBefore ||
-        (list.kind === "ready" && list.items.length > 0) ||
-        (list.kind === "ready" &&
-            debouncedQuery !== "" &&
-            list.totalMatches !== null &&
-            list.totalMatches > 0);
-
-    const listBusy =
-        list.kind === "loading" ||
-        fetchRunning ||
-        (list.kind === "ready" && list.more.kind === "loading");
+    const upstreamItems = upstream.kind === "ready" ? upstream.items : [];
 
     const searchSummary =
+        viewMode === "selected" &&
         list.kind === "ready" &&
         debouncedQuery !== "" &&
         list.totalMatches !== null
@@ -493,42 +625,70 @@ export function ProviderModels({
                   total: list.totalMatches,
                   shown: list.items.length,
               })
-            : null;
+            : viewMode === "upstream" &&
+                debouncedQuery !== "" &&
+                upstream.kind === "ready"
+              ? t("providers.models.searchSummaryUpstream", {
+                    shown: upstreamItems.length,
+                })
+              : null;
 
-    const emptyMessage = ((): string => {
-        if (keyMissing) return t("providers.models.emptyNeedKey");
-        if (!hasFetchedBefore) return t("providers.models.emptyNeedFetch");
-        if (debouncedQuery !== "" || filter === "selected") {
-            return t("providers.models.emptyFiltered");
-        }
-        return t("providers.models.empty");
-    })();
-
-    const sectionBusy = fetchRunning || list.kind === "loading";
+    const sectionBusy =
+        browseActive ||
+        saveState.kind === "running" ||
+        (viewMode === "selected" && list.kind === "loading") ||
+        (viewMode === "upstream" && upstream.kind === "loading");
 
     useEffect(() => {
-        // Background list loads must not block the API tab or the back control.
         onBusyChange?.(!hidden && sectionBusy);
     }, [onBusyChange, sectionBusy, hidden]);
 
-    const sectionLabel =
-        layout === "section" ? "provider-models-heading" : undefined;
+    const emptyMessage = ((): string => {
+        if (keyMissing) return t("providers.models.emptyNeedKey");
+        if (viewMode === "selected") {
+            if (debouncedQuery !== "")
+                return t("providers.models.emptyFiltered");
+            return t("providers.models.emptyNeedFetch");
+        }
+        if (upstream.kind === "error")
+            return t("providers.models.emptyUpstream");
+        return t("providers.models.emptyUpstream");
+    })();
+
+    const listHeadingId = "provider-models-list-heading";
+    const listTitle =
+        viewMode === "selected"
+            ? t("providers.models.filter.selected")
+            : t("providers.models.filter.all");
+    const showListShell = list.kind !== "preview";
+
+    const endOfListMessage = resolveEndOfListMessage(
+        t,
+        viewMode,
+        list,
+        debouncedQuery,
+        upstream,
+        upstreamMorePages,
+        browseActive,
+    );
 
     const listBody = (
         <>
-            {list.kind === "loading" && !fetchRunning && (
-                <p className={styles["message"]} role="status">
-                    {t("providers.models.loading")}
-                </p>
-            )}
+            {viewMode === "selected" &&
+                list.kind === "loading" &&
+                !browseActive && (
+                    <p className={styles["message"]} role="status">
+                        {t("providers.models.loading")}
+                    </p>
+                )}
 
-            {list.kind === "preview" && (
+            {viewMode === "selected" && list.kind === "preview" && (
                 <p className={styles["message"]} role="status">
                     {t("providers.models.preview")}
                 </p>
             )}
 
-            {list.kind === "error" && (
+            {viewMode === "selected" && list.kind === "error" && (
                 <>
                     <p className={styles["error"]} role="alert">
                         {t(`providers.models.errors.${list.code}`)}
@@ -537,7 +697,7 @@ export function ProviderModels({
                         type="button"
                         className={buttons["secondary"]}
                         onClick={() => {
-                            void loadFirstPage();
+                            void loadSelectedList();
                         }}
                     >
                         {t("providers.models.retry")}
@@ -545,155 +705,278 @@ export function ProviderModels({
                 </>
             )}
 
-            {list.kind === "ready" && list.items.length === 0 && (
+            {viewMode === "upstream" && upstream.kind === "loading" && (
+                <p className={styles["message"]} role="status">
+                    {t("providers.models.upstreamLoading")}
+                </p>
+            )}
+
+            {viewMode === "upstream" && upstream.kind === "error" && (
+                <>
+                    <p className={styles["error"]} role="alert">
+                        {t(`providers.models.errors.${upstream.code}`)}
+                    </p>
+                    <button
+                        type="button"
+                        className={buttons["secondary"]}
+                        onClick={() => {
+                            void loadUpstreamPage(null, false);
+                        }}
+                    >
+                        {t("providers.models.retry")}
+                    </button>
+                </>
+            )}
+
+            {((viewMode === "selected" &&
+                list.kind === "ready" &&
+                list.items.length === 0) ||
+                (viewMode === "upstream" &&
+                    upstream.kind === "ready" &&
+                    upstreamItems.length === 0 &&
+                    !browseActive)) && (
                 <p className={styles["empty"]} role="status">
                     {emptyMessage}
                 </p>
             )}
 
-            {list.kind === "ready" && list.items.length > 0 && (
-                <ul
-                    className={styles["list"]}
-                    aria-label={t("providers.models.listLabel")}
-                >
-                    {list.items.map((model) => {
-                        const busy = rowBusy.has(model.modelId);
-                        const blocked = selectionBlocked(model);
-                        const rowError = rowErrors[model.modelId];
-                        return (
-                            <li key={model.modelId} className={styles["item"]}>
-                                <ModelCheckbox
-                                    checked={model.selected}
-                                    disabled={listBusy || busy || blocked}
-                                    ariaLabel={
-                                        model.selected
-                                            ? t(
-                                                  "providers.models.deselectModel",
-                                                  {
-                                                      modelId: model.modelId,
-                                                  },
-                                              )
-                                            : t(
-                                                  "providers.models.selectModel",
-                                                  {
-                                                      modelId: model.modelId,
-                                                  },
-                                              )
-                                    }
-                                    onCheckedChange={(nextSelected) => {
-                                        void toggleSelection(
-                                            model,
-                                            nextSelected,
-                                        );
-                                    }}
-                                />
-                                <div className={styles["body"]}>
-                                    <p className={styles["line"]}>
-                                        <span className={styles["lineText"]}>
-                                            <span className={styles["name"]}>
-                                                {displayTitle(model)}
-                                            </span>
-                                            {displayTitle(model) !==
-                                                model.modelId && (
+            {viewMode === "selected" &&
+                list.kind === "ready" &&
+                list.items.length > 0 && (
+                    <ul
+                        className={styles["list"]}
+                        aria-labelledby={listHeadingId}
+                    >
+                        {list.items.map((model) => {
+                            const checked = draftSelected.has(model.modelId);
+                            const blocked = selectionBlocked(
+                                model.routeSupport,
+                                model.source,
+                            );
+                            return (
+                                <li
+                                    key={model.modelId}
+                                    className={styles["item"]}
+                                >
+                                    <ModelCheckbox
+                                        checked={checked}
+                                        disabled={sectionBusy || blocked}
+                                        ariaLabel={
+                                            checked
+                                                ? t(
+                                                      "providers.models.deselectModel",
+                                                      {
+                                                          modelId:
+                                                              model.modelId,
+                                                      },
+                                                  )
+                                                : t(
+                                                      "providers.models.selectModel",
+                                                      {
+                                                          modelId:
+                                                              model.modelId,
+                                                      },
+                                                  )
+                                        }
+                                        onCheckedChange={(nextSelected) => {
+                                            if (blocked) return;
+                                            toggleDraft(
+                                                model.modelId,
+                                                nextSelected,
+                                            );
+                                        }}
+                                    />
+                                    <div className={styles["body"]}>
+                                        <p className={styles["line"]}>
+                                            <span
+                                                className={styles["lineText"]}
+                                            >
                                                 <span
-                                                    className={
-                                                        styles["modelId"]
-                                                    }
+                                                    className={styles["name"]}
                                                 >
-                                                    {" · "}
-                                                    {model.modelId}
+                                                    {displayTitle(model)}
                                                 </span>
-                                            )}
-                                            {model.source === "manual" && (
-                                                <span
-                                                    className={
-                                                        styles["manualTag"]
-                                                    }
-                                                >
-                                                    {" · "}
-                                                    {t(
-                                                        "providers.models.manualSource",
-                                                    )}
-                                                </span>
-                                            )}
-                                        </span>
-                                        {model.routeSupport ===
-                                            "unsupported" && (
-                                            <span className={styles["badge"]}>
-                                                {t(
-                                                    "providers.models.badges.routeUnsupported",
+                                                {displayTitle(model) !==
+                                                    model.modelId && (
+                                                    <span
+                                                        className={
+                                                            styles["modelId"]
+                                                        }
+                                                    >
+                                                        {" · "}
+                                                        {model.modelId}
+                                                    </span>
+                                                )}
+                                                {model.source === "manual" && (
+                                                    <span
+                                                        className={
+                                                            styles["manualTag"]
+                                                        }
+                                                    >
+                                                        {" · "}
+                                                        {t(
+                                                            "providers.models.manualSource",
+                                                        )}
+                                                    </span>
                                                 )}
                                             </span>
-                                        )}
-                                        {model.routeSupport === "unknown" && (
-                                            <span className={styles["badge"]}>
-                                                {t(
-                                                    "providers.models.badges.routeUnknown",
-                                                )}
-                                            </span>
-                                        )}
-                                    </p>
-                                    {model.upstreamState === "missing" &&
-                                        model.missingSinceMs !== null && (
-                                            <div className={styles["badges"]}>
+                                            {model.routeSupport ===
+                                                "unsupported" && (
                                                 <span
                                                     className={styles["badge"]}
                                                 >
                                                     {t(
-                                                        "providers.models.badges.upstreamMissing",
-                                                        {
-                                                            date: formatMissingDate(
-                                                                model.missingSinceMs,
-                                                                i18n.language,
-                                                            ),
-                                                        },
+                                                        "providers.models.badges.routeUnsupported",
                                                     )}
                                                 </span>
-                                            </div>
-                                        )}
-                                    {rowError !== undefined && (
-                                        <p
-                                            className={styles["rowError"]}
-                                            role="alert"
-                                        >
-                                            {t(
-                                                `providers.models.errors.${rowError}`,
+                                            )}
+                                            {model.routeSupport ===
+                                                "unknown" && (
+                                                <span
+                                                    className={styles["badge"]}
+                                                >
+                                                    {t(
+                                                        "providers.models.badges.routeUnknown",
+                                                    )}
+                                                </span>
                                             )}
                                         </p>
-                                    )}
-                                </div>
-                            </li>
-                        );
-                    })}
-                </ul>
+                                        {model.upstreamState === "missing" &&
+                                            model.missingSinceMs !== null && (
+                                                <div
+                                                    className={styles["badges"]}
+                                                >
+                                                    <span
+                                                        className={
+                                                            styles["badge"]
+                                                        }
+                                                    >
+                                                        {t(
+                                                            "providers.models.badges.upstreamMissing",
+                                                            {
+                                                                date: formatMissingDate(
+                                                                    model.missingSinceMs,
+                                                                    i18n.language,
+                                                                ),
+                                                            },
+                                                        )}
+                                                    </span>
+                                                </div>
+                                            )}
+                                    </div>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                )}
+
+            {viewMode === "upstream" &&
+                upstream.kind === "ready" &&
+                upstreamItems.length > 0 && (
+                    <ul
+                        className={styles["list"]}
+                        aria-labelledby={listHeadingId}
+                    >
+                        {upstreamItems.map((model) => {
+                            const checked = draftSelected.has(model.modelId);
+                            const blocked = selectionBlocked(
+                                model.routeSupport,
+                            );
+                            return (
+                                <li
+                                    key={model.modelId}
+                                    className={styles["item"]}
+                                >
+                                    <ModelCheckbox
+                                        checked={checked}
+                                        disabled={sectionBusy || blocked}
+                                        ariaLabel={
+                                            checked
+                                                ? t(
+                                                      "providers.models.deselectModel",
+                                                      {
+                                                          modelId:
+                                                              model.modelId,
+                                                      },
+                                                  )
+                                                : t(
+                                                      "providers.models.selectModel",
+                                                      {
+                                                          modelId:
+                                                              model.modelId,
+                                                      },
+                                                  )
+                                        }
+                                        onCheckedChange={(nextSelected) => {
+                                            if (blocked) return;
+                                            toggleDraft(
+                                                model.modelId,
+                                                nextSelected,
+                                            );
+                                        }}
+                                    />
+                                    <div className={styles["body"]}>
+                                        <p className={styles["line"]}>
+                                            <span
+                                                className={styles["lineText"]}
+                                            >
+                                                <span
+                                                    className={styles["name"]}
+                                                >
+                                                    {displayTitle(model)}
+                                                </span>
+                                                {displayTitle(model) !==
+                                                    model.modelId && (
+                                                    <span
+                                                        className={
+                                                            styles["modelId"]
+                                                        }
+                                                    >
+                                                        {" · "}
+                                                        {model.modelId}
+                                                    </span>
+                                                )}
+                                            </span>
+                                            {model.routeSupport ===
+                                                "unsupported" && (
+                                                <span
+                                                    className={styles["badge"]}
+                                                >
+                                                    {t(
+                                                        "providers.models.badges.routeUnsupported",
+                                                    )}
+                                                </span>
+                                            )}
+                                        </p>
+                                    </div>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                )}
+
+            {viewMode === "upstream" && upstreamMorePages && (
+                <div
+                    ref={loadMoreSentinelRef}
+                    className={styles["loadSentinel"]}
+                    aria-hidden
+                />
             )}
 
-            {list.kind === "ready" && list.more.kind === "error" && (
-                <p className={styles["error"]} role="alert">
-                    {t(`providers.models.errors.${list.more.code}`)}
+            {endOfListMessage !== null && (
+                <p
+                    className={styles["listFooter"]}
+                    role="status"
+                    aria-live="polite"
+                >
+                    {endOfListMessage}
                 </p>
             )}
-
-            {list.kind === "ready" &&
-                debouncedQuery === "" &&
-                list.nextCursor !== null && (
-                    <div className={styles["more"]}>
-                        <button
-                            type="button"
-                            className={buttons["secondary"]}
-                            aria-disabled={list.more.kind === "loading"}
-                            onClick={() => {
-                                void loadMore();
-                            }}
-                        >
-                            {list.more.kind === "loading"
-                                ? t("providers.models.loadingMore")
-                                : t("providers.models.loadMore")}
-                        </button>
-                    </div>
-                )}
         </>
     );
+
+    const sectionLabel =
+        layout === "section" ? "provider-models-heading" : undefined;
 
     return (
         <section
@@ -711,15 +994,9 @@ export function ProviderModels({
                 </h2>
             )}
 
-            {fetchAction.kind === "error" && (
+            {saveState.kind === "error" && (
                 <p className={styles["error"]} role="alert">
-                    {t(`providers.models.errors.${fetchAction.code}`)}
-                </p>
-            )}
-
-            {fetchStatus.kind === "error" && (
-                <p className={styles["error"]} role="alert">
-                    {t(`providers.models.errors.${fetchStatus.code}`)}
+                    {t(`providers.models.errors.${saveState.code}`)}
                 </p>
             )}
 
@@ -729,14 +1006,8 @@ export function ProviderModels({
                 </p>
             )}
 
-            {fetchRunning && (
-                <p className={styles["message"]} role="status">
-                    {t("providers.models.fetchRunningStatus")}
-                </p>
-            )}
-
-            <div className={styles["filterBlock"]}>
-                <div className={styles["searchToolbar"]}>
+            <div className={styles["toolbarRow"]}>
+                <div className={styles["searchField"]}>
                     <input
                         className={styles["searchInput"]}
                         id="provider-models-search"
@@ -748,77 +1019,108 @@ export function ProviderModels({
                         aria-label={t("providers.models.searchPlaceholder")}
                         disabled={
                             list.kind === "preview" ||
-                            !canFilterLocally ||
-                            fetchRunning
+                            keyMissing ||
+                            keyState.kind === "loading" ||
+                            (viewMode === "selected" &&
+                                list.kind !== "ready" &&
+                                list.kind !== "loading") ||
+                            (viewMode === "upstream" &&
+                                upstream.kind === "idle")
                         }
                         onChange={onSearchChange}
                     />
-                    <button
-                        type="button"
-                        className={buttons["primary"]}
-                        aria-disabled={
-                            fetchRunning ||
-                            list.kind === "preview" ||
-                            keyMissing ||
-                            keyState.kind === "loading"
-                        }
-                        onClick={() => {
-                            void runFetch();
-                        }}
-                    >
-                        {fetchRunning
-                            ? t("providers.models.fetching")
-                            : t("providers.models.fetch")}
-                    </button>
-                    {fetchRunning && (
+                </div>
+                <div className={styles["toolbarActions"]}>
+                    {viewMode === "selected" ? (
                         <button
                             type="button"
-                            className={buttons["secondary"]}
+                            className={[
+                                buttons["secondary"],
+                                styles["toolbarButton"],
+                            ].join(" ")}
+                            aria-disabled={
+                                browseActive ||
+                                list.kind === "preview" ||
+                                keyMissing ||
+                                keyState.kind === "loading"
+                            }
                             onClick={() => {
-                                void runCancelFetch();
+                                if (
+                                    browseActive ||
+                                    list.kind === "preview" ||
+                                    keyMissing ||
+                                    keyState.kind === "loading"
+                                ) {
+                                    return;
+                                }
+                                if (dirty && !confirmDiscardDraft()) return;
+                                void startUpstreamBrowse();
                             }}
                         >
-                            {t("providers.models.cancelFetch")}
+                            {t("providers.models.fetch")}
                         </button>
-                    )}
-                </div>
-                <div
-                    className={styles["filter"]}
-                    role="group"
-                    aria-label={t("providers.models.filter.ariaLabel")}
-                >
-                    {(["all", "selected"] as const).map((value) => {
-                        const label =
-                            value === "selected" &&
-                            selectedSummary !== null &&
-                            selectedSummary.count > 0
-                                ? selectedSummary.hasMore
-                                    ? t(
-                                          "providers.models.filter.selectedMany",
-                                          { count: selectedSummary.count },
-                                      )
-                                    : t(
-                                          "providers.models.filter.selectedCount",
-                                          { count: selectedSummary.count },
-                                      )
-                                : t(`providers.models.filter.${value}`);
-                        return (
+                    ) : (
+                        <>
+                            {browseActive && (
+                                <button
+                                    type="button"
+                                    className={[
+                                        buttons["secondary"],
+                                        styles["toolbarButton"],
+                                    ].join(" ")}
+                                    onClick={() => {
+                                        void runCancelBrowse();
+                                    }}
+                                >
+                                    {t("providers.models.cancelFetch")}
+                                </button>
+                            )}
                             <button
-                                key={value}
                                 type="button"
-                                className={styles["filterButton"]}
-                                aria-pressed={filter === value}
-                                disabled={
-                                    list.kind === "preview" || !canFilterLocally
+                                className={[
+                                    buttons["secondary"],
+                                    styles["toolbarButton"],
+                                ].join(" ")}
+                                aria-disabled={
+                                    browseActive ||
+                                    keyMissing ||
+                                    keyState.kind === "loading"
                                 }
                                 onClick={() => {
-                                    setFilter(value);
+                                    if (
+                                        browseActive ||
+                                        keyMissing ||
+                                        keyState.kind === "loading"
+                                    ) {
+                                        return;
+                                    }
+                                    if (dirty && !confirmDiscardDraft()) return;
+                                    setDraftSelected(new Set(baselineSelected));
+                                    setViewMode("selected");
+                                    setUpstream({ kind: "idle" });
+                                    void loadSelectedList();
                                 }}
                             >
-                                {label}
+                                {t("providers.models.backToSelected")}
                             </button>
-                        );
-                    })}
+                        </>
+                    )}
+                    <button
+                        type="button"
+                        className={[
+                            buttons["primary"],
+                            styles["toolbarButton"],
+                        ].join(" ")}
+                        aria-disabled={!dirty || saveState.kind === "running"}
+                        onClick={() => {
+                            if (!dirty || saveState.kind === "running") return;
+                            void runSave();
+                        }}
+                    >
+                        {saveState.kind === "running"
+                            ? t("providers.models.saving")
+                            : t("providers.models.save")}
+                    </button>
                 </div>
             </div>
 
@@ -828,33 +1130,30 @@ export function ProviderModels({
                 </p>
             )}
 
-            {filter === "all" &&
-                selectedSummary !== null &&
-                selectedSummary.count > 0 && (
-                    <div className={styles["selectedJump"]}>
-                        <span className={styles["selectedJumpText"]}>
-                            {selectedSummary.hasMore
-                                ? t("providers.models.selectedSummaryMany", {
-                                      count: selectedSummary.count,
-                                  })
-                                : t("providers.models.selectedSummary", {
-                                      count: selectedSummary.count,
-                                  })}
-                        </span>
-                        <button
-                            type="button"
-                            className={buttons["text"]}
-                            onClick={() => {
-                                setFilter("selected");
-                            }}
-                        >
-                            {t("providers.models.showSelectedOnly")}
-                        </button>
-                    </div>
-                )}
-
             {layout === "tabPanel" ? (
-                <div className={styles["listRegion"]}>{listBody}</div>
+                <div className={styles["listRegion"]}>
+                    {showListShell && (
+                        <h3 className={styles["listHeader"]} id={listHeadingId}>
+                            {listTitle}
+                        </h3>
+                    )}
+                    <div className={styles["listScroll"]} ref={listScrollRef}>
+                        {showListShell ? (
+                            <div className={styles["listShell"]}>
+                                {listBody}
+                            </div>
+                        ) : (
+                            listBody
+                        )}
+                    </div>
+                </div>
+            ) : showListShell ? (
+                <>
+                    <h3 className={styles["listHeader"]} id={listHeadingId}>
+                        {listTitle}
+                    </h3>
+                    <div className={styles["listShell"]}>{listBody}</div>
+                </>
             ) : (
                 listBody
             )}

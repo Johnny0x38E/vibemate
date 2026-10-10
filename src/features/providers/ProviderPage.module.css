@@ -1,5 +1,6 @@
 .page {
     display: flex;
+    flex: 1;
     flex-direction: column;
     width: 100%;
     min-height: 0;
@@ -14,12 +15,20 @@
 
 .header {
     display: flex;
+    flex-shrink: 0;
     align-items: center;
     justify-content: space-between;
     gap: var(--space-lg);
     min-width: 0;
     margin-top: 2px;
     margin-bottom: var(--space-sm);
+}
+
+.page > :not(.header) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
 }
 
 /*

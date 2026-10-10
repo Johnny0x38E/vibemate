@@ -1,8 +1,12 @@
 //! Fault-injection tests for central definitions, with temporary DBs and fake credentials.
-use super::validation::{normalize_url, validate};
+use super::repository::lock;
+use super::validation::{field_name, normalize_url, validate};
 use super::*;
 use crate::credentials::Secret;
+use crate::credentials::{CredentialError, CredentialStore};
+use crate::storage::Storage;
 use std::cell::{Cell, RefCell};
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};

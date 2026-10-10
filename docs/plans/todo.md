@@ -1437,7 +1437,7 @@ D16（维护者批准，2026-10-10 完成）：2026-10-10 20:10（UTC+8）不带
 | [x] BR3.b   | Provider 模板和专用校验拆分                                    | `providers.rs`、`providers/templates.rs`、`providers/validation.rs`、`providers/tests.rs`                    | BR3.a |
 | [x] BR3.c   | Provider SQL 与保存编排拆分                                    | `providers.rs`、`providers/repository.rs`、`providers/service.rs`、`providers/tests.rs`                      | BR3.b |
 | [x] BR4.a   | MCP DTO/错误和专用字段校验拆分                                 | `mcp.rs`、`mcp/types.rs`、`mcp/validation.rs`、`mcp/tests.rs`                                                | BR3   |
-| [ ] BR4.b   | MCP 查询/SQL 与凭据保存/清理编排拆分                           | `mcp.rs`、`mcp/repository.rs`、`mcp/service.rs`、`mcp/tests.rs`                                              | BR4.a |
+| [x] BR4.b   | MCP 查询/SQL 与凭据保存/清理编排拆分                           | `mcp.rs`、`mcp/repository.rs`、`mcp/service.rs`、`mcp/tests.rs`                                              | BR4.a |
 | [ ] BR4.c   | 提取共享文字校验，分别映射业务错误；保留 Provider 公开校验入口 | `providers/validation.rs`、`mcp/validation.rs`、`shared.rs`、`lib.rs`                                        | BR4.b |
 | [ ] BR4.d   | MCP 独立身份类型与通用 ID 格式校验，保持原有 ID 字符串         | `shared.rs`、`mcp/types.rs`、`mcp/validation.rs`、`mcp/repository.rs`                                        | BR4.c |
 | [ ] BR4.e   | 共享时间来源与业务错误映射，保留当前 Provider 时间入口         | `shared.rs`、`providers.rs`、`commands/state.rs`、`commands/models.rs`                                       | BR4.d |

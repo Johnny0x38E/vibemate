@@ -8,7 +8,7 @@ GitHub release notes are extracted from the matching version section only.
 
 ### Changed
 
-- Smoothed the macOS icon tile with continuous corner curves and a broader corner transition, keeping its existing Dock footprint and logo artwork.
+- Smoothed the macOS icon tile with continuous corner curves and a broader 160 px corner transition, keeping its existing Dock footprint and logo artwork.
 
 - Reduced the macOS Dock icon artwork to 85% of its previous size with transparent padding, preserving the selected V shape and colors. Added a separate macOS SVG master so other platform icons retain their existing dimensions.
 

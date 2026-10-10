@@ -13,7 +13,8 @@ they remove raster shading and use flat, scalable shapes.
   the canvas center. Its 408 px tile on a 512 px canvas leaves transparent
   margins so the Dock icon does not appear oversized. The tile uses paired
   cubic curves with matching tangents and curvature at their joins, and zero
-  curvature where they meet straight edges, for softer continuous corners.
+  curvature where they meet straight edges, for softer continuous corners. Each corner transition spans 160 px before
+  scaling, distributing the bend over more of the edge.
 - `logo-expanded.svg` / `logo-collapsed.svg`: full horizontal lockup and symbol-only artwork.
 - `src/components/BrandLogo.tsx`: one inline SVG lockup with a lettering mask from the actual selected reference, with no external font
   dependency. Lettering follows UI text color; the raised i dot is warm orange.

@@ -1421,25 +1421,26 @@ D16（维护者批准，2026-10-10 完成）：2026-10-10 20:10（UTC+8）不带
 
 - [x] **BR0：检查源码并记录规划。** 基线 `165e262`，记录大小、职责、实际耦合、扩展边界和兼容要求。Files：本清单、`backend-modularity.md`、`architecture.md`、`development-plan.md`；Verification：源码核对、Markdown 格式与 diff 检查；无业务代码变更。
 
-| 待办      | 一次迁移的职责                                                 | 建议实际文件范围（另含本清单）                                                                               | 依赖  |
-| --------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ----- |
-| [x] BR1.a | 原样迁出 Provider/Model 内联测试                               | `providers.rs`、`providers/tests.rs`、`models.rs`、`models/tests.rs`                                         | BR0   |
-| [x] BR1.b | 原样迁出 Fetch/Catalog 内联测试                                | `model_fetch.rs`、`model_fetch/tests.rs`、`model_catalog.rs`、`model_catalog/tests.rs`                       | BR1.a |
-| [x] BR1.c | 原样迁出 Storage/Credentials 测试；保留跨模块 fake helper 入口 | `storage.rs`、`storage/tests.rs`、`credentials.rs`、`credentials/tests.rs`                                   | BR1.b |
-| [x] BR1.d | 原样迁出 HTTP/Provider Secret 测试；保留本地服务 fixture       | `http_client.rs`、`http_client/tests.rs`、`provider_secrets.rs`、`provider_secrets/tests.rs`                 | BR1.c |
-| [x] BR2.a | 命令状态/凭据锁和 app/log 入口拆分                             | `commands.rs`、`commands/state.rs`、`commands/app.rs`、`lib.rs`                                              | BR1   |
-| [x] BR2.b | Provider 和 Models 命令按功能拆分                              | `commands.rs`、`commands/providers.rs`、`commands/models.rs`、`lib.rs`                                       | BR2.a |
-| [x] BR2.c | 偏好和 MCP 命令按功能拆分                                      | `commands.rs`、`commands/preferences.rs`、`commands/mcp.rs`、`lib.rs`                                        | BR2.b |
-| [x] BR2.d | 记录模块布局偏好、原生回归与本轮完成边界                       | `CHANGELOG.md`、`docs/architecture.md`、`docs/plans/backend-modularity.md`、`docs/plans/development-plan.md` | BR2.c |
-| [x] BR2.e | 今日收尾：统一 README/阶段概览/架构与任务状态                  | `README.md`、`docs/plans/phase-1.md`、`docs/architecture.md`                                                 | BR2.d |
-| [x] BR3.a | Provider 类型/错误从实现中提取；保留原入口                     | `providers.rs`、`providers/types.rs`、`providers/tests.rs`                                                   | BR2   |
-| [ ] BR3.b | Provider 模板和专用校验拆分                                    | `providers.rs`、`providers/templates.rs`、`providers/validation.rs`、`providers/tests.rs`                    | BR3.a |
-| [ ] BR3.c | Provider SQL 与保存编排拆分                                    | `providers.rs`、`providers/repository.rs`、`providers/service.rs`、`providers/tests.rs`                      | BR3.b |
-| [ ] BR4.a | MCP DTO/错误和专用字段校验拆分                                 | `mcp.rs`、`mcp/types.rs`、`mcp/validation.rs`、`mcp/tests.rs`                                                | BR3   |
-| [ ] BR4.b | MCP 查询/SQL 与凭据保存/清理编排拆分                           | `mcp.rs`、`mcp/repository.rs`、`mcp/service.rs`、`mcp/tests.rs`                                              | BR4.a |
-| [ ] BR4.c | 提取共享文字校验，分别映射业务错误；保留 Provider 公开校验入口 | `providers/validation.rs`、`mcp/validation.rs`、`shared.rs`、`lib.rs`                                        | BR4.b |
-| [ ] BR4.d | MCP 独立身份类型与通用 ID 格式校验，保持原有 ID 字符串         | `shared.rs`、`mcp/types.rs`、`mcp/validation.rs`、`mcp/repository.rs`                                        | BR4.c |
-| [ ] BR4.e | 共享时间来源与业务错误映射，保留当前 Provider 时间入口         | `shared.rs`、`providers.rs`、`commands/state.rs`、`commands/models.rs`                                       | BR4.d |
+| 待办        | 一次迁移的职责                                                 | 建议实际文件范围（另含本清单）                                                                               | 依赖  |
+| ----------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ----- |
+| [x] BR1.a   | 原样迁出 Provider/Model 内联测试                               | `providers.rs`、`providers/tests.rs`、`models.rs`、`models/tests.rs`                                         | BR0   |
+| [x] BR1.b   | 原样迁出 Fetch/Catalog 内联测试                                | `model_fetch.rs`、`model_fetch/tests.rs`、`model_catalog.rs`、`model_catalog/tests.rs`                       | BR1.a |
+| [x] BR1.c   | 原样迁出 Storage/Credentials 测试；保留跨模块 fake helper 入口 | `storage.rs`、`storage/tests.rs`、`credentials.rs`、`credentials/tests.rs`                                   | BR1.b |
+| [x] BR1.d   | 原样迁出 HTTP/Provider Secret 测试；保留本地服务 fixture       | `http_client.rs`、`http_client/tests.rs`、`provider_secrets.rs`、`provider_secrets/tests.rs`                 | BR1.c |
+| [x] BR2.a   | 命令状态/凭据锁和 app/log 入口拆分                             | `commands.rs`、`commands/state.rs`、`commands/app.rs`、`lib.rs`                                              | BR1   |
+| [x] BR2.b   | Provider 和 Models 命令按功能拆分                              | `commands.rs`、`commands/providers.rs`、`commands/models.rs`、`lib.rs`                                       | BR2.a |
+| [x] BR2.c   | 偏好和 MCP 命令按功能拆分                                      | `commands.rs`、`commands/preferences.rs`、`commands/mcp.rs`、`lib.rs`                                        | BR2.b |
+| [x] BR2.d   | 记录模块布局偏好、原生回归与本轮完成边界                       | `CHANGELOG.md`、`docs/architecture.md`、`docs/plans/backend-modularity.md`、`docs/plans/development-plan.md` | BR2.c |
+| [x] BR2.e   | 今日收尾：统一 README/阶段概览/架构与任务状态                  | `README.md`、`docs/plans/phase-1.md`、`docs/architecture.md`                                                 | BR2.d |
+| [x] BR3.a   | Provider 类型/错误从实现中提取；保留原入口                     | `providers.rs`、`providers/types.rs`、`providers/tests.rs`                                                   | BR2   |
+| [x] BR3.b.0 | Provider 类型通过公开模板访问器解耦                            | `providers/types.rs`                                                                                         | BR3.a |
+| [ ] BR3.b   | Provider 模板和专用校验拆分                                    | `providers.rs`、`providers/templates.rs`、`providers/validation.rs`、`providers/tests.rs`                    | BR3.a |
+| [ ] BR3.c   | Provider SQL 与保存编排拆分                                    | `providers.rs`、`providers/repository.rs`、`providers/service.rs`、`providers/tests.rs`                      | BR3.b |
+| [ ] BR4.a   | MCP DTO/错误和专用字段校验拆分                                 | `mcp.rs`、`mcp/types.rs`、`mcp/validation.rs`、`mcp/tests.rs`                                                | BR3   |
+| [ ] BR4.b   | MCP 查询/SQL 与凭据保存/清理编排拆分                           | `mcp.rs`、`mcp/repository.rs`、`mcp/service.rs`、`mcp/tests.rs`                                              | BR4.a |
+| [ ] BR4.c   | 提取共享文字校验，分别映射业务错误；保留 Provider 公开校验入口 | `providers/validation.rs`、`mcp/validation.rs`、`shared.rs`、`lib.rs`                                        | BR4.b |
+| [ ] BR4.d   | MCP 独立身份类型与通用 ID 格式校验，保持原有 ID 字符串         | `shared.rs`、`mcp/types.rs`、`mcp/validation.rs`、`mcp/repository.rs`                                        | BR4.c |
+| [ ] BR4.e   | 共享时间来源与业务错误映射，保留当前 Provider 时间入口         | `shared.rs`、`providers.rs`、`commands/state.rs`、`commands/models.rs`                                       | BR4.d |
 
 BR1/BR2/BR3 等依赖名表示该组全部子任务。具体入口仍采用原有 `.rs` facade，
 统一使用 `feature.rs` + `feature/` 的模块布局，不引入 `mod.rs`。共享格式函数只做格式判断，不统一业务身份类型。

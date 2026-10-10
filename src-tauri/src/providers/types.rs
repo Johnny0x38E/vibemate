@@ -1,6 +1,6 @@
 //! Provider identities, requests, records, templates, and stable error codes.
 
-use super::TEMPLATES;
+use super::provider_templates;
 use crate::credentials::{CredentialError, InvalidSecret, Secret};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -54,9 +54,9 @@ impl ProviderKind {
     /// The built-in template that describes this kind's defaults and limits.
     pub fn template(self) -> &'static ProviderTemplate {
         match self {
-            Self::CommandCode => &TEMPLATES[0],
-            Self::DeepSeek => &TEMPLATES[1],
-            Self::OpenRouter => &TEMPLATES[2],
+            Self::CommandCode => &provider_templates()[0],
+            Self::DeepSeek => &provider_templates()[1],
+            Self::OpenRouter => &provider_templates()[2],
         }
     }
 }

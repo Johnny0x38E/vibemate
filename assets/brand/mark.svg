@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+    <defs>
+        <mask id="v-gap" maskUnits="userSpaceOnUse" x="0" y="0" width="256" height="256">
+            <rect width="256" height="256" fill="white" />
+            <path d="M199 27C179 27 169 35 159 55L113 146C103 166 109 178 120 184C134 192 148 190 158 172L217 74C232 48 222 27 199 27Z" fill="black" stroke="black" stroke-width="9" />
+        </mask>
+    </defs>
+    <path mask="url(#v-gap)" fill="#324e40" d="M55 27C29 27 16 40 16 59C16 69 19 77 24 87L87 216C103 246 145 257 174 220L184 205C162 212 145 198 136 178L79 56C70 37 67 27 55 27Z" />
+    <path fill="#a8b8a7" d="M199 27C179 27 169 35 159 55L113 146C103 166 109 178 120 184C134 192 148 190 158 172L217 74C232 48 222 27 199 27Z" />
+</svg>

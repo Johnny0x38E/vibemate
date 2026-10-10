@@ -8,6 +8,9 @@ GitHub release notes are extracted from the matching version section only.
 
 ### Changed
 
+- Replaced the default Tauri icon with vibemate's selected V identity: editable SVG masters, regenerated desktop PNG/ICO/ICNS assets, and a rounded sidebar wordmark without the old yellow dot. The app tile keeps the symbol visible in light and dark appearance.
+- Verified branding with full frontend checks (80 UI and eight release-tool tests), 720×560 light/dark and collapsed-sidebar ego-browser checks, the locked macOS desktop build, and an unsigned local app bundle with the expected ICNS. Windows/Linux native icon display remains pending.
+
 - Replaced the scope landing page with the desktop shell: a collapsible 200/88 px sidebar (fixed widths, toggle only) with the app icon and an SVG "vibemate" wordmark, an Overview destination, honest planned pages, a relationship home with reserved statistics, and Settings with language and appearance controls. The runtime status line was removed. Settings and its tabs stay mounted while hidden so pending saves and input survive navigation.
 - On macOS, removed the separate native title-bar row with Tauri's overlay title bar while keeping the native traffic lights inside the sidebar. Unpainted 44 px top strips drag the window.
 - On Windows and Linux, disabled native decorations and added in-app minimize, maximize or restore, and close controls in the content title strip (including the startup gate).

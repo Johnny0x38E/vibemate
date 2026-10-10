@@ -1,6 +1,6 @@
 # vibemate 第一阶段执行清单
 
-状态：P00–P08、I02（桌面壳、窗控、设置 UX）已完成。**未完成**：P09 全站 i18n/资源校验。业务 Provider/Agent 等功能未开始。勾选与文件范围见下文；设计见 [development-plan.md](development-plan.md)、[desktop-shell-design.md](desktop-shell-design.md)。
+状态：P00–P08、I02（桌面壳、窗控、设置 UX）、I03（自有品牌图标）已完成。**未完成**：P09 全站 i18n/资源校验。业务 Provider/Agent 等功能未开始。勾选与文件范围见下文；设计见 [development-plan.md](development-plan.md)、[desktop-shell-design.md](desktop-shell-design.md)。
 这里是唯一任务状态来源，不能在其他文件维护第二份勾选清单。
 
 ## 执行约定
@@ -578,6 +578,34 @@ Windows/Linux 为无边框与顶栏自绘窗控。设计基准见
 #### I02.e：侧栏拖动调宽（已取消）
 
 固定 **200 / 88 px**（`App.module.css` `--sidebar-width`），仅折叠按钮切换 `data-collapsed`。
+
+### 插队任务 I03：vibemate 自有品牌图标
+
+维护者选择最初方案 1：深绿/鼠尾草绿 V 图形与圆润字标，替换 Tauri 默认图标。
+
+#### I03.a：可维护的矢量母版
+
+- [x] 保存选定参考稿，重绘透明 V 图形与深绿底应用图标 SVG；记录颜色、来源与重建命令。
+
+**Files:** `assets/brand/mark.svg`、`assets/brand/app-icon.svg`、`assets/brand/concept.png`、`assets/brand/README.md`。
+**Verification:** 与选定稿目视比较；小尺寸与单色轮廓检查。
+
+#### I03.b：桌面图标与侧栏字标
+
+- [x] 从同一 SVG 母版生成全部现有桌面 PNG/ICO/ICNS；侧栏继续复用打包图标。
+- [x] 字标沿用原创 SVG 轮廓，加粗为圆润风格；移除旧 Tauri 黄点。
+
+**Files:** `src-tauri/icons/` 全部已有桌面图标（生成文件逐项计入范围）；`src/components/BrandWordmark.tsx`、`src/App.module.css`（同步尺寸注释）。
+**Verification:** `check:frontend`、macOS 原生构建；ego-browser 浅/深色、720×560、展开/折叠与品牌返回首页。
+
+桌面图标是同一母版的生成产物，本子任务集中更新该产物集，不逐个修改几何形状。
+
+#### I03.c：验收记录
+
+- [x] 更新品牌/前端说明、设计状态与英文 changelog，如实记录平台限制。
+
+**Files:** `docs/frontend.md`、`docs/plans/desktop-shell-design.md`、`CHANGELOG.md`；本清单随任务更新。
+**Verification:** 格式与差异检查。
 
 ### Task P09: 让现有界面支持中英文
 

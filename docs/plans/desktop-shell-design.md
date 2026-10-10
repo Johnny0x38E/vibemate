@@ -143,3 +143,12 @@ and input-preservation behavior intact. Add both translations with each new view
 Browser checks prove layout and DOM behavior, not native dragging or window
 controls. Acceptance requires actual Tauri runtime checks and screenshots.
 Do not claim Windows/Linux native behavior from local macOS checks.
+
+## Product identity
+
+The maintainer selected logo concept 1 on 2026-10-10: a rounded V symbol in
+forest/sage green and a rounded lowercase wordmark. Production SVG masters and
+the selected reference are in `assets/brand/`. Desktop packaging and the sidebar
+use the off-white V on a green tile; the two strokes retain a separating gap.
+The wordmark follows light/dark text color. This replaces the default Tauri
+cyan/yellow ring icon. I03 status is tracked only in `todo.md`.

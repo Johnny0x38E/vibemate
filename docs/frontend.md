@@ -309,3 +309,20 @@ The existing macOS debug binary, placed in a temporary app bundle and connected
 to the current Vite frontend, returned version 0.1.0 through real WebView IPC.
 No new Rust command or desktop permission was added. Windows/Linux runtime
 verification and native error injection were not performed.
+
+## Product branding
+
+`assets/brand/` contains the selected V concept and editable SVG masters.
+The app icon is an off-white V on a forest-green tile. The sidebar reuses the
+bundled `128x128@2x.png`, so it follows the desktop icon rather than maintaining
+a second raster asset. `BrandWordmark` uses custom rounded SVG letter paths and
+`currentColor` for light/dark contrast; it no longer uses Tauri's yellow dot.
+See `assets/brand/README.md` for the palette and the locked Tauri CLI icon command.
+
+I03 verification on macOS: all 80 UI tests and eight release-tool tests passed
+in `check:frontend`; the native locked desktop build and an unsigned local `.app`
+bundle succeeded. The bundle's ICNS matches the generated source. The packaged
+app was opened and its sidebar inspected. ego-browser checked the new brand at
+720×560 in light/dark appearance, expanded/collapsed navigation, loaded image
+assets, no horizontal overflow, and keyboard activation of the brand-home button.
+Windows/Linux native icon display remains unverified.

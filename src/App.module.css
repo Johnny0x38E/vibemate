@@ -52,7 +52,7 @@
 .brandName {
     display: block;
     height: 18px;
-    /* viewBox is 101 × 19, so 18 px tall is about 96 px wide. */
+    /* The 103 × 22 SVG preserves its ratio inside this 96 × 18 slot. */
     width: 96px;
     flex-shrink: 0;
     color: var(--color-text);

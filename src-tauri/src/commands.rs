@@ -1,11 +1,13 @@
-//! Desktop metadata, preference, and provider commands exposed to the React interface.
-//!
-//! Keep this boundary thin: future configuration behavior belongs in feature
-//! modules so it can be tested without starting a Tauri window.
+//! Desktop IPC composition. Each feature owns its command module; managed-state
+//! coordination is shared here, while domain behavior remains independent of Tauri.
+
+pub(crate) mod app;
+mod state;
+
+pub(crate) use state::CredentialLock;
 
 use crate::appearance::{self, AppearancePreference};
 use crate::credentials::{OsCredentialStore, Secret};
-use crate::log_access::{self, LogAccess, LogAccessError, LogLocation};
 use crate::model_fetch::{
     self, ModelFetchRegistry, ModelFetchStatus, ModelFetchSummary, ModelFetcher,
 };
@@ -19,86 +21,14 @@ use crate::providers::{
     ProviderTemplate, UpdateProviderRequest,
 };
 use crate::settings::{self, LocalePreference, SettingsError};
-use crate::storage::{Storage, StorageStatus};
+use crate::storage::StorageStatus;
 use serde::Serialize;
-use std::sync::{Mutex, PoisonError};
+use state::{
+    model_timestamp, with_credential_writes, with_mcp_storage, with_model_storage,
+    with_provider_storage,
+};
+use std::sync::PoisonError;
 use tauri::Manager;
-
-/// Serializes this app's writes to the OS credential store.
-///
-/// A replacement reads the old key as a backup, writes the new one, and may put
-/// the old one back. Two such sequences for the same provider must not interleave.
-/// This is a separate lock from the database connection: the credential store may
-/// wait for a system prompt, and database reads must not wait with it.
-///
-/// The mutex only excludes other threads of this process. It does not stop a
-/// second vibemate process from writing the same entry at the same time; the
-/// app does not prevent a second instance yet.
-#[derive(Default)]
-pub(crate) struct CredentialLock(Mutex<()>);
-
-/// Application metadata returned to the frontend without reading user config.
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct AppInfo {
-    name: &'static str,
-    version: &'static str,
-}
-
-/// Return build metadata. This command has no filesystem or network side effects.
-#[tauri::command]
-pub(crate) fn get_app_info() -> AppInfo {
-    AppInfo {
-        name: "vibemate",
-        version: env!("CARGO_PKG_VERSION"),
-    }
-}
-
-/// Return the configured log paths and startup file-logging status without I/O.
-#[tauri::command]
-pub(crate) fn get_log_location(
-    access: tauri::State<'_, LogAccess>,
-) -> Result<LogLocation, LogAccessError> {
-    access.location()
-}
-
-/// Open only the fixed app log file with a platform text tool.
-/// No frontend path or executable is accepted. Files are never created here.
-#[tauri::command]
-pub(crate) async fn open_log_file(app: tauri::AppHandle) -> Result<(), LogAccessError> {
-    let result = tauri::async_runtime::spawn_blocking(move || {
-        let access = app
-            .try_state::<LogAccess>()
-            .ok_or(LogAccessError::PathUnavailable)?;
-        access.open_file_with(log_access::open_in_text_tool)
-    })
-    .await
-    .map_err(|_| LogAccessError::OperationFailed)
-    .and_then(|result| result);
-    if let Err(error) = result {
-        log::warn!(target: "vibemate", "event=command_failed operation=open_log_file code={error:?}");
-    }
-    result
-}
-
-/// Open only the fixed app log directory with the system file manager.
-/// Returns safe error codes without creating a missing directory.
-#[tauri::command]
-pub(crate) async fn open_log_directory(app: tauri::AppHandle) -> Result<(), LogAccessError> {
-    let result = tauri::async_runtime::spawn_blocking(move || {
-        let access = app
-            .try_state::<LogAccess>()
-            .ok_or(LogAccessError::PathUnavailable)?;
-        access.open_directory_with(log_access::open_in_file_manager)
-    })
-    .await
-    .map_err(|_| LogAccessError::OperationFailed)
-    .and_then(|result| result);
-    if let Err(error) = result {
-        log::warn!(target: "vibemate", "event=command_failed operation=open_log_directory code={error:?}");
-    }
-    result
-}
 
 /// Read the saved language choice without writing defaults. Returns safe error
 /// codes if startup storage or the read fails; never exposes SQLite diagnostics.
@@ -187,20 +117,6 @@ pub(crate) async fn save_appearance_preference(
     .map_err(|_| SettingsError::OperationFailed)
     .and_then(|result| result);
     crate::logging::settings_outcome("save_appearance_preference", result)
-}
-
-/// Open the project's fixed GitHub repository in the system browser.
-///
-/// Accepts no frontend URL or executable. Returns a safe code if the operating
-/// system cannot open the browser or the blocking task cannot complete.
-#[tauri::command]
-pub(crate) async fn open_project_repository() -> Result<(), &'static str> {
-    tauri::async_runtime::spawn_blocking(|| {
-        tauri_plugin_opener::open_url("https://github.com/Johnny0x38E/vibemate", None::<&str>)
-            .map_err(|_| "open_failed")
-    })
-    .await
-    .map_err(|_| "open_failed")?
 }
 
 /// Return the built-in provider templates (default URL, allowed protocols, and
@@ -546,61 +462,6 @@ pub(crate) async fn delete_manual_provider_model(
     .map_err(|_| ModelError::OperationFailed)?
 }
 
-fn model_timestamp() -> Result<i64, ModelError> {
-    providers::current_unix_millis().map_err(|_| ModelError::OperationFailed)
-}
-
-/// Resolve startup storage while keeping failures in the model error namespace.
-fn with_model_storage<T>(
-    app: &tauri::AppHandle,
-    operation: impl FnOnce(&Storage) -> Result<T, ModelError>,
-) -> Result<T, ModelError> {
-    let status = app
-        .try_state::<StorageStatus>()
-        .ok_or(ModelError::StorageUnavailable)?;
-    let storage = status
-        .storage()
-        .map_err(|_| ModelError::StorageUnavailable)?;
-    operation(storage)
-}
-
-/// Run `operation` while holding the app-wide `CredentialLock`.
-///
-/// The lock guards no data, only ordering, so a panic elsewhere ("poisoning")
-/// leaves nothing inconsistent to protect and the lock is used as usual.
-/// It gives mutual exclusion within this process only (see `CredentialLock`).
-///
-/// A missing lock means the app was wired up wrongly, not that storage failed,
-/// so it is reported as the generic internal `OperationFailed`, before anything
-/// was written.
-fn with_credential_writes<T>(
-    app: &tauri::AppHandle,
-    operation: impl FnOnce() -> Result<T, ProviderError>,
-) -> Result<T, ProviderError> {
-    let lock = app
-        .try_state::<CredentialLock>()
-        .ok_or(ProviderError::OperationFailed)?;
-    let _credential_writes = lock.0.lock().unwrap_or_else(PoisonError::into_inner);
-    operation()
-}
-
-/// Run one provider operation against the storage opened at startup.
-///
-/// Every provider command needs the same two lookups, and both failures mean
-/// `StorageUnavailable`. Keeping them here leaves each command one line of logic.
-fn with_provider_storage<T>(
-    app: &tauri::AppHandle,
-    operation: impl FnOnce(&Storage) -> Result<T, ProviderError>,
-) -> Result<T, ProviderError> {
-    let status = app
-        .try_state::<StorageStatus>()
-        .ok_or(ProviderError::StorageUnavailable)?;
-    let storage = status
-        .storage()
-        .map_err(|_| ProviderError::StorageUnavailable)?;
-    operation(storage)
-}
-
 /// Read central MCP metadata, without executing servers or opening credentials.
 #[tauri::command]
 pub(crate) async fn list_mcp_definitions(
@@ -677,16 +538,4 @@ pub(crate) async fn cleanup_mcp_credentials(
     })
     .await
     .map_err(|_| crate::mcp::McpError::OperationFailed)?
-}
-fn with_mcp_storage<T>(
-    app: &tauri::AppHandle,
-    operation: impl FnOnce(&Storage) -> Result<T, crate::mcp::McpError>,
-) -> Result<T, crate::mcp::McpError> {
-    let status = app
-        .try_state::<StorageStatus>()
-        .ok_or(crate::mcp::McpError::StorageUnavailable)?;
-    let storage = status
-        .storage()
-        .map_err(|_| crate::mcp::McpError::StorageUnavailable)?;
-    operation(storage)
 }

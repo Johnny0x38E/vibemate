@@ -51,15 +51,15 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            commands::get_app_info,
+            commands::app::get_app_info,
             commands::list_mcp_definitions,
             commands::get_mcp_definition,
             commands::save_mcp_definition,
             commands::cleanup_mcp_credentials,
-            commands::get_log_location,
-            commands::open_log_file,
-            commands::open_log_directory,
-            commands::open_project_repository,
+            commands::app::get_log_location,
+            commands::app::open_log_file,
+            commands::app::open_log_directory,
+            commands::app::open_project_repository,
             commands::get_locale_preference,
             commands::save_locale_preference,
             commands::get_appearance_preference,

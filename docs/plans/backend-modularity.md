@@ -12,16 +12,20 @@
 业务混合文件和内联测试，采用小批迁移；每批保持现有行为可运行。
 扩展能力用实际业务接入来验证，不提前引入动态插件、统一连接器框架或多 crate workspace。
 
-BR1/BR2 已实施：八个大文件的内联测试原样迁出，命令分为 app、preferences、providers、models、mcp 与 state。`commands.rs` 从 692 行变成 11 行的模块声明/锁导出入口；功能命令文件为 82–221 行。Provider/Model 主文件变为 1184/940 行，内部职责仍待 BR3 等后续批次拆分。
+本轮 BR1–BR4 已实施：八个大文件的内联测试原样迁出，命令分为 app、preferences、providers、models、mcp 与 state。`commands.rs` 从 692 行变成 11 行的模块声明/锁导出入口；功能命令文件为 82–221 行。
+
+Provider 原 1184 行运行时入口拆为 63 行 facade，`providers/` 的 types、templates、validation、repository、service 分别为 370、40、126、382、180 行。MCP 原 770 行入口变为 15 行 facade，对应 types、validation、repository、service 为 212、167、338、131 行。SQL 查询和事务留在 repository；OS 凭据写入、补偿、清理步骤留在 service，提示仍在数据库锁外。
+
+`shared.rs` 为 94 行，仅复用文字校验、32 位小写十六进制 ID 格式与毫秒时间。MCP 使用内部 `McpId`，不再依赖 Provider 类型/错误/校验；ProviderId 保留原公开语义，业务错误分别映射。公开 Provider 时间/显示名入口与 Catalog 的内部 Unicode 校验兼容导出保留。Models/Fetch 等其他职责按 BR5 起的实际需求继续整理。
 
 测试模块路径不变，例如 `providers::tests::unified_save`。Rust 从 `providers.rs` 的 `mod tests;` 查找 `providers/tests.rs`，其子模块继续查找 `providers/tests/unified_save.rs`。测试 fixture 的 `include_bytes!` 路径按新文件位置调整；测试清单与迁移前完全一致。共享的测试 fake 和 TCP fixture 仍保持原有入口。
 
 29 个 Tauri 命令的 wire name 和注册顺序保留，只改变 Rust 注册路径。凭据锁在 `commands/state.rs`，仅在 commands 内部开放字段访问，并保留 root 的类型导出供启动注册；服务商和模型仍采用原来的 poisoning 处理，MCP 仍返回原有安全失败码。没有修改调度、锁顺序、协议、数据格式、前端组件或能力权限。
 
-源码规模如下；行数包含空行、注释和测试，不作为强制拆分阈值。
+拆分前基线规模如下；行数包含空行、注释和测试，不作为强制拆分阈值。
 “测试前”指文件首个 `#[cfg(test)]` 标记之前，属于粗略规模指标。
 
-| 文件               | 总行数 | 测试前行数 | 当前集中职责                                         |
+| 文件               | 总行数 | 测试前行数 | 拆分前集中职责                                       |
 | ------------------ | -----: | ---------: | ---------------------------------------------------- |
 | `providers.rs`     |   2235 |       1163 | 品牌/协议/模板、身份、校验、SQL、凭据写入协调        |
 | `model_fetch.rs`   |   1739 |        888 | 获取注册与取消、快照、下载、浏览缓存/搜索/分页、合并 |
@@ -33,14 +37,13 @@ BR1/BR2 已实施：八个大文件的内联测试原样迁出，命令分为 ap
 | `mcp.rs`           |    770 |        768 | DTO、校验、元数据查询、凭据协调与清理、SQL           |
 | `commands.rs`      |    692 |        692 | 所有功能的 Tauri 命令、状态查找、凭据锁              |
 
-MCP 的测试已经独立放在 `mcp/tests.rs`，所以运行时代码仍然较集中。
-其他文件有相当比例的测试：先迁出测试有助阅读，但不能代替业务职责拆分。
+基线 MCP 的测试已独立放在 `mcp/tests.rs`，其他文件有相当比例的内联测试。
+本轮既迁出测试，也完成 Provider/MCP 业务职责拆分。
 
-源码中的具体耦合需要处理：
+基线中的耦合与本轮处理范围：
 
-- MCP 使用 `providers::ProviderId` 验证自己的 ID，并借用服务商的文字校验。
-  应保留 ProviderId 的语义，MCP 使用自己的身份类型，共享小的格式校验函数。
-- 时间戳和通用文字校验现在属于 providers，其他功能因此依赖服务商模块。
+- MCP 原使用 `providers::ProviderId` 和服务商文字校验；BR4 已改为独立身份和共享格式/文字校验。
+- 时间戳和通用文字校验原属于 providers；BR4 已移至 shared，命令按各业务映射原有错误。
 - `model_fetch` 借用 `models::lock`，并直接操作模型 SQL；获取编排与数据访问应分开。
 - `ModelError` 同时包含本地编辑、凭据、网络和目录解析错误。可以拆内部职责，
   但第一轮保留现有前端错误码，不能顺便改动 IPC 合约。
@@ -233,7 +236,7 @@ flowchart TD
    API 转发及 Agent 安装首条路径。每条先明确数据与生命周期，再提取实际复用的网络/授权能力。
    Vercel 的用途确定后再增加适配。未来目录只出现在计划中，当前不创建空壳。
 
-前三步建议作为下一批结构整理，完成各批回归后再继续 Agent/MCP 注入。
+前三步已在本轮完成并通过回归。下一步按实际业务需求继续 Agent/MCP 注入或 BR5 整理。
 后面按新增服务商或云服务接入的实际需求开展，不要求做完所有整理才能开发业务。
 
 ## 回归与边界

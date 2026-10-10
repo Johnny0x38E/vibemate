@@ -28,7 +28,8 @@ page with API keys and unified save. P12 adds Rust-side model fetch, storage,
 search and IPC. The tabbed Models UI, create gate, dual-view browse/save and
 manual model form are implemented per [models-tab-ux.md](models-tab-ux.md).
 The maintainer verified browse/save for three providers in Tauri (2026-10-11);
-manual-model native acceptance remains pending.
+isolated Linux IPC also verified manual-model add/restart/delete using a no-key
+provider fixture. Real-provider UI and broader platform acceptance remain pending.
 
 P31 central MCP management is implemented ahead of Agent deployment at the
 maintainer's request: structured stdio/Streamable HTTP definitions, protected
@@ -37,6 +38,13 @@ contacted, and no Agent config is written. Agent deployment, skills and inferenc
 checks remain pending. [todo.md](todo.md) is the sole task-status source; current
 UI rules and verification are in [desktop-shell-design.md](desktop-shell-design.md)
 and [frontend.md](../frontend.md).
+
+Backend BR1–BR4 has separated eight modules' behavior tests, grouped Tauri
+commands by feature, and split Provider/MCP types, validation, repositories and
+credential services. Domain-neutral text, ID-format and clock helpers are shared;
+MCP has its own identity type. Runtime modules use a `feature.rs` entrypoint with
+a matching directory. This refactoring adds no new integrations or behavior. See
+[backend-modularity.md](backend-modularity.md).
 
 ## Execution plan
 

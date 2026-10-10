@@ -10,8 +10,7 @@
 - **Commands.** `src-tauri/src/commands.rs` declares feature-specific command
   modules under `commands/` (app, preferences, providers, models and mcp).
   `commands/state.rs` holds managed-state lookups and the existing credential lock.
-  These thin Tauri commands handle app
-  metadata, the repository link, language and appearance preferences, provider
+  These thin Tauri commands handle app metadata, the repository link, language and appearance preferences, provider
   instances, provider API keys, and provider model fetch/list/selection (user-triggered
   only). The Models tab uses `browse_upstream_models_page` (in-memory browse
   catalog, optional fuzzy `query`, no SQLite merge) and
@@ -20,15 +19,18 @@
   and registers them.
 - **Persistence.** `src-tauri/src/storage.rs` owns the private SQLite database in
   the app-data folder and its forward-only migrations (currently schema v8).
-  `settings.rs` and `appearance.rs` store preferences; `providers.rs` validates
-  and stores provider instances (stable random IDs, cursor pages, optimistic
+  `settings.rs` and `appearance.rs` store preferences; `providers.rs` preserves
+  the public domain entrypoints while `providers/` separates types, templates,
+  validation, repository SQL and credential save orchestration. It stores provider instances (stable random IDs, cursor pages, optimistic
   `revision` checks); `provider_secrets.rs` reads key status and replaces keys;
   `models.rs` stores fetched and manual model rows and selections per provider.
   SQLite stores only a `provider-<id>` reference per key, never the key itself.
 - **Credentials.** `src-tauri/src/credentials.rs` provides the OS credential-store
   interface, key validation and the compensation helpers that keep the store and
   SQLite consistent when providers are created and keys are replaced.
-- **Central MCP.** `mcp.rs` validates stdio/Streamable HTTP definitions and stores
+- **Central MCP.** `mcp.rs` exposes the original domain entrypoints; `mcp/` separates
+  request/record types, validation, repository SQL and credential services.
+  It validates stdio/Streamable HTTP definitions and stores
   non-secret metadata, stable IDs and revisions. Every env/header value uses
   an immutable OS credential reference. Failed known database writes compensate
   new credentials; uncertain commits retain them and require reconciliation.
@@ -36,6 +38,10 @@
   Reads never load values. Saves and enablement changes perform no server process
   launch, HTTP request or Agent config write. Crash-orphan recovery remains P34.
   See [central definition boundaries](plans/mcp-central.md).
+- **Shared helpers.** `shared.rs` holds domain-neutral text checks, random-ID format
+  checks and Unix milliseconds. Provider and MCP keep their own identity types and
+  map failures into their existing errors. MCP has no Provider dependency.
+  The original public Provider validation and clock entrypoints remain available.
 - **HTTP and models.** `http_client.rs` performs bounded HTTPS GETs with cancellation
   and system-proxy support; `model_catalog.rs` and `model_fetch.rs` map the three
   phase-1 providers' list endpoints into stored catalog rows; `model_search.rs`
@@ -43,8 +49,9 @@
 
 Saved provider instances and selected models are configuration only: nothing writes
 agent configuration or claims a verified inference connection yet. Manual model
-add is implemented in the UI; its real desktop add/restart/delete acceptance
-remains pending.
+add is implemented in the UI. Isolated Linux IPC verified its add/restart/delete
+using a seeded no-key provider fixture; real-provider UI and other-platform
+acceptance remain separate.
 
 Keep one Rust crate while learning the framework. Create feature modules as
 behavior is implemented rather than adding empty abstractions now.
@@ -53,9 +60,10 @@ The maintainer has requested planning for GitHub/Vercel integrations, more model
 providers and MCP capabilities, including GitHub configuration backups, source-based
 MCP/Skill installation, potential Agent installation and API forwarding to Agents. The [backend modularity plan](plans/backend-modularity.md)
 records current file sizes and dependency issues, incremental splits, and future
-extension boundaries. BR1/BR2 in [todo.md](plans/todo.md) are implemented:
-eight modules have separate behavior-test files and commands are grouped by
-feature. Provider/MCP internal responsibilities remain the next planned batch.
+extension boundaries. BR1–BR4 in [todo.md](plans/todo.md) are implemented:
+eight modules have separate behavior-test files, commands are grouped by feature,
+and Provider/MCP responsibilities are split with shared text, identity and clock
+helpers. Models/Fetch and future integrations remain planned.
 The layout uses `feature.rs` plus a matching `feature/` directory. Keep cloud-service accounts separate
 from model providers and central MCP definitions. Reuse credential storage and
 extract HTTP transport only when a concrete second use requires it. Planned

@@ -5,9 +5,11 @@ Built with Rust, Tauri 2, React, and TypeScript. Licensed under MIT.
 
 ## Status
 
-This repository contains a runnable desktop scaffold and development rules.
-Provider connections, agent injection, skill management, and MCP management
-are planned and are not implemented yet.
+The desktop app supports provider configuration with OS-stored API keys, model
+fetching and selection, manual model entries, and central stdio/HTTP MCP
+definitions. It also includes bilingual preferences, themes and local logging.
+Agent deployment, skill management, MCP execution/deployment and inference
+verification remain planned. Saving an MCP definition never starts its server.
 
 The first release targets **Command Code, DeepSeek, and OpenRouter** with
 **Pi and Grok Build**. macOS, Windows, and Linux are the target platforms.
@@ -47,11 +49,18 @@ builds a desktop executable without an installer.
 - [`src/AGENTS.md`](src/AGENTS.md): strict frontend rules.
 - [`docs/frontend.md`](docs/frontend.md): React/Tauri boundaries and automated checks.
 - [`docs/architecture.md`](docs/architecture.md): responsibilities and extension points.
+- [`docs/plans/backend-modularity.md`](docs/plans/backend-modularity.md): backend module boundaries and incremental refactoring.
 - [`docs/plans/phase-1.md`](docs/plans/phase-1.md): scope, implementation order, and acceptance criteria.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md): local checks and contribution expectations.
 
-The initial screen makes one read-only call from React to Rust to display the
-application version. It does not read or modify any agent configuration.
+React uses typed, validated IPC wrappers. Rust owns configuration persistence,
+credentials and network access. Backend commands are grouped by feature under
+`src-tauri/src/commands/`; Provider and MCP internals separate types, validation,
+SQLite repositories and credential save/cleanup services. Modules use
+`feature.rs` with a matching directory.
+The app does not write Agent configuration yet. Implementation status and
+remaining native/platform acceptance are recorded in
+[`docs/plans/todo.md`](docs/plans/todo.md).
 
 GitHub Actions runs frontend checks and native Rust checks/builds on all three
 platforms after this repository is pushed to GitHub. Installer builds are defined in `.github/workflows/release.yml`: a stable version

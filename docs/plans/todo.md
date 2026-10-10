@@ -1424,7 +1424,7 @@ BR1–BR4 是建议的近期整理；BR5–BR7 按新增功能需求开展，不
 | 待办      | 一次迁移的职责                                                 | 建议实际文件范围（另含本清单）                                                               | 依赖  |
 | --------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ----- |
 | [x] BR1.a | 原样迁出 Provider/Model 内联测试                               | `providers.rs`、`providers/tests.rs`、`models.rs`、`models/tests.rs`                         | BR0   |
-| [ ] BR1.b | 原样迁出 Fetch/Catalog 内联测试                                | `model_fetch.rs`、`model_fetch/tests.rs`、`model_catalog.rs`、`model_catalog/tests.rs`       | BR1.a |
+| [x] BR1.b | 原样迁出 Fetch/Catalog 内联测试                                | `model_fetch.rs`、`model_fetch/tests.rs`、`model_catalog.rs`、`model_catalog/tests.rs`       | BR1.a |
 | [ ] BR1.c | 原样迁出 Storage/Credentials 测试；保留跨模块 fake helper 入口 | `storage.rs`、`storage/tests.rs`、`credentials.rs`、`credentials/tests.rs`                   | BR1.b |
 | [ ] BR1.d | 原样迁出 HTTP/Provider Secret 测试；保留本地服务 fixture       | `http_client.rs`、`http_client/tests.rs`、`provider_secrets.rs`、`provider_secrets/tests.rs` | BR1.c |
 | [ ] BR2.a | 命令状态/凭据锁和 app/log 入口拆分                             | `commands.rs`、`commands/state.rs`、`commands/app.rs`、`lib.rs`                              | BR1   |

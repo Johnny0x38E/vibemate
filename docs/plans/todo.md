@@ -1416,7 +1416,7 @@ D16（维护者批准，2026-10-10 完成）：2026-10-10 20:10（UTC+8）不带
 
 维护者提出未来 GitHub 配置备份、MCP/Skill 来源安装、给 Agent 的 API 转发，可能直接安装 Agent，以及 Vercel/更多模型服务商接入，优先规划模块边界。
 设计见 [backend-modularity.md](backend-modularity.md)。规划已推送，按下列小批任务迁移；勾选仅表示该批次已实施并完成适用回归。
-本轮完成 BR1–BR4；BR1/BR2 已完成，BR3/BR4 继续拆分 Provider/MCP 与共享校验。BR5–BR11 按新增功能需求开展。
+本轮 BR1–BR4 已完成：测试、命令、Provider/MCP 职责及共享文字/ID/时间已拆分。BR5–BR11 按新增功能需求开展。
 表中范围包含本清单更新；若实际 import/测试 fixture 迁移超出五个文件，先继续拆批。
 
 - [x] **BR0：检查源码并记录规划。** 基线 `165e262`，记录大小、职责、实际耦合、扩展边界和兼容要求。Files：本清单、`backend-modularity.md`、`architecture.md`、`development-plan.md`；Verification：源码核对、Markdown 格式与 diff 检查；无业务代码变更。
@@ -1440,7 +1440,7 @@ D16（维护者批准，2026-10-10 完成）：2026-10-10 20:10（UTC+8）不带
 | [x] BR4.b   | MCP 查询/SQL 与凭据保存/清理编排拆分                           | `mcp.rs`、`mcp/repository.rs`、`mcp/service.rs`、`mcp/tests.rs`                                              | BR4.a |
 | [x] BR4.c   | 提取共享文字校验，分别映射业务错误；保留 Provider 公开校验入口 | `providers/validation.rs`、`mcp/validation.rs`、`shared.rs`、`lib.rs`                                        | BR4.b |
 | [x] BR4.d   | MCP 独立身份类型与通用 ID 格式校验，保持原有 ID 字符串         | `shared.rs`、`mcp/types.rs`、`mcp/validation.rs`、`providers/types.rs`                                       | BR4.c |
-| [ ] BR4.e   | 共享时间来源与业务错误映射，保留当前 Provider 时间入口         | `shared.rs`、`providers.rs`、`commands/state.rs`、`commands/mcp.rs`                                          | BR4.d |
+| [x] BR4.e   | 共享时间来源与业务错误映射，保留当前 Provider 时间入口         | `shared.rs`、`providers.rs`、`commands/state.rs`、`commands/mcp.rs`                                          | BR4.d |
 
 BR1/BR2/BR3 等依赖名表示该组全部子任务。具体入口仍采用原有 `.rs` facade，
 统一使用 `feature.rs` + `feature/` 的模块布局，不引入 `mod.rs`。共享格式函数只做格式判断，不统一业务身份类型。

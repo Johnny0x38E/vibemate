@@ -1,24 +1,24 @@
 //! Provider domain facade. Types, validation, SQL, and credential orchestration
 //! remain independent of desktop IPC; the public entry points stay stable.
 
+mod repository;
+mod service;
+mod templates;
 mod types;
+mod validation;
+
+#[cfg(test)]
+use crate::storage::Storage;
+pub use repository::{get_provider, list_providers};
+pub use service::{create_provider, update_provider, update_provider_with_secret};
+pub use templates::provider_templates;
 pub use types::{
     CreateProviderRequest, ListProvidersRequest, MAX_BASE_URL_LEN, MAX_DISPLAY_NAME_CHARS,
     MAX_PAGE_SIZE, ProviderError, ProviderId, ProviderKind, ProviderPage, ProviderProtocol,
     ProviderRecord, ProviderSettings, ProviderTemplate, UpdateProviderRequest,
 };
-mod templates;
-mod validation;
-pub use templates::provider_templates;
 pub(crate) use validation::is_hidden_format_character;
 pub use validation::{normalize_base_url, parse_kind, validate_display_name, validate_settings};
-mod repository;
-mod service;
-#[cfg(test)]
-use crate::storage::Storage;
-pub use repository::{get_provider, list_providers};
-pub use service::{create_provider, update_provider, update_provider_with_secret};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Read the system clock as Unix epoch milliseconds for `created_at`/`updated_at`.
 ///
@@ -28,10 +28,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// # Errors
 /// Returns `OperationFailed` if the clock is set before 1970 or impossibly far ahead.
 pub fn current_unix_millis() -> Result<i64, ProviderError> {
-    let elapsed = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|_| ProviderError::OperationFailed)?;
-    i64::try_from(elapsed.as_millis()).map_err(|_| ProviderError::OperationFailed)
+    crate::shared::current_unix_millis().map_err(|_| ProviderError::OperationFailed)
 }
 
 /// Test support shared with `provider_secrets`.

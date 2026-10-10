@@ -2,7 +2,6 @@
 
 use super::state::{CredentialLock, with_mcp_storage};
 use crate::credentials::OsCredentialStore;
-use crate::providers;
 use tauri::Manager;
 
 /// Read central MCP metadata, without executing servers or opening credentials.
@@ -50,7 +49,7 @@ pub(crate) async fn save_mcp_definition(
                 .0
                 .lock()
                 .map_err(|_| crate::mcp::McpError::OperationFailed)?;
-            let now = providers::current_unix_millis()
+            let now = crate::shared::current_unix_millis()
                 .map_err(|_| crate::mcp::McpError::OperationFailed)?;
             crate::mcp::save_definition(storage, &OsCredentialStore, request, now)
         })

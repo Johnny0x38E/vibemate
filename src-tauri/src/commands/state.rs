@@ -2,7 +2,7 @@
 //! Business modules never depend on this desktop-only boundary.
 
 use crate::models::ModelError;
-use crate::providers::{self, ProviderError};
+use crate::providers::ProviderError;
 use crate::storage::{Storage, StorageStatus};
 use std::sync::{Mutex, PoisonError};
 use tauri::Manager;
@@ -22,7 +22,7 @@ pub(crate) struct CredentialLock(pub(super) Mutex<()>);
 
 /// Return Unix milliseconds in the existing model error namespace.
 pub(super) fn model_timestamp() -> Result<i64, ModelError> {
-    providers::current_unix_millis().map_err(|_| ModelError::OperationFailed)
+    crate::shared::current_unix_millis().map_err(|_| ModelError::OperationFailed)
 }
 
 /// Resolve startup storage while keeping failures in the model error namespace.

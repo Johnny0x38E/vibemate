@@ -1,6 +1,8 @@
 //! Small domain-neutral text, identity, and clock helpers. Business modules map
 //! failures into their own stable error codes; this module owns no persistence.
 
+use std::time::{SystemTime, UNIX_EPOCH};
+
 /// Text violates the caller's length or visibility constraints.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct InvalidText;
@@ -76,4 +78,17 @@ pub(crate) fn is_random_id(value: &str) -> bool {
         && value
             .bytes()
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+/// The system clock cannot be represented as nonnegative Unix milliseconds.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct InvalidTimestamp;
+
+/// Read Unix milliseconds; reject a pre-epoch clock or an i64 overflow.
+/// Callers map clock failures to their existing domain errors.
+pub(crate) fn current_unix_millis() -> Result<i64, InvalidTimestamp> {
+    let elapsed = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| InvalidTimestamp)?;
+    i64::try_from(elapsed.as_millis()).map_err(|_| InvalidTimestamp)
 }

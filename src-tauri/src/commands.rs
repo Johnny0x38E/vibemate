@@ -3,6 +3,7 @@
 //! Keep this boundary thin: future configuration behavior belongs in feature
 //! modules so it can be tested without starting a Tauri window.
 
+use crate::appearance::{self, AppearancePreference};
 use crate::settings::{self, LocalePreference, SettingsError};
 use crate::storage::StorageStatus;
 use serde::Serialize;
@@ -62,6 +63,45 @@ pub(crate) async fn save_locale_preference(
             .storage()
             .map_err(|_| SettingsError::StorageUnavailable)?;
         settings::save_locale_preference(storage, preference)
+    })
+    .await
+    .map_err(|_| SettingsError::OperationFailed)?
+}
+
+/// Read the validated appearance/theme pair without writing a default row.
+/// Database work uses the blocking pool; only safe settings error codes escape.
+#[tauri::command]
+pub(crate) async fn get_appearance_preference(
+    app: tauri::AppHandle,
+) -> Result<AppearancePreference, SettingsError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let status = app
+            .try_state::<StorageStatus>()
+            .ok_or(SettingsError::StorageUnavailable)?;
+        let storage = status
+            .storage()
+            .map_err(|_| SettingsError::StorageUnavailable)?;
+        appearance::load_appearance_preference(storage)
+    })
+    .await
+    .map_err(|_| SettingsError::OperationFailed)?
+}
+
+/// Save a typed pair atomically, returning the committed choice. A task failure
+/// has an unknown outcome and requires a read before another save is attempted.
+#[tauri::command]
+pub(crate) async fn save_appearance_preference(
+    app: tauri::AppHandle,
+    preference: AppearancePreference,
+) -> Result<AppearancePreference, SettingsError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let status = app
+            .try_state::<StorageStatus>()
+            .ok_or(SettingsError::StorageUnavailable)?;
+        let storage = status
+            .storage()
+            .map_err(|_| SettingsError::StorageUnavailable)?;
+        appearance::save_appearance_preference(storage, preference)
     })
     .await
     .map_err(|_| SettingsError::OperationFailed)?

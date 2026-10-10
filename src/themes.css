@@ -1,0 +1,115 @@
+/* Palette values only. App.css resolves brightness into shared semantic tokens. */
+:root {
+    --theme-text-light: #202621;
+    --theme-background-light: #f7f8f7;
+    --theme-sidebar-light: #ecefec;
+    --theme-surface-light: #ffffff;
+    --theme-hover-light: #dfe4e0;
+    --theme-selected-light: #dce3dd;
+    --theme-border-light: #d7ddd8;
+    --theme-summary-light: #5b665e;
+    --theme-focus-light: #59685e;
+    --theme-accent-light: #59685e;
+    --theme-text-dark: #e5eae6;
+    --theme-background-dark: #191d1a;
+    --theme-sidebar-dark: #141815;
+    --theme-surface-dark: #202622;
+    --theme-hover-dark: #252c27;
+    --theme-selected-dark: #303b33;
+    --theme-border-dark: #354038;
+    --theme-summary-dark: #a1ada4;
+    --theme-focus-dark: #b6c9bd;
+    --theme-accent-dark: #b6c9bd;
+}
+
+:root[data-theme="graphite"] {
+    --theme-text-light: #25252a;
+    --theme-background-light: #f7f7f8;
+    --theme-sidebar-light: #ededf0;
+    --theme-surface-light: #ffffff;
+    --theme-hover-light: #e2e2e7;
+    --theme-selected-light: #dedee6;
+    --theme-border-light: #d3d3dc;
+    --theme-summary-light: #62626c;
+    --theme-focus-light: #4d4d5c;
+    --theme-accent-light: #4d4d5c;
+    --theme-text-dark: #ececf1;
+    --theme-background-dark: #1b1b20;
+    --theme-sidebar-dark: #151519;
+    --theme-surface-dark: #232329;
+    --theme-hover-dark: #2d2d36;
+    --theme-selected-dark: #363640;
+    --theme-border-dark: #3e3e4a;
+    --theme-summary-dark: #adadbb;
+    --theme-focus-dark: #c5c5d3;
+    --theme-accent-dark: #c5c5d3;
+}
+
+:root[data-theme="linen"] {
+    --theme-text-light: #332e29;
+    --theme-background-light: #faf8f3;
+    --theme-sidebar-light: #f0eae0;
+    --theme-surface-light: #fffdf8;
+    --theme-hover-light: #e9dfd1;
+    --theme-selected-light: #e7d6c0;
+    --theme-border-light: #ddd0bf;
+    --theme-summary-light: #625447;
+    --theme-focus-light: #88603c;
+    --theme-accent-light: #88603c;
+    --theme-text-dark: #f1e7d7;
+    --theme-background-dark: #211d19;
+    --theme-sidebar-dark: #191612;
+    --theme-surface-dark: #2a241e;
+    --theme-hover-dark: #352c23;
+    --theme-selected-dark: #443326;
+    --theme-border-dark: #4c3e30;
+    --theme-summary-dark: #c2ad94;
+    --theme-focus-dark: #e1b784;
+    --theme-accent-dark: #e1b784;
+}
+
+:root[data-theme="iris"] {
+    --theme-text-light: #2e2940;
+    --theme-background-light: #f8f7fb;
+    --theme-sidebar-light: #efecf5;
+    --theme-surface-light: #ffffff;
+    --theme-hover-light: #e4def0;
+    --theme-selected-light: #e0d5f0;
+    --theme-border-light: #d8cde5;
+    --theme-summary-light: #64546f;
+    --theme-focus-light: #7654aa;
+    --theme-accent-light: #7654aa;
+    --theme-text-dark: #ece4fa;
+    --theme-background-dark: #201b29;
+    --theme-sidebar-dark: #19151f;
+    --theme-surface-dark: #292233;
+    --theme-hover-dark: #342940;
+    --theme-selected-dark: #433053;
+    --theme-border-dark: #4d3a60;
+    --theme-summary-dark: #b6a5cb;
+    --theme-focus-dark: #c7a2ef;
+    --theme-accent-dark: #c7a2ef;
+}
+
+:root[data-theme="ocean"] {
+    --theme-text-light: #23343e;
+    --theme-background-light: #f5f8fa;
+    --theme-sidebar-light: #e9f0f3;
+    --theme-surface-light: #ffffff;
+    --theme-hover-light: #dce7ed;
+    --theme-selected-light: #d2e3ec;
+    --theme-border-light: #c7d8e1;
+    --theme-summary-light: #506773;
+    --theme-focus-light: #266a8c;
+    --theme-accent-light: #266a8c;
+    --theme-text-dark: #e0edf4;
+    --theme-background-dark: #192229;
+    --theme-sidebar-dark: #131b21;
+    --theme-surface-dark: #202d36;
+    --theme-hover-dark: #283947;
+    --theme-selected-dark: #2d4353;
+    --theme-border-dark: #365367;
+    --theme-summary-dark: #9fb9c9;
+    --theme-focus-dark: #87bfdc;
+    --theme-accent-dark: #87bfdc;
+}

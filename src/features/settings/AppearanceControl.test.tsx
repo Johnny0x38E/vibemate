@@ -4,63 +4,220 @@ import {
     fireEvent,
     render,
     screen,
+    waitFor,
 } from "@testing-library/react";
+import { StrictMode } from "react";
 import { I18nextProvider } from "react-i18next";
-import { afterEach, expect, test } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { createAppI18n } from "../../i18n";
+import {
+    AppearanceRequestError,
+    getAppearancePreference,
+    saveAppearancePreference,
+    type AppearancePreferenceResult,
+    type AppearancePreference,
+} from "../../lib/desktop/appearance";
 import { AppearanceControl } from "./AppearanceControl";
 
+vi.mock(import("../../lib/desktop/appearance"), async (importOriginal) => ({
+    ...(await importOriginal()),
+    getAppearancePreference: vi.fn(),
+    saveAppearancePreference: vi.fn(),
+}));
+const read = vi.mocked(getAppearancePreference);
+const save = vi.mocked(saveAppearancePreference);
+beforeEach(() => {
+    read.mockReset();
+    save.mockReset();
+    read.mockResolvedValue({ kind: "preview" });
+});
 afterEach(cleanup);
 
-test("selects appearance from the dropdown", async () => {
-    const instance = await createAppI18n("en");
-    render(
-        <I18nextProvider i18n={instance}>
-            <AppearanceControl />
-        </I18nextProvider>,
+function deferred<T>() {
+    let resolve: (value: T) => void = () => {
+        throw new Error("Not initialized");
+    };
+    const promise = new Promise<T>((res) => {
+        resolve = res;
+    });
+    return { promise, resolve };
+}
+async function mount(locale: "en" | "zh-CN" = "en") {
+    const instance = await createAppI18n(locale);
+    const view = render(
+        <StrictMode>
+            <I18nextProvider i18n={instance}>
+                <AppearanceControl />
+                <input aria-label="Draft" defaultValue="" />
+            </I18nextProvider>
+        </StrictMode>,
     );
-    const select = screen.getByRole("combobox", { name: "Appearance" });
-    fireEvent.change(select, { target: { value: "light" } });
-    expect(document.documentElement.dataset["appearance"]).toBe("light");
-    expect(select).toHaveProperty("value", "light");
-    fireEvent.change(select, { target: { value: "dark" } });
+    return { instance, ...view };
+}
+async function ready(label = "Color theme") {
+    const select = screen.getByRole("combobox", { name: label });
+    await waitFor(() => {
+        expect(select).toHaveProperty("disabled", false);
+    });
+    return select;
+}
+
+test("preview tries built-in palettes and brightness without invoking save", async () => {
+    await mount();
+    const themes = await ready();
+    fireEvent.change(themes, { target: { value: "iris" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Appearance" }), {
+        target: { value: "dark" },
+    });
+    expect(document.documentElement.dataset["theme"]).toBe("iris");
     expect(document.documentElement.dataset["appearance"]).toBe("dark");
-    fireEvent.change(select, { target: { value: "system" } });
-    expect(document.documentElement.dataset["appearance"]).toBe("system");
+    expect(screen.getByRole("status").textContent).toContain("not saved");
+    expect(save).not.toHaveBeenCalled();
 });
 
-test("keeps the selected appearance when language changes", async () => {
-    const instance = await createAppI18n("en");
-    render(
-        <I18nextProvider i18n={instance}>
-            <AppearanceControl />
-        </I18nextProvider>,
-    );
-    fireEvent.change(screen.getByRole("combobox", { name: "Appearance" }), {
-        target: { value: "light" },
+test("language changes retain selected colors and edited sibling input", async () => {
+    const { instance } = await mount();
+    const select = await ready();
+    fireEvent.change(select, { target: { value: "linen" } });
+    fireEvent.change(screen.getByRole("textbox"), {
+        target: { value: "editing" },
     });
     await act(async () => {
         await instance.changeLanguage("zh-CN");
     });
-    expect(screen.getByRole("combobox", { name: "外观" })).toHaveProperty(
-        "value",
-        "light",
-    );
-    expect(document.documentElement.dataset["appearance"]).toBe("light");
+    expect(screen.getByRole("combobox", { name: "主题配色" })).toBe(select);
+    expect(select).toHaveProperty("value", "linen");
+    expect(screen.getByDisplayValue("editing")).toBeDefined();
 });
 
-test("restores the previous document attribute when its owner unmounts", async () => {
+test("restores document attributes on unmount", async () => {
     document.documentElement.dataset["appearance"] = "dark";
-    const instance = await createAppI18n("en");
-    const view = render(
-        <I18nextProvider i18n={instance}>
-            <AppearanceControl />
-        </I18nextProvider>,
-    );
-    fireEvent.change(screen.getByRole("combobox", { name: "Appearance" }), {
-        target: { value: "light" },
-    });
+    document.documentElement.dataset["theme"] = "ocean";
+    const view = await mount();
+    await ready();
     view.unmount();
     expect(document.documentElement.dataset["appearance"]).toBe("dark");
+    expect(document.documentElement.dataset["theme"]).toBe("ocean");
     delete document.documentElement.dataset["appearance"];
+    delete document.documentElement.dataset["theme"];
+});
+
+test("loads the saved pair and applies changes only after confirmation", async () => {
+    read.mockResolvedValue({
+        kind: "desktop",
+        preference: { appearance: "dark", theme: "ocean" },
+    });
+    const request = deferred<AppearancePreference>();
+    save.mockReturnValue(request.promise);
+    await mount();
+    const select = await ready();
+    expect(document.documentElement.dataset["theme"]).toBe("ocean");
+    fireEvent.change(select, { target: { value: "iris" } });
+    expect(select).toHaveProperty("disabled", true);
+    expect(document.documentElement.dataset["theme"]).toBe("ocean");
+    fireEvent.change(select, { target: { value: "linen" } });
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(save).toHaveBeenCalledWith({ appearance: "dark", theme: "iris" });
+    await act(async () => {
+        request.resolve({ appearance: "dark", theme: "iris" });
+        await request.promise;
+    });
+    expect(document.documentElement.dataset["theme"]).toBe("iris");
+    expect(select).toHaveProperty("disabled", false);
+});
+
+test("known failed writes keep the previous pair and allow another attempt", async () => {
+    read.mockResolvedValue({
+        kind: "desktop",
+        preference: { appearance: "light", theme: "forest" },
+    });
+    save.mockRejectedValue(new AppearanceRequestError("write_failed"));
+    await mount("zh-CN");
+    const select = await ready("主题配色");
+    fireEvent.change(select, { target: { value: "linen" } });
+    expect((await screen.findByRole("alert")).textContent).toContain(
+        "原配色未改变",
+    );
+    expect(select).toHaveProperty("value", "forest");
+    expect(select).toHaveProperty("disabled", false);
+});
+
+test("unknown saves block further writes until the persisted pair is reloaded", async () => {
+    read.mockResolvedValue({
+        kind: "desktop",
+        preference: { appearance: "light", theme: "forest" },
+    });
+    save.mockRejectedValue(new AppearanceRequestError("invalid_response"));
+    await mount();
+    const select = await ready();
+    fireEvent.change(select, { target: { value: "iris" } });
+    await screen.findByRole("alert");
+    expect(select).toHaveProperty("disabled", true);
+    fireEvent.change(select, { target: { value: "ocean" } });
+    expect(save).toHaveBeenCalledTimes(1);
+    read.mockResolvedValue({
+        kind: "desktop",
+        preference: { appearance: "light", theme: "iris" },
+    });
+    fireEvent.click(
+        screen.getByRole("button", { name: "Reload saved appearance" }),
+    );
+    await ready();
+    expect(select).toHaveProperty("value", "iris");
+});
+
+test("read failures are safe and disable changes until retry succeeds", async () => {
+    read.mockRejectedValue(new Error("private diagnostic"));
+    await mount();
+    await screen.findByRole("alert");
+    expect(screen.queryByText(/private diagnostic/)).toBeNull();
+    expect(
+        screen.getByRole("combobox", { name: "Color theme" }),
+    ).toHaveProperty("disabled", true);
+    read.mockResolvedValue({ kind: "preview" });
+    fireEvent.click(
+        screen.getByRole("button", { name: "Reload saved appearance" }),
+    );
+    await ready();
+});
+
+test("obsolete StrictMode reads cannot replace the current saved theme", async () => {
+    const old = deferred<AppearancePreferenceResult>();
+    const current = deferred<AppearancePreferenceResult>();
+    read.mockReturnValueOnce(old.promise).mockReturnValueOnce(current.promise);
+    await mount();
+    await act(async () => {
+        current.resolve({
+            kind: "desktop",
+            preference: { appearance: "dark", theme: "iris" },
+        });
+        await current.promise;
+    });
+    await act(async () => {
+        old.resolve({
+            kind: "desktop",
+            preference: { appearance: "light", theme: "forest" },
+        });
+        await old.promise;
+    });
+    expect(document.documentElement.dataset["theme"]).toBe("iris");
+    expect(document.documentElement.dataset["appearance"]).toBe("dark");
+});
+
+test("late saves after unmount cannot change the document colors", async () => {
+    read.mockResolvedValue({
+        kind: "desktop",
+        preference: { appearance: "system", theme: "forest" },
+    });
+    const request = deferred<AppearancePreference>();
+    save.mockReturnValue(request.promise);
+    const view = await mount();
+    const select = await ready();
+    fireEvent.change(select, { target: { value: "iris" } });
+    view.unmount();
+    await act(async () => {
+        request.resolve({ appearance: "system", theme: "iris" });
+        await request.promise;
+    });
+    expect(document.documentElement.dataset["theme"]).toBeUndefined();
 });

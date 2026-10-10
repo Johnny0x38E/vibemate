@@ -109,6 +109,23 @@
             "preview": "Browser preview cannot read the desktop application version.",
             "failed": "Application information could not be read. Try again.",
             "retry": "Reload application information"
+        },
+        "theme": {
+            "label": "Color theme",
+            "names": {
+                "forest": "Forest",
+                "graphite": "Graphite",
+                "linen": "Linen",
+                "iris": "Iris",
+                "ocean": "Ocean"
+            },
+            "loading": "Reading appearance preferences…",
+            "readFailed": "Saved appearance preferences could not be read. Reload before making changes.",
+            "saving": "Saving appearance preferences…",
+            "saveFailed": "Appearance preferences could not be saved. Your previous colors are unchanged; try again.",
+            "saveUnconfirmed": "The saved appearance preferences could not be confirmed. Reload before making another change.",
+            "preview": "Browser preview applies colors only in this window; preferences are not saved.",
+            "reload": "Reload saved appearance"
         }
     }
 }

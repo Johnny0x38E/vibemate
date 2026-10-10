@@ -5,6 +5,7 @@ import {
     fireEvent,
     render as renderView,
     screen,
+    waitFor,
 } from "@testing-library/react";
 import type { i18n } from "i18next";
 import { I18nextProvider } from "react-i18next";
@@ -19,6 +20,11 @@ import {
     saveLocalePreference,
     SettingsRequestError,
 } from "./lib/desktop/settings";
+
+import {
+    getAppearancePreference,
+    saveAppearancePreference,
+} from "./lib/desktop/appearance";
 
 let translator: i18n;
 function render(element: ReactNode) {
@@ -60,11 +66,21 @@ vi.mock(import("./lib/desktop/settings"), async (importOriginal) => ({
     saveLocalePreference: vi.fn<typeof saveLocalePreference>(),
 }));
 
+vi.mock(import("./lib/desktop/appearance"), async (importOriginal) => ({
+    ...(await importOriginal()),
+    getAppearancePreference: vi.fn<typeof getAppearancePreference>(),
+    saveAppearancePreference: vi.fn<typeof saveAppearancePreference>(),
+}));
+
 beforeEach(async () => {
     vi.mocked(getLocalePreference)
         .mockReset()
         .mockResolvedValue({ kind: "desktop", preference: "en" });
     vi.mocked(saveLocalePreference).mockReset();
+    vi.mocked(getAppearancePreference)
+        .mockReset()
+        .mockResolvedValue({ kind: "preview" });
+    vi.mocked(saveAppearancePreference).mockReset();
     translator = await createAppI18n("en");
 });
 
@@ -142,13 +158,21 @@ test("keeps every button and field outside the window drag regions", () => {
     expect(controlsInsideDragRegion).toEqual([]);
 });
 
-test("keeps the same settings input and appearance while navigating elsewhere", () => {
+test("keeps the same settings input and colors while navigating elsewhere", async () => {
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    await waitFor(() => {
+        expect(
+            screen.getByRole("combobox", { name: "Appearance" }),
+        ).toHaveProperty("disabled", false);
+    });
     const input = screen.getByRole("textbox", { name: "Unsubmitted note" });
     fireEvent.change(input, { target: { value: "Still editing" } });
     fireEvent.change(screen.getByRole("combobox", { name: "Appearance" }), {
         target: { value: "light" },
+    });
+    fireEvent.change(screen.getByRole("combobox", { name: "Color theme" }), {
+        target: { value: "iris" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Agents" }));
     expect(screen.queryByRole("textbox")).toBeNull();
@@ -160,6 +184,9 @@ test("keeps the same settings input and appearance while navigating elsewhere", 
         "light",
     );
     expect(document.documentElement.dataset["appearance"]).toBe("light");
+    expect(
+        screen.getByRole("combobox", { name: "Color theme" }),
+    ).toHaveProperty("value", "iris");
 });
 
 test("translates current navigation without resetting the selected page or collapse", async () => {
@@ -270,4 +297,32 @@ test("finishes a pending save while Settings is hidden and retains its confirmed
     expect(screen.getByRole("combobox", { name: "语言" })).toBe(selector);
     expect(selector).toHaveProperty("value", "zh-CN");
     expect(selector).toHaveProperty("disabled", false);
+});
+
+test("the brand returns home in both logo states and preserves collapse", () => {
+    render(<App />);
+    const brand = screen.getByRole("button", {
+        name: "vibemate · Configuration overview",
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Agents" }));
+    fireEvent.click(brand);
+    expect(screen.getByRole("main").getAttribute("aria-label")).toBe(
+        "Configuration overview",
+    );
+    fireEvent.click(
+        screen.getByRole("button", { name: "Collapse navigation" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Providers" }));
+    expect(
+        screen.getByRole("button", {
+            name: "vibemate · Configuration overview",
+        }),
+    ).toBe(brand);
+    fireEvent.click(brand);
+    expect(screen.getByRole("main").getAttribute("aria-label")).toBe(
+        "Configuration overview",
+    );
+    expect(
+        screen.getByRole("button", { name: "Expand navigation" }),
+    ).toBeDefined();
 });

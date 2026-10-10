@@ -54,6 +54,14 @@ const MIGRATIONS: &[Migration] = &[
             preference TEXT NOT NULL CHECK (preference IN ('system', 'zh-CN', 'en'))
         ) STRICT;",
     },
+    Migration {
+        version: 3,
+        sql: "CREATE TABLE appearance_preference (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            appearance TEXT NOT NULL CHECK (appearance IN ('system', 'light', 'dark')),
+            theme TEXT NOT NULL CHECK (theme IN ('forest', 'graphite', 'linen', 'iris', 'ocean'))
+        ) STRICT;",
+    },
 ];
 
 /// Errors from opening or migrating the private database.

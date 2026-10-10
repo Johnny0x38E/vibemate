@@ -1,5 +1,6 @@
 //! Desktop startup and command registration for vibemate.
 
+pub mod appearance;
 mod commands;
 pub mod credentials;
 pub mod settings;
@@ -38,6 +39,8 @@ pub fn run() {
             commands::get_app_info,
             commands::get_locale_preference,
             commands::save_locale_preference,
+            commands::get_appearance_preference,
+            commands::save_appearance_preference,
         ])
         .run(tauri::generate_context!())
         .expect("failed to start vibemate desktop runtime");

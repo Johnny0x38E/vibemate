@@ -9,14 +9,24 @@ import { StrictMode } from "react";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { createAppI18n } from "../../i18n";
-import { getAppInfo, type AppInfo } from "../../lib/desktop";
+import {
+    getAppInfo,
+    openProjectRepository,
+    type AppInfo,
+} from "../../lib/desktop";
 import { AboutPanel } from "./AboutPanel";
 
-vi.mock("../../lib/desktop", () => ({ getAppInfo: vi.fn() }));
+vi.mock("../../lib/desktop", () => ({
+    getAppInfo: vi.fn(),
+    openProjectRepository: vi.fn(),
+}));
+const openRepository = vi.mocked(openProjectRepository);
 const readInfo = vi.mocked(getAppInfo);
 afterEach(cleanup);
 beforeEach(() => {
     readInfo.mockReset();
+    openRepository.mockReset();
+    openRepository.mockResolvedValue(undefined);
 });
 
 function deferred() {
@@ -58,7 +68,9 @@ test("loads runtime metadata and translates without rereading or changing identi
     });
     expect(screen.getByText("0.1.0")).toBeDefined();
     expect(
-        screen.getByText("https://github.com/Johnny0x38E/vibemate"),
+        screen.getByRole("button", {
+            name: "Open GitHub repository in your browser",
+        }),
     ).toBeDefined();
     const calls = readInfo.mock.calls.length;
     await act(async () => {
@@ -88,7 +100,9 @@ test("sanitizes failures and retries in Chinese", async () => {
     const request = deferred();
     readInfo.mockReturnValue(request.promise);
     fireEvent.click(screen.getByRole("button", { name: "重新读取应用信息" }));
-    expect(screen.queryByRole("button")).toBeNull();
+    expect(
+        screen.queryByRole("button", { name: "重新读取应用信息" }),
+    ).toBeNull();
     await act(async () => {
         request.resolve({ name: "vibemate", version: "0.1.0" });
         await request.promise;
@@ -119,3 +133,50 @@ for (const outcome of ["success", "failure"] as const) {
         expect(screen.queryByText("9.9.9")).toBeNull();
     });
 }
+
+test("opens GitHub on explicit activation, blocks repeated clicks, and recovers from failure", async () => {
+    readInfo.mockResolvedValue({ name: "vibemate", version: "0.1.0" });
+    let rejectOpening: (reason: Error) => void = () => {
+        throw new Error("Not initialized");
+    };
+    openRepository.mockReturnValueOnce(
+        new Promise<void>((_, reject) => {
+            rejectOpening = reject;
+        }),
+    );
+    const { instance } = await mount();
+    await screen.findByText("0.1.0");
+    expect(openRepository).not.toHaveBeenCalled();
+    const button = screen.getByRole("button", {
+        name: "Open GitHub repository in your browser",
+    });
+    fireEvent.click(button);
+    expect(button).toHaveProperty("disabled", true);
+    fireEvent.click(button);
+    expect(openRepository).toHaveBeenCalledTimes(1);
+    await act(async () => {
+        rejectOpening(new Error("private OS details"));
+        await Promise.resolve();
+    });
+    expect(screen.getByRole("alert").textContent).toBe(
+        "Could not open GitHub. Try again.",
+    );
+    expect(screen.queryByText(/private OS/)).toBeNull();
+    await act(async () => {
+        await instance.changeLanguage("zh-CN");
+    });
+    expect(screen.getByRole("alert").textContent).toBe(
+        "无法打开 GitHub，请重试。",
+    );
+    fireEvent.click(
+        screen.getByRole("button", { name: "在浏览器中打开 GitHub 仓库" }),
+    );
+    await act(async () => {
+        await Promise.resolve();
+    });
+    expect(openRepository).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(
+        screen.getByRole("button", { name: "在浏览器中打开 GitHub 仓库" }),
+    ).toHaveProperty("disabled", false);
+});

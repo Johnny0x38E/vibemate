@@ -108,7 +108,10 @@
             "loading": "正在读取应用信息…",
             "preview": "浏览器预览无法读取桌面应用版本。",
             "failed": "无法读取应用信息，请重试。",
-            "retry": "重新读取应用信息"
+            "retry": "重新读取应用信息",
+            "openRepository": "在浏览器中打开 GitHub 仓库",
+            "openingRepository": "正在打开 GitHub…",
+            "repositoryFailed": "无法打开 GitHub，请重试。"
         },
         "theme": {
             "label": "主题配色",

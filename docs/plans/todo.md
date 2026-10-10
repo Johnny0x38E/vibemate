@@ -716,6 +716,20 @@ I05.a.1 校正 `mark.svg` / `app-icon.svg` 与同母版生成的桌面图标集�
 **Files:** `src/components/BrandLogo.tsx`、`CHANGELOG.md`、本清单。
 **Verification:** `check:frontend`；不运行浏览器或截图视觉检查。
 
+### 插队任务 I10：重新设计关于页
+
+- [x] I10.a：与常规 Tab 同宽，展开 Logo、说明与信息行建立层次；GitHub 图标入口、打开中与失败反馈。
+- [x] I10.b：Rust 固定仓库打开命令，使用稳定 Tauri opener，仅暴露固定地址，不增加通用 URL/文件打开权限。
+- [x] I10.c：更新交互测试、中英资源、Octicons MIT 声明与前端文档；运行前端、Rust 和本地桌面构建检查。
+- [ ] 外观由维护者人工验收，不运行浏览器或截图检查。
+
+**I10.a Files:** `AboutPanel.tsx`、`AboutPanel.module.css`、`AboutPanel.test.tsx`。
+**I10.b.1 Files:** `src-tauri/src/commands.rs`、`src-tauri/src/lib.rs`、`src-tauri/Cargo.toml`、`src-tauri/Cargo.lock`。
+**I10.b.2 Files:** `src/lib/desktop.ts`、`src/lib/desktop/repository.test.ts`。
+**Verification:** `check:frontend` 通过 99 项 UI 测试和 8 项发布测试；Rust fmt/Clippy 通过、31 项测试通过（既有 OS 密钥库测试忽略）；locked macOS 桌面构建和本地 unsigned app 打包通过。外观及实际系统浏览器打开由维护者人工验收，Windows/Linux 未原生验收。
+
+**I10.c Files:** `src/locales/en.json`、`src/locales/zh-CN.json`、`assets/licenses/octicons-MIT.txt`、`docs/frontend.md`、`CHANGELOG.md`；本清单同步更新。
+
 ### Task P09: 让现有界面支持中英文
 
 **Description:** 把现有 App 的文本与 metadata 状态接入 i18n，并将翻译一致性和切换回归检查纳入完成标准。

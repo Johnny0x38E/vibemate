@@ -37,6 +37,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_app_info,
+            commands::open_project_repository,
             commands::get_locale_preference,
             commands::save_locale_preference,
             commands::get_appearance_preference,

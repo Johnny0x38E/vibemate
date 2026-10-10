@@ -108,7 +108,10 @@
             "loading": "Reading application information…",
             "preview": "Browser preview cannot read the desktop application version.",
             "failed": "Application information could not be read. Try again.",
-            "retry": "Reload application information"
+            "retry": "Reload application information",
+            "openRepository": "Open GitHub repository in your browser",
+            "openingRepository": "Opening GitHub…",
+            "repositoryFailed": "Could not open GitHub. Try again."
         },
         "theme": {
             "label": "Color theme",

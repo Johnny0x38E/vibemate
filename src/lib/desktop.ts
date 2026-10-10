@@ -28,3 +28,24 @@ export async function getAppInfo(): Promise<AppInfo | null> {
     }
     return { name: data.name, version: data.version };
 }
+
+/**
+ * Open the fixed project repository. Rust owns desktop browser launching;
+ * browser preview opens a new tab without exposing the opener window.
+ */
+export async function openProjectRepository(): Promise<void> {
+    if (!isTauri()) {
+        window.open(
+            "https://github.com/Johnny0x38E/vibemate",
+            "_blank",
+            "noopener,noreferrer",
+        );
+        return;
+    }
+    try {
+        const response = await invoke<unknown>("open_project_repository");
+        if (response !== null) throw new Error("Invalid repository response.");
+    } catch {
+        throw new Error("Could not open the project repository.");
+    }
+}

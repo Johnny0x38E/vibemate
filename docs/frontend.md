@@ -295,9 +295,9 @@ JavaScript package version. Unknown IPC exceptions become bundled error feedback
 with a retry button. Each read effect has a cleanup flag so obsolete StrictMode
 requests cannot replace current results.
 
-The panel displays the brand, MIT license, and the repository address verified
-against this checkout's Git remote. The address is selectable text; opening an
-external browser is not implemented. Settings tabs use one Tab stop with
+The panel displays the expanded brand, MIT license, and an icon button for the
+repository verified against this checkout's Git remote. Activating it opens the
+fixed repository in the system browser. Settings tabs use one Tab stop with
 Left/Right, Home, and End selecting and focusing native tab buttons. Preference
 controls and loaded About metadata remain mounted while hidden.
 
@@ -394,3 +394,18 @@ I06 was checked with UI behavior tests and `check:frontend`. Per the maintainer'
 instruction, visual inspection is manual: check circle spacing, selected/focus
 rings, theme colors, and wrapping in the minimum window. No browser screenshots
 or automated visual review were performed for this change.
+
+The About panel uses the same full-width settings surface as General. Its
+header renders the expanded `BrandLogo`, followed by aligned version, license,
+and repository rows. The GitHub Octicons mark is an icon button with a
+translated accessible name, pending state, and retryable failure feedback.
+Octicons is MIT-licensed; its notice is in `assets/licenses/octicons-MIT.txt`.
+
+`openProjectRepository` is the desktop boundary for explicit activation. Rust
+accepts no URL arguments and calls the stable Tauri opener crate's `open_url`
+with the fixed repository address. The opener plugin is not registered and no
+opener IPC permissions are granted: only the app's fixed command is exposed.
+Browser preview opens that same address in a tab with `noopener,noreferrer`.
+Visual acceptance is performed by the maintainer.
+
+The repository opener uses the [official Rust `open_url` API](https://docs.rs/tauri-plugin-opener/2.7.0/tauri_plugin_opener/fn.open_url.html). The GitHub mark comes from [GitHub Octicons](https://github.com/primer/octicons/blob/main/icons/mark-github-16.svg).

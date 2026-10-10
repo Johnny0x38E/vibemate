@@ -8,6 +8,8 @@ GitHub release notes are extracted from the matching version section only.
 
 ### Changed
 
+- Redesigned Settings About to match General’s full content width, with the expanded brand logo and aligned metadata rows. Replaced the raw repository address with an accessible GitHub Octicons button that opens the fixed repository in the system browser, with pending and retryable failure feedback. The icon’s MIT notice is bundled. Verified with 99 UI tests, eight release-tool tests, frontend lint/type/build checks, Rust fmt/Clippy and 31 passing tests (the existing OS-keychain smoke test remains ignored), and a locked macOS build with an unsigned local app bundle. Visual and native browser-opening acceptance remains with the maintainer.
+
 - Cleared the original reference i dot in the rendered brand logo mask, preventing a dark remnant below the raised orange accent.
 
 - Smoothed the macOS icon tile with continuous corner curves and a broader 160 px corner transition, keeping its existing Dock footprint and logo artwork.

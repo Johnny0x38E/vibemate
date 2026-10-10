@@ -106,3 +106,17 @@ pub(crate) async fn save_appearance_preference(
     .await
     .map_err(|_| SettingsError::OperationFailed)?
 }
+
+/// Open the project's fixed GitHub repository in the system browser.
+///
+/// Accepts no frontend URL or executable. Returns a safe code if the operating
+/// system cannot open the browser or the blocking task cannot complete.
+#[tauri::command]
+pub(crate) async fn open_project_repository() -> Result<(), &'static str> {
+    tauri::async_runtime::spawn_blocking(|| {
+        tauri_plugin_opener::open_url("https://github.com/Johnny0x38E/vibemate", None::<&str>)
+            .map_err(|_| "open_failed")
+    })
+    .await
+    .map_err(|_| "open_failed")?
+}

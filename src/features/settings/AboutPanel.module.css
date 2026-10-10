@@ -1,23 +1,36 @@
 .card {
+    width: 100%;
     margin-top: var(--space-lg);
-    max-width: 36rem;
-    padding: var(--space-lg);
+    overflow: hidden;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-card);
     background: var(--color-surface);
 }
 
+.identity {
+    padding: var(--space-xl) var(--space-lg) var(--space-lg);
+    border-bottom: 1px solid var(--color-border);
+}
+
 .brand {
     margin: 0;
-    font-size: 1rem;
-    font-weight: 600;
+    line-height: 0;
+}
+
+.logo {
+    display: block;
+    width: 15.525rem;
+    max-width: 100%;
+    height: auto;
 }
 
 .description {
-    margin: var(--space-sm) 0 var(--space-lg);
+    max-width: 44rem;
+    margin: var(--space-md) 0 0;
     color: var(--color-summary);
     font-size: 0.8125rem;
     line-height: 1.7;
+    text-wrap: pretty;
 }
 
 .details {
@@ -28,9 +41,16 @@
 
 .details > div {
     display: grid;
-    grid-template-columns: 6rem minmax(0, 1fr);
-    gap: var(--space-sm);
-    margin-top: var(--space-md);
+    grid-template-columns: minmax(6rem, 1fr) minmax(0, 2fr);
+    align-items: center;
+    gap: var(--space-lg);
+    min-height: 3.5rem;
+    padding: 14px var(--space-lg);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.details > div:last-child {
+    border-bottom: 0;
 }
 
 .details dt {
@@ -39,15 +59,48 @@
 
 .details dd {
     margin: 0;
+    text-align: end;
     overflow-wrap: anywhere;
+    font-variant-numeric: tabular-nums;
 }
 
 .repository {
-    user-select: text;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    padding: 0;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    color: var(--color-text);
+    background: var(--color-background);
+    cursor: pointer;
+}
+
+.repository:hover:not(:disabled),
+.retry:hover {
+    background: var(--color-hover);
+}
+
+.repository:active:not(:disabled) {
+    background: var(--color-selected);
+}
+
+.repository:disabled {
+    opacity: 0.5;
+    cursor: wait;
+}
+
+.feedback {
+    display: block;
+    margin-top: var(--space-sm);
+    color: var(--color-summary);
 }
 
 .retry {
     display: block;
+    margin-inline-start: auto;
     margin-top: var(--space-sm);
     padding: 6px 10px;
     border: 1px solid var(--color-border);
@@ -58,10 +111,7 @@
     cursor: pointer;
 }
 
-.retry:hover {
-    background: var(--color-hover);
-}
-
+.repository:focus-visible,
 .retry:focus-visible {
     outline: 2px solid var(--color-focus);
     outline-offset: 2px;

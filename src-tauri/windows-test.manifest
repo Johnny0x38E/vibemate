@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+  Embedded into the Windows unit-test harness (see build.rs).
+  Requesting Common Controls v6 makes the loader use comctl32 v6 instead of the
+  v5 DLL that Windows picks by default. Without it, test binaries that link
+  Tauri's dialog-related imports (for example TaskDialogIndirect) fail at
+  startup with STATUS_ENTRYPOINT_NOT_FOUND (0xc0000139).
+-->
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <dependency>
+    <dependentAssembly>
+      <assemblyIdentity
+        type="win32"
+        name="Microsoft.Windows.Common-Controls"
+        version="6.0.0.0"
+        processorArchitecture="*"
+        publicKeyToken="6595b64144ccf1df"
+        language="*" />
+    </dependentAssembly>
+  </dependency>
+</assembly>

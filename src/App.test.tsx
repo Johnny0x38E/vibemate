@@ -10,6 +10,7 @@ import {
 import type { i18n } from "i18next";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { fieldSelectValue, setFieldSelectValue } from "./test/fieldSelect";
 import DesktopApp from "./App";
 import { createAppI18n } from "./i18n";
 import { LocaleStartup } from "./features/settings/LocaleStartup";
@@ -227,19 +228,19 @@ test("keeps the same settings input and colors while navigating elsewhere", asyn
     });
     const input = screen.getByRole("textbox", { name: "Unsubmitted note" });
     fireEvent.change(input, { target: { value: "Still editing" } });
-    fireEvent.change(screen.getByRole("combobox", { name: "Appearance" }), {
-        target: { value: "light" },
-    });
+    setFieldSelectValue(
+        screen.getByRole("combobox", { name: "Appearance" }),
+        "light",
+    );
     fireEvent.click(screen.getByRole("radio", { name: "Iris" }));
     fireEvent.click(screen.getByRole("button", { name: "Agents" }));
     expect(screen.queryByRole("textbox")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     expect(screen.getByRole("textbox")).toBe(input);
     expect(input).toHaveProperty("value", "Still editing");
-    expect(screen.getByRole("combobox", { name: "Appearance" })).toHaveProperty(
-        "value",
-        "light",
-    );
+    expect(
+        fieldSelectValue(screen.getByRole("combobox", { name: "Appearance" })),
+    ).toBe("light");
     expect(document.documentElement.dataset["appearance"]).toBe("light");
     expect(screen.getByRole("radio", { name: "Iris" })).toHaveProperty(
         "checked",
@@ -306,7 +307,7 @@ test("keeps an uncertain language save blocked across navigation until a real se
     const selector = screen.getByRole("combobox", {
         name: "Language",
     });
-    fireEvent.change(selector, { target: { value: "zh-CN" } });
+    setFieldSelectValue(selector, "zh-CN");
     const reload = await screen.findByRole("button", {
         name: "Reload saved preference",
     });
@@ -323,10 +324,9 @@ test("keeps an uncertain language save blocked across navigation until a real se
     });
     fireEvent.click(reload);
     await screen.findByRole("combobox", { name: "语言" });
-    expect(screen.getByRole("combobox", { name: "语言" })).toHaveProperty(
-        "value",
-        "zh-CN",
-    );
+    expect(
+        fieldSelectValue(screen.getByRole("combobox", { name: "语言" })),
+    ).toBe("zh-CN");
     expect(document.documentElement.lang).toBe("zh-CN");
     expect(
         screen
@@ -348,7 +348,7 @@ test("finishes a pending save while Settings is hidden and retains its confirmed
     const selector = screen.getByRole("combobox", {
         name: "Language",
     });
-    fireEvent.change(selector, { target: { value: "zh-CN" } });
+    setFieldSelectValue(selector, "zh-CN");
     fireEvent.click(screen.getByRole("button", { name: "Providers" }));
     await act(async () => {
         finishSave("zh-CN");
@@ -362,7 +362,7 @@ test("finishes a pending save while Settings is hidden and retains its confirmed
     ).toBe("page");
     fireEvent.click(screen.getByRole("button", { name: "设置" }));
     expect(screen.getByRole("combobox", { name: "语言" })).toBe(selector);
-    expect(selector).toHaveProperty("value", "zh-CN");
+    expect(fieldSelectValue(selector)).toBe("zh-CN");
     expect(selector).toHaveProperty("disabled", false);
 });
 
@@ -440,10 +440,9 @@ test("a saved Chinese choice overrides an English system at startup", async () =
         screen.getByRole("button", { name: "vibemate · 配置概览" }),
     ).toBeDefined();
     fireEvent.click(screen.getByRole("button", { name: "设置" }));
-    expect(screen.getByRole("combobox", { name: "语言" })).toHaveProperty(
-        "value",
-        "zh-CN",
-    );
+    expect(
+        fieldSelectValue(screen.getByRole("combobox", { name: "语言" })),
+    ).toBe("zh-CN");
     expectNoKeysOrDiagnostics();
 });
 
@@ -455,10 +454,9 @@ test("following the system opens in Chinese for a Chinese system language", asyn
     renderDesktopStartup("zh-Hans-CN");
     fireEvent.click(await screen.findByRole("button", { name: "设置" }));
     expect(document.documentElement.lang).toBe("zh-CN");
-    expect(screen.getByRole("combobox", { name: "语言" })).toHaveProperty(
-        "value",
-        "system",
-    );
+    expect(
+        fieldSelectValue(screen.getByRole("combobox", { name: "语言" })),
+    ).toBe("system");
     expect(screen.getByRole("tab", { name: "常规" })).toBeDefined();
     expectNoKeysOrDiagnostics();
 });
@@ -482,7 +480,7 @@ test("switching language through the real selector keeps page, tab, collapse, in
     fireEvent.change(input, { target: { value: "Still editing" } });
     const selector = screen.getByRole("combobox", { name: "Language" });
 
-    fireEvent.change(selector, { target: { value: "zh-CN" } });
+    setFieldSelectValue(selector, "zh-CN");
     await screen.findByRole("combobox", { name: "语言" });
     expect(saveLocalePreference).toHaveBeenCalledExactlyOnceWith("zh-CN");
     expect(document.documentElement.lang).toBe("zh-CN");
@@ -509,7 +507,7 @@ test("switching language through the real selector keeps page, tab, collapse, in
     expect(getAppInfo).toHaveBeenCalledTimes(metadataReads);
 
     fireEvent.click(screen.getByRole("tab", { name: "常规" }));
-    fireEvent.change(selector, { target: { value: "en" } });
+    setFieldSelectValue(selector, "en");
     await screen.findByRole("combobox", { name: "Language" });
     expect(document.documentElement.lang).toBe("en");
     expect(input).toHaveProperty("value", "Still editing");
@@ -857,11 +855,11 @@ test.each([
         renderDesktopStartup("en-US");
         fireEvent.click(await screen.findByRole("button", { name: settings }));
         const selector = screen.getByRole("combobox", { name: label });
-        fireEvent.change(selector, { target: { value: next } });
+        setFieldSelectValue(selector, next);
         // Appearance preview has its own status line, so find this one by text.
         const feedback = await screen.findByText(message);
         expect(feedback.getAttribute("role")).toBe("status");
-        expect(selector).toHaveProperty("value", preference);
+        expect(fieldSelectValue(selector)).toBe(preference);
         expect(selector).toHaveProperty("disabled", false);
         expect(document.documentElement.lang).toBe(preference);
         expectNoKeysOrDiagnostics();

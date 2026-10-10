@@ -10,6 +10,11 @@ import { StrictMode } from "react";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { NotificationProvider } from "../../components/Notifications";
+import {
+    fieldSelectOptionValues,
+    fieldSelectValue,
+    setFieldSelectValue,
+} from "../../test/fieldSelect";
 import { createAppI18n } from "../../i18n";
 import {
     createProvider,
@@ -349,17 +354,14 @@ test("New opens the form with the first template, in Rust's order, selected and 
     ).toBeDefined();
     const kind = screen.getByRole("combobox", { name: "Provider" });
     expect(screen.getAllByRole("combobox")[0]).toBe(kind);
-    expect(kind).toHaveProperty("value", "openrouter");
-    expect(
-        Array.from(kind.querySelectorAll("option"), (option) => option.value),
-    ).toEqual(["openrouter", "deepseek"]);
+    expect(fieldSelectValue(kind)).toBe("openrouter");
+    expect(fieldSelectOptionValues(kind)).toEqual(["openrouter", "deepseek"]);
     expect(screen.getByLabelText("Name")).toHaveProperty("value", "OpenRouter");
     expect(screen.getByLabelText("Base URL")).toHaveProperty(
         "value",
         "https://openrouter.ai/api/v1",
     );
-    expect(screen.getByLabelText("Protocol")).toHaveProperty(
-        "value",
+    expect(fieldSelectValue(screen.getByLabelText("Protocol"))).toBe(
         "chat_completions",
     );
     typeKey();
@@ -734,12 +736,9 @@ test("the detail page and the create form show the provider icon next to the pro
     await click("New configuration");
     const select = screen.getByRole("combobox", { name: "Provider" });
     const icon = (): string | null | undefined =>
-        select
-            .closest("div")
-            ?.parentElement?.querySelector("img")
-            ?.getAttribute("src");
+        select.querySelector("img")?.getAttribute("src");
     expect(icon()).toMatch(/\/deepseek\.svg$/);
-    fireEvent.change(select, { target: { value: "openrouter" } });
+    setFieldSelectValue(select, "openrouter");
     expect(icon()).toMatch(/\/openrouter\.svg$/);
 });
 

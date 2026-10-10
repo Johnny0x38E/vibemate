@@ -15,6 +15,7 @@ import {
     type LocalePreference,
     type LocalePreferenceResult,
 } from "../../lib/desktop/settings";
+import { FieldSelect } from "../../components/FieldSelect";
 import fieldStyles from "./settingsField.module.css";
 import styles from "./LanguageSelector.module.css";
 
@@ -178,40 +179,40 @@ export function LanguageSelector({
                     <label className={fieldStyles["label"]} htmlFor={id}>
                         {t("settings.language.label")}
                     </label>
-                    {/* The wrapper draws the arrow: WebKit ignores height on a native select
-                    unless its appearance is removed, and CSP forbids data: images. */}
-                    <div className={fieldStyles["field"]}>
-                        <select
-                            className={fieldStyles["select"]}
-                            id={id}
-                            value={preference}
-                            disabled={preview || busy || needsReload}
-                            aria-describedby={
-                                statusMessage ? `${id}-status` : undefined
+                    <FieldSelect
+                        id={id}
+                        value={preference}
+                        disabled={preview || busy || needsReload}
+                        aria-describedby={
+                            statusMessage ? `${id}-status` : undefined
+                        }
+                        options={[
+                            {
+                                value: "system",
+                                label: t("settings.language.system"),
+                            },
+                            {
+                                value: "zh-CN",
+                                label: t("settings.language.zhCN"),
+                                optionLang: "zh-CN",
+                            },
+                            {
+                                value: "en",
+                                label: t("settings.language.en"),
+                                optionLang: "en",
+                            },
+                        ]}
+                        onChange={(value) => {
+                            if (
+                                value === "system" ||
+                                value === "zh-CN" ||
+                                value === "en"
+                            ) {
+                                // save handles both rejection and lifecycle cleanup internally.
+                                void save(value);
                             }
-                            onChange={(event) => {
-                                const value = event.currentTarget.value;
-                                if (
-                                    value === "system" ||
-                                    value === "zh-CN" ||
-                                    value === "en"
-                                ) {
-                                    // save handles both rejection and lifecycle cleanup internally.
-                                    void save(value);
-                                }
-                            }}
-                        >
-                            <option value="system">
-                                {t("settings.language.system")}
-                            </option>
-                            <option value="zh-CN" lang="zh-CN">
-                                {t("settings.language.zhCN")}
-                            </option>
-                            <option value="en" lang="en">
-                                {t("settings.language.en")}
-                            </option>
-                        </select>
-                    </div>
+                        }}
+                    />
                 </div>
                 {footer}
             </div>

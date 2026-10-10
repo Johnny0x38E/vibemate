@@ -15,6 +15,7 @@ import {
     THEME_IDS,
     type AppearancePreference,
 } from "../../lib/desktop/appearance";
+import { FieldSelect } from "../../components/FieldSelect";
 import fieldStyles from "./settingsField.module.css";
 import styles from "./AppearanceControl.module.css";
 
@@ -180,28 +181,24 @@ export function AppearanceControl(): JSX.Element {
                 >
                     {t("settings.appearance.label")}
                 </label>
-                <div className={fieldStyles["field"]}>
-                    <select
-                        className={fieldStyles["select"]}
-                        id={`${id}-appearance`}
-                        value={appearance}
-                        disabled={blocked}
-                        onChange={(event) => {
-                            const value = event.currentTarget.value;
-                            if (isAppearance(value))
-                                void changePreference({
-                                    appearance: value,
-                                    theme,
-                                });
-                        }}
-                    >
-                        {(["system", "light", "dark"] as const).map((mode) => (
-                            <option key={mode} value={mode}>
-                                {t(`settings.appearance.modes.${mode}`)}
-                            </option>
-                        ))}
-                    </select>
-                </div>
+                <FieldSelect
+                    id={`${id}-appearance`}
+                    value={appearance}
+                    disabled={blocked}
+                    options={(["system", "light", "dark"] as const).map(
+                        (mode) => ({
+                            value: mode,
+                            label: t(`settings.appearance.modes.${mode}`),
+                        }),
+                    )}
+                    onChange={(value) => {
+                        if (isAppearance(value))
+                            void changePreference({
+                                appearance: value,
+                                theme,
+                            });
+                    }}
+                />
             </div>
             <div className={fieldStyles["row"]}>
                 <span id={`${id}-theme-label`} className={fieldStyles["label"]}>

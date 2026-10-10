@@ -18,6 +18,11 @@ import {
     type ProviderTemplate,
 } from "../../lib/desktop/providers";
 import { getProviderSecretStatus } from "../../lib/desktop/providerSecrets";
+import {
+    fieldSelectOptionLabels,
+    fieldSelectValue,
+    setFieldSelectValue,
+} from "../../test/fieldSelect";
 import { ProviderForm, type ProviderFormMode } from "./ProviderForm";
 
 vi.mock(
@@ -152,19 +157,37 @@ async function mount(
     };
 }
 
-function input(label: string): HTMLInputElement | HTMLSelectElement {
-    const element = screen.getByLabelText(label);
+function input(label: string): HTMLElement {
+    return screen.getByLabelText(label);
+}
+
+function fieldValue(label: string): string {
+    const element = input(label);
+    if (element instanceof HTMLInputElement) return element.value;
+    if (element instanceof HTMLSelectElement) return element.value;
+    if (element.getAttribute("role") === "combobox")
+        return fieldSelectValue(element);
+    throw new Error(`${label} is not a supported field`);
+}
+
+function setField(label: string, value: string): void {
+    const element = input(label);
     if (
-        !(element instanceof HTMLInputElement) &&
-        !(element instanceof HTMLSelectElement)
+        element instanceof HTMLInputElement ||
+        element instanceof HTMLSelectElement
     ) {
-        throw new Error(`${label} is not a form control`);
+        fireEvent.change(element, { target: { value } });
+        return;
     }
-    return element;
+    if (element.getAttribute("role") === "combobox") {
+        setFieldSelectValue(element, value);
+        return;
+    }
+    throw new Error(`${label} is not a supported field`);
 }
 
 function type(label: string, value: string): void {
-    fireEvent.change(input(label), { target: { value } });
+    setField(label, value);
 }
 
 /**
@@ -211,17 +234,15 @@ test("starts with the first template selected and its defaults filled", async ()
     const kind = input("Provider");
     // The provider is the first field, with no empty placeholder option.
     expect(screen.getAllByRole("combobox")[0]).toBe(kind);
-    expect(kind.value).toBe("deepseek");
+    expect(fieldSelectValue(kind)).toBe("deepseek");
+    fireEvent.click(kind);
     expect(
-        Array.from(
-            screen.getAllByRole("option"),
-            (option) => option.textContent,
-        ),
+        screen.getAllByRole("option").map((option) => option.textContent),
     ).toContain("OpenRouter");
-    expect(kind.querySelector('option[value=""]')).toBeNull();
-    expect(input("Name").value).toBe("DeepSeek");
-    expect(input("Base URL").value).toBe("https://api.deepseek.com");
-    expect(input("Protocol").value).toBe("chat_completions");
+    fireEvent.click(kind);
+    expect(fieldValue("Name")).toBe("DeepSeek");
+    expect(fieldValue("Base URL")).toBe("https://api.deepseek.com");
+    expect(fieldValue("Protocol")).toBe("chat_completions");
     expect(
         screen.getByRole("form", { name: "Basic information" }),
     ).toBeDefined();
@@ -243,38 +264,38 @@ test("starts with the first template selected and its defaults filled", async ()
 
 test("switching provider replaces untouched defaults and only allowed protocols are listed", async () => {
     await mount();
-    fireEvent.change(input("Provider"), { target: { value: "openrouter" } });
-    expect(input("Name").value).toBe("OpenRouter");
-    expect(input("Base URL").value).toBe("https://openrouter.ai/api/v1");
-    expect(input("Protocol").value).toBe("chat_completions");
-    const protocolOptions = (): (string | null)[] =>
-        Array.from(
-            input("Protocol").querySelectorAll("option"),
-            (option) => option.textContent,
-        );
-    expect(protocolOptions()).toEqual(["Chat Completions", "Responses"]);
+    setField("Provider", "openrouter");
+    expect(fieldValue("Name")).toBe("OpenRouter");
+    expect(fieldValue("Base URL")).toBe("https://openrouter.ai/api/v1");
+    expect(fieldValue("Protocol")).toBe("chat_completions");
+    expect(fieldSelectOptionLabels(input("Protocol"))).toEqual([
+        "Chat Completions",
+        "Responses",
+    ]);
 
-    fireEvent.change(input("Provider"), { target: { value: "deepseek" } });
-    expect(input("Name").value).toBe("DeepSeek");
-    expect(input("Base URL").value).toBe("https://api.deepseek.com");
-    expect(protocolOptions()).toEqual(["Chat Completions"]);
+    setField("Provider", "deepseek");
+    expect(fieldValue("Name")).toBe("DeepSeek");
+    expect(fieldValue("Base URL")).toBe("https://api.deepseek.com");
+    expect(fieldSelectOptionLabels(input("Protocol"))).toEqual([
+        "Chat Completions",
+    ]);
 });
 
 test("switching provider keeps the fields the user edited", async () => {
     await mount();
     type("Name", "My router");
-    fireEvent.change(input("Provider"), { target: { value: "openrouter" } });
+    setField("Provider", "openrouter");
     // The edited name stays; the untouched URL follows the new provider.
-    expect(input("Name").value).toBe("My router");
-    expect(input("Base URL").value).toBe("https://openrouter.ai/api/v1");
+    expect(fieldValue("Name")).toBe("My router");
+    expect(fieldValue("Base URL")).toBe("https://openrouter.ai/api/v1");
     type("Base URL", "https://proxy.example.com/v1");
-    fireEvent.change(input("Protocol"), { target: { value: "responses" } });
+    setField("Protocol", "responses");
 
-    fireEvent.change(input("Provider"), { target: { value: "deepseek" } });
-    expect(input("Name").value).toBe("My router");
-    expect(input("Base URL").value).toBe("https://proxy.example.com/v1");
+    setField("Provider", "deepseek");
+    expect(fieldValue("Name")).toBe("My router");
+    expect(fieldValue("Base URL")).toBe("https://proxy.example.com/v1");
     // A chosen protocol the new provider does not allow falls back to its default.
-    expect(input("Protocol").value).toBe("chat_completions");
+    expect(fieldValue("Protocol")).toBe("chat_completions");
 });
 
 test("creates for the selected provider and reports the normalized record Rust returns", async () => {
@@ -288,10 +309,10 @@ test("creates for the selected provider and reports the normalized record Rust r
     };
     create.mockResolvedValue(normalized);
     const { onSaved } = await mount();
-    fireEvent.change(input("Provider"), { target: { value: "openrouter" } });
+    setField("Provider", "openrouter");
     type("Name", "  Team router  ");
     type("Base URL", "HTTPS://OpenRouter.ai/api/v1/");
-    fireEvent.change(input("Protocol"), { target: { value: "responses" } });
+    setField("Protocol", "responses");
     await submit();
 
     expect(create).toHaveBeenCalledTimes(1);
@@ -374,7 +395,7 @@ test("keeps focus on Save, announces saving and ignores a second submit while pe
     const request = deferred<ProviderRecord>();
     create.mockReturnValue(request.promise);
     const { onBusyChange } = await mount();
-    fireEvent.change(input("Provider"), { target: { value: "openrouter" } });
+    setField("Provider", "openrouter");
     const save = screen.getByRole("button", { name: "Save" });
     save.focus();
     await submit();
@@ -386,12 +407,12 @@ test("keeps focus on Save, announces saving and ignores a second submit while pe
     // Blocked fields stay focusable but cannot change.
     expect(input("Name")).toHaveProperty("readOnly", true);
     expect(input("Protocol").getAttribute("aria-disabled")).toBe("true");
-    fireEvent.change(input("Protocol"), { target: { value: "responses" } });
-    expect(input("Protocol").value).toBe("chat_completions");
+    setField("Protocol", "responses");
+    expect(fieldValue("Protocol")).toBe("chat_completions");
     expect(input("Provider").getAttribute("aria-disabled")).toBe("true");
-    fireEvent.change(input("Provider"), { target: { value: "deepseek" } });
-    expect(input("Provider").value).toBe("openrouter");
-    expect(input("Name").value).toBe("OpenRouter");
+    setField("Provider", "deepseek");
+    expect(fieldValue("Provider")).toBe("openrouter");
+    expect(fieldValue("Name")).toBe("OpenRouter");
     // The page blocks its back control while this is reported.
     expect(onBusyChange).toHaveBeenLastCalledWith(true);
     fireEvent.click(save);
@@ -418,7 +439,7 @@ test("edits by id with the expected revision and never sends or changes the type
     );
     // Detail shows the full ID that the list abbreviates.
     expect(screen.getByText(ID)).toBeDefined();
-    expect(input("Name").value).toBe("Work");
+    expect(fieldValue("Name")).toBe("Work");
 
     type("Name", "Work 2 ");
     await submit();
@@ -466,7 +487,7 @@ test("a revision conflict blocks saving until the latest record is reloaded", as
         screen.getByRole("button", { name: "Save" }),
     );
     expect(onRecordLoaded).toHaveBeenCalledWith(latest);
-    expect(input("Name").value).toBe("Changed elsewhere");
+    expect(fieldValue("Name")).toBe("Changed elsewhere");
     expect(screen.getByRole("status").textContent).toBe(
         "The latest saved settings were loaded. Review them before saving.",
     );
@@ -592,7 +613,7 @@ test("cancel calls back and switching language keeps typed values", async () => 
     await act(async () => {
         await instance.changeLanguage("zh-CN");
     });
-    expect(input("名称").value).toBe("Personal");
+    expect(fieldValue("名称")).toBe("Personal");
     fireEvent.click(screen.getByRole("button", { name: "取消" }));
     expect(onCancel).toHaveBeenCalledTimes(1);
 });
@@ -789,7 +810,7 @@ test("the key is cleared after every submit, on cancel and while hidden; other f
     expectKeyCleared();
     setHidden(false);
     expect(keyField().value).toBe("");
-    expect(input("Name").value).toBe("Draft");
+    expect(fieldValue("Name")).toBe("Draft");
 
     fireEvent.change(keyField(), { target: { value: SECRET } });
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));

@@ -19,6 +19,7 @@ import {
     type ProviderTemplate,
 } from "../../lib/desktop/providers";
 import { getProviderSecretStatus } from "../../lib/desktop/providerSecrets";
+import { FieldSelect } from "../../components/FieldSelect";
 import { Icon } from "../../components/Icon";
 import fieldStyles from "../settings/settingsField.module.css";
 import { ProviderIcon } from "./ProviderIcon";
@@ -595,44 +596,25 @@ export function ProviderForm({
                             >
                                 {t("providers.fields.kind")}
                             </label>
-                            <div
-                                className={[
-                                    styles["control"],
-                                    styles["controlWithIcon"],
-                                ]
-                                    .filter(
-                                        (value): value is string =>
-                                            value !== undefined,
-                                    )
-                                    .join(" ")}
-                            >
-                                {/* A native select cannot show images; the icon
-                                    beside it follows the current choice. */}
+                            <div className={styles["control"]}>
                                 {createKind !== undefined && (
-                                    <ProviderIcon kind={createKind} />
-                                )}
-                                <div className={fieldStyles["field"]}>
-                                    <select
-                                        className={fieldStyles["select"]}
+                                    <FieldSelect
                                         id={`${id}-kind`}
                                         value={createKind}
-                                        aria-disabled={saveBlocked}
-                                        onChange={(event) => {
-                                            changeKind(
-                                                event.currentTarget.value,
-                                            );
-                                        }}
-                                    >
-                                        {templates.map((entry) => (
-                                            <option
-                                                key={entry.kind}
-                                                value={entry.kind}
-                                            >
-                                                {entry.brandName}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
+                                        blocked={saveBlocked}
+                                        data-test-value={createKind}
+                                        options={templates.map((entry) => ({
+                                            value: entry.kind,
+                                            label: entry.brandName,
+                                            leading: (
+                                                <ProviderIcon
+                                                    kind={entry.kind}
+                                                />
+                                            ),
+                                        }))}
+                                        onChange={changeKind}
+                                    />
+                                )}
                             </div>
                         </div>
                     )}
@@ -716,31 +698,21 @@ export function ProviderForm({
                             {t("providers.fields.protocol")}
                         </label>
                         <div className={styles["control"]}>
-                            <div className={fieldStyles["field"]}>
-                                <select
-                                    className={fieldStyles["select"]}
-                                    id={`${id}-protocol`}
-                                    value={fields.protocol}
-                                    aria-disabled={saveBlocked}
-                                    aria-invalid={fieldError === "protocol"}
-                                    aria-describedby={describedBy("protocol")}
-                                    onChange={(event) => {
-                                        if (saveBlocked) return;
-                                        update(
-                                            "protocol",
-                                            event.currentTarget.value,
-                                        );
-                                    }}
-                                >
-                                    {protocols.map((protocol) => (
-                                        <option key={protocol} value={protocol}>
-                                            {t(
-                                                `providers.protocols.${protocol}`,
-                                            )}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
+                            <FieldSelect
+                                id={`${id}-protocol`}
+                                value={fields.protocol}
+                                blocked={saveBlocked}
+                                aria-invalid={fieldError === "protocol"}
+                                aria-describedby={describedBy("protocol")}
+                                options={protocols.map((protocol) => ({
+                                    value: protocol,
+                                    label: t(`providers.protocols.${protocol}`),
+                                }))}
+                                onChange={(next) => {
+                                    if (saveBlocked) return;
+                                    update("protocol", next);
+                                }}
+                            />
                             {errorText("protocol")}
                         </div>
                     </div>

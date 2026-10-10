@@ -14,6 +14,7 @@ import {
     type LocalePreferenceResult,
 } from "../../lib/desktop/settings";
 import { LocaleStartup as StartupBoundary } from "./LocaleStartup";
+import { fieldSelectValue, setFieldSelectValue } from "../../test/fieldSelect";
 import { LanguageSelector } from "./LanguageSelector";
 
 // Compose a real consumer of the ready snapshot. Startup itself does not own
@@ -87,8 +88,10 @@ test("withholds application content until a saved English choice overrides a Chi
         await response.promise;
     });
     expect(
-        await screen.findByRole("combobox", { name: "Language" }),
-    ).toHaveProperty("value", "en");
+        fieldSelectValue(
+            await screen.findByRole("combobox", { name: "Language" }),
+        ),
+    ).toBe("en");
     expect(document.documentElement.lang).toBe("en");
     expect(screen.getByRole("textbox")).toHaveProperty("value", "Draft");
     expect(saveLocalePreference).not.toHaveBeenCalled();
@@ -111,8 +114,10 @@ test.each([
             </LocaleStartup>,
         );
         expect(
-            await screen.findByRole("combobox", { name: label }),
-        ).toHaveProperty("value", preference);
+            fieldSelectValue(
+                await screen.findByRole("combobox", { name: label }),
+            ),
+        ).toBe(preference);
         expect(document.documentElement.lang).toBe(language);
         expect(screen.getByRole("textbox")).toBeDefined();
         expect(saveLocalePreference).not.toHaveBeenCalled();
@@ -162,8 +167,8 @@ test("blocks the app after a read failure and retries without saving a default",
         await response.promise;
     });
     expect(
-        await screen.findByRole("combobox", { name: "语言" }),
-    ).toHaveProperty("value", "zh-CN");
+        fieldSelectValue(await screen.findByRole("combobox", { name: "语言" })),
+    ).toBe("zh-CN");
     expect(getLocalePreference).toHaveBeenCalledTimes(2);
     expect(saveLocalePreference).not.toHaveBeenCalled();
 });
@@ -189,8 +194,10 @@ test("distinguishes translator initialization failure from a failed preference r
     expect(screen.queryByText("Synthetic translator diagnostic")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "重试启动" }));
     expect(
-        await screen.findByRole("combobox", { name: "Language" }),
-    ).toHaveProperty("value", "en");
+        fieldSelectValue(
+            await screen.findByRole("combobox", { name: "Language" }),
+        ),
+    ).toBe("en");
     expect(saveLocalePreference).not.toHaveBeenCalled();
 });
 
@@ -229,8 +236,10 @@ test.each(["resolve", "reject"] as const)(
             await oldResponse.catch(() => undefined);
         });
         expect(
-            screen.getByRole("combobox", { name: "Language" }),
-        ).toHaveProperty("value", "en");
+            fieldSelectValue(
+                screen.getByRole("combobox", { name: "Language" }),
+            ),
+        ).toBe("en");
         expect(document.documentElement.lang).toBe("en");
         expect(screen.getByRole("textbox")).toBe(input);
         expect(input).toHaveProperty("value", "Still editing");
@@ -258,9 +267,7 @@ test("updates HTML language only after a confirmed save and preserves the same i
     await screen.findByRole("combobox", { name: "Language" });
     const input = screen.getByRole("textbox");
     fireEvent.change(input, { target: { value: "Unsubmitted draft" } });
-    fireEvent.change(screen.getByRole("combobox"), {
-        target: { value: "zh-CN" },
-    });
+    setFieldSelectValue(screen.getByRole("combobox"), "zh-CN");
     expect(document.documentElement.lang).toBe("en");
     await act(async () => {
         finishSave("zh-CN");

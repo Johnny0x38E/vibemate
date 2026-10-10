@@ -23,8 +23,11 @@ React describes the interface; Rust handles local system and provider operations
   tabs, and panels. General hosts `LanguageSelector` (with `footer={<AppearanceControl />}`)
   composed in `src/main.tsx`. Tab switches and leaving Settings keep preference
   controls mounted so pending saves and input survive.
+- `src/components/FieldSelect.tsx` is the shared single-choice dropdown (36 px
+  trigger, chevron from `settingsField.field`, custom list panel). Settings and
+  provider forms use it instead of a native `<select>`.
 - `src/features/settings/settingsField.module.css` shares the grouped-card row
-  layout (label left, 36 px select right) for language and appearance.
+  layout (label left, control right) for language and appearance.
 - Sidebar width is fixed at 200/88 px (`--sidebar-width`, `data-collapsed`); only
   the collapse button changes layout.
 - `src/components/WindowDragRegion.tsx` and `TitlebarChrome.tsx` (with
@@ -250,7 +253,8 @@ The snapshot initializes local selection once, so unrelated parent rerenders do
 not discard a confirmed choice. The selector does not read startup preferences
 or own the document language; those belong to `LocaleStartup`.
 
-It uses a native labeled select and a live status message. Preview is disabled
+It uses the shared `FieldSelect` (`src/components/FieldSelect.tsx`) and a live
+status message. Preview is disabled
 with an explicit explanation. A pending save also disables the select, while a
 synchronous request guard prevents two writes before React renders that state.
 Only a confirmed save changes the translator. Explicit English/Chinese choices
@@ -268,7 +272,8 @@ Effect cleanup cannot cancel an IPC write, but late save/read results cannot
 change the shared translator after this component unmounts. Tests exercise this
 observable behavior rather than only checking that the unmounted DOM is empty.
 CSS Modules keep the styles local while using the existing shared color/spacing
-variables; the retry action and native select have visible keyboard focus styles.
+variables; the retry action and `FieldSelect` trigger have visible keyboard focus
+styles.
 
 Component tests use real React and i18next instances with the desktop boundary
 replaced. Earlier isolated browser fixtures exercised explicitly labeled synthetic
@@ -521,7 +526,7 @@ an official brand file in `assets/providers/`, imported through Vite like
 `assets/brand/` (emitted as files, so the `img-src 'self'` CSP allows them).
 Each list row shows it before the name; the detail page shows it before the
 read-only provider value, and the create form beside the provider select,
-following the current choice (a native `<select>` cannot hold images). The
+in the trigger and in each menu row via `FieldSelect`. The
 title stays text only. The icon sits in a 20×20 box with `object-fit: contain`,
 is decorative (`alt=""`), and unknown kinds render nothing. The files are kept
 byte-for-byte as published: no recolouring or stretching, and Prettier has no

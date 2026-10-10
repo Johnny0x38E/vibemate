@@ -10,6 +10,7 @@ import { StrictMode } from "react";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { createAppI18n } from "../../i18n";
+import { setFieldSelectValue } from "../../test/fieldSelect";
 import {
     AppearanceRequestError,
     getAppearancePreference,
@@ -66,9 +67,10 @@ test("preview tries built-in palettes and brightness without invoking save", asy
     await mount();
     const themes = await ready();
     fireEvent.click(themes);
-    fireEvent.change(screen.getByRole("combobox", { name: "Appearance" }), {
-        target: { value: "dark" },
-    });
+    setFieldSelectValue(
+        screen.getByRole("combobox", { name: "Appearance" }),
+        "dark",
+    );
     expect(document.documentElement.dataset["theme"]).toBe("iris");
     expect(document.documentElement.dataset["appearance"]).toBe("dark");
     expect(screen.getByRole("status").textContent).toContain("not saved");

@@ -25,9 +25,9 @@ DeepSeek、OpenRouter；Agent 是 Pi、Grok Build。目标平台是 macOS、Wind
 - 已有 CHANGELOG 分版本提取、发布校验测试及四目标安装包草稿 Release 工作流。
 - 已有 UI 行为测试、SQLite 私有存储与迁移、OS 凭据接口，以及覆盖现有全部界面的中英文资源。
 - 语言偏好、启动门禁与桌面壳（双语导航、Settings 常规/关于、语言/外观下拉）已接入。
-- P10：Providers 页可保存非敏感 Provider 配置（schema v5，稳定随机 ID、游标分页、`revision` 并发检查，同一服务商可有多个实例）；
-  真实 Tauri 保存→重启的人工验证待完成。
-- **没有** 密钥保存、Provider 连接、Model 管理、Agent 配置写入或 Skill/MCP 管理。
+- P10–P11：Providers 页保存非敏感配置与 OS 凭据引用（统一 Save）；schema v5 实例表 + v7 模型表。
+- P12（进行中）：用户触发的三家模型列表获取、本地目录、勾选与搜索；Tab 式编辑 UI、列表行刷新已落地；手动添加模型（P12.c.3）与 P12 总验收检查点仍开放。
+- **没有** Agent 配置写入、Skill/MCP 管理，也没有「已验证推理连接」或自动路由。
   现有界面文案已全部接入翻译，`check:i18n` 校验资源一致性（P09 已完成，维护者 2026-10-10 人工确认双语界面）；
   不要把发布校验或基础测试当作业务接入验收。
 - 当前 codegraph 索引可查询；仓库上下文和跨模块分析使用项目绝对路径。

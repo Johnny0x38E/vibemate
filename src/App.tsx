@@ -2,6 +2,7 @@ import { useId, useState, type JSX, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { BrandLogo } from "./components/BrandLogo";
 import { Icon } from "./components/Icon";
+import { PageModuleHeader } from "./components/PageModuleHeader";
 import { NotificationProvider } from "./components/Notifications";
 import { TitlebarChrome } from "./components/TitlebarChrome";
 import { WindowDragRegion } from "./components/WindowDragRegion";
@@ -135,9 +136,10 @@ export default function App({ languageSettings }: AppProps): JSX.Element {
                         page !== "settings" &&
                         page !== "providers" && (
                             <section>
-                                <h1 className={styles["pageHeading"]}>
-                                    {pageLabel}
-                                </h1>
+                                <PageModuleHeader
+                                    icon={page}
+                                    title={pageLabel}
+                                />
                                 <div className={styles["planned"]}>
                                     <h2>{t("desktop.plannedTitle")}</h2>
                                     <p>{t("desktop.plannedDetail")}</p>

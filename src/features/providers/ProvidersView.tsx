@@ -1,19 +1,22 @@
 import { useCallback, useEffect, useRef, useState, type JSX } from "react";
 import { useTranslation } from "react-i18next";
 import { Icon } from "../../components/Icon";
+import { PageModuleHeader } from "../../components/PageModuleHeader";
 import { useNotify } from "../../components/Notifications";
 import {
+    getProvider,
     listProviders,
     listProviderTemplates,
     MAX_PROVIDER_PAGE_SIZE,
     ProviderRequestError,
     type ProviderErrorCode,
     type ProviderPageResult,
+    type ProviderKind,
     type ProviderProtocol,
     type ProviderRecord,
     type ProviderTemplate,
 } from "../../lib/desktop/providers";
-import { ProviderForm } from "./ProviderForm";
+import { ProviderTabbedView } from "./ProviderTabbedView";
 import { ProviderIcon } from "./ProviderIcon";
 import { ProviderPage } from "./ProviderPage";
 import pageStyles from "./ProviderPage.module.css";
@@ -116,6 +119,11 @@ export function ProvidersView({
     const [listAttempt, setListAttempt] = useState(0);
     const [page, setPage] = useState<ProvidersPage>({ kind: "list" });
     const [formBusy, setFormBusy] = useState(false);
+    const [modelsBusy, setModelsBusy] = useState(false);
+    /** Create-page title tracks the provider chosen in the form, like edit. */
+    const [createTitleKind, setCreateTitleKind] = useState<
+        ProviderKind | undefined
+    >();
     // Each list read takes a new generation; a result from an older generation
     // (superseded by a reload, or after unmount) is discarded.
     const listGeneration = useRef(0);
@@ -293,22 +301,55 @@ export function ProvidersView({
     }
 
     // Stable so the form's busy effect does not re-run on every render.
-    const reportBusy = useCallback((busy: boolean) => {
+    const reportFormBusy = useCallback((busy: boolean) => {
         setFormBusy(busy);
+    }, []);
+    const reportModelsBusy = useCallback((busy: boolean) => {
+        setModelsBusy(busy);
+    }, []);
+    const reportCreateKind = useCallback((kind: ProviderKind) => {
+        setCreateTitleKind(kind);
     }, []);
 
     function open(next: ProvidersPage): void {
+        if (next.kind === "create" && templates.kind === "ready") {
+            setCreateTitleKind(templates.templates[0]?.kind);
+        }
         // A secondary page focuses its own title when it opens.
         setPage(next);
     }
 
+    function brandTitle(kind: ProviderKind, brandName: string): JSX.Element {
+        return (
+            <span className={pageStyles["titleBrand"]}>
+                <ProviderIcon kind={kind} />
+                <span className={pageStyles["titleBrandText"]}>
+                    {brandName}
+                </span>
+            </span>
+        );
+    }
+
+    /** Merge one row from storage so list badges match edits made on other tabs. */
+    async function refreshRecordFromStorage(providerId: string): Promise<void> {
+        try {
+            showRecord(await getProvider(providerId));
+        } catch {
+            // Preview has no instances; a failed read leaves the row unchanged.
+        }
+    }
+
     /** Back to the list, focusing the control that started this flow. */
     function backToList(): void {
+        const editingId = page.kind === "edit" ? page.record.id : undefined;
         focusTarget.current =
-            page.kind === "edit"
-                ? { kind: "edit", id: page.record.id }
+            editingId !== undefined
+                ? { kind: "edit", id: editingId }
                 : { kind: "add" };
         setPage({ kind: "list" });
+        if (editingId !== undefined) {
+            void refreshRecordFromStorage(editingId);
+        }
     }
 
     function handleSaved(record: ProviderRecord): void {
@@ -319,7 +360,10 @@ export function ProvidersView({
         showRecord(record);
         // A brief app-level notification names what Rust stored; it is announced
         // without taking focus and does not stay on the list.
-        notify(t("providers.saved", { name: record.displayName }));
+        notify({
+            tone: "success",
+            message: t("providers.saved", { name: record.displayName }),
+        });
         // Confirm against storage; refreshList handles its own failure and
         // keeps focus on the row once the re-read is applied.
         void refreshList(record.id);
@@ -333,6 +377,9 @@ export function ProvidersView({
     const brandFor = (record: ProviderRecord): string =>
         availableTemplates.find((entry) => entry.kind === record.kind)
             ?.brandName ?? record.kind;
+    const brandNameForKind = (kind: ProviderKind): string =>
+        availableTemplates.find((entry) => entry.kind === kind)?.brandName ??
+        kind;
     const protocolLabel = (protocol: ProviderProtocol): string =>
         t(`providers.protocols.${protocol}`);
 
@@ -340,37 +387,36 @@ export function ProvidersView({
         switch (page.kind) {
             case "list":
                 return null;
-            case "create":
             case "edit":
+            case "create":
                 return (
                     <ProviderPage
-                        // Keyed by page and instance: each opens fresh and takes focus.
                         key={page.kind === "edit" ? page.record.id : "create"}
                         title={
-                            page.kind === "edit" ? (
-                                <span className={pageStyles["titleBrand"]}>
-                                    <ProviderIcon kind={page.record.kind} />
-                                    <span
-                                        className={pageStyles["titleBrandText"]}
-                                    >
-                                        {brandFor(page.record)}
-                                    </span>
-                                </span>
-                            ) : (
-                                t("providers.form.createTitle")
-                            )
+                            page.kind === "edit"
+                                ? brandTitle(
+                                      page.record.kind,
+                                      brandFor(page.record),
+                                  )
+                                : createTitleKind !== undefined
+                                  ? brandTitle(
+                                        createTitleKind,
+                                        brandNameForKind(createTitleKind),
+                                    )
+                                  : t("providers.form.createTitle")
                         }
                         onBack={backToList}
-                        backBlocked={formBusy}
+                        backBlocked={formBusy || modelsBusy}
                     >
-                        <ProviderForm
-                            templates={availableTemplates}
+                        <ProviderTabbedView
                             mode={page}
+                            templates={availableTemplates}
+                            onCreateKindChange={reportCreateKind}
                             onSaved={handleSaved}
                             onRecordLoaded={showRecord}
                             onRefresh={refreshList}
-                            onCancel={backToList}
-                            onBusyChange={reportBusy}
+                            onFormBusyChange={reportFormBusy}
+                            onModelsBusyChange={reportModelsBusy}
                             hidden={hidden}
                         />
                     </ProviderPage>
@@ -381,36 +427,36 @@ export function ProvidersView({
     function listPage(): JSX.Element {
         return (
             <>
-                <div className={styles["header"]}>
-                    <h1
-                        className={styles["title"]}
-                        data-focus="heading"
-                        tabIndex={-1}
-                    >
-                        {t("desktop.nav.providers")}
-                    </h1>
-                    {!preview && (
-                        <button
-                            className={[buttons["primary"], buttons["withIcon"]]
-                                .filter(
-                                    (value): value is string =>
-                                        value !== undefined,
-                                )
-                                .join(" ")}
-                            type="button"
-                            data-focus="add"
-                            aria-disabled={addBlocked}
-                            onClick={() => {
-                                if (!addBlocked) open({ kind: "create" });
-                            }}
-                        >
-                            {/* Decorative; the text names the button. */}
-                            <Icon name="plus" />
-                            {t("providers.add")}
-                        </button>
-                    )}
-                </div>
-                <p className={styles["note"]}>{t("providers.note")}</p>
+                <PageModuleHeader
+                    icon="providers"
+                    title={t("desktop.nav.providers")}
+                    dataFocus="heading"
+                    tabIndex={-1}
+                    trailing={
+                        !preview ? (
+                            <button
+                                className={[
+                                    buttons["primary"],
+                                    buttons["withIcon"],
+                                ]
+                                    .filter(
+                                        (value): value is string =>
+                                            value !== undefined,
+                                    )
+                                    .join(" ")}
+                                type="button"
+                                data-focus="add"
+                                aria-disabled={addBlocked}
+                                onClick={() => {
+                                    if (!addBlocked) open({ kind: "create" });
+                                }}
+                            >
+                                <Icon name="plus" />
+                                {t("providers.add")}
+                            </button>
+                        ) : undefined
+                    }
+                />
 
                 {preview && (
                     <p className={styles["notice"]} role="status">
@@ -476,25 +522,48 @@ export function ProvidersView({
                             return (
                                 <li className={styles["item"]} key={record.id}>
                                     <div className={styles["details"]}>
-                                        <h2 className={styles["name"]}>
-                                            <ProviderIcon kind={record.kind} />
-                                            <span
-                                                className={styles["nameText"]}
+                                        <div className={styles["primaryRow"]}>
+                                            <ProviderIcon
+                                                kind={record.kind}
+                                                size="row"
+                                            />
+                                            <div
+                                                className={styles["textColumn"]}
                                             >
-                                                {record.displayName}
-                                            </span>
-                                        </h2>
-                                        <p className={styles["summary"]}>
-                                            {t("providers.list.summary", {
-                                                brand: brandFor(record),
-                                                protocol: protocolLabel(
-                                                    record.protocol,
-                                                ),
-                                            })}
-                                        </p>
-                                        <p className={styles["url"]}>
-                                            {record.baseUrl}
-                                        </p>
+                                                <span
+                                                    className={styles["brand"]}
+                                                >
+                                                    {brandFor(record)}
+                                                </span>
+                                                <p
+                                                    className={
+                                                        styles["displayName"]
+                                                    }
+                                                >
+                                                    {record.displayName}
+                                                </p>
+                                            </div>
+                                            <div className={styles["tagGroup"]}>
+                                                <span className={styles["tag"]}>
+                                                    {protocolLabel(
+                                                        record.protocol,
+                                                    )}
+                                                </span>
+                                                <span
+                                                    className={[
+                                                        styles["tag"],
+                                                        styles["tagModels"],
+                                                    ].join(" ")}
+                                                >
+                                                    {t(
+                                                        "providers.list.selectedModels",
+                                                        {
+                                                            count: record.selectedModelCount,
+                                                        },
+                                                    )}
+                                                </span>
+                                            </div>
+                                        </div>
                                     </div>
                                     <button
                                         className={[

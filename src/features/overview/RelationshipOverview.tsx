@@ -1,5 +1,6 @@
 import { useId, type JSX } from "react";
 import { useTranslation } from "react-i18next";
+import { PageModuleHeader } from "../../components/PageModuleHeader";
 import styles from "./RelationshipOverview.module.css";
 
 /**
@@ -12,10 +13,17 @@ export function RelationshipOverview(): JSX.Element {
     const statisticsId = useId();
     return (
         <section aria-labelledby={headingId}>
-            <div className={styles["heading"]}>
-                <h1 id={headingId}>{t("desktop.overview.title")}</h1>
-                <span>{t("desktop.overview.state")}</span>
-            </div>
+            <PageModuleHeader
+                className={styles["pageHeader"] ?? ""}
+                icon="home"
+                title={t("desktop.nav.overview")}
+                headingId={headingId}
+                trailing={
+                    <span className={styles["state"]}>
+                        {t("desktop.overview.state")}
+                    </span>
+                }
+            />
             <figure
                 className={styles["relationship"]}
                 aria-label={t("desktop.overview.diagram")}

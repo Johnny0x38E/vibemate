@@ -6,6 +6,7 @@ import {
     type ReactNode,
 } from "react";
 import { useTranslation } from "react-i18next";
+import { PageModuleHeader } from "../../components/PageModuleHeader";
 import { AboutPanel } from "./AboutPanel";
 import { LogSettings } from "./LogSettings";
 import styles from "./SettingsView.module.css";
@@ -61,7 +62,10 @@ export function SettingsView({
 
     return (
         <section className={styles["settings"]} hidden={hidden}>
-            <h1 className={styles["title"]}>{t("desktop.nav.settings")}</h1>
+            <PageModuleHeader
+                icon="settings"
+                title={t("desktop.nav.settings")}
+            />
             <div
                 className={styles["tabs"]}
                 role="tablist"

@@ -23,14 +23,13 @@ themes and full-width General/About settings. Theme order is Forest, Ink,
 Graphite, Linen, Iris, Ocean; schema v4 preserves existing preferences.
 
 CI and changelog-driven draft release workflows are present. Integration
-contracts are documented in `docs/integrations/`. P10 adds the Providers page:
-non-secret provider instances (schema v5) can be created, listed and edited; the
-manual save-and-restart check in the real desktop runtime is still pending.
-Provider keys, connections, models and all agent behavior remain unimplemented.
-No provider credentials have been collected and no agent configuration has been
-changed. P11 (provider keys) follows P10. P12 (fetch the model list and tick
-models; the old P13 and P14 are merged into it) is planned. [todo.md](todo.md) is the sole
-status source; current UI rules and verification are in
+contracts are documented in `docs/integrations/`. P10–P11 deliver the Providers
+page with API keys and unified save. P12 adds Rust-side model fetch, storage,
+search and IPC. The tabbed Models UI, list fetch toolbar, and create gate are
+implemented; manual model add and P12.d verification remain in
+[todo.md](todo.md). Agent configuration and all non-provider features remain
+unimplemented. [todo.md](todo.md) is the sole status
+source; current UI rules and verification are in
 [desktop-shell-design.md](desktop-shell-design.md) and [frontend.md](../frontend.md).
 
 ## Execution plan

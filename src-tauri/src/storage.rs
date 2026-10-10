@@ -567,8 +567,11 @@ mod tests {
             crate::settings::load_locale_preference(&upgraded),
             Ok(crate::settings::LocalePreference::SimplifiedChinese)
         );
+        drop(upgraded);
+        // Selected-model counts need the v6 `provider_model` table; finish migrating before listing.
+        let current = Storage::open_file(&path, MIGRATIONS).expect("upgrade to current");
         let page = crate::providers::list_providers(
-            &upgraded,
+            &current,
             &crate::providers::ListProvidersRequest {
                 after: None,
                 limit: 10,

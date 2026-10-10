@@ -175,7 +175,12 @@ export function LanguageSelector({
     return (
         <div className={styles["selector"]}>
             <div className={fieldStyles["group"]}>
-                <div className={fieldStyles["row"]}>
+                <div
+                    className={[
+                        fieldStyles["row"],
+                        fieldStyles["rowUniform"],
+                    ].join(" ")}
+                >
                     <label className={fieldStyles["label"]} htmlFor={id}>
                         {t("settings.language.label")}
                     </label>

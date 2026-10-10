@@ -11,6 +11,10 @@
     --theme-summary-light: #5b665e;
     --theme-focus-light: #59685e;
     --theme-accent-light: #59685e;
+    --theme-chip-info-bg-light: #e3ebe6;
+    --theme-chip-info-fg-light: #3a5248;
+    --theme-chip-count-bg-light: #dce8ef;
+    --theme-chip-count-fg-light: #2f5f78;
     --theme-text-dark: #e5eae6;
     --theme-background-dark: #191d1a;
     --theme-sidebar-dark: #141815;
@@ -21,6 +25,10 @@
     --theme-summary-dark: #a1ada4;
     --theme-focus-dark: #b6c9bd;
     --theme-accent-dark: #b6c9bd;
+    --theme-chip-info-bg-dark: #2a3530;
+    --theme-chip-info-fg-dark: #b6c9bd;
+    --theme-chip-count-bg-dark: #243540;
+    --theme-chip-count-fg-dark: #9ec9de;
 }
 
 :root[data-theme="graphite"],
@@ -35,6 +43,10 @@
     --theme-summary-light: #62626c;
     --theme-focus-light: #4d4d5c;
     --theme-accent-light: #4d4d5c;
+    --theme-chip-info-bg-light: #e8e8f0;
+    --theme-chip-info-fg-light: #45455a;
+    --theme-chip-count-bg-light: #e0e4f4;
+    --theme-chip-count-fg-light: #3d4a7a;
     --theme-text-dark: #ececf1;
     --theme-background-dark: #1b1b20;
     --theme-sidebar-dark: #151519;
@@ -45,6 +57,10 @@
     --theme-summary-dark: #adadbb;
     --theme-focus-dark: #c5c5d3;
     --theme-accent-dark: #c5c5d3;
+    --theme-chip-info-bg-dark: #32323c;
+    --theme-chip-info-fg-dark: #c5c5d3;
+    --theme-chip-count-bg-dark: #2e3348;
+    --theme-chip-count-fg-dark: #aeb8e8;
 }
 
 :root[data-theme="linen"],
@@ -59,6 +75,10 @@
     --theme-summary-light: #625447;
     --theme-focus-light: #88603c;
     --theme-accent-light: #88603c;
+    --theme-chip-info-bg-light: #f0e4d4;
+    --theme-chip-info-fg-light: #7a5434;
+    --theme-chip-count-bg-light: #ebe0f0;
+    --theme-chip-count-fg-light: #6a4a7a;
     --theme-text-dark: #f1e7d7;
     --theme-background-dark: #211d19;
     --theme-sidebar-dark: #191612;
@@ -69,6 +89,10 @@
     --theme-summary-dark: #c2ad94;
     --theme-focus-dark: #e1b784;
     --theme-accent-dark: #e1b784;
+    --theme-chip-info-bg-dark: #3d3228;
+    --theme-chip-info-fg-dark: #e1b784;
+    --theme-chip-count-bg-dark: #3a3040;
+    --theme-chip-count-fg-dark: #d4b8e8;
 }
 
 :root[data-theme="iris"],
@@ -83,6 +107,10 @@
     --theme-summary-light: #64546f;
     --theme-focus-light: #7654aa;
     --theme-accent-light: #7654aa;
+    --theme-chip-info-bg-light: #ebe4f5;
+    --theme-chip-info-fg-light: #5c3f8a;
+    --theme-chip-count-bg-light: #e4ecf8;
+    --theme-chip-count-fg-light: #3a5a8a;
     --theme-text-dark: #ece4fa;
     --theme-background-dark: #201b29;
     --theme-sidebar-dark: #19151f;
@@ -93,6 +121,10 @@
     --theme-summary-dark: #b6a5cb;
     --theme-focus-dark: #c7a2ef;
     --theme-accent-dark: #c7a2ef;
+    --theme-chip-info-bg-dark: #352a45;
+    --theme-chip-info-fg-dark: #c7a2ef;
+    --theme-chip-count-bg-dark: #2a3348;
+    --theme-chip-count-fg-dark: #a8c4ef;
 }
 
 :root[data-theme="ocean"],
@@ -107,6 +139,10 @@
     --theme-summary-light: #506773;
     --theme-focus-light: #266a8c;
     --theme-accent-light: #266a8c;
+    --theme-chip-info-bg-light: #dceaf2;
+    --theme-chip-info-fg-light: #1f5a75;
+    --theme-chip-count-bg-light: #d8efe8;
+    --theme-chip-count-fg-light: #2a6a58;
     --theme-text-dark: #e0edf4;
     --theme-background-dark: #192229;
     --theme-sidebar-dark: #131b21;
@@ -117,6 +153,10 @@
     --theme-summary-dark: #9fb9c9;
     --theme-focus-dark: #87bfdc;
     --theme-accent-dark: #87bfdc;
+    --theme-chip-info-bg-dark: #243540;
+    --theme-chip-info-fg-dark: #87bfdc;
+    --theme-chip-count-bg-dark: #243530;
+    --theme-chip-count-fg-dark: #8fd4bc;
 }
 
 /* Notion-inspired neutrals; secondary text is darkened for readable contrast. */
@@ -132,6 +172,10 @@
     --theme-summary-light: #686560;
     --theme-focus-light: #5f5e59;
     --theme-accent-light: #2c2c2b;
+    --theme-chip-info-bg-light: #eceae6;
+    --theme-chip-info-fg-light: #4a4844;
+    --theme-chip-count-bg-light: #e6edf5;
+    --theme-chip-count-fg-light: #3d5568;
     --theme-text-dark: #f0efed;
     --theme-background-dark: #191919;
     --theme-sidebar-dark: #202020;
@@ -142,4 +186,8 @@
     --theme-summary-dark: #ada9a3;
     --theme-focus-dark: #d4d3cf;
     --theme-accent-dark: #d4d3cf;
+    --theme-chip-info-bg-dark: #333330;
+    --theme-chip-info-fg-dark: #d4d3cf;
+    --theme-chip-count-bg-dark: #2e3338;
+    --theme-chip-count-fg-dark: #b8cce0;
 }

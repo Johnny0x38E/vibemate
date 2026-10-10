@@ -1,12 +1,17 @@
-.settings {
+/* API / Models tabs for provider create and edit (see ProviderTabbedView). */
+.edit {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
     width: 100%;
     max-width: none;
+    min-height: 0;
 }
 
 .tabs {
     display: flex;
     gap: var(--space-lg);
-    margin-top: var(--space-md);
+    margin-top: 0;
     border-bottom: 1px solid var(--color-border);
 }
 
@@ -48,5 +53,15 @@
 }
 
 .panel {
+    flex: 1;
     min-width: 0;
+    min-height: 0;
+    overflow: auto;
+}
+
+/* Models tab: toolbar stays fixed; ProviderModels scrolls the list region only. */
+.panelModels {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }

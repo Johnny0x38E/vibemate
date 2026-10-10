@@ -1,43 +1,18 @@
 /*
- * Page layout mirrors SettingsView. Row hierarchy: the name is primary
- * (foreground, semibold); provider · protocol and the URL are secondary
- * (muted, regular). Buttons come
- * from providerButtons.module.css.
+ * List rows are two lines: brand, tags, then the user-defined name indented with
+ * the brand (not the icon). The list title uses PageModuleHeader.
  */
 .view {
     width: 100%;
     max-width: none;
 }
 
-.header {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-md);
-}
-
-.title {
-    margin: 0;
-    font-size: 1rem;
-    font-weight: 600;
-}
-
-.note,
 .notice {
     margin: 0;
     color: var(--color-summary);
     font-size: 0.8125rem;
     line-height: 1.6;
     overflow-wrap: anywhere;
-}
-
-.note {
-    max-width: 44rem;
-    margin-top: var(--space-sm);
-}
-
-.notice {
     display: grid;
     justify-items: start;
     gap: var(--space-sm);
@@ -45,7 +20,6 @@
 }
 
 /* Programmatic focus targets (tabIndex -1) still show where focus went. */
-.title:focus-visible,
 .notice:focus-visible {
     outline: 2px solid var(--color-focus);
     outline-offset: 2px;
@@ -84,7 +58,7 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-lg);
-    padding: 14px var(--space-md);
+    padding: 12px var(--space-md);
     border-bottom: 1px solid var(--color-border);
 }
 
@@ -93,33 +67,73 @@
 }
 
 .details {
-    display: grid;
-    gap: 2px;
+    min-width: 0;
+    flex: 1;
+}
+
+.primaryRow {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: var(--space-md);
     min-width: 0;
 }
 
-/* The brand icon (20px box) sits before the name, centred on its first line. */
-.name {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
+.textColumn {
+    display: grid;
+    align-content: center;
+    gap: 4px;
+    min-width: 0;
+    flex: 1;
+}
+
+.brand {
     margin: 0;
     color: var(--color-text);
     font-size: 0.875rem;
     font-weight: 600;
-}
-
-.nameText {
-    min-width: 0;
+    line-height: 1.35;
     overflow-wrap: anywhere;
 }
 
-.summary,
-.url {
+.tagGroup {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    align-self: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-shrink: 0;
+    margin-inline-start: auto;
+}
+
+.tag {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    min-height: 1.625rem;
+    padding: 0 11px;
+    border-radius: 999px;
+    background: var(--color-chip-info-bg);
+    color: var(--color-chip-info-fg);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    line-height: 1;
+    overflow-wrap: anywhere;
+    white-space: nowrap;
+}
+
+.tagModels {
+    background: var(--color-chip-count-bg);
+    color: var(--color-chip-count-fg);
+}
+
+.displayName {
     margin: 0;
     color: var(--color-summary);
     font-size: 0.8125rem;
-    line-height: 1.5;
+    line-height: 1.45;
     overflow-wrap: anywhere;
 }
 
@@ -139,5 +153,16 @@
 
     .item > button {
         align-self: flex-start;
+    }
+
+    .primaryRow {
+        flex-wrap: wrap;
+    }
+
+    .tagGroup {
+        flex-basis: 100%;
+        flex-wrap: nowrap;
+        justify-content: flex-start;
+        margin-inline-start: calc(2.5rem + var(--space-md));
     }
 }

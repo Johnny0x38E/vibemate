@@ -18,7 +18,9 @@ export type IconName =
     | "edit"
     | "eyeOff"
     | "logFile"
-    | "folder";
+    | "folder"
+    | "check"
+    | "error";
 
 /** Render an inline SVG; the containing control must provide its accessible name. */
 export function Icon({ name }: { name: IconName }): JSX.Element {
@@ -127,6 +129,17 @@ export function Icon({ name }: { name: IconName }): JSX.Element {
         case "folder":
             content = (
                 <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7l-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2Z" />
+            );
+            break;
+        case "check":
+            content = <path d="M5 12l5 5L20 7" />;
+            break;
+        case "error":
+            content = (
+                <>
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M8 8l8 8M16 8l-8 8" />
+                </>
             );
             break;
     }

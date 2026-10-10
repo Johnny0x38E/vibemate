@@ -107,6 +107,7 @@ const saved: ProviderRecord = {
     revision: 3,
     createdAtMs: 1000,
     updatedAtMs: 2000,
+    selectedModelCount: 0,
 };
 
 function deferred<T>() {
@@ -133,7 +134,6 @@ async function mount(
     const onSaved = vi.fn<(record: ProviderRecord) => void>();
     const onRecordLoaded = vi.fn<(record: ProviderRecord) => void>();
     const onRefresh = vi.fn(refresh);
-    const onCancel = vi.fn<() => void>();
     const onBusyChange = vi.fn<(busy: boolean) => void>();
     const tree = (isHidden: boolean) => (
         <StrictMode>
@@ -144,7 +144,6 @@ async function mount(
                     onSaved={onSaved}
                     onRecordLoaded={onRecordLoaded}
                     onRefresh={onRefresh}
-                    onCancel={onCancel}
                     onBusyChange={onBusyChange}
                     hidden={isHidden}
                 />
@@ -164,7 +163,6 @@ async function mount(
         onSaved,
         onRecordLoaded,
         onRefresh,
-        onCancel,
         onBusyChange,
     };
 }
@@ -618,32 +616,6 @@ test("a result that arrives after unmount is ignored", async () => {
     expect(onSaved).not.toHaveBeenCalled();
 });
 
-test("cancel calls back and switching language keeps typed values", async () => {
-    const { instance, onCancel } = await mount();
-    type("Name", "Personal");
-    await act(async () => {
-        await instance.changeLanguage("zh-CN");
-    });
-    expect(fieldValue("名称")).toBe("Personal");
-    fireEvent.click(screen.getByRole("button", { name: "取消" }));
-    expect(onCancel).toHaveBeenCalledTimes(1);
-});
-
-test("cancel is ignored while a save is pending", async () => {
-    const request = deferred<ProviderRecord>();
-    create.mockReturnValue(request.promise);
-    const { onCancel } = await mount();
-    await submit();
-    const cancel = screen.getByRole("button", { name: "Cancel" });
-    expect(cancel.getAttribute("aria-disabled")).toBe("true");
-    fireEvent.click(cancel);
-    expect(onCancel).not.toHaveBeenCalled();
-    await act(async () => {
-        request.resolve({ ...saved, revision: 1 });
-        await request.promise;
-    });
-});
-
 test("reports pending work so the page can block going back", async () => {
     const request = deferred<ProviderRecord>();
     create.mockReturnValue(request.promise);
@@ -799,10 +771,10 @@ test("create_outcome_unknown re-reads the list and a retry needs the key typed a
     expect(onSaved).toHaveBeenCalledTimes(1);
 });
 
-test("the key is cleared after every submit, on cancel and while hidden; other fields stay", async () => {
+test("the key is cleared after every submit and while hidden; other fields stay", async () => {
     const request = deferred<ProviderRecord>();
     create.mockReturnValueOnce(request.promise);
-    const { onCancel, setHidden } = await mount();
+    const { setHidden } = await mount();
     await submit();
     // Cleared as soon as it is sent, while the request is still pending.
     expectKeyCleared();
@@ -822,11 +794,6 @@ test("the key is cleared after every submit, on cancel and while hidden; other f
     setHidden(false);
     expect(keyField().value).toBe("");
     expect(fieldValue("Name")).toBe("Draft");
-
-    fireEvent.change(keyField(), { target: { value: SECRET } });
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(onCancel).toHaveBeenCalledTimes(1);
-    expect(keyField().value).toBe("");
 });
 
 test("the key never appears in page text, callbacks or the console", async () => {

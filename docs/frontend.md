@@ -14,13 +14,14 @@ React describes the interface; Rust handles local system and provider operations
   visit, then kept mounted while hidden, so an open form survives navigation and
   returning does not re-read the list), planned pages for Agents/Skills/MCP,
   and `SettingsView` (mounted while hidden) for the settings area.
-- `src/features/providers/` contains `ProvidersView` (the list and the switch
-  between its views), `ProviderPage` (secondary page shell), `ProviderForm`
-  (the "Basic information" group), `ProviderIcon` (brand icons) and
-  `providerButtons.module.css` (button hierarchy); see
-  [Provider configurations](#provider-configurations).
-- `src/features/settings/SettingsView.tsx` renders the settings title, General/About
+- `src/features/providers/` contains `ProvidersView` (list and in-page
+  navigation), `ProviderPage` (back control and title), `ProviderTabbedView`
+  (API / Models tabs), `ProviderForm` (API fields in a settings-style card),
+  `ProviderModels` and `ProviderModelsCreateGate`, `ProviderIcon`, and
+  `providerButtons.module.css`; see [Provider configurations](#provider-configurations).
+- `src/features/settings/SettingsView.tsx` uses `PageModuleHeader`, General/About
   tabs, and panels. General hosts `LanguageSelector` (with `footer={<AppearanceControl />}`)
+  and a separate `LogSettings` section (group heading plus its own card), both
   composed in `src/main.tsx`. Tab switches and leaving Settings keep preference
   controls mounted so pending saves and input survive.
 - `src/components/FieldSelect.tsx` is the shared single-choice dropdown (36 px
@@ -38,9 +39,17 @@ React describes the interface; Rust handles local system and provider operations
 - `src/components/BrandLogo.tsx` renders one SVG logo: the transparent V and rounded
   wordmark when expanded, and the V symbol alone when collapsed. The wordmark uses
   a mask from the selected reference without a font dependency. `src/components/Icon.tsx` holds UI icons.
+- `src/components/PageModuleHeader.tsx` is the shared module title row (Providers
+  list layout): 20 px sidebar `Icon`, 1 rem semibold `h1`, optional trailing
+  actions or meta on the end, a 36 px minimum row height so titles align
+  vertically even without a trailing button, and 2 px top margin for clearance
+  under the Windows/Linux title strip. Overview, Providers list, planned
+  Agents/Skills/MCP, and Settings all use it; icons are decorative. Provider
+  create/edit headers use the same 2 px offset in `ProviderPage.module.css`.
 - `src/components/Notifications.tsx` is the app-level notification host, mounted
-  once in `App`. Features call `useNotify()` and pass an already translated
-  message: `notify(t("…"))`. One notification shows at a time, top-right below
+  once in `App`. Features call `useNotify()` with an already translated
+  `message` and optional `tone` (`success` | `error`); a plain string defaults
+  to success. One notification shows at a time, top-right below
   the title strip, in a polite `role="status"` region that is always mounted and
   holds only the message text (the close button sits beside it in the same
   card, outside the live region), so it is announced without moving focus or
@@ -48,8 +57,9 @@ React describes the interface; Rust handles local system and provider operations
   (`NOTIFICATION_DURATION_MS`); the timer pauses while hovered or while focus is
   inside, and keeps the time left. The close button ("Dismiss notification" /
   「关闭通知」) or Escape on it closes it and returns focus to where the user came
-  from. Styling uses `--color-surface`, `--color-text`, `--color-border` and
-  `--color-summary` (close icon); the entry fade only runs under
+  from. Styling uses `--color-surface`, `--color-text`, `--color-border`,
+  `--color-summary` (close icon), and tone tokens `--color-success-*` /
+  `--color-danger-*`; the entry fade only runs under
   `prefers-reduced-motion: no-preference`. Outside the provider, `notify` does
   nothing.
 - `src/lib/desktop.ts` checks runtime availability, calls Rust, and validates
@@ -472,7 +482,9 @@ They do not verify native WebView IPC, OS credential access or real providers.
 
 ## Settings logs
 
-`LogSettings` is a separate block below the General preference controls. It shows
+`LogSettings` is a separate section below the language/appearance card on the
+General tab (its own heading and grouped-card row, same pattern as future General
+sections). It shows
 the actual Rust-owned log file path in the same grouped-card row layout as language
 and appearance (label left, value right-aligned), with wrapping and text selection.
 Two small icon buttons after the path request a local text tool (View logs /
@@ -564,13 +576,17 @@ stale revision is refused with `revision_conflict` instead of overwriting a newe
 save. The kind is never part of an edit request.
 
 **UI.** The Providers page switches views inside `ProvidersView` (state
-`list | create | edit`, no router library). The list view shows
-loading, empty, error-with-retry, the saved rows and a "Load more" button while
-`nextCursor` is set. Each row puts the name first (foreground, semibold), then
-provider · protocol and the normalized URL (muted), with a weak "Edit" action.
-Rows are keyed internally by stable ID, so two rows with the same name stay
-distinct even though the ID is not shown. List data stays in `ProvidersView` while a
-secondary view is open, so going back does not re-read it.
+`list | create | edit`, no router library). The list view uses `PageModuleHeader`
+with the `providers` icon and "New configuration" in the trailing slot. The list
+view shows loading, empty,
+error-with-retry, saved rows and "Load more" while `nextCursor` is set. Each row
+is two lines: line 1 has a 40 px brand icon, the official brand name, a protocol
+pill and a selected-model count pill; line 2 shows the saved display name aligned
+with the brand text (not the icon). Base URL is omitted on the list. A weak
+"Edit" action sits on the row. Rows are keyed by stable ID. List data stays in
+`ProvidersView` while a secondary view is open; going back does not re-read the
+whole list, but returning from edit refreshes that row from storage so model
+counts stay current.
 
 **Brand icons.** `ProviderIcon` maps a provider kind (never a display name) to
 an official brand file in `assets/providers/`, imported through Vite like
@@ -597,54 +613,56 @@ trademarks of their respective owners and are used only to identify the
 providers." (「服务商名称和标志的商标归各自所有者，仅用于标识服务商」). The icons
 above are used on that basis only.
 
-Secondary views share `ProviderPage`: a secondary back button (the shared
-`Icon` "back" arrow at 18px plus the short text "Back" / 「返回」, 36px tall) and
-the page title on top. Edit uses the official brand icon and brand name (for
-example DeepSeek), not the saved display name or quote marks; create keeps a
-translated title string. Its `aria-label` is the fuller "Back to provider
-list" / 「返回服务商列表」 (separate keys `providers.back` and
-`providers.backLabel`), which starts with the visible text (WCAG 2.5.3). "New"
-opens the create form directly. Its first field is the provider select, which
-starts on the first template in `list_provider_templates` order with that
-template's name, base URL and protocol filled in (there is no empty option).
-Switching provider replaces only values that still equal the previous
-template's defaults; edited values are kept, and a protocol the new provider
-does not allow falls back to its default. The protocol select lists only the
-template's allowed values. The provider is read-only when editing. The detail
-page puts the name, base URL, protocol and API key in one "Basic information"
-group, alongside the read-only provider and full ID. One Save submits settings
-and an optional replacement key together. Models remain a separate group.
-Rust validates the submitted values: field codes appear next to their field and
-other codes at form level. After a successful save the page returns to the list,
-the row shows the values Rust stored (for example a trimmed name or a normalized
-URL), and the list is re-read. The save is confirmed by an app-level
-notification ("Saved “name”." / 「已保存「name」。」, see `Notifications`) that
-survives the jump back to the list; the list page itself keeps no message.
+Create and edit use `ProviderPage` and `ProviderTabbedView`. The secondary header
+is one row: a surface back control (border, 18px arrow plus "Back" / 「返回」,
+`min-height` 36 px, 2 px top margin) on the left and the page title (official
+brand icon and name) aligned on the right. Keys `providers.back` and
+`providers.backLabel` supply the visible label and `aria-label` (WCAG 2.5.3).
+Create updates the title when the provider field changes.
 
-- Hierarchy: each view has exactly one primary button ("New configuration" or
-  "Save"): solid `--color-accent` with `--color-background` text. Cancel,
-  recovery actions ("Save again", "Reload latest settings", "Try again") and
-  "Load more", and Back are secondary (`--color-border` outline, `--color-text`);
-  row "Edit" is a text button. "New configuration" (`plus`), row "Edit" (`edit`)
-  and Back (`back`) carry a leading 18px `Icon`
-  (`aria-hidden`, centered with the label via `buttons.withIcon`); Save, Cancel
-  and recovery actions stay text-only, like every form button elsewhere in the
-  app, so icons mark navigation and entry points rather than every button.
-  Blocked buttons use `aria-disabled`
-  styling (muted `--color-summary`, or half opacity for the primary). Labels and values use
-  `--color-text` at 0.8125rem and normal weight; hints and secondary values use
-  `--color-summary` at 0.75rem; errors use `--color-text`, semibold, with a
-  leading rule, so they never read as hints. Every focus ring is `--color-focus`.
-- Focus: opening a secondary view focuses its title; Back or Cancel returns focus
-  to "New configuration" or to that row's "Edit"; a successful save focuses the
-  saved row's "Edit" (found by ID), or the page heading when a new row is not on
-  the loaded pages. The re-read after a save re-applies that focus unless the
-  user has moved it, and a superseded read applies nothing. Controls that can hold focus are never `disabled` while
-  work is pending (disabling the focused element drops focus to the page):
+Tab layout (Settings-style tabs: **API** / 「API 配置」 and **Models** with
+optional selected count). Panels stay mounted while
+switching tabs. Create shows a Models gate until the instance is saved. API fields
+live in a grouped card: the first row is a right-aligned **Save**; the provider
+row follows (select when creating, read-only brand when editing), then display
+name, base URL, protocol and API key. Recovery actions ("Save again", "Refresh
+list", "Reload latest settings") stay at the bottom of the form when needed.
+There is no form Cancel; **Back** leaves the page. One Save submits settings and
+an optional replacement key together.
+
+The Models tab fetches on user action (primary **Fetch models** after the search
+field, 36 px row height with filter toggles), filters the saved catalog locally,
+and saves checkbox changes per row. Fetch summaries use app notifications with
+tone and icon. Hiding the page or leaving cancels in-flight fetches.
+
+Rust validates submitted values: field codes appear next to their field and
+other codes at form level. After a successful save the page returns to the list,
+the row shows the values Rust stored, and the list is re-read. The save is
+confirmed by an app-level notification (`Saved name.` / 「已保存 name。」,
+see `Notifications`) that survives the jump back to the list.
+
+- Hierarchy: each view has exactly one primary button ("New configuration",
+  "Save" or "Fetch models" on the Models toolbar): solid `--color-accent` with
+  `--color-background` text. Recovery actions and "Load more" are secondary
+  (`--color-border` outline); row "Edit" is a text button. "New configuration"
+  (`plus`) and row "Edit" (`edit`) carry a leading 18px `Icon`; create/edit Back
+  shows the back arrow and short label on the left of the secondary header (title
+  on the right). Save and
+  recovery actions stay text-only. Blocked buttons
+  use `aria-disabled` styling (muted `--color-summary`, or half opacity for the
+  primary). Labels and values use `--color-text` at 0.8125rem and normal weight;
+  hints and secondary values use `--color-summary` at 0.75rem; errors use
+  `--color-text`, semibold, with a leading rule. Every focus ring is
+  `--color-focus`. Protocol and count pills on the provider list use per-palette
+  `--color-chip-info-*` and `--color-chip-count-*` (defined in `themes.css`,
+  resolved in `App.css`).
+- Focus: opening a secondary view focuses its title; Back returns focus to "New
+  configuration" or that row's "Edit"; a successful save focuses the saved row's
+  "Edit" (found by ID), or the page heading when a new row is not on the loaded
+  pages. Controls that can hold focus are never `disabled` while work is pending:
   buttons and selects use `aria-disabled`, text fields `readOnly`, and handlers
-  check the state. Back is blocked while a save is pending, so its
-  outcome cannot be hidden. "Saving…" is announced through a `role="status"`
-  message.
+  check the state. Back is blocked while API save or model fetch/list work is
+  pending. "Saving…" is announced through a `role="status"` message.
 
 - `operation_failed` or `invalid_response` after a save means the outcome is
   unknown. The form re-reads the list first and offers "Save again" only after a
@@ -705,8 +723,8 @@ retry requires it to be typed again; reading metadata cannot confirm which key
 the credential store holds. Revision conflicts require reloading the latest
 settings for review.
 
-Typed keys are cleared before every submit, on Cancel, on unmount and before a
-hidden frame renders. They are never passed to parent callbacks, translations,
+Typed keys are cleared before every submit, when leaving the page, on unmount
+and before a hidden frame renders. They are never passed to parent callbacks, translations,
 notifications, logs or persistent frontend storage. IPC and OS credential access
 necessarily receive the new value; SQLite and responses hold only references and
 non-secret settings. The legacy standalone replacement command and its safe
@@ -722,11 +740,11 @@ validation, failed credentials, transaction rollback, legacy references,
 uncertain commits, concurrent edits, failed restoration and key exclusion from
 the database and response.
 
-Verified: `check:frontend` (306 UI tests, 14 translation-checker tests and eight
-release-tool tests), Rust fmt/Clippy, 182 passing Rust tests and a locked
-macOS no-bundle desktop build. One real OS credential-store test remains ignored.
-Native save/restart/keychain prompts, visual acceptance and Windows/Linux runtime
-behavior remain manual checks.
+Verified: `check:frontend` (frontend tests, translation checker and release-tool
+tests), Rust fmt/Clippy, passing Rust tests and a locked macOS no-bundle desktop
+build. One real OS credential-store test remains ignored. Native save/restart,
+model fetch against live providers, keychain prompts, visual acceptance and
+Windows/Linux runtime behavior remain manual checks.
 
 ## Product branding
 

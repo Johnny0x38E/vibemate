@@ -130,11 +130,6 @@
     padding: var(--space-sm) var(--space-lg) var(--space-lg);
     overflow: auto;
 }
-.pageHeading {
-    margin: 0;
-    font-size: 1rem;
-    font-weight: 600;
-}
 .planned {
     max-width: 680px;
     margin-top: var(--space-lg);

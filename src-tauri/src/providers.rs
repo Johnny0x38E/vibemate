@@ -388,6 +388,8 @@ pub struct ProviderRecord {
     pub created_at_ms: i64,
     /// Last edit time in Unix epoch milliseconds.
     pub updated_at_ms: i64,
+    /// Models the user has selected for this configuration.
+    pub selected_model_count: u32,
 }
 
 /// Validated, normalized editable fields shared by create and update.
@@ -661,17 +663,23 @@ pub fn create_provider(
         insert_provider_with_reference(storage, &id, kind, &settings, &reference, now_ms)
     });
     match saved {
-        Ok(()) => Ok(ProviderRecord {
-            id,
-            kind,
-            display_name: settings.display_name,
-            base_url: settings.base_url,
-            protocol: settings.protocol,
-            extensions: settings.extensions,
-            revision: 1,
-            created_at_ms: now_ms,
-            updated_at_ms: now_ms,
-        }),
+        Ok(()) => {
+            let connection = storage
+                .lock()
+                .map_err(|_| ProviderError::StorageUnavailable)?;
+            Ok(ProviderRecord {
+                id: id.clone(),
+                kind,
+                display_name: settings.display_name,
+                base_url: settings.base_url,
+                protocol: settings.protocol,
+                extensions: settings.extensions,
+                revision: 1,
+                created_at_ms: now_ms,
+                updated_at_ms: now_ms,
+                selected_model_count: read_selected_model_count(&connection, &id)?,
+            })
+        }
         Err(SaveNewError::Credential(error)) => Err(error.into()),
         // The key was deleted again, so the SQLite error describes the whole outcome.
         Err(SaveNewError::CommitFailed {
@@ -848,7 +856,7 @@ fn commit_provider_update(
     transaction
         .commit()
         .map_err(|_| CommitFailure::Uncertain(ProviderError::WriteFailed))?;
-    Ok(record)
+    enrich_selected_model_count(&connection, record).map_err(CommitFailure::NotCommitted)
 }
 
 fn update_in_transaction(
@@ -935,7 +943,8 @@ pub fn get_provider(storage: &Storage, id: &str) -> Result<ProviderRecord, Provi
     let connection = storage
         .lock()
         .map_err(|_| ProviderError::StorageUnavailable)?;
-    read_record(&connection, &id)?.ok_or(ProviderError::NotFound)
+    let record = read_record(&connection, &id)?.ok_or(ProviderError::NotFound)?;
+    enrich_selected_model_count(&connection, record)
 }
 
 /// Read one bounded page ordered by `created_at` ascending, then `id` ascending.
@@ -971,7 +980,13 @@ pub fn list_providers(
     // With no cursor, `?1 IS NULL` is true and the comparison is not needed.
     let mut statement = connection
         .prepare(&format!(
-            "SELECT {RECORD_COLUMNS} FROM provider_instance
+            "SELECT {RECORD_COLUMNS},
+                    COALESCE(
+                        (SELECT COUNT(*) FROM provider_model m
+                         WHERE m.provider_id = provider_instance.id AND m.selected = 1),
+                        0
+                    ) AS selected_model_count
+             FROM provider_instance
              WHERE ?1 IS NULL OR (created_at, id) > (?1, ?2)
              ORDER BY created_at, id
              LIMIT ?3"
@@ -980,7 +995,7 @@ pub fn list_providers(
     let rows = statement
         .query_map(
             params![after_created_at, after_id, i64::from(request.limit) + 1],
-            StoredRow::read,
+            ListedRow::read,
         )
         .map_err(|_| ProviderError::ReadFailed)?;
     let mut items = Vec::new();
@@ -1047,6 +1062,13 @@ impl StoredRow {
 
     /// Convert to a typed record. Unknown values are reported, never replaced.
     fn into_record(self) -> Result<ProviderRecord, ProviderError> {
+        self.into_record_with_selected_count(0)
+    }
+
+    fn into_record_with_selected_count(
+        self,
+        selected_model_count: u32,
+    ) -> Result<ProviderRecord, ProviderError> {
         let invalid = ProviderError::InvalidStoredProvider;
         Ok(ProviderRecord {
             id: ProviderId::parse(&self.id).ok_or(invalid)?,
@@ -1058,8 +1080,52 @@ impl StoredRow {
             revision: self.revision,
             created_at_ms: self.created_at,
             updated_at_ms: self.updated_at,
+            selected_model_count,
         })
     }
+}
+
+/// One list row including the selected-model count from the list query.
+struct ListedRow {
+    row: StoredRow,
+    selected_model_count: i64,
+}
+
+impl ListedRow {
+    fn read(row: &rusqlite::Row<'_>) -> rusqlite::Result<Self> {
+        Ok(Self {
+            row: StoredRow::read(row)?,
+            selected_model_count: row.get(8)?,
+        })
+    }
+
+    fn into_record(self) -> Result<ProviderRecord, ProviderError> {
+        let count =
+            u32::try_from(self.selected_model_count).map_err(|_| ProviderError::ReadFailed)?;
+        self.row.into_record_with_selected_count(count)
+    }
+}
+
+fn read_selected_model_count(
+    connection: &Connection,
+    id: &ProviderId,
+) -> Result<u32, ProviderError> {
+    let count: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM provider_model WHERE provider_id = ?1 AND selected = 1",
+            [id.as_str()],
+            |row| row.get(0),
+        )
+        .map_err(|_| ProviderError::ReadFailed)?;
+    u32::try_from(count).map_err(|_| ProviderError::ReadFailed)
+}
+
+fn enrich_selected_model_count(
+    connection: &Connection,
+    mut record: ProviderRecord,
+) -> Result<ProviderRecord, ProviderError> {
+    record.selected_model_count = read_selected_model_count(connection, &record.id)?;
+    Ok(record)
 }
 
 /// Build the cursor that continues after `record`: `"<created_at_ms>.<id>"`.

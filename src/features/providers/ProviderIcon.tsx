@@ -22,7 +22,8 @@ const ICONS = new Map<string, IconSource>([
 ]);
 
 /**
- * A provider's brand icon in a 20×20 box, scaled with `object-fit: contain` so
+ * A provider's brand icon in a fixed box (20×20 by default, 40×40 for list rows),
+ * scaled with `object-fit: contain` so
  * it is never stretched. It is decorative (`alt=""`): the provider or
  * configuration name next to it already identifies it. Unknown kinds render
  * nothing.
@@ -32,11 +33,20 @@ const ICONS = new Map<string, IconSource>([
  * tokens (`data-appearance` and the system scheme), so there is no second
  * theme detection in script.
  */
-export function ProviderIcon({ kind }: { kind: string }): JSX.Element | null {
+/** `row` matches the two-line provider list row; `default` is the 20px inline box. */
+export type ProviderIconSize = "default" | "row";
+
+export function ProviderIcon({
+    kind,
+    size = "default",
+}: {
+    kind: string;
+    size?: ProviderIconSize;
+}): JSX.Element | null {
     const source = ICONS.get(kind);
     if (!source) return null;
     return (
-        <span className={styles["icon"]}>
+        <span className={styles["icon"]} data-size={size}>
             {source.dark === undefined ? (
                 <img src={source.light} alt="" draggable={false} />
             ) : (

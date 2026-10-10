@@ -15,12 +15,30 @@ import styles from "./Notifications.module.css";
 /** How long a notification stays before it dismisses itself, in milliseconds. */
 export const NOTIFICATION_DURATION_MS = 3500;
 
+export type NotificationTone = "success" | "error";
+
+/** Payload for {@link Notify}; tone selects the leading icon. */
+export interface NotificationPayload {
+    message: string;
+    tone: NotificationTone;
+}
+
+export type NotifyInput = string | NotificationPayload;
+
 /** Show a short, already translated message; it replaces any current one. */
-export type Notify = (message: string) => void;
+export type Notify = (input: NotifyInput) => void;
 
 interface ShownNotification {
     id: number;
     message: string;
+    tone: NotificationTone;
+}
+
+function normalizeNotify(input: NotifyInput): NotificationPayload {
+    if (typeof input === "string") {
+        return { message: input, tone: "success" };
+    }
+    return input;
 }
 
 // Outside a provider (isolated feature tests, previews) notifying does nothing.
@@ -61,13 +79,18 @@ export function NotificationProvider({
     const returnFocus = useRef<HTMLElement | null>(null);
     const id = shown?.id;
 
-    const notify = useCallback<Notify>((message) => {
+    const notify = useCallback<Notify>((input) => {
+        const payload = normalizeNotify(input);
         nextId.current += 1;
         remaining.current = {
             id: nextId.current,
             ms: NOTIFICATION_DURATION_MS,
         };
-        setShown({ id: nextId.current, message });
+        setShown({
+            id: nextId.current,
+            message: payload.message,
+            tone: payload.tone,
+        });
     }, []);
 
     const dismiss = useCallback((dismissed: number) => {
@@ -106,6 +129,9 @@ export function NotificationProvider({
         if (target?.isConnected) target.focus();
     }
 
+    const toneIcon =
+        shown?.tone === "error" ? <Icon name="error" /> : <Icon name="check" />;
+
     return (
         <NotifyContext.Provider value={notify}>
             {children}
@@ -113,6 +139,7 @@ export function NotificationProvider({
                 <div
                     className={styles["card"]}
                     data-shown={shown ? "" : undefined}
+                    data-tone={shown?.tone}
                     onMouseEnter={() => {
                         if (shown) setHovered(true);
                     }}
@@ -138,10 +165,20 @@ export function NotificationProvider({
                             setFocused(false);
                     }}
                 >
-                    {/* Only the text is live; the button stays outside it. */}
-                    <p className={styles["message"]} role="status">
-                        {shown?.message}
-                    </p>
+                    <div className={styles["content"]}>
+                        {shown && (
+                            <span
+                                className={styles["toneIcon"]}
+                                aria-hidden="true"
+                            >
+                                {toneIcon}
+                            </span>
+                        )}
+                        {/* Only the text is live; the button stays outside it. */}
+                        <p className={styles["message"]} role="status">
+                            {shown?.message}
+                        </p>
+                    </div>
                     {shown && (
                         <button
                             className={styles["close"]}

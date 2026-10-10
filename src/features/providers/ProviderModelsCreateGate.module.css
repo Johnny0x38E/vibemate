@@ -1,0 +1,11 @@
+.gate {
+    margin-top: var(--space-md);
+}
+
+.message {
+    margin: 0;
+    color: var(--color-summary);
+    font-size: 0.8125rem;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}

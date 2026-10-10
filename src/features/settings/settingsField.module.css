@@ -16,6 +16,12 @@
     border-bottom: 1px solid var(--color-border);
 }
 
+/* 36 px control plus vertical padding; skip on tall rows such as theme circles. */
+.rowUniform {
+    min-height: 64px;
+    box-sizing: border-box;
+}
+
 .group > .row:last-child {
     border-bottom: 0;
 }

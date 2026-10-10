@@ -46,6 +46,8 @@ export interface ProviderRecord {
     revision: number;
     createdAtMs: number;
     updatedAtMs: number;
+    /** Selected models for this configuration; Rust counts rows in SQLite. */
+    selectedModelCount: number;
 }
 
 /** One bounded page ordered by creation time, then ID. */
@@ -182,6 +184,7 @@ const RECORD_KEYS = [
     "revision",
     "createdAtMs",
     "updatedAtMs",
+    "selectedModelCount",
 ] as const;
 
 function isProviderKind(value: unknown): value is ProviderKind {
@@ -232,7 +235,10 @@ function validateRecord(value: unknown): ProviderRecord {
         value["revision"] < 1 ||
         !isTimestamp(value["createdAtMs"]) ||
         !isTimestamp(value["updatedAtMs"]) ||
-        value["updatedAtMs"] < value["createdAtMs"]
+        value["updatedAtMs"] < value["createdAtMs"] ||
+        !Number.isSafeInteger(value["selectedModelCount"]) ||
+        typeof value["selectedModelCount"] !== "number" ||
+        value["selectedModelCount"] < 0
     ) {
         throw invalidResponse();
     }
@@ -246,6 +252,7 @@ function validateRecord(value: unknown): ProviderRecord {
         revision: value["revision"],
         createdAtMs: value["createdAtMs"],
         updatedAtMs: value["updatedAtMs"],
+        selectedModelCount: value["selectedModelCount"],
     };
 }
 

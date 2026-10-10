@@ -9,6 +9,14 @@
     margin-top: var(--space-lg);
 }
 
+.group[data-layout="tabPanel"] {
+    margin-top: var(--space-sm);
+}
+
+.saveRow {
+    justify-content: flex-end;
+}
+
 .groupTitle {
     margin: 0;
     color: var(--color-text);
@@ -61,6 +69,10 @@
 }
 
 .value {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    min-height: 36px;
     color: var(--color-text);
     font-size: 0.8125rem;
 }
@@ -71,6 +83,7 @@
     align-items: center;
     justify-content: flex-end;
     gap: var(--space-sm);
+    min-height: 36px;
 }
 
 .secondaryValue {
@@ -162,4 +175,8 @@
     flex-wrap: wrap;
     gap: var(--space-sm);
     margin-top: var(--space-md);
+}
+
+.actions:empty {
+    display: none;
 }

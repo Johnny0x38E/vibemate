@@ -12,6 +12,15 @@
     --color-summary: var(--theme-summary-light);
     --color-focus: var(--theme-focus-light);
     --color-accent: var(--theme-accent-light);
+    /* Chips and status hues sit beside the neutral theme ramp. */
+    --color-chip-info-bg: var(--theme-chip-info-bg-light);
+    --color-chip-info-fg: var(--theme-chip-info-fg-light);
+    --color-chip-count-bg: var(--theme-chip-count-bg-light);
+    --color-chip-count-fg: var(--theme-chip-count-fg-light);
+    --color-success-fg: #16794a;
+    --color-success-bg: #daf0e4;
+    --color-danger-fg: #b42318;
+    --color-danger-bg: #fce8e6;
     --space-sm: 8px;
     --space-md: 16px;
     --space-lg: 24px;
@@ -41,6 +50,14 @@
         --color-summary: var(--theme-summary-dark);
         --color-focus: var(--theme-focus-dark);
         --color-accent: var(--theme-accent-dark);
+        --color-chip-info-bg: var(--theme-chip-info-bg-dark);
+        --color-chip-info-fg: var(--theme-chip-info-fg-dark);
+        --color-chip-count-bg: var(--theme-chip-count-bg-dark);
+        --color-chip-count-fg: var(--theme-chip-count-fg-dark);
+        --color-success-fg: #6bc497;
+        --color-success-bg: #1a3328;
+        --color-danger-fg: #f08979;
+        --color-danger-bg: #3d1f1f;
     }
 }
 :root[data-appearance="dark"] {
@@ -55,6 +72,14 @@
     --color-summary: var(--theme-summary-dark);
     --color-focus: var(--theme-focus-dark);
     --color-accent: var(--theme-accent-dark);
+    --color-chip-info-bg: var(--theme-chip-info-bg-dark);
+    --color-chip-info-fg: var(--theme-chip-info-fg-dark);
+    --color-chip-count-bg: var(--theme-chip-count-bg-dark);
+    --color-chip-count-fg: var(--theme-chip-count-fg-dark);
+    --color-success-fg: #6bc497;
+    --color-success-bg: #1a3328;
+    --color-danger-fg: #f08979;
+    --color-danger-bg: #3d1f1f;
 }
 * {
     box-sizing: border-box;

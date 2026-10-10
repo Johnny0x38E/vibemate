@@ -19,12 +19,69 @@
     align-items: center;
     gap: var(--space-sm);
     max-width: 100%;
-    padding: 10px 6px 10px var(--space-md);
+    padding: 8px 6px 8px 10px;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-card);
     color: var(--color-text);
     background: var(--color-surface);
     pointer-events: auto;
+}
+
+.content {
+    display: flex;
+    flex: 1;
+    align-items: flex-start;
+    gap: 8px;
+    min-width: 0;
+}
+
+.toneIcon {
+    display: grid;
+    flex-shrink: 0;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    margin-top: 1px;
+    color: var(--color-summary);
+}
+
+.card[data-tone="success"] {
+    border-color: color-mix(
+        in srgb,
+        var(--color-success-fg) 35%,
+        var(--color-border)
+    );
+    background: color-mix(
+        in srgb,
+        var(--color-success-bg) 55%,
+        var(--color-surface)
+    );
+}
+
+.card[data-tone="success"] .toneIcon {
+    color: var(--color-success-fg);
+}
+
+.card[data-tone="error"] {
+    border-color: color-mix(
+        in srgb,
+        var(--color-danger-fg) 35%,
+        var(--color-border)
+    );
+    background: color-mix(
+        in srgb,
+        var(--color-danger-bg) 55%,
+        var(--color-surface)
+    );
+}
+
+.card[data-tone="error"] .toneIcon {
+    color: var(--color-danger-fg);
+}
+
+.toneIcon svg {
+    width: 18px;
+    height: 18px;
 }
 
 .message {

@@ -91,7 +91,12 @@ export function LogSettings(): JSX.Element {
             </h2>
             {state.kind === "ready" && (
                 <div className={fieldStyles["group"]}>
-                    <div className={fieldStyles["row"]}>
+                    <div
+                        className={[
+                            fieldStyles["row"],
+                            fieldStyles["rowUniform"],
+                        ].join(" ")}
+                    >
                         <span className={fieldStyles["label"]}>
                             {t("settings.logs.filePath")}
                         </span>

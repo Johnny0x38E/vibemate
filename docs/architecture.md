@@ -9,20 +9,26 @@
   in `src/lib/desktop.ts` and `src/lib/desktop/`, which validate every response.
 - **Commands.** `src-tauri/src/commands.rs` holds thin Tauri commands for app
   metadata, the repository link, language and appearance preferences, provider
-  instances, and provider API keys. `src-tauri/src/lib.rs` opens storage and
-  registers them.
+  instances, provider API keys, and provider model fetch/list/selection (user-triggered
+  only). `src-tauri/src/lib.rs` opens storage and registers them.
 - **Persistence.** `src-tauri/src/storage.rs` owns the private SQLite database in
-  the app-data folder and its forward-only migrations (currently schema v6).
+  the app-data folder and its forward-only migrations (currently schema v7).
   `settings.rs` and `appearance.rs` store preferences; `providers.rs` validates
   and stores provider instances (stable random IDs, cursor pages, optimistic
-  `revision` checks); `provider_secrets.rs` reads key status and replaces keys.
+  `revision` checks); `provider_secrets.rs` reads key status and replaces keys;
+  `models.rs` stores fetched and manual model rows and selections per provider.
   SQLite stores only a `provider-<id>` reference per key, never the key itself.
 - **Credentials.** `src-tauri/src/credentials.rs` provides the OS credential-store
   interface, key validation and the compensation helpers that keep the store and
   SQLite consistent when providers are created and keys are replaced.
+- **HTTP and models.** `http_client.rs` performs bounded HTTPS GETs with cancellation
+  and system-proxy support; `model_catalog.rs` and `model_fetch.rs` map the three
+  phase-1 providers' list endpoints into stored catalog rows; `model_search.rs`
+  scores in-memory fuzzy queries over saved rows.
 
-Saved provider instances are configuration records only: nothing connects to a
-provider, discovers models, or writes agent configuration yet.
+Saved provider instances and selected models are configuration only: nothing writes
+agent configuration or claims a verified inference connection yet. Manual model
+add in the UI is still pending (P12.c.3).
 
 Keep one Rust crate while learning the framework. Create feature modules as
 behavior is implemented rather than adding empty abstractions now.

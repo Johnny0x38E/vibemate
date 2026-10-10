@@ -8,6 +8,11 @@
     height: 20px;
 }
 
+.icon[data-size="row"] {
+    width: 2.5rem;
+    height: 2.5rem;
+}
+
 .icon img {
     display: block;
     width: 100%;

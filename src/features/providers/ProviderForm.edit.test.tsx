@@ -45,6 +45,7 @@ const record: ProviderRecord = {
     revision: 1,
     createdAtMs: 1000,
     updatedAtMs: 1000,
+    selectedModelCount: 0,
 };
 const templates: ProviderTemplate[] = [
     {
@@ -87,7 +88,6 @@ async function mount(locale: "en" | "zh-CN" = "en") {
         onSaved: vi.fn(),
         onRecordLoaded: vi.fn(),
         onRefresh: vi.fn().mockResolvedValue(true),
-        onCancel: vi.fn(),
         onBusyChange: vi.fn(),
     };
     const view = render(

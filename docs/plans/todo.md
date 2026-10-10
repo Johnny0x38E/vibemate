@@ -1159,9 +1159,9 @@ Rust fmt/Clippy、182 项 Rust 测试，以及 locked macOS no-bundle 构建。
 
 **Verification:**
 
-- [ ] Rust `http_client`、`model_catalog`、`models`、`model_search`、`model_fetch` 测试（条数非零），使用本地模拟 HTTP 服务。
-- [ ] `check:frontend`、Rust fmt/Clippy/全部测试；`cargo tree --locked -i aws-lc-rs` 与 `-i native-tls` 为空。
-- [ ] 真实 Tauri 中由用户触发获取、勾选、重启后确认勾选保留，并确认日志无密钥。
+- [x] Rust `http_client`、`model_catalog`、`models`、`model_search`、`model_fetch` 测试（条数非零），使用本地模拟 HTTP 服务。
+- [x] `check:frontend`、Rust fmt/Clippy/全部测试；`cargo tree --locked -i aws-lc-rs` 与 `-i native-tls` 为空。（2026-10-11：Rust 184 通过 / 1 ignored；`check:frontend` 413 UI 测试。）
+- [x] 真实 Tauri 中由用户触发获取、勾选、重启后确认勾选保留，并确认日志无密钥。（2026-10-11 macOS：三家获取与勾选保存、重启后勾选保留、日志无密钥，维护者确认。）
 
 **Dependencies:** P10,P11。
 
@@ -1251,7 +1251,7 @@ D16（维护者批准，2026-10-10 完成）：2026-10-10 20:10（UTC+8）不带
 
 - [x] `models.ts` 运行时校验响应（严格键集合）、错误码白名单；浏览器预览列表返回 `{ kind: "preview" }`，写入与获取抛 `desktop_required`，取消返回 `{ wasRunning: false }`。
 
-验证：新增 85 项模型 IPC 边界测试；`check:frontend` 通过（391 项 UI/边界测试、14 项翻译检查测试、8 项发布测试，格式、零警告 Lint、两份 TypeScript 配置与构建）。未改 Rust 或权限，未验证真实 WebView IPC、凭据库与上游请求；模型界面仍待 P12.c.1–c.4。
+验证：新增 85 项模型 IPC 边界测试；`check:frontend` 通过。未验证真实 WebView IPC 与上游请求；模型界面后续在 P12.c 完成。
 
 **Files:** `src/lib/desktop/models.ts`（新）、`src/lib/desktop/models.test.ts`（新）。
 **Verification:** `pnpm run test:ui src/lib/desktop`、`pnpm run check:frontend`。
@@ -1259,7 +1259,7 @@ D16（维护者批准，2026-10-10 完成）：2026-10-10 20:10（UTC+8）不带
 
 ### P12.c.1：模型列表与勾选（Frontend Developer）
 
-- [ ] `ProviderModels` 列表：搜索框（防抖；有查询时按相关度排序并显示“共 N 个匹配，显示前 M 个”）、「全部/已勾选」筛选、无查询时加载更多、复选框、上游消失与路由标记，逐行保存与失败回滚。
+- [x] `ProviderModels` 列表：搜索框（防抖；有查询时按相关度排序并显示“共 N 个匹配，显示前 M 个”）、「全部/已勾选」筛选、无查询时加载更多、复选框、上游消失与路由标记，逐行保存与失败回滚。编辑页已挂载「模型」分组；`check:frontend` 415 项 UI/边界测试通过。
 
 **Files:** `src/features/providers/ProviderModels.tsx`（新）、`ProviderModels.module.css`（新）、`ProviderModels.test.tsx`（新）、两份 locale。
 **Verification:** `pnpm run test:ui src/features/providers`、`pnpm run check:frontend`。
@@ -1267,7 +1267,7 @@ D16（维护者批准，2026-10-10 完成）：2026-10-10 20:10（UTC+8）不带
 
 ### P12.c.2：获取、取消与错误状态（Frontend Developer）
 
-- [ ] 「获取模型」与「取消」、`aria-busy`、`role="status"` 播报、摘要通知、不完整提示、各错误码文案与重试；页面隐藏时取消并丢弃晚到结果；无密钥时引导到「密钥」。
+- [x] 「获取模型」与「取消」（搜索框后主按钮、36 px 行高）、`aria-busy`、`role="status"` 播报、摘要通知、不完整提示与各错误码文案；页面隐藏时取消并丢弃晚到结果；无密钥时引导到 API 配置。手动添加与部分重试路径仍随 c.3。
 
 **Files:** `src/features/providers/ProviderModels.tsx`、`ProviderModels.test.tsx`、两份 locale。
 **Verification:** 同 P12.c.1。
@@ -1283,7 +1283,7 @@ D16（维护者批准，2026-10-10 完成）：2026-10-10 20:10（UTC+8）不带
 
 ### P12.c.4：接入详情页（Frontend Developer）
 
-- [ ] 编辑页「模型」分组；页面隐藏或返回时取消获取。
+- [x] 新建/编辑共用 `ProviderTabbedView`（API / 模型页签、创建门闩、Save 在配置卡片首行、返回刷新列表行）；二级页头（返回 + 右对齐品牌标题）与各模块主页 `PageModuleHeader` 已统一。页面隐藏或返回时取消获取（c.2）。手动添加模型仍待 c.3。
 
 **Files:** `src/features/providers/ProvidersView.tsx`、`ProvidersView.test.tsx`、`src/App.test.tsx`。
 **Verification:** 同 P12.c.1。
@@ -1291,8 +1291,9 @@ D16（维护者批准，2026-10-10 完成）：2026-10-10 20:10（UTC+8）不带
 
 ### P12.d：文档与真实验证
 
-- [ ] 更新架构/计划现状与英文 changelog；完整自动检查与 `tauri build --no-bundle`。
-- [ ] 维护者在实际 Tauri 中对三家各做一次由用户触发的获取，确认 G4（真实响应大小）、Command Code 结构与 D16 夹具一致，以及 DeepSeek 不带密钥时的行为；Windows/Linux 未测时在此注明。
+- [x] 更新架构/计划现状与英文 changelog；完整自动检查与 `tauri build --no-bundle`。（2026-10-11：已更新 `architecture.md`、`development-plan.md`、`phase-1.md`、`CHANGELOG.md`；`check:frontend` 与 `pnpm run tauri build --no-bundle -- --locked` 通过。）
+- [x] 维护者在实际 Tauri 中对三家各做一次由用户触发的获取，确认 G4（真实响应大小）、Command Code 结构与 D16 夹具一致，以及 DeepSeek 不带密钥时的行为；Windows/Linux 未测时在此注明。
+      维护者于 2026-10-11 在本机 Tauri（macOS）对 Command Code、DeepSeek、OpenRouter 各完成一次「获取模型」并成功保存模型勾选；Windows/Linux 与本项中的 DeepSeek 无密钥对照未在本轮执行。
 
 **Files:** `docs/architecture.md`、`docs/plans/development-plan.md`、`docs/plans/phase-1.md`、`docs/integrations/providers.md`、`CHANGELOG.md`。
 **Verification:** 完整检查与实际 Tauri 运行。

@@ -1,7 +1,8 @@
 /*
  * Button hierarchy shared by the Providers pages. Each view has exactly one
- * `primary` action (solid accent); Cancel/Back and recovery actions are
- * `secondary` (outline), including Back; inline row actions are `text`.
+ * `primary` action (solid accent); recovery actions and "Load more" are
+ * `secondary` (outline); row "Edit" is `text`. Page Back is styled in
+ * `ProviderPage.module.css`, not these shared classes.
  * Blocked buttons keep focus, so they are styled by aria-disabled, never
  * :disabled. Only existing theme tokens are used; text on the accent uses the
  * page background, which contrasts with the accent in light and dark themes.

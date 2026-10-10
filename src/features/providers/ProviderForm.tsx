@@ -50,7 +50,6 @@ export interface ProviderFormProps {
      * `true` when the list was read, so the user can check it before retrying.
      */
     onRefresh: () => Promise<boolean>;
-    onCancel: () => void;
     /** Reports pending work so the page can block its back control meanwhile. */
     onBusyChange: (busy: boolean) => void;
     /**
@@ -58,6 +57,17 @@ export interface ProviderFormProps {
      * mounted and keeps its other fields, but a typed API key is cleared.
      */
     hidden?: boolean;
+    /** When embedded in the edit-page Models/API tabs, omit the section heading. */
+    layout?: "page" | "tabPanel";
+    /** Stable id for the `<form>` when callers associate external controls with it. */
+    formId?: string;
+    /**
+     * Primary Save placement: the first row of the settings-style card (`external`)
+     * or the form footer (`footer`, default).
+     */
+    primaryActionPlacement?: "footer" | "external";
+    /** Create mode only: sync the page title with the provider field. */
+    onCreateKindChange?: (kind: ProviderKind) => void;
 }
 
 /**
@@ -162,12 +172,16 @@ export function ProviderForm({
     onSaved,
     onRecordLoaded,
     onRefresh,
-    onCancel,
     onBusyChange,
     hidden = false,
+    layout = "page",
+    formId,
+    primaryActionPlacement = "footer",
+    onCreateKindChange,
 }: ProviderFormProps): JSX.Element {
     const { t } = useTranslation();
     const id = useId();
+    const submitRef = useRef<HTMLButtonElement>(null);
     const editing = mode.kind === "edit" ? mode.record : null;
     // Only used when creating; an edit keeps the stored record's provider.
     const [createKind, setCreateKind] = useState<ProviderKind | undefined>(
@@ -190,7 +204,7 @@ export function ProviderForm({
     const [status, setStatus] = useState<FormStatus>({ kind: "idle" });
     // A new or replacement API key. It lives only in this state: it is
     // never logged, stored, put into a message or passed to the parent, and it
-    // is cleared after every submit, on cancel and while the page is hidden.
+    // is cleared after every submit and while the page is hidden.
     const [secret, setSecret] = useState("");
     // Set when a submit found the key empty; checked here, not by Rust.
     const [secretMissing, setSecretMissing] = useState(false);
@@ -238,7 +252,6 @@ export function ProviderForm({
     }
     const alive = useRef(true);
     const pending = useRef(false);
-    const submit = useRef<HTMLButtonElement>(null);
     const secretInput = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -283,6 +296,12 @@ export function ProviderForm({
             onBusyChange(false);
         };
     }, [busy, onBusyChange]);
+
+    useEffect(() => {
+        if (mode.kind === "create" && createKind !== undefined) {
+            onCreateKindChange?.(createKind);
+        }
+    }, [mode.kind, createKind, onCreateKindChange]);
 
     function update(name: FieldName, value: string): void {
         if (name === "protocol") {
@@ -546,13 +565,23 @@ export function ProviderForm({
     const configured = keyStatus.kind === "ready" && keyStatus.configured;
     const showStoredIndicator = configured && secret === "";
 
+    const formLabel = layout === "page" ? groupId : t("providers.tabs.api");
+
     return (
-        <section className={styles["group"]} aria-labelledby={groupId}>
-            <h2 className={styles["groupTitle"]} id={groupId}>
-                {t("providers.groups.basic")}
-            </h2>
+        <section
+            className={styles["group"]}
+            data-layout={layout}
+            aria-labelledby={layout === "page" ? groupId : undefined}
+        >
+            {layout === "page" && (
+                <h2 className={styles["groupTitle"]} id={groupId}>
+                    {t("providers.groups.basic")}
+                </h2>
+            )}
             <form
-                aria-labelledby={groupId}
+                id={formId}
+                aria-labelledby={layout === "page" ? groupId : undefined}
+                aria-label={layout === "tabPanel" ? formLabel : undefined}
                 aria-busy={busy}
                 noValidate
                 onSubmit={handleSubmit}
@@ -565,10 +594,32 @@ export function ProviderForm({
                     </div>
                 )}
                 <div className={fieldStyles["group"]}>
+                    {primaryActionPlacement === "external" && (
+                        <div
+                            className={[
+                                fieldStyles["row"],
+                                styles["saveRow"],
+                            ].join(" ")}
+                        >
+                            <button
+                                className={buttons["primary"]}
+                                type="submit"
+                                ref={submitRef}
+                                aria-disabled={saveBlocked}
+                            >
+                                {t("providers.form.save")}
+                            </button>
+                        </div>
+                    )}
                     {/* The provider is part of the instance identity: chosen when
                         creating, then fixed, so an edit shows it read-only. */}
                     {editing ? (
-                        <div className={fieldStyles["row"]}>
+                        <div
+                            className={[
+                                fieldStyles["row"],
+                                fieldStyles["rowUniform"],
+                            ].join(" ")}
+                        >
                             <span className={fieldStyles["label"]}>
                                 {t("providers.fields.kind")}
                             </span>
@@ -588,7 +639,12 @@ export function ProviderForm({
                             </span>
                         </div>
                     ) : (
-                        <div className={fieldStyles["row"]}>
+                        <div
+                            className={[
+                                fieldStyles["row"],
+                                fieldStyles["rowUniform"],
+                            ].join(" ")}
+                        >
                             <label
                                 className={fieldStyles["label"]}
                                 htmlFor={`${id}-kind`}
@@ -616,7 +672,12 @@ export function ProviderForm({
                             </div>
                         </div>
                     )}
-                    <div className={fieldStyles["row"]}>
+                    <div
+                        className={[
+                            fieldStyles["row"],
+                            fieldStyles["rowUniform"],
+                        ].join(" ")}
+                    >
                         <label
                             className={fieldStyles["label"]}
                             htmlFor={`${id}-displayName`}
@@ -643,7 +704,12 @@ export function ProviderForm({
                             {errorText("displayName")}
                         </div>
                     </div>
-                    <div className={fieldStyles["row"]}>
+                    <div
+                        className={[
+                            fieldStyles["row"],
+                            fieldStyles["rowUniform"],
+                        ].join(" ")}
+                    >
                         <label
                             className={fieldStyles["label"]}
                             htmlFor={`${id}-baseUrl`}
@@ -672,7 +738,12 @@ export function ProviderForm({
                             {errorText("baseUrl")}
                         </div>
                     </div>
-                    <div className={fieldStyles["row"]}>
+                    <div
+                        className={[
+                            fieldStyles["row"],
+                            fieldStyles["rowUniform"],
+                        ].join(" ")}
+                    >
                         <label
                             className={fieldStyles["label"]}
                             htmlFor={`${id}-protocol`}
@@ -700,7 +771,12 @@ export function ProviderForm({
                     </div>
                     {/* The fixed placeholder and eye-off mark only indicate a
                         configured entry; neither is an input value or a reveal control. */}
-                    <div className={fieldStyles["row"]}>
+                    <div
+                        className={[
+                            fieldStyles["row"],
+                            fieldStyles["rowUniform"],
+                        ].join(" ")}
+                    >
                         <label
                             className={fieldStyles["label"]}
                             htmlFor={`${id}-secret`}
@@ -793,23 +869,25 @@ export function ProviderForm({
                 </div>
                 <div className={styles["feedback"]}>{formMessage()}</div>
                 <div className={styles["actions"]}>
-                    {/* The one primary action. Never `disabled`: focus stays here
-                        while saving, and save() checks the state itself. */}
-                    <button
-                        className={buttons["primary"]}
-                        type="submit"
-                        ref={submit}
-                        aria-disabled={saveBlocked}
-                    >
-                        {t("providers.form.save")}
-                    </button>
+                    {primaryActionPlacement === "footer" && (
+                        // The one primary action. Never `disabled`: focus stays here
+                        // while saving, and save() checks the state itself.
+                        <button
+                            className={buttons["primary"]}
+                            type="submit"
+                            ref={submitRef}
+                            aria-disabled={saveBlocked}
+                        >
+                            {t("providers.form.save")}
+                        </button>
+                    )}
                     {status.kind === "unknown" && status.refreshed && (
                         <button
                             className={buttons["secondary"]}
                             type="button"
                             onClick={() => {
                                 // This button disappears; keep focus inside the form.
-                                submit.current?.focus();
+                                submitRef.current?.focus();
                                 // An explicit second action after the list was re-read.
                                 void save(true);
                             }}
@@ -822,7 +900,7 @@ export function ProviderForm({
                             className={buttons["secondary"]}
                             type="button"
                             onClick={() => {
-                                submit.current?.focus();
+                                submitRef.current?.focus();
                                 void refreshAgain();
                             }}
                         >
@@ -835,25 +913,13 @@ export function ProviderForm({
                             className={buttons["secondary"]}
                             type="button"
                             onClick={() => {
-                                submit.current?.focus();
+                                submitRef.current?.focus();
                                 void reloadLatest();
                             }}
                         >
                             {t("providers.form.reloadLatest")}
                         </button>
                     )}
-                    <button
-                        className={buttons["secondary"]}
-                        type="button"
-                        aria-disabled={busy}
-                        onClick={() => {
-                            if (busy) return;
-                            setSecret("");
-                            onCancel();
-                        }}
-                    >
-                        {t("providers.form.cancel")}
-                    </button>
                 </div>
             </form>
         </section>

@@ -26,6 +26,7 @@ const record: ProviderRecord = {
     revision: 1,
     createdAtMs: 1000,
     updatedAtMs: 1000,
+    selectedModelCount: 0,
 };
 
 const createInput: CreateProviderInput = {

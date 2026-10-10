@@ -174,7 +174,11 @@ export function AppearanceControl(): JSX.Element {
 
     return (
         <>
-            <div className={fieldStyles["row"]}>
+            <div
+                className={[fieldStyles["row"], fieldStyles["rowUniform"]].join(
+                    " ",
+                )}
+            >
                 <label
                     className={fieldStyles["label"]}
                     htmlFor={`${id}-appearance`}

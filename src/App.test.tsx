@@ -550,6 +550,7 @@ const savedProvider: ProviderRecord = {
     revision: 1,
     createdAtMs: 1000,
     updatedAtMs: 1000,
+    selectedModelCount: 0,
 };
 
 function useDesktopProviders(): void {
@@ -597,7 +598,7 @@ test.each([
         add: "New configuration",
         name: "Name",
         key: "API key",
-        edit: "Edit “Personal DeepSeek”",
+        edit: "Edit Personal DeepSeek",
         planned: "Not implemented",
     },
     {
@@ -607,7 +608,7 @@ test.each([
         add: "新建配置",
         name: "名称",
         key: "API 密钥",
-        edit: "编辑「Personal DeepSeek」",
+        edit: "编辑 Personal DeepSeek",
         planned: "功能尚未实现",
     },
 ] as const)(
@@ -653,21 +654,21 @@ test.each([
         locale: "en",
         providers: "Providers",
         agents: "Agents",
-        edit: "Edit “Personal DeepSeek”",
-        renamedEdit: "Edit “Renamed”",
+        edit: "Edit Personal DeepSeek",
+        renamedEdit: "Edit Renamed",
         name: "Name",
         save: "Save",
-        saved: "Saved “Renamed”.",
+        saved: "Saved Renamed.",
     },
     {
         locale: "zh-CN",
         providers: "服务商",
         agents: "Agent",
-        edit: "编辑「Personal DeepSeek」",
-        renamedEdit: "编辑「Renamed」",
+        edit: "编辑 Personal DeepSeek",
+        renamedEdit: "编辑 Renamed",
         name: "名称",
         save: "保存",
-        saved: "已保存「Renamed」。",
+        saved: "已保存 Renamed。",
     },
 ] as const)(
     "in $locale a save shows an app-level notification that outlives the jump back and page changes",
@@ -723,7 +724,7 @@ test("switching language keeps the Providers list and an open form in place", as
     fireEvent.click(screen.getByRole("button", { name: "Providers" }));
     fireEvent.click(
         await screen.findByRole("button", {
-            name: "Edit “Personal DeepSeek”",
+            name: "Edit Personal DeepSeek",
         }),
     );
     const field = screen.getByRole("textbox", { name: "Name" });

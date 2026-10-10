@@ -24,7 +24,6 @@
         "plannedTitle": "Not implemented",
         "plannedDetail": "This feature has not been implemented. No connection or configuration changes are available yet.",
         "overview": {
-            "title": "Configuration relationships",
             "state": "Not connected · planned",
             "planned": "Planned",
             "diagram": "Providers above agents, with shared skills and MCP server definitions alongside",
@@ -124,26 +123,114 @@
         "dismiss": "Dismiss notification"
     },
     "providers": {
-        "note": "These are saved configurations only. vibemate does not use them for connections or apply them to any agent yet.",
         "preview": "The browser preview cannot read or save provider configurations. Open this page in the vibemate desktop app.",
         "loading": "Reading saved provider configurations…",
         "empty": "No provider configurations are saved yet.",
         "add": "New configuration",
         "retry": "Try again",
         "retryTemplates": "Try reading available providers again",
-        "saved": "Saved “{{name}}”.",
+        "saved": "Saved {{name}}.",
         "loadMore": "Load more",
         "loadingMore": "Loading more…",
         "back": "Back",
         "backLabel": "Back to provider list",
         "list": {
             "label": "Saved provider configurations",
-            "summary": "{{brand}} · {{protocol}}",
+            "selectedModels": "{{count}} selected models",
             "edit": "Edit",
-            "editLabel": "Edit “{{name}}”"
+            "editLabel": "Edit {{name}}"
+        },
+        "tabs": {
+            "ariaLabel": "Provider configuration sections",
+            "api": "API",
+            "models": "Models",
+            "modelsCount": "Models ({{count}})",
+            "modelsCountMany": "Models ({{count}}+)"
         },
         "groups": {
-            "basic": "Basic information"
+            "basic": "Basic information",
+            "models": "Models"
+        },
+        "models": {
+            "fetch": "Fetch models",
+            "fetching": "Fetching models…",
+            "cancelFetch": "Cancel",
+            "fetchRunningStatus": "Downloading and merging the model list…",
+            "needKey": "Add an API key in the API configuration before fetching models.",
+            "loading": "Reading saved models…",
+            "empty": "No models are saved for this configuration yet.",
+            "emptyNeedFetch": "No models yet. Use Fetch models to download the provider list, then filter it here.",
+            "emptyNeedKey": "Add an API key above, then use Fetch models.",
+            "emptyFiltered": "No saved models match this filter or search.",
+            "retry": "Try again",
+            "preview": "The browser preview cannot read saved models. Open this page in the vibemate desktop app.",
+            "searchPlaceholder": "Search",
+            "searchSummary": "{{total}} matches in the saved catalog, showing the first {{shown}}",
+            "fetchNotice": {
+                "complete": "{{listed}} models updated",
+                "incomplete": {
+                    "model_limit": "Partial update · {{listed}} merged",
+                    "page_limit": "Partial update · {{listed}} merged",
+                    "empty_list": "Empty model list"
+                }
+            },
+            "loadMore": "Load more",
+            "loadingMore": "Loading more…",
+            "listLabel": "Models for this provider configuration",
+            "selectModel": "Select {{modelId}}",
+            "deselectModel": "Deselect {{modelId}}",
+            "manualSource": "Added manually",
+            "createPending": "Complete the API configuration first.",
+            "selectedSummary": "{{count}} selected",
+            "selectedSummaryMany": "{{count}}+ selected",
+            "showSelectedOnly": "Show selected only",
+            "filter": {
+                "ariaLabel": "Model list filter",
+                "all": "All",
+                "selected": "Selected",
+                "selectedCount": "Selected ({{count}})",
+                "selectedMany": "Selected ({{count}}+)"
+            },
+            "badges": {
+                "upstreamMissing": "Unavailable upstream · since {{date}}",
+                "routeUnsupported": "Not supported for this protocol",
+                "routeUnknown": "Route support unknown"
+            },
+            "errors": {
+                "storage_unavailable": "Local configuration storage is unavailable. Restart vibemate.",
+                "read_failed": "Models could not be read. Try again.",
+                "write_failed": "The selection was not saved. Try again.",
+                "operation_failed": "The operation could not finish. Try again.",
+                "invalid_request": "The request is invalid. Refresh and try again.",
+                "not_found": "This provider configuration was not found. Return to the list and refresh.",
+                "invalid_stored_provider": "This provider configuration is not recognized. Nothing was changed.",
+                "invalid_stored_model": "A saved model entry is not recognized. Nothing was changed.",
+                "model_id_invalid": "The model ID is not valid.",
+                "model_alias_invalid": "The display name is not valid.",
+                "model_already_exists": "This model ID is already saved.",
+                "model_not_found": "This model was not found. Refresh the list.",
+                "model_route_not_supported": "This model cannot be selected with the current protocol.",
+                "secret_missing": "Add an API key in the fields above before selecting models.",
+                "secret_invalid": "The API key is not valid.",
+                "base_url_invalid": "The base URL is not valid.",
+                "credential_store_unavailable": "The system credential store is unavailable.",
+                "credential_store_access_denied": "The system credential store denied access.",
+                "credential_store_failed": "The system credential store reported an error.",
+                "model_fetch_in_progress": "A model fetch is already running.",
+                "model_fetch_cancelled": "The model fetch was cancelled.",
+                "model_fetch_stale": "Provider settings changed during the fetch. Try again.",
+                "connection_failed": "The network connection failed.",
+                "tls_failed": "The secure connection could not be established.",
+                "request_timed_out": "The request timed out.",
+                "auth_rejected": "The provider rejected authentication.",
+                "insufficient_balance": "The provider reported insufficient balance.",
+                "rate_limited": "The provider rate-limited the request.",
+                "upstream_unavailable": "The provider is temporarily unavailable.",
+                "upstream_response_invalid": "The provider returned an unrecognized response.",
+                "response_too_large": "The provider response was too large.",
+                "invalid_response": "The app returned an unrecognized response. Try again.",
+                "desktop_required": "Model changes require the vibemate desktop app."
+            }
         },
         "fields": {
             "kind": "Provider",
@@ -165,7 +252,6 @@
             "createTitle": "New provider configuration",
             "save": "Save",
             "saving": "Saving…",
-            "cancel": "Cancel",
             "saveAgain": "Save again",
             "refreshList": "Refresh list",
             "refreshing": "Refreshing the list to check the result of this save…",

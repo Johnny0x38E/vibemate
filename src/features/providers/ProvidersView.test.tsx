@@ -31,6 +31,7 @@ import {
     getProviderSecretStatus,
     replaceProviderSecret,
 } from "../../lib/desktop/providerSecrets";
+import { listProviderModels } from "../../lib/desktop/models";
 import { PROVIDER_PAGE_SIZE, ProvidersView } from "./ProvidersView";
 
 // Keep the real error class and constants; only the IPC calls are replaced.
@@ -58,6 +59,12 @@ vi.mock(
 );
 const readKey = vi.mocked(getProviderSecretStatus);
 const replaceKey = vi.mocked(replaceProviderSecret);
+
+vi.mock(import("../../lib/desktop/models"), async (importOriginal) => ({
+    ...(await importOriginal()),
+    listProviderModels: vi.fn(),
+}));
+const listModels = vi.mocked(listProviderModels);
 
 // Synthetic; never a real key.
 const SECRET = "sk-synthetic-view-4444";
@@ -92,6 +99,7 @@ function row(id: string, overrides: Partial<ProviderRecord> = {}) {
         revision: 1,
         createdAtMs: 1000,
         updatedAtMs: 1000,
+        selectedModelCount: 0,
         ...overrides,
     } satisfies ProviderRecord;
 }
@@ -117,7 +125,18 @@ afterEach(cleanup);
 beforeEach(() => {
     for (const mock of [create, update, read, list, readTemplates])
         mock.mockReset();
+    listModels.mockReset().mockResolvedValue({
+        kind: "desktop",
+        page: { items: [], nextCursor: null, totalMatches: null },
+    });
     readTemplates.mockResolvedValue({ kind: "desktop", templates });
+    read.mockImplementation((providerId) => {
+        for (const seed of ["a", "b", "c", "d", "e"]) {
+            const record = row(seed);
+            if (record.id === providerId) return Promise.resolve(record);
+        }
+        return Promise.resolve(row("a", { id: providerId }));
+    });
     readKey.mockReset().mockImplementation((providerId) =>
         Promise.resolve({
             kind: "desktop",
@@ -224,8 +243,10 @@ test("shows a loading state, then saved rows distinguished by id, never as conne
     ).toBeDefined();
     // Duplicate names are allowed; rows stay distinct by stable internal id.
     expect(rows()).toHaveLength(2);
-    expect(screen.getAllByRole("heading", { name: "Work" })).toHaveLength(2);
-    expect(screen.getByText("OpenRouter · Chat Completions")).toBeDefined();
+    expect(screen.getAllByText("Work")).toHaveLength(2);
+    expect(screen.getByText("OpenRouter")).toBeDefined();
+    expect(screen.getAllByText("Chat Completions")).toHaveLength(2);
+    expect(screen.getAllByText("0 selected models")).toHaveLength(2);
     expect(editButton("b")).toBeDefined();
     expect(document.body.textContent).not.toMatch(/\bconnected\b|available/i);
 
@@ -234,7 +255,6 @@ test("shows a loading state, then saved rows distinguished by id, never as conne
     });
     expect(screen.getByRole("heading", { level: 1, name: "服务商" }));
     expect(editButton("b")).toBeDefined();
-    expect(document.body.textContent).toContain("这里只列出已保存的配置");
     expect(document.body.textContent).not.toMatch(/已连接|可用/);
 });
 
@@ -351,14 +371,10 @@ test("New opens the form with the first template, in Rust's order, selected and 
     // The secondary page replaces the list and focuses its title.
     expect(screen.queryByRole("list")).toBeNull();
     expect(document.activeElement).toBe(
-        screen.getByRole("heading", {
-            level: 1,
-            name: "New provider configuration",
-        }),
+        screen.getByRole("heading", { level: 1, name: "OpenRouter" }),
     );
-    expect(
-        screen.getByRole("heading", { level: 2, name: "Basic information" }),
-    ).toBeDefined();
+    expect(screen.getByRole("tab", { name: "API" })).toBeDefined();
+    expect(screen.getByRole("form", { name: "API" })).toBeDefined();
     const kind = screen.getByRole("combobox", { name: "Provider" });
     expect(screen.getAllByRole("combobox")[0]).toBe(kind);
     expect(fieldSelectValue(kind)).toBe("openrouter");
@@ -401,7 +417,7 @@ test("creating re-reads the list and shows the normalized saved name", async () 
     expect(screen.queryByRole("form")).toBeNull();
     // A notification outside the page announces the save; the list keeps no
     // lingering message, and focus lands on the new row's Edit.
-    expectSavedNotification("Saved “Team”.");
+    expectSavedNotification("Saved Team.");
     expect(document.activeElement).toBe(editButton("c"));
     expect(list).toHaveBeenCalledTimes(reads + 1);
     expect(list).toHaveBeenLastCalledWith({
@@ -446,7 +462,7 @@ test("editing one of two same-named rows keeps its identity", async () => {
     expect(first?.textContent).not.toMatch(/\bID\b/);
     expect(edited?.textContent).toContain("Home");
     expect(edited?.textContent).not.toMatch(/\bID\b/);
-    expectSavedNotification("Saved “Home”.");
+    expectSavedNotification("Saved Home.");
     // Focus returns to the edited row, not to its same-named twin.
     expect(document.activeElement).toBe(editButton("b"));
 });
@@ -461,7 +477,7 @@ test("a new configuration beyond the loaded pages focuses the page heading", asy
     await click("Save");
 
     expect(rows()).toHaveLength(1);
-    expectSavedNotification("Saved “Team”.");
+    expectSavedNotification("Saved Team.");
     expect(document.activeElement).toBe(
         screen.getByRole("heading", { level: 1, name: "Providers" }),
     );
@@ -532,7 +548,7 @@ test("going back is blocked while a save is pending", async () => {
     const back = screen.getByRole("button", { name: "Back to provider list" });
     expect(back.getAttribute("aria-disabled")).toBe("true");
     await click("Back to provider list");
-    expect(screen.getByRole("form", { name: "Basic information" }));
+    expect(screen.getByRole("form", { name: "API" }));
     await act(async () => {
         pending.resolve(row("a", { revision: 2 }));
         await pending.promise;
@@ -583,25 +599,12 @@ test("a failed template read blocks New and Edit until it is retried", async () 
     expect(add.getAttribute("aria-disabled")).toBe("false");
 });
 
-test("Back and Cancel return focus to New without re-reading the list", async () => {
+test("Back returns focus to New without re-reading the list", async () => {
     list.mockResolvedValue(page([row("a")]));
     await mount();
     const reads = list.mock.calls.length;
     const add = screen.getByRole("button", { name: "New configuration" });
     add.focus();
-
-    await click("New configuration");
-    await click("Back to provider list");
-    expect(document.activeElement).toBe(
-        screen.getByRole("button", { name: "New configuration" }),
-    );
-
-    await openNew();
-    await click("Cancel");
-    expect(screen.queryByRole("form")).toBeNull();
-    expect(document.activeElement).toBe(
-        screen.getByRole("button", { name: "New configuration" }),
-    );
 
     await openNew();
     await click("Back to provider list");
@@ -622,7 +625,7 @@ test("leaving an edit returns focus to that row's Edit button", async () => {
     expect(screen.getByText("服务商").nextElementSibling?.textContent).toBe(
         "DeepSeek",
     );
-    await click("取消");
+    await click("返回服务商列表");
     expect(document.activeElement).toBe(editButton("b"));
     await clickEdit("a");
     await click("返回服务商列表");
@@ -640,7 +643,7 @@ test("switching language keeps the open page and typed values", async () => {
         await instance.changeLanguage("zh-CN");
     });
     expect(
-        screen.getByRole("heading", { level: 1, name: "新建服务商配置" }),
+        screen.getByRole("heading", { level: 1, name: "DeepSeek" }),
     ).toBeDefined();
     expect(screen.getByLabelText("名称")).toHaveProperty("value", "Draft");
 });
@@ -679,7 +682,6 @@ test.each([
         expect(
             backButton.querySelector("svg")?.getAttribute("aria-hidden"),
         ).toBe("true");
-        // Label in name (WCAG 2.5.3): the accessible name begins with the text.
         expect(backName.startsWith(back)).toBe(true);
     },
 );
@@ -694,28 +696,29 @@ test("rows show the provider's icon before the name; an unknown kind shows none"
         page([row("a"), row("b", { kind: "openrouter" }), unknown]),
     );
     await mount();
-    const [deepseek, openrouter, future] = rows().map((item) =>
-        within(item).getByRole("heading", { level: 2 }),
-    );
-    const files = (heading: HTMLElement | undefined): (string | null)[] =>
+    const [deepseekItem, openrouterItem, futureItem] = rows();
+    const primaryRow = (item: HTMLElement | undefined): HTMLElement => {
+        const row = item?.querySelector('[class*="primaryRow"]');
+        if (!(row instanceof HTMLElement)) {
+            throw new Error("Missing primary row");
+        }
+        return row;
+    };
+    const files = (row: HTMLElement): (string | null)[] =>
         Array.from(
-            heading?.querySelectorAll("img") ?? [],
+            row.querySelectorAll("img"),
             (image) => image.getAttribute("src")?.replace(/^.*\//, "") ?? null,
         );
-    expect(files(deepseek)).toEqual(["deepseek.svg"]);
-    expect(files(openrouter)).toEqual([
+    expect(files(primaryRow(deepseekItem))).toEqual(["deepseek.svg"]);
+    expect(files(primaryRow(openrouterItem))).toEqual([
         "openrouter.svg",
         "openrouter-volt.svg",
     ]);
-    expect(files(future)).toEqual([]);
-    // The icon comes first and adds nothing to the heading's name.
-    expect(deepseek?.firstElementChild?.querySelector("img")).not.toBeNull();
-    expect(screen.getByRole("heading", { level: 2, name: "Future" })).toBe(
-        future,
-    );
-    expect(
-        screen.getAllByRole("heading", { level: 2, name: "Work" }),
-    ).toHaveLength(2);
+    expect(files(primaryRow(futureItem))).toEqual([]);
+    if (!futureItem) throw new Error("Missing future row");
+    expect(within(futureItem).getByText("Future")).toBeDefined();
+    expect(within(futureItem).getByText("future-provider")).toBeDefined();
+    expect(screen.getAllByText("Work")).toHaveLength(2);
 });
 
 test("the detail page and the create form show the provider icon next to the provider", async () => {
@@ -747,8 +750,10 @@ test("the edit page combines configuration and key with one Save while the list 
     expect(readKey).not.toHaveBeenCalled();
     expect(view().textContent).not.toMatch(/key|密钥|待配置/i);
     await clickEdit("a");
+    expect(screen.getByRole("tab", { name: "API" })).toBeDefined();
+    expect(screen.getByRole("tab", { name: "Models" })).toBeDefined();
     expect(readKey).toHaveBeenCalledWith(row("a").id);
-    const basic = screen.getByRole("form", { name: "Basic information" });
+    const basic = screen.getByRole("form", { name: "API" });
     expect(screen.getAllByRole("form")).toHaveLength(1);
     const key = within(basic).getByLabelText("API key");
     expect(key).toHaveProperty("value", "");
@@ -788,9 +793,7 @@ test("one Save sends both edited settings and a replacement key and leaves only 
     const back = screen.getByRole("button", { name: "Back to provider list" });
     expect(back.getAttribute("aria-disabled")).toBe("true");
     await click("Back to provider list");
-    expect(
-        screen.getByRole("form", { name: "Basic information" }),
-    ).toBeDefined();
+    expect(screen.getByRole("form", { name: "API" })).toBeDefined();
     expect(screen.getByLabelText("API key")).toHaveProperty("value", "");
     const edited = {
         ...row("a"),
@@ -803,7 +806,7 @@ test("one Save sends both edited settings and a replacement key and leaves only 
         await pending.promise;
     });
     expect(screen.queryByRole("form")).toBeNull();
-    expect(screen.getByText("Saved “Renamed”.")).toBeDefined();
+    expect(screen.getByText("Saved Renamed.")).toBeDefined();
     expect(document.body.textContent).not.toContain(SECRET);
 });
 
@@ -824,7 +827,7 @@ test("a typed key is cleared when the page is hidden or left, while other drafts
     await click("Back to provider list");
     await openNew();
     expect(screen.getByLabelText("API key")).toHaveProperty("value", "");
-    await click("Cancel");
+    await click("Back to provider list");
 
     await clickEdit("a");
     typeKey("API key");

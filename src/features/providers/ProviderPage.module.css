@@ -1,25 +1,87 @@
 .page {
+    display: flex;
+    flex-direction: column;
     width: 100%;
+    min-height: 0;
+    /*
+     * Cap height to the main column so the Models list can scroll inside the tab
+     * instead of scrolling the whole app content area (see ProviderModels).
+     */
+    max-height: calc(
+        100dvh - var(--titlebar-height) - var(--space-sm) - var(--space-lg)
+    );
 }
 
 .header {
-    display: grid;
-    justify-items: start;
-    gap: var(--space-md);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-lg);
+    min-width: 0;
+    margin-top: 2px;
+    margin-bottom: var(--space-sm);
+}
+
+/*
+ * Create/edit header: back on the start edge; the h1 title is pushed to the end.
+ * Surface control with leading arrow and short visible label (full phrase in aria-label).
+ */
+.backButton {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 6px;
+    min-height: 36px;
+    padding: 0 var(--space-sm);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    color: var(--color-text);
+    background: var(--color-surface);
+    font: inherit;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    cursor: pointer;
+}
+
+.backButton:hover:not([aria-disabled="true"]) {
+    background: var(--color-hover);
+}
+
+.backButton:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+}
+
+.backButton[aria-disabled="true"] {
+    color: var(--color-summary);
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+.backButton svg {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
 }
 
 .title {
+    flex: 0 1 auto;
+    min-width: 0;
     margin: 0;
+    margin-inline-start: auto;
     font-size: 1rem;
     font-weight: 600;
+    text-align: end;
     overflow-wrap: anywhere;
 }
 
 .titleBrand {
     display: inline-flex;
     align-items: center;
+    justify-content: flex-end;
     gap: var(--space-sm);
     min-width: 0;
+    max-width: 100%;
 }
 
 .titleBrandText {

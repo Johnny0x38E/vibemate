@@ -38,7 +38,16 @@ function Trigger({ message }: { message: string }) {
     );
 }
 
-async function mount(locale: "en" | "zh-CN" = "en", message = "Saved “Work”.") {
+function notificationCard(): HTMLElement {
+    const status = screen.getByRole("status");
+    const card = status.parentElement?.parentElement;
+    if (!(card instanceof HTMLElement)) {
+        throw new Error("notification card missing");
+    }
+    return card;
+}
+
+async function mount(locale: "en" | "zh-CN" = "en", message = "Saved Work.") {
     const instance = await createAppI18n(locale);
     render(
         <StrictMode>
@@ -63,12 +72,12 @@ function advance(ms: number): void {
 
 test("shows the message in a status region without taking focus, then dismisses itself", async () => {
     const trigger = await mount();
-    expect(screen.getByRole("status").textContent).toBe("Saved “Work”.");
+    expect(screen.getByRole("status").textContent).toBe("Saved Work.");
     expect(document.activeElement).toBe(trigger);
     advance(NOTIFICATION_DURATION_MS - 1);
-    expect(screen.getByText("Saved “Work”.")).toBeDefined();
+    expect(screen.getByText("Saved Work.")).toBeDefined();
     advance(1);
-    expect(screen.queryByText("Saved “Work”.")).toBeNull();
+    expect(screen.queryByText("Saved Work.")).toBeNull();
     // The live region stays mounted so the next message is announced too.
     expect(screen.getByRole("status").textContent).toBe("");
 });
@@ -76,16 +85,15 @@ test("shows the message in a status region without taking focus, then dismisses 
 test("hovering pauses the timer and leaving resumes the time left", async () => {
     await mount();
     advance(1000);
-    const card = screen.getByText("Saved “Work”.").parentElement;
-    if (!card) throw new Error("card missing");
+    const card = notificationCard();
     fireEvent.mouseEnter(card);
     advance(NOTIFICATION_DURATION_MS * 3);
-    expect(screen.getByText("Saved “Work”.")).toBeDefined();
+    expect(screen.getByText("Saved Work.")).toBeDefined();
     fireEvent.mouseLeave(card);
     advance(NOTIFICATION_DURATION_MS - 1000 - 1);
-    expect(screen.getByText("Saved “Work”.")).toBeDefined();
+    expect(screen.getByText("Saved Work.")).toBeDefined();
     advance(1);
-    expect(screen.queryByText("Saved “Work”.")).toBeNull();
+    expect(screen.queryByText("Saved Work.")).toBeNull();
 });
 
 test("focus inside pauses the timer; closing restores focus to where it came from", async () => {
@@ -94,9 +102,9 @@ test("focus inside pauses the timer; closing restores focus to where it came fro
     fireEvent.focus(close, { relatedTarget: trigger });
     close.focus();
     advance(NOTIFICATION_DURATION_MS * 3);
-    expect(screen.getByText("Saved “Work”.")).toBeDefined();
+    expect(screen.getByText("Saved Work.")).toBeDefined();
     fireEvent.click(close);
-    expect(screen.queryByText("Saved “Work”.")).toBeNull();
+    expect(screen.queryByText("Saved Work.")).toBeNull();
     expect(document.activeElement).toBe(trigger);
 });
 
@@ -108,30 +116,30 @@ test("Escape closes it", async () => {
             key: "Escape",
         },
     );
-    expect(screen.queryByText("Saved “Work”.")).toBeNull();
+    expect(screen.queryByText("Saved Work.")).toBeNull();
 });
 
 test("the close button is named in Chinese and a new message replaces the old one", async () => {
-    const trigger = await mount("zh-CN", "已保存「工作」。");
+    const trigger = await mount("zh-CN", "已保存 工作。");
     expect(screen.getByRole("button", { name: "关闭通知" })).toBeDefined();
     advance(NOTIFICATION_DURATION_MS - 500);
     // Notifying again restarts the full duration for the new message.
     fireEvent.click(trigger);
     advance(NOTIFICATION_DURATION_MS - 1);
-    expect(screen.getAllByText("已保存「工作」。")).toHaveLength(1);
+    expect(screen.getAllByText("已保存 工作。")).toHaveLength(1);
     advance(1);
-    expect(screen.queryByText("已保存「工作」。")).toBeNull();
+    expect(screen.queryByText("已保存 工作。")).toBeNull();
 });
 
 test("the live region holds only the message text; the close button is outside it", async () => {
     await mount();
     const status = screen.getByRole("status");
     const close = screen.getByRole("button", { name: "Dismiss notification" });
-    expect(status.textContent).toBe("Saved “Work”.");
+    expect(status.textContent).toBe("Saved Work.");
     expect(status.children).toHaveLength(0);
     expect(status.contains(close)).toBe(false);
     // Both still sit in the same card, side by side.
-    expect(close.parentElement).toBe(status.parentElement);
+    expect(close.parentElement).toBe(notificationCard());
     fireEvent.click(close);
     // The region stays mounted and empty, without the button.
     expect(screen.getByRole("status")).toBe(status);
@@ -143,13 +151,12 @@ test("the live region holds only the message text; the close button is outside i
 
 test("closing while hovered does not leave the next notification paused", async () => {
     const trigger = await mount();
-    const card = screen.getByText("Saved “Work”.").parentElement;
-    if (!card) throw new Error("card missing");
+    const card = notificationCard();
     fireEvent.mouseEnter(card);
     fireEvent.click(
         screen.getByRole("button", { name: "Dismiss notification" }),
     );
     fireEvent.click(trigger);
     advance(NOTIFICATION_DURATION_MS);
-    expect(screen.queryByText("Saved “Work”.")).toBeNull();
+    expect(screen.queryByText("Saved Work.")).toBeNull();
 });

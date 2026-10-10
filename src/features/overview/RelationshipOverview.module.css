@@ -1,18 +1,26 @@
+.pageHeader {
+    margin-bottom: var(--space-md);
+}
+
 .heading {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
     flex-wrap: wrap;
     gap: var(--space-sm);
-    margin-bottom: var(--space-md);
 }
-.heading h1,
+
 .heading h2 {
     margin: 0;
     font-size: 0.875rem;
     font-weight: 600;
 }
-.heading span,
+
+.heading span {
+    color: var(--color-summary);
+    font-size: 0.6875rem;
+}
+
 .caption,
 .state {
     color: var(--color-summary);

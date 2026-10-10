@@ -1,7 +1,6 @@
 import { useEffect, useRef, type JSX, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Icon } from "../../components/Icon";
-import buttons from "./providerButtons.module.css";
 import styles from "./ProviderPage.module.css";
 
 /** Inputs for {@link ProviderPage}. */
@@ -15,10 +14,10 @@ export interface ProviderPageProps {
 }
 
 /**
- * Shell for a secondary Providers page (new, edit): a back
- * control and the page title on top. The title takes focus when the page
- * opens, so keyboard and screen reader users land at its start. Callers key
- * this component by page so each page change counts as a fresh open.
+ * Shell for a secondary Providers page (new, edit): back on the left, title
+ * aligned on the right of one row. The title takes focus when the page opens.
+ * Callers key this component
+ * by page so each page change counts as a fresh open.
  */
 export function ProviderPage({
     title,
@@ -37,18 +36,14 @@ export function ProviderPage({
         <div className={styles["page"]}>
             <div className={styles["header"]}>
                 <button
-                    className={[buttons["secondary"], buttons["withIcon"]]
-                        .filter((value): value is string => value !== undefined)
-                        .join(" ")}
+                    className={styles["backButton"]}
                     type="button"
                     aria-disabled={backBlocked}
-                    // The fuller name starts with the visible text (label in name).
                     aria-label={t("providers.backLabel")}
                     onClick={() => {
                         if (!backBlocked) onBack();
                     }}
                 >
-                    {/* Decorative: the label carries the meaning. */}
                     <Icon name="back" />
                     {t("providers.back")}
                 </button>

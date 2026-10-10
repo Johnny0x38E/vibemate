@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type JSX } from "react";
 import { useTranslation } from "react-i18next";
+import { Icon } from "../../components/Icon";
 import {
     getLogLocation,
     LogRequestError,
@@ -8,6 +9,7 @@ import {
     type LogErrorCode,
     type LogLocation,
 } from "../../lib/desktop/logs";
+import fieldStyles from "./settingsField.module.css";
 import styles from "./LogSettings.module.css";
 
 type LocationState =
@@ -27,13 +29,12 @@ function errorCode(error: unknown): LogErrorCode {
 /**
  * Show Rust-owned log paths and request explicit OS opens. No file contents or
  * executable names enter React. Keep requests/results across settings navigation,
- * but ignore obsolete reads and action results after unmount or a newer refresh.
+ * but ignore obsolete reads and action results after unmount.
  */
 export function LogSettings(): JSX.Element {
     const { t } = useTranslation();
     const [state, setState] = useState<LocationState>({ kind: "loading" });
     const [openState, setOpenState] = useState<OpenState>({ kind: "idle" });
-    const [attempt, setAttempt] = useState(0);
     const generation = useRef(0);
     const opening = useRef(false);
 
@@ -58,7 +59,7 @@ export function LogSettings(): JSX.Element {
         return () => {
             generation.current = current + 1;
         };
-    }, [attempt]);
+    }, []);
 
     async function open(target: "file" | "directory"): Promise<void> {
         if (state.kind !== "ready" || opening.current) return;
@@ -82,29 +83,51 @@ export function LogSettings(): JSX.Element {
 
     return (
         <section
-            className={styles["group"]}
+            className={styles["section"]}
             aria-labelledby="log-settings-title"
         >
             <h2 className={styles["title"]} id="log-settings-title">
                 {t("settings.logs.title")}
             </h2>
             {state.kind === "ready" && (
-                <dl className={styles["paths"]}>
-                    <div>
-                        <dt>{t("settings.logs.filePath")}</dt>
-                        <dd>
-                            <code dir="auto">{state.location.filePath}</code>
-                        </dd>
-                    </div>
-                    <div>
-                        <dt>{t("settings.logs.directoryPath")}</dt>
-                        <dd>
-                            <code dir="auto">
-                                {state.location.directoryPath}
+                <div className={fieldStyles["group"]}>
+                    <div className={fieldStyles["row"]}>
+                        <span className={fieldStyles["label"]}>
+                            {t("settings.logs.filePath")}
+                        </span>
+                        <div className={styles["pathCell"]}>
+                            <code className={styles["pathText"]} dir="auto">
+                                {state.location.filePath}
                             </code>
-                        </dd>
+                            <span className={styles["pathActions"]}>
+                                <button
+                                    type="button"
+                                    className={styles["iconButton"]}
+                                    aria-disabled={!canOpen}
+                                    aria-label={t("settings.logs.view")}
+                                    onClick={() => {
+                                        void open("file");
+                                    }}
+                                >
+                                    <Icon name="logFile" />
+                                </button>
+                                <button
+                                    type="button"
+                                    className={styles["iconButton"]}
+                                    aria-disabled={!canOpen}
+                                    aria-label={t(
+                                        "settings.logs.openDirectory",
+                                    )}
+                                    onClick={() => {
+                                        void open("directory");
+                                    }}
+                                >
+                                    <Icon name="folder" />
+                                </button>
+                            </span>
+                        </div>
                     </div>
-                </dl>
+                </div>
             )}
             {state.kind === "loading" && (
                 <p role="status">{t("settings.logs.loading")}</p>
@@ -122,42 +145,6 @@ export function LogSettings(): JSX.Element {
                                 {t("settings.logs.fileInactive")}
                             </p>
                         )}
-                    <div className={styles["actions"]}>
-                        <button
-                            type="button"
-                            className={styles["button"]}
-                            aria-disabled={!canOpen}
-                            onClick={() => {
-                                void open("file");
-                            }}
-                        >
-                            {t("settings.logs.view")}
-                        </button>
-                        <button
-                            type="button"
-                            className={styles["button"]}
-                            aria-disabled={!canOpen}
-                            onClick={() => {
-                                void open("directory");
-                            }}
-                        >
-                            {t("settings.logs.openDirectory")}
-                        </button>
-                        <button
-                            type="button"
-                            className={styles["button"]}
-                            aria-disabled={state.kind === "loading" || busy}
-                            onClick={() => {
-                                if (state.kind === "loading" || opening.current)
-                                    return;
-                                setState({ kind: "loading" });
-                                setOpenState({ kind: "idle" });
-                                setAttempt((previous) => previous + 1);
-                            }}
-                        >
-                            {t("settings.logs.refresh")}
-                        </button>
-                    </div>
                     <p className={styles["hint"]}>{t("settings.logs.hint")}</p>
                     {openState.kind === "opening" && (
                         <p role="status">

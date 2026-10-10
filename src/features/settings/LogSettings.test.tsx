@@ -71,7 +71,7 @@ for (const locale of ["en", "zh-CN"] as const) {
     test(`shows actual selectable paths and opens only on explicit activation in ${locale}`, async () => {
         const { instance } = await mount(locale);
         await screen.findByText(location.filePath);
-        expect(screen.getByText(location.directoryPath)).toBeDefined();
+        expect(screen.queryByText(location.directoryPath)).toBeNull();
         expect(viewFile).not.toHaveBeenCalled();
         expect(viewDirectory).not.toHaveBeenCalled();
         fireEvent.click(
@@ -118,12 +118,14 @@ test("preview invents no path and offers no OS actions", async () => {
     expect(viewDirectory).not.toHaveBeenCalled();
 });
 
-test("loading blocks actions, sanitizes read failures and preserves refresh focus during retry", async () => {
+test("loading blocks actions and sanitizes read failures", async () => {
     const request = deferred<LogLocation | null>();
     read.mockReturnValue(request.promise);
     await mount("zh-CN");
     expect(screen.getByRole("status").textContent).toBe("正在读取日志路径…");
-    fireEvent.click(screen.getByRole("button", { name: "查看日志" }));
+    expect(
+        screen.queryByRole("button", { name: "查看日志" }),
+    ).toBeNull();
     expect(viewFile).not.toHaveBeenCalled();
     await act(async () => {
         request.reject(new Error("private filesystem details"));
@@ -133,12 +135,7 @@ test("loading blocks actions, sanitizes read failures and preserves refresh focu
         "日志请求未能完成，请重试。",
     );
     expect(screen.queryByText(/private filesystem/)).toBeNull();
-    read.mockResolvedValue(location);
-    const refresh = screen.getByRole("button", { name: "重新读取日志路径" });
-    refresh.focus();
-    fireEvent.click(refresh);
-    await screen.findByText(location.filePath);
-    expect(document.activeElement).toBe(refresh);
+    expect(screen.queryByText(location.filePath)).toBeNull();
 });
 
 test("an OS request blocks repeated and competing actions without dropping focus", async () => {
@@ -151,7 +148,6 @@ test("an OS request blocks repeated and competing actions without dropping focus
     fireEvent.click(view);
     fireEvent.click(view);
     fireEvent.click(screen.getByRole("button", { name: "Open log folder" }));
-    fireEvent.click(screen.getByRole("button", { name: "Refresh log paths" }));
     expect(viewFile).toHaveBeenCalledTimes(1);
     expect(viewDirectory).not.toHaveBeenCalled();
     expect(screen.getByRole("status").textContent).toBe(

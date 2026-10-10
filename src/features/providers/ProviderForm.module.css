@@ -73,18 +73,6 @@
     gap: var(--space-sm);
 }
 
-/* Brand icon beside the provider select; the select keeps the rest. */
-.controlWithIcon {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-}
-
-.controlWithIcon > div {
-    flex: 1 1 auto;
-    min-width: 0;
-}
-
 .secondaryValue {
     color: var(--color-summary);
     font-size: 0.75rem;

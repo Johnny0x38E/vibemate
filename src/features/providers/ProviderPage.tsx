@@ -6,7 +6,7 @@ import styles from "./ProviderPage.module.css";
 
 /** Inputs for {@link ProviderPage}. */
 export interface ProviderPageProps {
-    title: string;
+    title: ReactNode;
     /** Return to the provider list; the caller restores focus there. */
     onBack: () => void;
     /** While a save is pending, leaving would hide its outcome. */
@@ -38,9 +38,8 @@ export function ProviderPage({
             <div className={styles["header"]}>
                 <button
                     className={[
-                        buttons["text"],
+                        buttons["secondary"],
                         buttons["withIcon"],
-                        styles["back"],
                     ]
                         .filter((value): value is string => value !== undefined)
                         .join(" ")}

@@ -22,6 +22,7 @@ import { getProviderSecretStatus } from "../../lib/desktop/providerSecrets";
 import { Icon } from "../../components/Icon";
 import fieldStyles from "../settings/settingsField.module.css";
 import { ProviderIcon } from "./ProviderIcon";
+import { ProviderKindSelect } from "./ProviderKindSelect";
 import buttons from "./providerButtons.module.css";
 import styles from "./ProviderForm.module.css";
 
@@ -541,7 +542,6 @@ export function ProviderForm({
     }
 
     const groupId = `${id}-basic`;
-    const hintId = `${id}-baseUrl-hint`;
     const secretStatusId = `${id}-secret-status`;
     const configured = keyStatus.kind === "ready" && keyStatus.configured;
     const showStoredIndicator = configured && secret === "";
@@ -595,55 +595,17 @@ export function ProviderForm({
                             >
                                 {t("providers.fields.kind")}
                             </label>
-                            <div
-                                className={[
-                                    styles["control"],
-                                    styles["controlWithIcon"],
-                                ]
-                                    .filter(
-                                        (value): value is string =>
-                                            value !== undefined,
-                                    )
-                                    .join(" ")}
-                            >
-                                {/* A native select cannot show images; the icon
-                                    beside it follows the current choice. */}
+                            <div className={styles["control"]}>
                                 {createKind !== undefined && (
-                                    <ProviderIcon kind={createKind} />
-                                )}
-                                <div className={fieldStyles["field"]}>
-                                    <select
-                                        className={fieldStyles["select"]}
+                                    <ProviderKindSelect
                                         id={`${id}-kind`}
+                                        templates={templates}
                                         value={createKind}
-                                        aria-disabled={saveBlocked}
-                                        onChange={(event) => {
-                                            changeKind(
-                                                event.currentTarget.value,
-                                            );
-                                        }}
-                                    >
-                                        {templates.map((entry) => (
-                                            <option
-                                                key={entry.kind}
-                                                value={entry.kind}
-                                            >
-                                                {entry.brandName}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
+                                        blocked={saveBlocked}
+                                        onChange={changeKind}
+                                    />
+                                )}
                             </div>
-                        </div>
-                    )}
-                    {editing && (
-                        <div className={fieldStyles["row"]}>
-                            <span className={fieldStyles["label"]}>
-                                {t("providers.fields.id")}
-                            </span>
-                            <span className={styles["secondaryValue"]}>
-                                {editing.id}
-                            </span>
                         </div>
                     )}
                     <div className={fieldStyles["row"]}>
@@ -691,10 +653,7 @@ export function ProviderForm({
                                 value={fields.baseUrl}
                                 readOnly={saveBlocked}
                                 aria-invalid={fieldError === "baseUrl"}
-                                aria-describedby={describedBy(
-                                    "baseUrl",
-                                    hintId,
-                                )}
+                                aria-describedby={describedBy("baseUrl")}
                                 onChange={(event) => {
                                     update(
                                         "baseUrl",
@@ -702,9 +661,6 @@ export function ProviderForm({
                                     );
                                 }}
                             />
-                            <p className={styles["hint"]} id={hintId}>
-                                {t("providers.fields.baseUrlHint")}
-                            </p>
                             {errorText("baseUrl")}
                         </div>
                     </div>

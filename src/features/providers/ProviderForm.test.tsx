@@ -80,6 +80,27 @@ const SECRET = "sk-synthetic-form-2222";
 const KEY_LABEL = /^(API key|API 密钥)$/;
 const SAVE_BUTTON = /^(Save|保存|Save again|再次保存)$/;
 
+function providerCombobox(label = "Provider"): HTMLElement {
+    return screen.getByRole("combobox", { name: label });
+}
+
+function providerKindValue(label = "Provider"): string {
+    return providerCombobox(label).getAttribute("data-kind") ?? "";
+}
+
+function chooseProvider(kind: string, label = "Provider"): void {
+    const combobox = providerCombobox(label);
+    if (combobox.getAttribute("aria-disabled") === "true") return;
+    const brand =
+        kind === "openrouter"
+            ? "OpenRouter"
+            : kind === "deepseek"
+              ? "DeepSeek"
+              : kind;
+    fireEvent.click(combobox);
+    fireEvent.click(screen.getByRole("option", { name: brand }));
+}
+
 const saved: ProviderRecord = {
     id: ID,
     kind: "deepseek",
@@ -208,17 +229,18 @@ async function submit(
 
 test("starts with the first template selected and its defaults filled", async () => {
     await mount();
-    const kind = input("Provider");
+    const kind = providerCombobox();
     // The provider is the first field, with no empty placeholder option.
     expect(screen.getAllByRole("combobox")[0]).toBe(kind);
-    expect(kind.value).toBe("deepseek");
+    expect(providerKindValue()).toBe("deepseek");
+    fireEvent.click(kind);
     expect(
         Array.from(
             screen.getAllByRole("option"),
             (option) => option.textContent,
         ),
     ).toContain("OpenRouter");
-    expect(kind.querySelector('option[value=""]')).toBeNull();
+    fireEvent.click(screen.getByRole("option", { name: "DeepSeek" }));
     expect(input("Name").value).toBe("DeepSeek");
     expect(input("Base URL").value).toBe("https://api.deepseek.com");
     expect(input("Protocol").value).toBe("chat_completions");
@@ -243,7 +265,7 @@ test("starts with the first template selected and its defaults filled", async ()
 
 test("switching provider replaces untouched defaults and only allowed protocols are listed", async () => {
     await mount();
-    fireEvent.change(input("Provider"), { target: { value: "openrouter" } });
+    chooseProvider("openrouter");
     expect(input("Name").value).toBe("OpenRouter");
     expect(input("Base URL").value).toBe("https://openrouter.ai/api/v1");
     expect(input("Protocol").value).toBe("chat_completions");
@@ -254,7 +276,7 @@ test("switching provider replaces untouched defaults and only allowed protocols 
         );
     expect(protocolOptions()).toEqual(["Chat Completions", "Responses"]);
 
-    fireEvent.change(input("Provider"), { target: { value: "deepseek" } });
+    chooseProvider("deepseek");
     expect(input("Name").value).toBe("DeepSeek");
     expect(input("Base URL").value).toBe("https://api.deepseek.com");
     expect(protocolOptions()).toEqual(["Chat Completions"]);
@@ -263,14 +285,14 @@ test("switching provider replaces untouched defaults and only allowed protocols 
 test("switching provider keeps the fields the user edited", async () => {
     await mount();
     type("Name", "My router");
-    fireEvent.change(input("Provider"), { target: { value: "openrouter" } });
+    chooseProvider("openrouter");
     // The edited name stays; the untouched URL follows the new provider.
     expect(input("Name").value).toBe("My router");
     expect(input("Base URL").value).toBe("https://openrouter.ai/api/v1");
     type("Base URL", "https://proxy.example.com/v1");
     fireEvent.change(input("Protocol"), { target: { value: "responses" } });
 
-    fireEvent.change(input("Provider"), { target: { value: "deepseek" } });
+    chooseProvider("deepseek");
     expect(input("Name").value).toBe("My router");
     expect(input("Base URL").value).toBe("https://proxy.example.com/v1");
     // A chosen protocol the new provider does not allow falls back to its default.
@@ -288,7 +310,7 @@ test("creates for the selected provider and reports the normalized record Rust r
     };
     create.mockResolvedValue(normalized);
     const { onSaved } = await mount();
-    fireEvent.change(input("Provider"), { target: { value: "openrouter" } });
+    chooseProvider("openrouter");
     type("Name", "  Team router  ");
     type("Base URL", "HTTPS://OpenRouter.ai/api/v1/");
     fireEvent.change(input("Protocol"), { target: { value: "responses" } });
@@ -374,7 +396,7 @@ test("keeps focus on Save, announces saving and ignores a second submit while pe
     const request = deferred<ProviderRecord>();
     create.mockReturnValue(request.promise);
     const { onBusyChange } = await mount();
-    fireEvent.change(input("Provider"), { target: { value: "openrouter" } });
+    chooseProvider("openrouter");
     const save = screen.getByRole("button", { name: "Save" });
     save.focus();
     await submit();
@@ -388,9 +410,9 @@ test("keeps focus on Save, announces saving and ignores a second submit while pe
     expect(input("Protocol").getAttribute("aria-disabled")).toBe("true");
     fireEvent.change(input("Protocol"), { target: { value: "responses" } });
     expect(input("Protocol").value).toBe("chat_completions");
-    expect(input("Provider").getAttribute("aria-disabled")).toBe("true");
-    fireEvent.change(input("Provider"), { target: { value: "deepseek" } });
-    expect(input("Provider").value).toBe("openrouter");
+    expect(providerCombobox().getAttribute("aria-disabled")).toBe("true");
+    chooseProvider("deepseek");
+    expect(providerKindValue()).toBe("openrouter");
     expect(input("Name").value).toBe("OpenRouter");
     // The page blocks its back control while this is reported.
     expect(onBusyChange).toHaveBeenLastCalledWith(true);
@@ -416,8 +438,7 @@ test("edits by id with the expected revision and never sends or changes the type
     expect(screen.getByText("Provider").nextElementSibling?.textContent).toBe(
         "DeepSeek",
     );
-    // Detail shows the full ID that the list abbreviates.
-    expect(screen.getByText(ID)).toBeDefined();
+    expect(screen.queryByText(ID)).toBeNull();
     expect(input("Name").value).toBe("Work");
 
     type("Name", "Work 2 ");
@@ -710,7 +731,7 @@ test.each([
         expect(alert.textContent).toBe(message);
         // Before the first field, not by the key field or the buttons.
         expect(
-            alert.compareDocumentPosition(input("Provider")) &
+            alert.compareDocumentPosition(providerCombobox()) &
                 Node.DOCUMENT_POSITION_FOLLOWING,
         ).toBeTruthy();
         expect(keyField().getAttribute("aria-invalid")).toBe("false");

@@ -16,6 +16,7 @@ import {
 import { ProviderForm } from "./ProviderForm";
 import { ProviderIcon } from "./ProviderIcon";
 import { ProviderPage } from "./ProviderPage";
+import pageStyles from "./ProviderPage.module.css";
 import buttons from "./providerButtons.module.css";
 import styles from "./ProvidersView.module.css";
 
@@ -87,7 +88,7 @@ function mergeRows(
 
 /**
  * The Providers page. The list view shows saved, non-secret configurations as
- * rows (name first, then provider, protocol and URL, then a short ID) with
+ * rows (name first, then provider, protocol and URL) with
  * cursor paging and a single primary "New" action. "New" opens the form, whose
  * first field picks the provider and which also takes the required API key; a
  * row's "Edit" opens its detail page, grouped like the Settings page: "Basic
@@ -346,11 +347,16 @@ export function ProvidersView({
                         // Keyed by page and instance: each opens fresh and takes focus.
                         key={page.kind === "edit" ? page.record.id : "create"}
                         title={
-                            page.kind === "edit"
-                                ? t("providers.form.editTitle", {
-                                      name: page.record.displayName,
-                                  })
-                                : t("providers.form.createTitle")
+                            page.kind === "edit" ? (
+                                <span className={pageStyles["titleBrand"]}>
+                                    <ProviderIcon kind={page.record.kind} />
+                                    <span className={pageStyles["titleBrandText"]}>
+                                        {brandFor(page.record)}
+                                    </span>
+                                </span>
+                            ) : (
+                                t("providers.form.createTitle")
+                            )
                         }
                         onBack={backToList}
                         backBlocked={formBusy}
@@ -465,7 +471,6 @@ export function ProvidersView({
                         aria-label={t("providers.list.label")}
                     >
                         {list.items.map((record) => {
-                            const shortId = record.id.slice(0, 8);
                             return (
                                 <li className={styles["item"]} key={record.id}>
                                     <div className={styles["details"]}>
@@ -488,11 +493,6 @@ export function ProvidersView({
                                         <p className={styles["url"]}>
                                             {record.baseUrl}
                                         </p>
-                                        <p className={styles["id"]}>
-                                            {t("providers.list.id", {
-                                                id: shortId,
-                                            })}
-                                        </p>
                                     </div>
                                     <button
                                         className={[
@@ -511,7 +511,6 @@ export function ProvidersView({
                                             "providers.list.editLabel",
                                             {
                                                 name: record.displayName,
-                                                id: shortId,
                                             },
                                         )}
                                         onClick={() => {

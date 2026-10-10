@@ -77,9 +77,9 @@ log::info!(target: "vibemate", "event=configuration_service_ready");
 
 ## Settings log access
 
-Settings → General includes a Logs group with the actual absolute log file and
-directory paths, selectable for copying. It offers View logs, Open log folder and
-Refresh log paths. Both languages include loading, browser-preview, stderr-fallback
+Settings → General includes a Logs group with the actual absolute log file path,
+selectable for copying. It offers View logs and Open log folder. Both languages
+include loading, browser-preview, stderr-fallback
 and safe failure feedback. Pending operations block duplicate/competing requests
 with `aria-disabled` while preserving button focus.
 

@@ -1,7 +1,7 @@
 /*
  * Button hierarchy shared by the Providers pages. Each view has exactly one
  * `primary` action (solid accent); Cancel/Back and recovery actions are
- * `secondary` (outline); inline row actions and the back link are `text`.
+ * `secondary` (outline), including Back; inline row actions are `text`.
  * Blocked buttons keep focus, so they are styled by aria-disabled, never
  * :disabled. Only existing theme tokens are used; text on the accent uses the
  * page background, which contrasts with the accent in light and dark themes.

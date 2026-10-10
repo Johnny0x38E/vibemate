@@ -183,6 +183,21 @@ function rows(): HTMLElement[] {
     return within(screen.getByRole("list")).getAllByRole("listitem");
 }
 
+function editButton(seed: string): HTMLButtonElement {
+    const button = document.querySelector<HTMLButtonElement>(
+        `[data-provider-id="${row(seed).id}"]`,
+    );
+    if (!button) throw new Error(`Missing edit button for ${seed}`);
+    return button;
+}
+
+async function clickEdit(seed: string): Promise<void> {
+    await act(async () => {
+        fireEvent.click(editButton(seed));
+        await Promise.resolve();
+    });
+}
+
 test("shows a loading state, then saved rows distinguished by id, never as connected", async () => {
     const pending = deferred<ProviderPageResult>();
     list.mockReturnValue(pending.promise);
@@ -207,24 +222,18 @@ test("shows a loading state, then saved rows distinguished by id, never as conne
     expect(
         screen.getByRole("list", { name: "Saved provider configurations" }),
     ).toBeDefined();
-    // Duplicate names are allowed; the short ID tells them apart.
+    // Duplicate names are allowed; rows stay distinct by stable internal id.
     expect(rows()).toHaveLength(2);
     expect(screen.getAllByRole("heading", { name: "Work" })).toHaveLength(2);
-    expect(screen.getByText("ID aaaaaaaa")).toBeDefined();
-    expect(screen.getByText("ID bbbbbbbb")).toBeDefined();
     expect(screen.getByText("OpenRouter · Chat Completions")).toBeDefined();
-    expect(
-        screen.getByRole("button", { name: "Edit “Work” (ID bbbbbbbb)" }),
-    ).toBeDefined();
+    expect(editButton("b")).toBeDefined();
     expect(document.body.textContent).not.toMatch(/\bconnected\b|available/i);
 
     await act(async () => {
         await instance.changeLanguage("zh-CN");
     });
     expect(screen.getByRole("heading", { level: 1, name: "服务商" }));
-    expect(
-        screen.getByRole("button", { name: "编辑「Work」（ID bbbbbbbb）" }),
-    ).toBeDefined();
+    expect(editButton("b")).toBeDefined();
     expect(document.body.textContent).toContain("这里只列出已保存的配置");
     expect(document.body.textContent).not.toMatch(/已连接|可用/);
 });
@@ -317,9 +326,7 @@ test("loads more with the opaque cursor, then stops on the last page", async () 
     expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
     // The last page removes the button; focus continues at the first new row.
-    expect(document.activeElement).toBe(
-        screen.getByRole("button", { name: "Edit “Work” (ID bbbbbbbb)" }),
-    );
+    expect(document.activeElement).toBe(editButton("b"));
 });
 
 /** "New" opens the create form directly. */
@@ -392,9 +399,7 @@ test("creating re-reads the list and shows the normalized saved name", async () 
     // A notification outside the page announces the save; the list keeps no
     // lingering message, and focus lands on the new row's Edit.
     expectSavedNotification("Saved “Team”.");
-    expect(document.activeElement).toBe(
-        screen.getByRole("button", { name: "Edit “Team” (ID cccccccc)" }),
-    );
+    expect(document.activeElement).toBe(editButton("c"));
     expect(list).toHaveBeenCalledTimes(reads + 1);
     expect(list).toHaveBeenLastCalledWith({
         after: null,
@@ -418,12 +423,11 @@ test("editing one of two same-named rows keeps its identity", async () => {
         return Promise.resolve(saved);
     });
     await mount();
-    await click("Edit “Work” (ID bbbbbbbb)");
+    await clickEdit("b");
     expect(document.activeElement).toBe(
-        screen.getByRole("heading", { level: 1, name: "Edit “Work”" }),
+        screen.getByRole("heading", { level: 1, name: "DeepSeek" }),
     );
-    // The detail page names the instance by its full ID, not only its name.
-    expect(screen.getByText(second.id)).toBeDefined();
+    expect(screen.queryByText(second.id)).toBeNull();
     fireEvent.change(screen.getByLabelText("Name"), {
         target: { value: "Home" },
     });
@@ -436,14 +440,12 @@ test("editing one of two same-named rows keeps its identity", async () => {
     expect(list).toHaveBeenCalledTimes(reads + 1);
     const [first, edited] = rows();
     expect(first?.textContent).toContain("Work");
-    expect(first?.textContent).toContain("ID aaaaaaaa");
+    expect(first?.textContent).not.toMatch(/\bID\b/);
     expect(edited?.textContent).toContain("Home");
-    expect(edited?.textContent).toContain("ID bbbbbbbb");
+    expect(edited?.textContent).not.toMatch(/\bID\b/);
     expectSavedNotification("Saved “Home”.");
-    // Focus returns to the edited instance by ID, not to its same-named twin.
-    expect(document.activeElement).toBe(
-        screen.getByRole("button", { name: "Edit “Home” (ID bbbbbbbb)" }),
-    );
+    // Focus returns to the edited row, not to its same-named twin.
+    expect(document.activeElement).toBe(editButton("b"));
 });
 
 test("a new configuration beyond the loaded pages focuses the page heading", async () => {
@@ -472,10 +474,9 @@ test("focus stays on the saved row once a slower re-read is applied", async () =
     });
     update.mockResolvedValue(row("a", { displayName: "Renamed", revision: 2 }));
     await mount();
-    await click("Edit “Work” (ID aaaaaaaa)");
+    await clickEdit("a");
     await click("Save");
-    const edit = (): HTMLElement =>
-        screen.getByRole("button", { name: "Edit “Renamed” (ID aaaaaaaa)" });
+    const edit = (): HTMLElement => editButton("a");
     expect(document.activeElement).toBe(edit());
 
     await act(async () => {
@@ -523,7 +524,7 @@ test("going back is blocked while a save is pending", async () => {
     list.mockResolvedValue(page([row("a")]));
     update.mockReturnValue(pending.promise);
     await mount();
-    await click("Edit “Work” (ID aaaaaaaa)");
+    await clickEdit("a");
     await click("Save");
     const back = screen.getByRole("button", { name: "Back to provider list" });
     expect(back.getAttribute("aria-disabled")).toBe("true");
@@ -533,9 +534,7 @@ test("going back is blocked while a save is pending", async () => {
         pending.resolve(row("a", { revision: 2 }));
         await pending.promise;
     });
-    expect(document.activeElement).toBe(
-        screen.getByRole("button", { name: "Edit “Work” (ID aaaaaaaa)" }),
-    );
+    expect(document.activeElement).toBe(editButton("a"));
 });
 
 test("a reload discards a load-more result that arrives late", async () => {
@@ -575,11 +574,7 @@ test("a failed template read blocks New and Edit until it is retried", async () 
     expect(add.getAttribute("aria-disabled")).toBe("true");
     await click("New configuration");
     expect(screen.getByRole("list")).toBeDefined();
-    expect(
-        screen
-            .getByRole("button", { name: "Edit “Work” (ID aaaaaaaa)" })
-            .getAttribute("aria-disabled"),
-    ).toBe("true");
+    expect(editButton("a").getAttribute("aria-disabled")).toBe("true");
     readTemplates.mockResolvedValue({ kind: "desktop", templates });
     await click("Try reading available providers again");
     expect(add.getAttribute("aria-disabled")).toBe("false");
@@ -617,22 +612,18 @@ test("Back and Cancel return focus to New without re-reading the list", async ()
 test("leaving an edit returns focus to that row's Edit button", async () => {
     list.mockResolvedValue(page([row("a"), row("b")]));
     await mount("zh-CN");
-    await click("编辑「Work」（ID bbbbbbbb）");
+    await clickEdit("b");
     expect(document.activeElement).toBe(
-        screen.getByRole("heading", { level: 1, name: "编辑「Work」" }),
+        screen.getByRole("heading", { level: 1, name: "DeepSeek" }),
     );
     expect(screen.getByText("服务商").nextElementSibling?.textContent).toBe(
         "DeepSeek",
     );
     await click("取消");
-    expect(document.activeElement).toBe(
-        screen.getByRole("button", { name: "编辑「Work」（ID bbbbbbbb）" }),
-    );
-    await click("编辑「Work」（ID aaaaaaaa）");
+    expect(document.activeElement).toBe(editButton("b"));
+    await clickEdit("a");
     await click("返回服务商列表");
-    expect(document.activeElement).toBe(
-        screen.getByRole("button", { name: "编辑「Work」（ID aaaaaaaa）" }),
-    );
+    expect(document.activeElement).toBe(editButton("a"));
 });
 
 test("switching language keeps the open page and typed values", async () => {
@@ -655,24 +646,24 @@ test.each([
     {
         locale: "en",
         add: "New configuration",
-        edit: "Edit “Work” (ID aaaaaaaa)",
         back: "Back",
         backName: "Back to provider list",
     },
     {
         locale: "zh-CN",
         add: "新建配置",
-        edit: "编辑「Work」（ID aaaaaaaa）",
         back: "返回",
         backName: "返回服务商列表",
     },
 ] as const)(
     "in $locale action icons are decorative and the back link's name starts with its visible text",
-    async ({ locale, add, edit, back, backName }) => {
+    async ({ locale, add, back, backName }) => {
         list.mockResolvedValue(page([row("a")]));
         await mount(locale);
-        for (const name of [add, edit]) {
-            const button = screen.getByRole("button", { name });
+        for (const button of [
+            screen.getByRole("button", { name: add }),
+            editButton("a"),
+        ]) {
             const icon = button.querySelector("svg");
             expect(icon?.getAttribute("aria-hidden")).toBe("true");
         }
@@ -727,19 +718,25 @@ test("rows show the provider's icon before the name; an unknown kind shows none"
 test("the detail page and the create form show the provider icon next to the provider", async () => {
     list.mockResolvedValue(page([row("b", { kind: "openrouter" })]));
     await mount();
-    await click("Edit “Work” (ID bbbbbbbb)");
+    await clickEdit("b");
     const value = screen.getByText("Provider").nextElementSibling;
     expect(value?.textContent).toBe("OpenRouter");
     expect(value?.querySelectorAll("img")).toHaveLength(2);
     await click("Back to provider list");
 
     await click("New configuration");
-    const select = screen.getByRole("combobox", { name: "Provider" });
-    const icon = (): string | null | undefined =>
-        select.querySelector("img")?.getAttribute("src");
-    expect(icon()).toMatch(/\/deepseek\.svg$/);
-    setFieldSelectValue(select, "openrouter");
-    expect(icon()).toMatch(/\/openrouter\.svg$/);
+    const combobox = screen.getByRole("combobox", { name: "Provider" });
+    const triggerIcon = (): string | null | undefined =>
+        combobox.querySelector("img")?.getAttribute("src");
+    expect(triggerIcon()).toMatch(/\/deepseek\.svg$/);
+    fireEvent.click(combobox);
+    expect(
+        screen
+            .getByRole("option", { name: "OpenRouter" })
+            .querySelectorAll("img"),
+    ).toHaveLength(2);
+    setFieldSelectValue(combobox, "openrouter");
+    expect(triggerIcon()).toMatch(/\/openrouter\.svg$/);
 });
 
 test("the edit page combines configuration and key with one Save while the list shows no key state", async () => {
@@ -747,7 +744,7 @@ test("the edit page combines configuration and key with one Save while the list 
     await mount();
     expect(readKey).not.toHaveBeenCalled();
     expect(view().textContent).not.toMatch(/key|密钥|待配置/i);
-    await click("Edit “Work” (ID aaaaaaaa)");
+    await clickEdit("a");
     expect(readKey).toHaveBeenCalledWith(row("a").id);
     const basic = screen.getByRole("form", { name: "Basic information" });
     expect(screen.getAllByRole("form")).toHaveLength(1);
@@ -770,7 +767,7 @@ test("one Save sends both edited settings and a replacement key and leaves only 
     list.mockResolvedValue(page([row("a")]));
     update.mockReturnValue(pending.promise);
     await mount();
-    await click("Edit “Work” (ID aaaaaaaa)");
+    await clickEdit("a");
     fireEvent.change(screen.getByLabelText("Name"), {
         target: { value: "Renamed" },
     });
@@ -827,14 +824,14 @@ test("a typed key is cleared when the page is hidden or left, while other drafts
     expect(screen.getByLabelText("API key")).toHaveProperty("value", "");
     await click("Cancel");
 
-    await click("Edit “Work” (ID aaaaaaaa)");
+    await clickEdit("a");
     typeKey("API key");
     setViewHidden(true);
     setViewHidden(false);
     expect(screen.getByLabelText("API key")).toHaveProperty("value", "");
     typeKey("API key");
     await click("Back to provider list");
-    await click("Edit “Work” (ID aaaaaaaa)");
+    await clickEdit("a");
     expect(screen.getByLabelText("API key")).toHaveProperty("value", "");
     expect(replaceKey).not.toHaveBeenCalled();
 });

@@ -422,11 +422,12 @@ They do not verify native WebView IPC, OS credential access or real providers.
 
 ## Settings logs
 
-`LogSettings` is a separate group below the General preference controls. It shows
-the actual Rust-owned log file and folder paths without abbreviating them, with
-wrapping and text selection for long paths. View logs / 「查看日志」 requests a
-local text tool; Open log folder / 「打开日志文件夹」 requests the system file
-manager. Refresh log paths / 「重新读取日志路径」 reloads metadata, not the logger.
+`LogSettings` is a separate block below the General preference controls. It shows
+the actual Rust-owned log file path in the same grouped-card row layout as language
+and appearance (label left, value right-aligned), with wrapping and text selection.
+Two small icon buttons after the path request a local text tool (View logs /
+「查看日志」) or the system file manager (Open log folder / 「打开日志文件夹」).
+Paths are read once when the group mounts.
 
 `src/lib/desktop/logs.ts` validates both paths and the startup active flag,
 rejects malformed responses, and keeps only safe error codes. Browser preview
@@ -434,7 +435,7 @@ shows no invented path or OS actions. An inactive startup file logger gets a
 warning; an older log can still be opened. Raw errors are never rendered.
 
 The component keeps read and open states separate. Each read has a generation
-number, so StrictMode cleanup, refresh and unmount invalidate stale results.
+number, so StrictMode cleanup and unmount invalidate stale results.
 A synchronous ref blocks rapid duplicate or competing open requests; rendered
 buttons use `aria-disabled` rather than dropping focus with `disabled`.
 The group remains mounted across settings/sidebar navigation, preserving paths
@@ -516,18 +517,18 @@ save. The kind is never part of an edit request.
 `list | create | edit`, no router library). The list view shows
 loading, empty, error-with-retry, the saved rows and a "Load more" button while
 `nextCursor` is set. Each row puts the name first (foreground, semibold), then
-provider · protocol and the normalized URL (muted), then the short ID (muted,
-smaller), with a weak "Edit" action. Rows are keyed and edited by ID, so two rows
-with the same name stay distinct. List data stays in `ProvidersView` while a
+provider · protocol and the normalized URL (muted), with a weak "Edit" action.
+Rows are keyed internally by stable ID, so two rows with the same name stay
+distinct even though the ID is not shown. List data stays in `ProvidersView` while a
 secondary view is open, so going back does not re-read it.
 
 **Brand icons.** `ProviderIcon` maps a provider kind (never a display name) to
 an official brand file in `assets/providers/`, imported through Vite like
 `assets/brand/` (emitted as files, so the `img-src 'self'` CSP allows them).
 Each list row shows it before the name; the detail page shows it before the
-read-only provider value, and the create form beside the provider select,
-in the trigger and in each menu row via `FieldSelect`. The
-title stays text only. The icon sits in a 20×20 box with `object-fit: contain`,
+read-only provider value; the create form uses `FieldSelect` so the trigger and
+each menu option show the logo before the brand name. Edit page titles use the
+same logo and brand name. The icon sits in a 20×20 box with `object-fit: contain`,
 is decorative (`alt=""`), and unknown kinds render nothing. The files are kept
 byte-for-byte as published: no recolouring or stretching, and Prettier has no
 SVG parser, so checks never rewrite them. OpenRouter has a separate dark file;
@@ -546,9 +547,11 @@ trademarks of their respective owners and are used only to identify the
 providers." (「服务商名称和标志的商标归各自所有者，仅用于标识服务商」). The icons
 above are used on that basis only.
 
-Secondary views share `ProviderPage`: a back link (the shared `Icon` "back"
-arrow at 18px plus the short text "Back" / 「返回」, at least 32px tall) and the
-page title on top. The link's `aria-label` is the fuller "Back to provider
+Secondary views share `ProviderPage`: a secondary back button (the shared
+`Icon` "back" arrow at 18px plus the short text "Back" / 「返回」, 36px tall) and
+the page title on top. Edit uses the official brand icon and brand name (for
+example DeepSeek), not the saved display name or quote marks; create keeps a
+translated title string. Its `aria-label` is the fuller "Back to provider
 list" / 「返回服务商列表」 (separate keys `providers.back` and
 `providers.backLabel`), which starts with the visible text (WCAG 2.5.3). "New"
 opens the create form directly. Its first field is the provider select, which
@@ -571,9 +574,9 @@ survives the jump back to the list; the list page itself keeps no message.
 - Hierarchy: each view has exactly one primary button ("New configuration" or
   "Save"): solid `--color-accent` with `--color-background` text. Cancel,
   recovery actions ("Save again", "Reload latest settings", "Try again") and
-  "Load more" are secondary (`--color-border` outline, `--color-text`); the back
-  link and row "Edit" are text buttons. "New configuration" (`plus`), row
-  "Edit" (`edit`) and the back link (`back`) carry a leading 18px `Icon`
+  "Load more", and Back are secondary (`--color-border` outline, `--color-text`);
+  row "Edit" is a text button. "New configuration" (`plus`), row "Edit" (`edit`)
+  and Back (`back`) carry a leading 18px `Icon`
   (`aria-hidden`, centered with the label via `buttons.withIcon`); Save, Cancel
   and recovery actions stay text-only, like every form button elsewhere in the
   app, so icons mark navigation and entry points rather than every button.
@@ -589,7 +592,7 @@ survives the jump back to the list; the list page itself keeps no message.
   user has moved it, and a superseded read applies nothing. Controls that can hold focus are never `disabled` while
   work is pending (disabling the focused element drops focus to the page):
   buttons and selects use `aria-disabled`, text fields `readOnly`, and handlers
-  check the state. The back link is blocked while a save is pending, so its
+  check the state. Back is blocked while a save is pending, so its
   outcome cannot be hidden. "Saving…" is announced through a `role="status"`
   message.
 

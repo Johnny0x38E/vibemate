@@ -1,7 +1,7 @@
 /*
  * Page layout mirrors SettingsView. Row hierarchy: the name is primary
  * (foreground, semibold); provider · protocol and the URL are secondary
- * (muted, regular); the short ID is weakest (muted, smaller). Buttons come
+ * (muted, regular). Buttons come
  * from providerButtons.module.css.
  */
 .view {
@@ -115,22 +115,12 @@
 }
 
 .summary,
-.url,
-.id {
+.url {
     margin: 0;
     color: var(--color-summary);
+    font-size: 0.8125rem;
     line-height: 1.5;
     overflow-wrap: anywhere;
-}
-
-.summary,
-.url {
-    font-size: 0.8125rem;
-}
-
-.id {
-    font-size: 0.75rem;
-    font-variant-numeric: tabular-nums;
 }
 
 .item > button {

@@ -597,7 +597,7 @@ test.each([
         add: "New configuration",
         name: "Name",
         key: "API key",
-        edit: "Edit “Personal DeepSeek” (ID 01234567)",
+        edit: "Edit “Personal DeepSeek”",
         planned: "Not implemented",
     },
     {
@@ -607,7 +607,7 @@ test.each([
         add: "新建配置",
         name: "名称",
         key: "API 密钥",
-        edit: "编辑「Personal DeepSeek」（ID 01234567）",
+        edit: "编辑「Personal DeepSeek」",
         planned: "功能尚未实现",
     },
 ] as const)(
@@ -653,8 +653,8 @@ test.each([
         locale: "en",
         providers: "Providers",
         agents: "Agents",
-        edit: "Edit “Personal DeepSeek” (ID 01234567)",
-        renamedEdit: "Edit “Renamed” (ID 01234567)",
+        edit: "Edit “Personal DeepSeek”",
+        renamedEdit: "Edit “Renamed”",
         name: "Name",
         save: "Save",
         saved: "Saved “Renamed”.",
@@ -663,8 +663,8 @@ test.each([
         locale: "zh-CN",
         providers: "服务商",
         agents: "Agent",
-        edit: "编辑「Personal DeepSeek」（ID 01234567）",
-        renamedEdit: "编辑「Renamed」（ID 01234567）",
+        edit: "编辑「Personal DeepSeek」",
+        renamedEdit: "编辑「Renamed」",
         name: "名称",
         save: "保存",
         saved: "已保存「Renamed」。",
@@ -723,7 +723,7 @@ test("switching language keeps the Providers list and an open form in place", as
     fireEvent.click(screen.getByRole("button", { name: "Providers" }));
     fireEvent.click(
         await screen.findByRole("button", {
-            name: "Edit “Personal DeepSeek” (ID 01234567)",
+            name: "Edit “Personal DeepSeek”",
         }),
     );
     const field = screen.getByRole("textbox", { name: "Name" });
@@ -737,7 +737,7 @@ test("switching language keeps the Providers list and an open form in place", as
     expect(
         screen.getByRole("heading", {
             level: 1,
-            name: "编辑「Personal DeepSeek」",
+            name: "DeepSeek",
         }),
     ).toBeDefined();
     expect(

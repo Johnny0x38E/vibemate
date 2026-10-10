@@ -9,6 +9,10 @@ GitHub release notes are extracted from the matching version section only.
 ### Changed
 
 - Settings and provider single-choice fields now use a shared custom dropdown with a consistent trigger and list panel (language, appearance, protocol, and provider kind with brand icons in the menu).
+- Settings → General logs now show only the log file path (no Refresh log paths) with compact icon actions beside the path for View logs and Open log folder.
+- The Providers list and edit form no longer display provider instance IDs; rows remain distinct internally.
+- Provider edit pages title the screen with the brand icon and official brand name instead of the saved display name in quotes.
+- Provider create and edit pages use a secondary outline back button instead of a text link.
 - Unified provider settings and API key editing under one Save button. Existing keys appear only as a fixed mask and closed-eye indicator, never read back; leaving the edit field empty preserves the key, while entering a new value replaces it. Removed the separate Keys group, update timestamp and permanent key explanations. Rust coordinates key replacement with the settings/reference transaction, restores the previous key after definite database failures and reports uncertain outcomes without claiming success. Bilingual tests cover replacement, status retry, focus and guarded retries.
 
 - Simplified Chinese now uses one term set throughout the interface: 服务商, Agent, 技能 and MCP 服务器. The overview no longer mixes in "Provider". English text is unchanged; brand names, model IDs and URLs stay untranslated. Unused strings from the former landing page were removed.

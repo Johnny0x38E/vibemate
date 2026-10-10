@@ -23,6 +23,7 @@ import { FieldSelect } from "../../components/FieldSelect";
 import { Icon } from "../../components/Icon";
 import fieldStyles from "../settings/settingsField.module.css";
 import { ProviderIcon } from "./ProviderIcon";
+import { ProviderKindSelect } from "./ProviderKindSelect";
 import buttons from "./providerButtons.module.css";
 import styles from "./ProviderForm.module.css";
 
@@ -542,7 +543,6 @@ export function ProviderForm({
     }
 
     const groupId = `${id}-basic`;
-    const hintId = `${id}-baseUrl-hint`;
     const secretStatusId = `${id}-secret-status`;
     const configured = keyStatus.kind === "ready" && keyStatus.configured;
     const showStoredIndicator = configured && secret === "";
@@ -602,7 +602,6 @@ export function ProviderForm({
                                         id={`${id}-kind`}
                                         value={createKind}
                                         blocked={saveBlocked}
-                                        data-test-value={createKind}
                                         options={templates.map((entry) => ({
                                             value: entry.kind,
                                             label: entry.brandName,
@@ -616,16 +615,6 @@ export function ProviderForm({
                                     />
                                 )}
                             </div>
-                        </div>
-                    )}
-                    {editing && (
-                        <div className={fieldStyles["row"]}>
-                            <span className={fieldStyles["label"]}>
-                                {t("providers.fields.id")}
-                            </span>
-                            <span className={styles["secondaryValue"]}>
-                                {editing.id}
-                            </span>
                         </div>
                     )}
                     <div className={fieldStyles["row"]}>
@@ -673,10 +662,7 @@ export function ProviderForm({
                                 value={fields.baseUrl}
                                 readOnly={saveBlocked}
                                 aria-invalid={fieldError === "baseUrl"}
-                                aria-describedby={describedBy(
-                                    "baseUrl",
-                                    hintId,
-                                )}
+                                aria-describedby={describedBy("baseUrl")}
                                 onChange={(event) => {
                                     update(
                                         "baseUrl",
@@ -684,9 +670,6 @@ export function ProviderForm({
                                     );
                                 }}
                             />
-                            <p className={styles["hint"]} id={hintId}>
-                                {t("providers.fields.baseUrlHint")}
-                            </p>
                             {errorText("baseUrl")}
                         </div>
                     </div>

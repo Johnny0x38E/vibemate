@@ -73,22 +73,20 @@
         "logs": {
             "title": "Logs",
             "filePath": "Log file",
-            "directoryPath": "Log folder",
             "view": "View logs",
             "openDirectory": "Open log folder",
-            "refresh": "Refresh log paths",
-            "loading": "Reading log paths…",
+            "loading": "Reading log path…",
             "preview": "Browser preview cannot read or open desktop logs.",
             "fileInactive": "File logging was not enabled at startup. Check the terminal output; an existing log file may contain older entries.",
-            "hint": "Opens a local text tool (TextEdit on macOS, Notepad on Windows, or the default app on Linux). Log paths are selectable for copying.",
+            "hint": "Opens a local text tool (TextEdit on macOS, Notepad on Windows, or the default app on Linux). The log file path is selectable for copying.",
             "openingFile": "Requesting the text tool…",
             "openingDirectory": "Requesting the file manager…",
             "errors": {
-                "path_unavailable": "The log path could not be resolved. Refresh or restart vibemate.",
-                "log_unavailable": "The log file or folder does not exist or cannot be accessed. Refresh the paths or restart vibemate.",
+                "path_unavailable": "The log path could not be resolved. Restart vibemate.",
+                "log_unavailable": "The log file or folder does not exist or cannot be accessed. Restart vibemate and try again.",
                 "open_failed": "The system could not accept the open request. Check that a text tool or file manager is available; on Linux, set a default app for .log files, then try again.",
                 "operation_failed": "The log request could not finish. Try again.",
-                "invalid_response": "The app returned an unrecognized log response. Refresh the paths before trying again.",
+                "invalid_response": "The app returned an unrecognized log response. Restart vibemate and try again.",
                 "desktop_required": "Use the vibemate desktop app to view local logs."
             }
         },
@@ -142,19 +140,16 @@
         "list": {
             "label": "Saved provider configurations",
             "summary": "{{brand}} · {{protocol}}",
-            "id": "ID {{id}}",
             "edit": "Edit",
-            "editLabel": "Edit “{{name}}” (ID {{id}})"
+            "editLabel": "Edit “{{name}}”"
         },
         "groups": {
             "basic": "Basic information"
         },
         "fields": {
             "kind": "Provider",
-            "id": "ID",
             "displayName": "Name",
             "baseUrl": "Base URL",
-            "baseUrlHint": "Must start with https:// and contain no query or fragment.",
             "protocol": "Protocol",
             "secret": "API key",
             "secretConfigured": "API key configured",
@@ -169,7 +164,6 @@
         },
         "form": {
             "createTitle": "New provider configuration",
-            "editTitle": "Edit “{{name}}”",
             "save": "Save",
             "saving": "Saving…",
             "cancel": "Cancel",

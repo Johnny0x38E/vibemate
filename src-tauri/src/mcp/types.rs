@@ -194,3 +194,19 @@ pub(super) struct Validated {
     pub(super) fields: Vec<SecretInput>,
     pub(super) kind: &'static str,
 }
+
+/// Validated identity of a central MCP definition, independent of ProviderId.
+/// Its wire and database representation stays the existing 32-character string.
+pub(super) struct McpId(String);
+
+impl McpId {
+    /// Accept only the random-ID format generated for central definitions.
+    pub(super) fn parse(value: &str) -> Option<Self> {
+        crate::shared::is_random_id(value).then(|| Self(value.to_string()))
+    }
+
+    /// Return the validated string without changing its database or wire format.
+    pub(super) fn into_string(self) -> String {
+        self.0
+    }
+}

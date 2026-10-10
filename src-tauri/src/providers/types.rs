@@ -109,11 +109,7 @@ pub struct ProviderId(String);
 impl ProviderId {
     /// Accept only the exact format vibemate generates, returning `None` otherwise.
     pub fn parse(value: &str) -> Option<Self> {
-        let well_formed = value.len() == 32
-            && value
-                .bytes()
-                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte));
-        well_formed.then(|| Self(value.to_string()))
+        crate::shared::is_random_id(value).then(|| Self(value.to_string()))
     }
 
     /// Borrow the identifier as text, for SQL parameters and cursors.

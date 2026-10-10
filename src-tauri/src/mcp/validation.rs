@@ -1,14 +1,11 @@
 //! Validate MCP metadata without executing servers or reading credentials.
 
 use super::types::*;
-use crate::providers::ProviderId;
 use crate::shared::{bounded_text, validate_display_name};
 use std::collections::BTreeSet;
 
-pub(super) fn identity(value: &str) -> Result<(), McpError> {
-    ProviderId::parse(value)
-        .map(|_| ())
-        .ok_or(McpError::InvalidRequest)
+pub(super) fn identity(value: &str) -> Result<McpId, McpError> {
+    McpId::parse(value).ok_or(McpError::InvalidRequest)
 }
 
 fn server_namespace(name: &str) -> Result<String, McpError> {
@@ -88,9 +85,12 @@ pub(super) fn field_name(name: &str, kind: &str) -> Result<String, McpError> {
 pub(super) fn validate(
     request: SaveMcpRequest,
 ) -> Result<(Option<String>, Option<i64>, bool, Validated), McpError> {
-    if let Some(id) = &request.id {
-        identity(id)?;
-    }
+    let id = request
+        .id
+        .as_deref()
+        .map(identity)
+        .transpose()?
+        .map(McpId::into_string);
     if request.id.is_some() != request.expected_revision.is_some()
         || request
             .expected_revision
@@ -152,7 +152,7 @@ pub(super) fn validate(
         }
     }
     Ok((
-        request.id,
+        id,
         request.expected_revision,
         request.enabled,
         Validated {

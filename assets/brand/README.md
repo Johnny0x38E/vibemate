@@ -9,18 +9,30 @@ they remove raster shading and use flat, scalable shapes.
 - `mark.svg`: transparent two-color symbol for light surfaces.
 - `app-icon.svg`: the selected forest/sage V on an off-white app tile, with
   transparent outside corners. The V colors stay faithful to the reference.
+- `app-icon-macos.svg`: macOS tile with the same artwork scaled to 85% around
+  the canvas center. Its 408 px tile on a 512 px canvas leaves transparent
+  margins so the Dock icon does not appear oversized.
 - `logo-expanded.svg` / `logo-collapsed.svg`: full horizontal lockup and symbol-only artwork.
 - `src/components/BrandLogo.tsx`: one inline SVG lockup with a lettering mask from the actual selected reference, with no external font
   dependency. Lettering follows UI text color; the raised i dot is warm orange.
 
-Desktop PNG, ICO, and ICNS files in `src-tauri/icons/` are generated from the
+Desktop PNG and ICO files in `src-tauri/icons/` are generated from the
 app icon by the repository's locked Tauri CLI:
 
 ```sh
 pnpm exec tauri icon assets/brand/app-icon.svg --output /tmp/vibemate-icons
 ```
 
-Copy only the existing desktop filenames from that output to `src-tauri/icons/`.
+Copy only the existing PNG and ICO filenames from that output to `src-tauri/icons/`.
+Generate the macOS ICNS separately to preserve its Dock-specific padding:
+
+```sh
+pnpm exec tauri icon assets/brand/app-icon-macos.svg --output /tmp/vibemate-macos-icons
+cp /tmp/vibemate-macos-icons/icon.icns src-tauri/icons/icon.icns
+```
+
+Only copy `icon.icns` from the macOS output; other platforms use the original
+master.
 The CLI also generates mobile files; mobile targets are outside this product's
 current scope. Do not edit generated icon geometry independently of the SVG.
 

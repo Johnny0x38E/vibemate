@@ -687,6 +687,16 @@ I05.a.1 校正 `mark.svg` / `app-icon.svg` 与同母版生成的桌面图标集�
 
 控件与自动检查已完成；圆圈间距、配色与焦点效果待维护者人工验收。
 
+### 插队任务 I07：调整 macOS Dock 图标大小
+
+- [x] 增加 macOS 专用 SVG 留白，整体缩小至原来的 85%，保持 V 形状和配色。
+- [x] 从专用 SVG 重新生成 ICNS，其他平台图标使用原有母版。
+- [x] 检查 ICNS 与本地 macOS app 包中的图标资源一致。
+- [ ] Dock 外观由维护者重启应用后人工验收。
+
+**Files:** `assets/brand/app-icon-macos.svg`、`assets/brand/README.md`、`src-tauri/icons/icon.icns`、`CHANGELOG.md`、本清单。
+**Verification:** 文档格式、图标生成与本地 app 打包资源检查；不运行浏览器或截图视觉检查。
+
 ### Task P09: 让现有界面支持中英文
 
 **Description:** 把现有 App 的文本与 metadata 状态接入 i18n，并将翻译一致性和切换回归检查纳入完成标准。

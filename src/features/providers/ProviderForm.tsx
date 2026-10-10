@@ -18,6 +18,8 @@ import {
     type ProviderRecord,
     type ProviderTemplate,
 } from "../../lib/desktop/providers";
+import { getProviderSecretStatus } from "../../lib/desktop/providerSecrets";
+import { Icon } from "../../components/Icon";
 import fieldStyles from "../settings/settingsField.module.css";
 import { ProviderIcon } from "./ProviderIcon";
 import buttons from "./providerButtons.module.css";
@@ -69,7 +71,7 @@ interface Fields {
 
 type FieldName = keyof Fields;
 
-/** Fields that can show an error next to them; `secret` exists only when creating. */
+/** Fields that can show an error next to them in both create and edit modes. */
 type ErrorField = FieldName | "secret";
 
 /**
@@ -80,8 +82,13 @@ type ErrorField = FieldName | "secret";
 type FormStatus =
     | { kind: "idle" | "saving" | "conflict" | "reloading" | "reloaded" }
     | { kind: "failed"; code: ProviderErrorCode }
-    | { kind: "refreshing"; code: ProviderErrorCode }
-    | { kind: "unknown"; code: ProviderErrorCode; refreshed: boolean }
+    | { kind: "refreshing"; code: ProviderErrorCode; needsSecret: boolean }
+    | {
+          kind: "unknown";
+          code: ProviderErrorCode;
+          refreshed: boolean;
+          needsSecret: boolean;
+      }
     | { kind: "reloadFailed"; code: ProviderErrorCode };
 
 /** Rust validation codes that belong next to one field rather than the form. */
@@ -112,7 +119,14 @@ const UNKNOWN_CODES: readonly ProviderErrorCode[] = [
     "operation_failed",
     "invalid_response",
     "create_outcome_unknown",
+    "secret_outcome_unknown",
 ];
+
+type KeyStatus =
+    | { kind: "loading" }
+    | { kind: "ready"; configured: boolean }
+    | { kind: "error"; code: ProviderErrorCode }
+    | { kind: "preview" };
 
 function fieldsFromRecord(record: ProviderRecord): Fields {
     return {
@@ -131,8 +145,9 @@ function errorCode(error: unknown): ProviderErrorCode {
 /**
  * The "Basic information" group of a provider configuration: name, base URL
  * and protocol, saved through Rust. A new configuration also takes its required
- * API key here, sent with the same request; an existing one replaces its key in
- * the separate `ProviderKeys` group, and models (P12) get their own group too.
+ * API key here. Editing uses the same field and save button: an empty field
+ * preserves the stored key, and a supplied replacement is coordinated with settings.
+ * The configured placeholder is fixed UI decoration, never a fetched secret.
  *
  * Edits send `expectedRevision`, so a concurrent change is reported instead of
  * overwritten. Rust is the only validator; its stable codes appear next to the
@@ -172,12 +187,44 @@ export function ProviderForm({
     // The revision this form last saw; edits must name it to be accepted.
     const [revision, setRevision] = useState(editing?.revision ?? 0);
     const [status, setStatus] = useState<FormStatus>({ kind: "idle" });
-    // The API key of a new configuration. It lives only in this state: it is
+    // A new or replacement API key. It lives only in this state: it is
     // never logged, stored, put into a message or passed to the parent, and it
     // is cleared after every submit, on cancel and while the page is hidden.
     const [secret, setSecret] = useState("");
     // Set when a submit found the key empty; checked here, not by Rust.
     const [secretMissing, setSecretMissing] = useState(false);
+    const editingId = editing?.id;
+    const [keyStatus, setKeyStatus] = useState<KeyStatus>(
+        editing ? { kind: "loading" } : { kind: "ready", configured: false },
+    );
+    const [keyAttempt, setKeyAttempt] = useState(0);
+
+    useEffect(() => {
+        if (editingId === undefined) return;
+        // Only SQLite status is read, never the key or the OS credential store.
+        // A per-effect flag rejects obsolete StrictMode reads and unmounted results.
+        let active = true;
+        getProviderSecretStatus(editingId).then(
+            (result) => {
+                if (!active) return;
+                setKeyStatus(
+                    result.kind === "preview"
+                        ? { kind: "preview" }
+                        : {
+                              kind: "ready",
+                              configured: result.status.state === "set",
+                          },
+                );
+            },
+            (error: unknown) => {
+                if (active)
+                    setKeyStatus({ kind: "error", code: errorCode(error) });
+            },
+        );
+        return () => {
+            active = false;
+        };
+    }, [editingId, keyAttempt]);
     // Clearing on hide is derived during render (not in an effect), so a key
     // never survives even one hidden frame.
     const [wasHidden, setWasHidden] = useState(hidden);
@@ -217,7 +264,8 @@ export function ProviderForm({
         busy ||
         status.kind === "conflict" ||
         status.kind === "reloadFailed" ||
-        status.kind === "unknown";
+        status.kind === "unknown" ||
+        keyStatus.kind !== "ready";
     const fieldError: ErrorField | undefined = secretMissing
         ? "secret"
         : status.kind === "failed"
@@ -286,7 +334,11 @@ export function ProviderForm({
         if (pending.current || target === undefined) return;
         if (saveBlocked && !(confirmedRetry && status.kind === "unknown"))
             return;
-        if (typeof target === "string" && key.trim() === "") {
+        const requiresKey =
+            typeof target === "string" ||
+            (keyStatus.kind === "ready" && !keyStatus.configured) ||
+            (confirmedRetry && status.kind === "unknown" && status.needsSecret);
+        if (requiresKey && key.trim() === "") {
             // The only check made here; Rust validates everything else. An
             // unknown outcome stays in place, so its retry rules still apply.
             setSecretMissing(true);
@@ -311,6 +363,7 @@ export function ProviderForm({
                           expectedRevision: revision,
                           ...fields,
                           extensions: {},
+                          ...(key !== "" ? { secret: key } : {}),
                       });
             if (!isAlive()) return;
             setStatus({ kind: "idle" });
@@ -323,9 +376,16 @@ export function ProviderForm({
                 // The write may have happened. Re-read the list before offering a
                 // retry, so a second click cannot silently create a duplicate. The
                 // key was cleared, so that retry needs it typed again.
-                setStatus({ kind: "refreshing", code });
+                const needsSecret = typeof target === "string" || key !== "";
+                setStatus({ kind: "refreshing", code, needsSecret });
                 const refreshed = await onRefresh();
-                if (isAlive()) setStatus({ kind: "unknown", code, refreshed });
+                if (isAlive())
+                    setStatus({
+                        kind: "unknown",
+                        code,
+                        refreshed,
+                        needsSecret,
+                    });
             } else if (code === "revision_conflict") {
                 setStatus({ kind: "conflict" });
             } else {
@@ -339,11 +399,12 @@ export function ProviderForm({
     async function refreshAgain(): Promise<void> {
         if (pending.current || status.kind !== "unknown") return;
         pending.current = true;
-        const { code } = status;
-        setStatus({ kind: "refreshing", code });
+        const { code, needsSecret } = status;
+        setStatus({ kind: "refreshing", code, needsSecret });
         try {
             const refreshed = await onRefresh();
-            if (isAlive()) setStatus({ kind: "unknown", code, refreshed });
+            if (isAlive())
+                setStatus({ kind: "unknown", code, refreshed, needsSecret });
         } finally {
             pending.current = false;
         }
@@ -441,7 +502,11 @@ export function ProviderForm({
                             {!status.refreshed
                                 ? t("providers.form.refreshFailed")
                                 : editing
-                                  ? t("providers.form.unknownRefreshed")
+                                  ? t(
+                                        status.needsSecret
+                                            ? "providers.form.editUnknownSecret"
+                                            : "providers.form.editUnknown",
+                                    )
                                   : t("providers.form.unknownRefreshedSecret")}
                         </p>
                     </>
@@ -477,7 +542,9 @@ export function ProviderForm({
 
     const groupId = `${id}-basic`;
     const hintId = `${id}-baseUrl-hint`;
-    const secretHintId = `${id}-secret-hint`;
+    const secretStatusId = `${id}-secret-status`;
+    const configured = keyStatus.kind === "ready" && keyStatus.configured;
+    const showStoredIndicator = configured && secret === "";
 
     return (
         <section className={styles["group"]} aria-labelledby={groupId}>
@@ -677,49 +744,98 @@ export function ProviderForm({
                             {errorText("protocol")}
                         </div>
                     </div>
-                    {/* Only a new configuration has a key field; an edit page
-                        replaces the key in its own group (ProviderKeys). */}
-                    {!editing && (
-                        <div className={fieldStyles["row"]}>
-                            <label
-                                className={fieldStyles["label"]}
-                                htmlFor={`${id}-secret`}
-                            >
-                                {t("providers.fields.secret")}
-                            </label>
-                            <div className={styles["control"]}>
-                                <input
-                                    className={styles["input"]}
-                                    id={`${id}-secret`}
-                                    ref={secretInput}
-                                    type="password"
-                                    // "off" is ignored for passwords; this keeps
-                                    // saved passwords from being filled in.
-                                    autoComplete="new-password"
-                                    autoCapitalize="none"
-                                    autoCorrect="off"
-                                    spellCheck={false}
-                                    required
-                                    value={secret}
-                                    // Editable after an unknown outcome, so the
-                                    // key can be typed again for a retry.
-                                    readOnly={busy}
-                                    aria-invalid={fieldError === "secret"}
-                                    aria-describedby={describedBy(
-                                        "secret",
-                                        secretHintId,
+                    {/* The fixed placeholder and eye-off mark only indicate a
+                        configured entry; neither is an input value or a reveal control. */}
+                    <div className={fieldStyles["row"]}>
+                        <label
+                            className={fieldStyles["label"]}
+                            htmlFor={`${id}-secret`}
+                        >
+                            {t("providers.fields.secret")}
+                        </label>
+                        <div className={styles["secretControl"]}>
+                            <input
+                                className={styles["input"]}
+                                id={`${id}-secret`}
+                                ref={secretInput}
+                                type="password"
+                                // "off" is ignored for passwords; this keeps
+                                // saved passwords from being filled in.
+                                autoComplete="new-password"
+                                autoCapitalize="none"
+                                autoCorrect="off"
+                                spellCheck={false}
+                                required={!configured}
+                                placeholder={
+                                    showStoredIndicator ? "••••••••" : undefined
+                                }
+                                value={secret}
+                                // Editable after an unknown outcome, so the
+                                // key can be typed again for a retry.
+                                readOnly={busy}
+                                aria-invalid={fieldError === "secret"}
+                                aria-describedby={describedBy(
+                                    "secret",
+                                    showStoredIndicator
+                                        ? secretStatusId
+                                        : undefined,
+                                )}
+                                onChange={(event) => {
+                                    updateSecret(event.currentTarget.value);
+                                }}
+                            />
+                            {showStoredIndicator && (
+                                <span
+                                    className={styles["keyIndicator"]}
+                                    title={t(
+                                        "providers.fields.secretConfigured",
                                     )}
-                                    onChange={(event) => {
-                                        updateSecret(event.currentTarget.value);
-                                    }}
-                                />
-                                <p className={styles["hint"]} id={secretHintId}>
-                                    {t("providers.fields.secretHint")}
+                                >
+                                    <Icon name="eyeOff" />
+                                    <span
+                                        className={styles["visuallyHidden"]}
+                                        id={secretStatusId}
+                                    >
+                                        {t("providers.fields.secretConfigured")}
+                                    </span>
+                                </span>
+                            )}
+                            {keyStatus.kind === "loading" && (
+                                <p className={styles["message"]} role="status">
+                                    {t("providers.fields.secretLoading")}
                                 </p>
-                                {errorText("secret")}
-                            </div>
+                            )}
+                            {keyStatus.kind === "error" && (
+                                <>
+                                    <p className={styles["error"]} role="alert">
+                                        {t(
+                                            `providers.errors.${keyStatus.code}`,
+                                        )}
+                                    </p>
+                                    <button
+                                        type="button"
+                                        className={buttons["secondary"]}
+                                        onClick={() => {
+                                            // The retry button disappears; keep focus in the key field.
+                                            secretInput.current?.focus();
+                                            setKeyStatus({ kind: "loading" });
+                                            setKeyAttempt(
+                                                (attempt) => attempt + 1,
+                                            );
+                                        }}
+                                    >
+                                        {t("providers.fields.secretRetry")}
+                                    </button>
+                                </>
+                            )}
+                            {keyStatus.kind === "preview" && (
+                                <p className={styles["message"]}>
+                                    {t("providers.errors.desktop_required")}
+                                </p>
+                            )}
+                            {errorText("secret")}
                         </div>
-                    )}
+                    </div>
                 </div>
                 <div className={styles["feedback"]}>{formMessage()}</div>
                 <div className={styles["actions"]}>

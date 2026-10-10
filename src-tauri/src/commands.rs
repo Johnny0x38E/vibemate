@@ -4,7 +4,7 @@
 //! modules so it can be tested without starting a Tauri window.
 
 use crate::appearance::{self, AppearancePreference};
-use crate::credentials::OsCredentialStore;
+use crate::credentials::{OsCredentialStore, Secret};
 use crate::log_access::{self, LogAccess, LogAccessError, LogLocation};
 use crate::provider_secrets::{self, ProviderSecretStatus, ReplaceProviderSecretRequest};
 use crate::providers::{
@@ -259,17 +259,27 @@ pub(crate) async fn create_provider(
     crate::logging::provider_outcome("create_provider", result)
 }
 
-/// Edit a provider instance if its revision still matches, returning the
-/// committed record. A task failure has an unknown outcome; reload before retrying.
+/// Save provider settings and an optional replacement key under one credential lock.
+/// Missing `secret` preserves the key without OS credential access. Only safe codes
+/// cross IPC; uncertain outcomes require reload before retrying.
 #[tauri::command]
 pub(crate) async fn update_provider(
     app: tauri::AppHandle,
     request: UpdateProviderRequest,
+    secret: Option<Secret>,
 ) -> Result<ProviderRecord, ProviderError> {
     let result = tauri::async_runtime::spawn_blocking(move || {
         with_provider_storage(&app, |storage| {
-            let now_ms = providers::current_unix_millis()?;
-            providers::update_provider(storage, &request, now_ms)
+            with_credential_writes(&app, || {
+                let now_ms = providers::current_unix_millis()?;
+                providers::update_provider_with_secret(
+                    storage,
+                    &OsCredentialStore,
+                    &request,
+                    secret,
+                    now_ms,
+                )
+            })
         })
     })
     .await

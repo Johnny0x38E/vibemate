@@ -147,8 +147,7 @@
             "editLabel": "Edit “{{name}}” (ID {{id}})"
         },
         "groups": {
-            "basic": "Basic information",
-            "keys": "Keys"
+            "basic": "Basic information"
         },
         "fields": {
             "kind": "Provider",
@@ -158,7 +157,9 @@
             "baseUrlHint": "Must start with https:// and contain no query or fragment.",
             "protocol": "Protocol",
             "secret": "API key",
-            "secretHint": "The key is stored only in the system credential store, never in vibemate's settings. This field is cleared after every save attempt.",
+            "secretConfigured": "API key configured",
+            "secretLoading": "Reading key status…",
+            "secretRetry": "Retry key status",
             "secretRequired": "Enter the API key."
         },
         "protocols": {
@@ -175,50 +176,15 @@
             "saveAgain": "Save again",
             "refreshList": "Refresh list",
             "refreshing": "Refreshing the list to check the result of this save…",
-            "unknownRefreshed": "The list was refreshed. Check whether this configuration already appears in it, and save again only if it does not.",
+            "editUnknown": "The saved result is unknown. Review the refreshed configuration before retrying.",
+            "editUnknownSecret": "The saved result is unknown. Review the refreshed configuration and enter the replacement key again before retrying.",
             "refreshFailed": "The list could not be refreshed, so saving again is blocked. Refresh the list to check first.",
             "reloadLatest": "Reload latest settings",
             "reloading": "Reloading the latest settings…",
             "reloaded": "The latest saved settings were loaded. Review them before saving.",
             "unknownRefreshedSecret": "The list was refreshed. Check whether this configuration already appears in it, and save again only if it does not. The API key field was cleared, so enter the key again before saving."
         },
-        "keys": {
-            "current": "Current key",
-            "set": "Set · updated {{time}}",
-            "missing": "No key set",
-            "unknown": "Status unknown",
-            "loading": "Reading the key status…",
-            "preview": "The browser preview cannot read or change API keys. Open this page in the vibemate desktop app.",
-            "newSecret": "New API key",
-            "secret": "API key",
-            "hint": "The key is stored only in the system credential store and cannot be viewed in vibemate. This field is cleared after every attempt.",
-            "replace": "Replace key",
-            "setKey": "Set key",
-            "replacing": "Replacing the key…",
-            "setting": "Setting the key…",
-            "replaced": "API key replaced.",
-            "keySet": "API key set.",
-            "refresh": "Refresh key status",
-            "retry": "Read key status again",
-            "refreshing": "Refreshing the key status…",
-            "refreshed": "The key status was refreshed. “Set” does not prove that the new key was saved; if you are not sure, replace it again.",
-            "replaceErrors": {
-                "read_failed": "The key was not changed because the saved configuration could not be read. Try again.",
-                "write_failed": "The key was not changed, and the previous key status is unchanged. Try again.",
-                "storage_unavailable": "Local configuration storage is unavailable, so the key was not changed. Restart vibemate.",
-                "invalid_request": "The request is invalid, so the key was not changed. Go back, refresh the list and try again.",
-                "not_found": "This provider configuration was not found, so its key was not changed. Go back and refresh the list.",
-                "operation_failed": "The operation could not finish and its result is unknown. Refresh the key status before trying again.",
-                "invalid_response": "The app received an unrecognized response, so the result is unknown. Refresh the key status to check.",
-                "desktop_required": "API keys cannot be changed in the browser preview, so nothing was changed. Use the vibemate desktop app."
-            },
-            "readErrors": {
-                "read_failed": "The key status could not be read. Try again.",
-                "not_found": "This provider configuration was not found; it may no longer exist. Go back and refresh the list.",
-                "operation_failed": "The key status could not be read because the operation did not finish. Nothing was changed. Try again.",
-                "invalid_response": "The app received an unrecognized key status. Nothing was changed. Try again."
-            }
-        },
+
         "errors": {
             "storage_unavailable": "Local configuration storage is unavailable. Restart vibemate.",
             "read_failed": "Provider settings could not be read. Try again.",

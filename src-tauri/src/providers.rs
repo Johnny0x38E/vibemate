@@ -22,8 +22,8 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 
 use crate::credentials::{
-    CommitFailure, CredentialError, CredentialStore, InvalidSecret, SaveNewError, Secret,
-    save_new_then_commit, validate_secret,
+    CommitFailure, CredentialError, CredentialStore, InvalidSecret, ReplaceError, SaveNewError,
+    Secret, replace_then_commit, save_new_then_commit, validate_secret,
 };
 use crate::storage::Storage;
 
@@ -761,23 +761,106 @@ fn insert_provider_with_reference(
 /// # Errors
 /// `InvalidRequest` for a malformed ID or revision, `NotFound`,
 /// `RevisionConflict`, `InvalidStoredProvider`, validation codes,
-/// `StorageUnavailable`, `ReadFailed`, or `WriteFailed`. No error leaves a
-/// partial change.
+/// `StorageUnavailable`, `ReadFailed`, or `WriteFailed` before commit. A failed
+/// commit returns `OperationFailed`, because the outcome cannot be confirmed.
 pub fn update_provider(
     storage: &Storage,
     request: &UpdateProviderRequest,
+    now_ms: i64,
+) -> Result<ProviderRecord, ProviderError> {
+    commit_provider_update(storage, request, None, now_ms).map_err(|error| match error {
+        CommitFailure::NotCommitted(source) => source,
+        CommitFailure::Uncertain(_) => ProviderError::OperationFailed,
+    })
+}
+
+/// Save settings and optionally replace an API key through one coordinated operation.
+///
+/// `None` preserves the key and never accesses the credential store. A supplied key
+/// is validated along with the settings before any OS prompt. The old key is kept
+/// only in memory while settings and its reference commit in one SQLite transaction.
+/// A concurrent settings change is rechecked after the OS call, and a definite
+/// database failure restores the previous key. No database lock spans an OS prompt.
+/// Callers must serialize credential writes within the app process.
+///
+/// # Errors
+/// Returns validation, revision, storage or credential-store codes when nothing
+/// changed (or was restored). Failed rollback or uncertain commit returns
+/// `OperationFailed`: callers must reload and must not claim success or rollback.
+/// As with other credential writes, separate app processes are not serialized.
+pub fn update_provider_with_secret(
+    storage: &Storage,
+    store: &dyn CredentialStore,
+    request: &UpdateProviderRequest,
+    secret: Option<Secret>,
+    now_ms: i64,
+) -> Result<ProviderRecord, ProviderError> {
+    let Some(secret) = secret else {
+        return update_provider(storage, request, now_ms);
+    };
+    let record = get_provider(storage, &request.id)?;
+    if request.expected_revision < 1 {
+        return Err(ProviderError::InvalidRequest);
+    }
+    if request.expected_revision != record.revision {
+        return Err(ProviderError::RevisionConflict);
+    }
+    validate_settings(
+        record.kind,
+        &request.display_name,
+        &request.base_url,
+        &request.protocol,
+        &request.extensions,
+    )?;
+    let secret = validate_secret(secret)?;
+    let reference = record.id.credential_reference();
+    let result = replace_then_commit(store, &reference, &secret, || {
+        commit_provider_update(storage, request, Some(&reference), now_ms)
+    });
+    match result {
+        Ok(record) => Ok(record),
+        Err(ReplaceError::Credential(error)) => Err(error.into()),
+        Err(ReplaceError::CommitFailed {
+            source,
+            restored: true,
+        }) => Err(source),
+        Err(ReplaceError::CommitFailed {
+            restored: false, ..
+        })
+        | Err(ReplaceError::CommitUncertain { .. }) => Err(ProviderError::OperationFailed),
+    }
+}
+
+fn commit_provider_update(
+    storage: &Storage,
+    request: &UpdateProviderRequest,
+    reference: Option<&str>,
+    now_ms: i64,
+) -> Result<ProviderRecord, CommitFailure<ProviderError>> {
+    let mut connection = storage
+        .lock()
+        .map_err(|_| CommitFailure::NotCommitted(ProviderError::StorageUnavailable))?;
+    let transaction = connection
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|_| CommitFailure::NotCommitted(ProviderError::WriteFailed))?;
+    let record = update_in_transaction(&transaction, request, reference, now_ms)
+        .map_err(CommitFailure::NotCommitted)?;
+    transaction
+        .commit()
+        .map_err(|_| CommitFailure::Uncertain(ProviderError::WriteFailed))?;
+    Ok(record)
+}
+
+fn update_in_transaction(
+    transaction: &rusqlite::Transaction<'_>,
+    request: &UpdateProviderRequest,
+    reference: Option<&str>,
     now_ms: i64,
 ) -> Result<ProviderRecord, ProviderError> {
     let id = ProviderId::parse(&request.id).ok_or(ProviderError::InvalidRequest)?;
     if request.expected_revision < 1 {
         return Err(ProviderError::InvalidRequest);
     }
-    let mut connection = storage
-        .lock()
-        .map_err(|_| ProviderError::StorageUnavailable)?;
-    let transaction = connection
-        .transaction_with_behavior(TransactionBehavior::Immediate)
-        .map_err(|_| ProviderError::WriteFailed)?;
     let stored: Option<(String, i64)> = transaction
         .query_row(
             "SELECT kind, revision FROM provider_instance WHERE id = ?1",
@@ -816,23 +899,30 @@ pub fn update_provider(
             ],
         )
         .map_err(|_| ProviderError::WriteFailed)?;
-    // The revision was checked above, but the transaction only takes SQLite's write
-    // lock at this UPDATE. Another connection (for example a second app process)
-    // could have edited the row between the SELECT and here; then `WHERE revision`
-    // matches nothing. Report that as a conflict instead of returning stale data.
-    // Returning early drops the transaction, which rolls it back.
+    // The immediate transaction already excludes concurrent writers. Still check
+    // the affected row count: a trigger or a future query change could suppress
+    // the UPDATE. Never report stale data as a successful save. Returning early
+    // drops the transaction and rolls back its changes.
     if changed != 1 {
         return Err(ProviderError::RevisionConflict);
     }
-    // Read the row back inside the transaction so the response shows exactly what
-    // will be committed. A failure here rolls back the update, so it is a write failure.
-    let record = read_record(&transaction, &id)
+    if let Some(reference) = reference {
+        // A legacy instance may have no key reference yet. Keep this upsert in
+        // the same transaction as its settings, so either both rows commit or
+        // both roll back before the credential helper restores the old key.
+        transaction
+            .execute(
+                "INSERT INTO provider_credential (provider_id, credential_ref, updated_at)
+                 VALUES (?1, ?2, ?3)
+                 ON CONFLICT (provider_id) DO UPDATE SET updated_at = excluded.updated_at",
+                params![id.as_str(), reference, now_ms],
+            )
+            .map_err(|_| ProviderError::WriteFailed)?;
+    }
+    // Read before commit so a malformed response cannot leave a partial save.
+    read_record(transaction, &id)
         .map_err(|_| ProviderError::WriteFailed)?
-        .ok_or(ProviderError::WriteFailed)?;
-    transaction
-        .commit()
-        .map_err(|_| ProviderError::WriteFailed)?;
-    Ok(record)
+        .ok_or(ProviderError::WriteFailed)
 }
 
 /// Read one instance by ID.
@@ -1026,6 +1116,7 @@ pub(crate) fn fail_commits_after_reference_writes(storage: &Storage) {
 
 #[cfg(test)]
 mod tests {
+    mod unified_save;
     use super::*;
     use crate::credentials::fake::FakeStore;
     use std::fs;

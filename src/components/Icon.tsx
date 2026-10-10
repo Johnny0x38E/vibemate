@@ -15,7 +15,8 @@ export type IconName =
     | "back"
     | "close"
     | "plus"
-    | "edit";
+    | "edit"
+    | "eyeOff";
 
 /** Render an inline SVG; the containing control must provide its accessible name. */
 export function Icon({ name }: { name: IconName }): JSX.Element {
@@ -102,6 +103,13 @@ export function Icon({ name }: { name: IconName }): JSX.Element {
             break;
         case "plus":
             content = <path d="M12 5v14M5 12h14" />;
+            break;
+        case "eyeOff":
+            content = (
+                <>
+                    <path d="m3 3 18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.5 5.4A10 10 0 0 1 12 5c5.5 0 9 7 9 7a16 16 0 0 1-3 3.8M6.2 6.2A20 20 0 0 0 3 12s3.5 7 9 7a10 10 0 0 0 5-1.5" />
+                </>
+            );
             break;
         case "edit":
             content = <path d="M4 20h4L19 9l-4-4L4 16Zm9-13 4 4" />;

@@ -147,8 +147,7 @@
             "editLabel": "编辑「{{name}}」（ID {{id}}）"
         },
         "groups": {
-            "basic": "基本信息",
-            "keys": "密钥"
+            "basic": "基本信息"
         },
         "fields": {
             "kind": "服务商",
@@ -158,7 +157,9 @@
             "baseUrlHint": "必须以 https:// 开头，不能包含查询参数或片段。",
             "protocol": "协议",
             "secret": "API 密钥",
-            "secretHint": "密钥只保存在系统凭据库中，不会写入 vibemate 的配置。每次保存后，此栏都会被清空。",
+            "secretConfigured": "已配置 API 密钥",
+            "secretLoading": "正在读取密钥状态…",
+            "secretRetry": "重试读取密钥状态",
             "secretRequired": "请输入 API 密钥。"
         },
         "protocols": {
@@ -175,50 +176,15 @@
             "saveAgain": "再次保存",
             "refreshList": "刷新列表",
             "refreshing": "正在刷新列表，以确认这次保存的结果…",
-            "unknownRefreshed": "列表已刷新。请先确认这项配置是否已出现在列表中；只有在没有出现时才再次保存。",
+            "editUnknown": "保存结果未知，请检查刷新后的配置再重试。",
+            "editUnknownSecret": "保存结果未知，请检查刷新后的配置，并重新输入要替换的密钥后再重试。",
             "refreshFailed": "列表未能刷新，暂时不能再次保存。请先刷新列表确认。",
             "reloadLatest": "重新加载最新配置",
             "reloading": "正在重新加载最新配置…",
             "reloaded": "已加载最新保存的配置，请检查后再保存。",
             "unknownRefreshedSecret": "列表已刷新。请先确认这项配置是否已出现在列表中；只有在没有出现时才再次保存。API 密钥栏已被清空，再次保存前请重新输入密钥。"
         },
-        "keys": {
-            "current": "当前密钥",
-            "set": "已设置 · 更新于 {{time}}",
-            "missing": "未设置密钥",
-            "unknown": "状态未知",
-            "loading": "正在读取密钥状态…",
-            "preview": "浏览器预览无法读取或更改 API 密钥。请在 vibemate 桌面应用中打开此页面。",
-            "newSecret": "新的 API 密钥",
-            "secret": "API 密钥",
-            "hint": "密钥只保存在系统凭据库中，无法在 vibemate 中查看。每次提交后，此栏都会被清空。",
-            "replace": "替换密钥",
-            "setKey": "设置密钥",
-            "replacing": "正在替换密钥…",
-            "setting": "正在设置密钥…",
-            "replaced": "已替换 API 密钥。",
-            "keySet": "已设置 API 密钥。",
-            "refresh": "刷新密钥状态",
-            "retry": "重新读取密钥状态",
-            "refreshing": "正在刷新密钥状态…",
-            "refreshed": "密钥状态已刷新。「已设置」并不能证明保存的是新密钥；如不确定，请再次替换。",
-            "replaceErrors": {
-                "read_failed": "无法读取已保存的配置，密钥没有更改。请重试。",
-                "write_failed": "密钥没有更改，之前的密钥状态保持不变。请重试。",
-                "storage_unavailable": "本地配置存储不可用，密钥没有更改。请重启 vibemate。",
-                "invalid_request": "请求无效，密钥没有更改。请返回并刷新列表后重试。",
-                "not_found": "找不到这个服务商配置，密钥没有更改。请返回并刷新列表。",
-                "operation_failed": "操作未能完成，结果未知。请先刷新密钥状态确认后再重试。",
-                "invalid_response": "收到无法识别的响应，结果未知。请刷新密钥状态确认。",
-                "desktop_required": "浏览器预览无法更改 API 密钥，什么都没有更改。请在 vibemate 桌面应用中操作。"
-            },
-            "readErrors": {
-                "read_failed": "无法读取密钥状态，请重试。",
-                "not_found": "找不到这个服务商配置，它可能已不存在。请返回并刷新列表。",
-                "operation_failed": "操作未能完成，无法读取密钥状态，什么都没有更改。请重试。",
-                "invalid_response": "收到无法识别的密钥状态，什么都没有更改。请重试。"
-            }
-        },
+
         "errors": {
             "storage_unavailable": "本地配置存储不可用，请重启 vibemate。",
             "read_failed": "无法读取服务商配置，请重试。",

@@ -72,6 +72,8 @@ export interface CreateProviderInput {
 
 /** Fields for an edit. The kind cannot change, so it is not part of the request. */
 export interface UpdateProviderInput {
+    /** Omit to preserve the stored key; supplied values replace it in the same save. */
+    secret?: string;
     id: string;
     expectedRevision: number;
     displayName: string;
@@ -398,6 +400,7 @@ export async function updateProvider(
                 protocol: input.protocol,
                 extensions: input.extensions,
             },
+            secret: input.secret ?? null,
         }),
     );
     if (

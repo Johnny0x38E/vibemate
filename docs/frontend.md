@@ -523,13 +523,11 @@ template's name, base URL and protocol filled in (there is no empty option).
 Switching provider replaces only values that still equal the previous
 template's defaults; edited values are kept, and a protocol the new provider
 does not allow falls back to its default. The protocol select lists only the
-template's allowed values. The provider is read-only when editing. The detail page groups fields
-like the Settings page; today there are two stacked groups, "Basic information"
-(name, base URL, protocol, plus the read-only provider and full ID) and "Keys"
-(P11, `ProviderKeys`). Each group is its own form with its own action, so P12
-(models) adds a group instead of lengthening one form; whether to switch to
-Settings-style tabs then is still open (P11 kept two stacked groups, as the
-maintainer asked for a separate group). Rust is the only validator: field codes appear next to their field and
+template's allowed values. The provider is read-only when editing. The detail
+page puts the name, base URL, protocol and API key in one "Basic information"
+group, alongside the read-only provider and full ID. One Save submits settings
+and an optional replacement key together. Models remain a separate group.
+Rust validates the submitted values: field codes appear next to their field and
 other codes at form level. After a successful save the page returns to the list,
 the row shows the values Rust stored (for example a trimmed name or a normalized
 URL), and the list is re-read. The save is confirmed by an app-level
@@ -576,141 +574,72 @@ survives the jump back to the list; the list page itself keeps no message.
 
 ### API keys
 
-**Create.** The create form ends with a required "API key" / 「API 密钥」
-field (`type="password"`, `autoComplete="new-password"`, because browsers ignore
-`off` on password fields, plus `spellCheck={false}`, `autoCapitalize="none"` and
-`autoCorrect="off"`), with a hint that the key is kept only in the system
-credential store and that the field is cleared after every attempt. The edit
-form has no key field. The only frontend check is that the trimmed value is not
-empty ("Enter the API key." / 「请输入 API 密钥。」, next to the field, focus moves
-there, no IPC); the key is otherwise sent exactly as typed and Rust is the only
-validator (`secret_invalid`, next to the field). The list never shows a key or a
-"needs a key" state.
+New and edit forms both use an "API key" / 「API 密钥」 password field with
+`autoComplete="new-password"`, spellchecking and automatic capitalization off.
+There is no permanent key explanation, separate Keys form, visible status label
+or update timestamp.
 
-**`ProviderKeys`.** The detail page has a second group, "Keys" / 「密钥」, below
-"Basic information". It is its own `<form>`, so replacing a key never saves the
-basic information, never changes the provider's `revision`, and never leaves
-the page. It reads the status on open (Rust reads SQLite only, so opening the
-page never triggers a credential-store prompt) and shows "Current key" /
-「当前密钥」 as a `role="status"` value:
+The edit form reads `getProviderSecretStatus(id)` on mount (StrictMode may repeat
+the read). This reads only SQLite metadata, not the key or OS credential store.
+A configured key appears as a fixed `••••••••` placeholder and a non-interactive
+closed-eye icon. The input value remains empty; neither the mask nor any stored
+key is fetched or submitted. An accessible name announces that a key is
+configured. Typing a replacement removes the indicator.
 
-- `set`: "Set · updated {time}" / 「已设置 · 更新于 {time}」, the time formatted
-  with `Intl.DateTimeFormat` (medium date, short time) in the UI language;
-- `missing` (only P10-era rows or a `create_outcome_unknown` case): "No key set"
-  / 「未设置密钥」; the field label becomes "API key" and the button "Set key" /
-  「设置密钥」, using the same replace command;
-- loading, a read error (with "Read key status again" / 「重新读取密钥状态」),
-  preview ("cannot read or change API keys"), and "Status unknown" / 「状态未知」.
+A blank edit field preserves the existing key. Creation and legacy instances
+without a key require input; empty input produces a field error and moves focus
+there. The frontend otherwise sends the value exactly as typed. Rust trims and
+validates it. Loading, failed status reads and browser preview block saves
+without pretending a key exists. A failed read offers a retry; focus moves to
+the input before the retry button disappears. Obsolete reads cannot replace a
+newer state or update an unmounted form.
 
-Below it, a password field ("New API key" / 「新的 API 密钥」, same attributes as
-the create field) and "Replace key" / 「替换密钥」. There is no clear or delete
-action. The button is secondary because the page's one primary action stays
-the basic information "Save". While replacing, the button is `aria-disabled`,
-the field `readOnly`, "Replacing the key…" is announced, and the page's back
-link is blocked. On success the status updates in place and the app-level
-notification says "API key replaced." / 「已替换 API 密钥。」 (or "API key set." /
-「已设置 API 密钥。」 for a missing key); focus stays on the button. After
-`secret_outcome_unknown`, `operation_failed` or `invalid_response` the status
-shows "Status unknown" with the error and a secondary "Refresh key status" /
-「刷新密钥状态」. Replacing is blocked only while that refresh runs (replacing
-again is the documented remedy). After the refresh the text warns that "Set" does
-not prove the new key was saved. A failed refresh keeps the unknown state, shows
-the read error and offers the refresh again. When a button disappears, focus
-moves to "Replace key".
+**One save.** `updateProvider` sends non-secret `request` fields and a separate
+`secret` argument (`null` when omitted) to `update_provider`. Rust uses
+`update_provider_with_secret`:
 
-**Error placement.** `secret_invalid` and the empty-key message sit next to the
-key field (`aria-invalid`, `aria-describedby` with the hint). The three
-`credential_store_*` codes concern the device, not one field, so they appear at
-the top of the form or group, before the first field. Everything else stays
-below the fields as in P10. The Keys group words errors by path, so a message
-never claims more than happened: replace failures use
-`providers.keys.replaceErrors.*` and always say whether the key changed, and
-status-read failures use `providers.keys.readErrors.*` and never suggest a
-write. Other codes use the generic `providers.errors.*` text (table below).
+- With no replacement, update settings only; never access the credential store.
+- With a replacement, validate settings, revision and key before OS access.
+  Keep the old key temporarily in memory, write the new key, then update settings
+  and the credential reference in one SQLite transaction. Recheck the revision
+  after the OS call. No database lock spans a system credential-store prompt.
+- A definite transaction failure restores the old key. A failed restoration or
+  uncertain commit returns `operation_failed`, not success or a claimed rollback.
+  The process-wide credential-write lock serializes writes within this app;
+  separate app processes are not serialized.
 
-**Key hygiene.** The key lives only in the local state of `ProviderForm` or
-`ProviderKeys`: it is never put into props, i18n interpolation, notifications,
-error objects, storage or the console. Each submit takes the value out of the
-field before the request starts, so the field is empty whatever the result
-(success, failure, unknown, or the empty-key check). The field is also cleared
-on Cancel and on unmount (Back, leaving the page), and while the page is
-`hidden` (another app page is shown). Hiding is handled during render rather
-than in an effect, so the key does not survive one hidden frame, while the
-other draft fields are kept as in P10. Only the status is shown; no mask,
-prefix or length.
+A successful acknowledgment returns to the list and emits the existing saved
+notification. Pending saves preserve focus with `readOnly` and
+`aria-disabled`; duplicate submissions cannot start another write. Definite
+errors retain draft settings but clear the typed key. Invalid keys appear beside
+the field; credential-store errors appear at form level. Unknown outcomes
+refresh before an explicit retry. If that attempt included a replacement key,
+retry requires it to be typed again; reading metadata cannot confirm which key
+the credential store holds. Revision conflicts require reloading the latest
+settings for review.
 
-| Code                             | From     | Shown at                    | English                                                                                                                                                                                                         | 简体中文                                                                                                                              |
-| -------------------------------- | -------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `storage_unavailable`            | Rust     | Form or list                | Local configuration storage is unavailable. Restart vibemate.                                                                                                                                                   | 本地配置存储不可用，请重启 vibemate。                                                                                                 |
-| `read_failed`                    | Rust     | Form or list                | Provider settings could not be read. Try again.                                                                                                                                                                 | 无法读取服务商配置，请重试。                                                                                                          |
-| `write_failed`                   | Rust     | Form or list                | The provider settings were not saved. The previous settings are unchanged. Try again.                                                                                                                           | 服务商配置未保存，之前的内容保持不变。请重试。                                                                                        |
-| `operation_failed`               | Rust     | Form or list                | The operation could not finish and its result is unknown. Refresh the list before trying again.                                                                                                                 | 操作未能完成，结果未知。请先刷新列表确认后再重试。                                                                                    |
-| `invalid_stored_provider`        | Rust     | Form or list                | A saved provider configuration is not recognized, possibly from a newer vibemate version. It was left unchanged.                                                                                                | 已保存的服务商配置无法识别，可能来自更新版本的 vibemate。数据未被修改。                                                               |
-| `not_found`                      | Rust     | Form or list                | This provider configuration was not found. Refresh the list.                                                                                                                                                    | 找不到这个服务商配置，它可能已不存在。请刷新列表。                                                                                    |
-| `revision_conflict`              | Rust     | Form or list                | This configuration was changed elsewhere. Reload it before editing.                                                                                                                                             | 该配置已在其他地方被修改。请重新加载后再编辑。                                                                                        |
-| `invalid_request`                | Rust     | Form or list                | The request is invalid. Refresh and try again.                                                                                                                                                                  | 请求无效，请刷新后重试。                                                                                                              |
-| `kind_not_supported`             | Rust     | Form                        | This provider is not supported.                                                                                                                                                                                 | 不支持这个服务商。                                                                                                                    |
-| `protocol_not_supported`         | Rust     | Protocol                    | The selected protocol is not supported for this provider yet.                                                                                                                                                   | 这个服务商暂不支持所选协议。                                                                                                          |
-| `display_name_invalid`           | Rust     | Name                        | Enter a name of 1–64 visible characters without line breaks, control characters or invisible formatting characters.                                                                                             | 名称须为 1–64 个可见字符，不能包含换行、控制字符或不可见的格式字符。                                                                  |
-| `base_url_invalid`               | Rust     | Base URL                    | Enter a valid base URL without spaces, a query (?) or fragment (#), up to 2048 characters.                                                                                                                      | 请输入有效的基础 URL，不能包含空格、查询参数（?）或片段（#），长度不超过 2048。                                                       |
-| `base_url_not_https`             | Rust     | Base URL                    | The base URL must start with https://.                                                                                                                                                                          | 基础 URL 必须以 https:// 开头。                                                                                                       |
-| `base_url_has_credentials`       | Rust     | Base URL                    | The base URL must not contain a user name or password.                                                                                                                                                          | 基础 URL 不能包含用户名或密码。                                                                                                       |
-| `extension_field_not_supported`  | Rust     | Form or list                | The settings include an extension field that is not supported yet. Nothing was saved.                                                                                                                           | 包含暂不支持的扩展字段，未保存。                                                                                                      |
-| `invalid_response`               | Frontend | Form or list                | The app received an unrecognized response, so the result is unknown. Refresh to check.                                                                                                                          | 收到无法识别的响应，结果未知。请刷新后确认。                                                                                          |
-| `desktop_required`               | Frontend | Form or list                | Settings cannot be saved in the browser preview. Use the vibemate desktop app.                                                                                                                                  | 浏览器预览无法保存配置，请在 vibemate 桌面应用中操作。                                                                                |
-| `secret_invalid`                 | Rust     | API key field               | Enter the API key. It must not contain line breaks or other control characters, and must fit the system credential store's size limit.                                                                          | 请输入 API 密钥。密钥不能包含换行或其他控制字符，长度不能超过系统凭据库的上限。                                                       |
-| `credential_store_unavailable`   | Rust     | Top of form or Keys group   | No system credential store is available on this device (for example, no Secret Service on Linux). Nothing was saved, and vibemate never stores keys as plain text.                                              | 此设备没有可用的系统凭据库（例如 Linux 上没有运行 Secret Service）。什么都没有保存，vibemate 也不会以明文保存密钥。                   |
-| `credential_store_access_denied` | Rust     | Top of form or Keys group   | vibemate could not access the system credential store. It may be locked or access was refused, and nothing was changed. Unlock it or allow access, then try again.                                              | 无法访问系统凭据库，它可能已锁定或拒绝了访问，什么都没有更改。请解锁或允许访问后重试。                                                |
-| `credential_store_failed`        | Rust     | Top of form or Keys group   | The system credential store reported an error and nothing was changed. If you denied access in a system prompt, try again and allow it.                                                                         | 系统凭据库报告了错误，什么都没有更改。如果你在系统提示中拒绝了访问，请重试并选择允许。                                                |
-| `create_outcome_unknown`         | Rust     | Form (then refresh list)    | vibemate could not confirm whether this configuration was saved, and an unused key entry may remain in the system credential store (vibemate never reads it). Refresh the list to check before adding it again. | 无法确认这项配置是否已保存，系统凭据库中可能留有一个未被使用的密钥条目（vibemate 不会读取它）。请先刷新列表确认，再决定是否重新添加。 |
-| `secret_outcome_unknown`         | Rust     | Keys group (status unknown) | vibemate could not confirm whether the key was replaced; the system credential store may already hold the new key. Refresh the key status and replace it again if unsure.                                       | 无法确认密钥是否已替换，系统凭据库中可能已经是新密钥。请刷新密钥状态；如不确定，请再次替换。                                          |
+Typed keys are cleared before every submit, on Cancel, on unmount and before a
+hidden frame renders. They are never passed to parent callbacks, translations,
+notifications, logs or persistent frontend storage. IPC and OS credential access
+necessarily receive the new value; SQLite and responses hold only references and
+non-secret settings. The legacy standalone replacement command and its safe
+desktop adapter remain available, but the provider interface does not call them.
 
-Messages in the Keys group, by path (`*` = key-specific text; others are the
-generic row above):
+Tests in `ProviderForm.edit.test.tsx` cover bilingual replacement, legacy
+instances, status retry, focus, uncertain outcomes, duplicate submits and obsolete
+StrictMode reads. `ProviderForm.test.tsx` also covers blank-field preservation.
+Boundary tests verify the single IPC payload, strict responses and sanitized
+errors. Rust `providers::tests::unified_save` uses temporary databases and an
+injected credential store for coordinated commits, settings-only saves,
+validation, failed credentials, transaction rollback, legacy references,
+uncertain commits, concurrent edits, failed restoration and key exclusion from
+the database and response.
 
-| Path    | Code                                                             | English                                                                                                  | 简体中文                                                                    |
-| ------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Replace | `read_failed`\*                                                  | The key was not changed because the saved configuration could not be read. Try again.                    | 无法读取已保存的配置，密钥没有更改。请重试。                                |
-| Replace | `write_failed`\*                                                 | The key was not changed, and the previous key status is unchanged. Try again.                            | 密钥没有更改，之前的密钥状态保持不变。请重试。                              |
-| Replace | `storage_unavailable`\*                                          | Local configuration storage is unavailable, so the key was not changed. Restart vibemate.                | 本地配置存储不可用，密钥没有更改。请重启 vibemate。                         |
-| Replace | `invalid_request`\*                                              | The request is invalid, so the key was not changed. Go back, refresh the list and try again.             | 请求无效，密钥没有更改。请返回并刷新列表后重试。                            |
-| Replace | `not_found`\*                                                    | This provider configuration was not found, so its key was not changed. Go back and refresh the list.     | 找不到这个服务商配置，密钥没有更改。请返回并刷新列表。                      |
-| Replace | `operation_failed`\* (unknown)                                   | The operation could not finish and its result is unknown. Refresh the key status before trying again.    | 操作未能完成，结果未知。请先刷新密钥状态确认后再重试。                      |
-| Replace | `invalid_response`\* (unknown)                                   | The app received an unrecognized response, so the result is unknown. Refresh the key status to check.    | 收到无法识别的响应，结果未知。请刷新密钥状态确认。                          |
-| Replace | `desktop_required`\*                                             | API keys cannot be changed in the browser preview, so nothing was changed. Use the vibemate desktop app. | 浏览器预览无法更改 API 密钥，什么都没有更改。请在 vibemate 桌面应用中操作。 |
-| Replace | `secret_invalid`, `credential_store_*`, `secret_outcome_unknown` | Generic rows above (they already say nothing was changed, or that the result is unknown).                | 同上表通用文案。                                                            |
-| Read    | `read_failed`\*                                                  | The key status could not be read. Try again.                                                             | 无法读取密钥状态，请重试。                                                  |
-| Read    | `not_found`\*                                                    | This provider configuration was not found; it may no longer exist. Go back and refresh the list.         | 找不到这个服务商配置，它可能已不存在。请返回并刷新列表。                    |
-| Read    | `operation_failed`\*                                             | The key status could not be read because the operation did not finish. Nothing was changed. Try again.   | 操作未能完成，无法读取密钥状态，什么都没有更改。请重试。                    |
-| Read    | `invalid_response`\*                                             | The app received an unrecognized key status. Nothing was changed. Try again.                             | 收到无法识别的密钥状态，什么都没有更改。请重试。                            |
-| Read    | `storage_unavailable`, `invalid_request`                         | Generic rows above.                                                                                      | 同上表通用文案。                                                            |
-
-**Tests and verification.** Rust has 24 tests matching the `providers` filter
-(validation, restart re-read, same-name instances, edits keeping identity, stale
-and malformed edits, cursor pages with ties and concurrent inserts, invalid stored
-rows, write failure, poisoned lock, SQL constraints, v4→v5 upgrade). UI tests
-after P11: 39 in `src/lib/desktop/providers.test.ts` (P10: 29; adds the key in
-the create request, strict response keys and the new codes), 29 in
-`src/lib/desktop/providerSecrets.test.ts` (preview without IPC, request shapes,
-malformed statuses, every code, no key in errors), 33 in `ProviderForm.test.tsx`
-(P10: 21; key field attributes, empty-key check, `secret_invalid` by the field,
-store codes at the top, `create_outcome_unknown` retry with a retyped key,
-clearing after submit, cancel and hide, including an ignored Enter after an
-unknown outcome and a second submit while saving, both as the property and the
-mirrored `value` attribute, no key in text, callbacks or console), 32 in
-`ProviderKeys.test.tsx` (set and missing in both languages, replace and
-notification, blocked state, error placement and per-path wording for replace
-and read failures, unknown outcome with refresh and a failed refresh, an ignored
-submit during a refresh, read retry, preview, hide, late results, no key leaks),
-27 in
-`ProvidersView.test.tsx` (P10: 24; Keys group placement, replacing without saving
-or leaving, clearing on hide and back), 4 in `ProviderIcon.test.tsx`, 7 in
-`src/components/Notifications.test.tsx` (including a live region that holds only
-the text), and provider navigation, the save
-notification and key clearing across app pages in `src/App.test.tsx`. The
-locked no-bundle macOS release build passed. Saving in the real Tauri runtime and
-confirming the values after a restart is still a pending manual check; these
-tests mock the desktop boundary and do not prove real WebView IPC.
+Verified: `check:frontend` (306 UI tests, 14 translation-checker tests and eight
+release-tool tests), Rust fmt/Clippy, 182 passing Rust tests and a locked
+macOS no-bundle desktop build. One real OS credential-store test remains ignored.
+Native save/restart/keychain prompts, visual acceptance and Windows/Linux runtime
+behavior remain manual checks.
 
 ## Product branding
 

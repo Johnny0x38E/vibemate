@@ -25,7 +25,6 @@ import {
 import {
     getProviderSecretStatus,
     replaceProviderSecret,
-    type ProviderSecretStatus,
 } from "../../lib/desktop/providerSecrets";
 import { PROVIDER_PAGE_SIZE, ProvidersView } from "./ProvidersView";
 
@@ -744,7 +743,7 @@ test("the detail page and the create form show the provider icon next to the pro
     expect(icon()).toMatch(/\/openrouter\.svg$/);
 });
 
-test("the list never shows key state; the detail page has a separate Keys group below Basic information", async () => {
+test("the edit page combines configuration and key with one Save while the list shows no key state", async () => {
     list.mockResolvedValue(page([row("a")]));
     await mount();
     expect(readKey).not.toHaveBeenCalled();
@@ -752,62 +751,61 @@ test("the list never shows key state; the detail page has a separate Keys group 
     await click("Edit “Work” (ID aaaaaaaa)");
     expect(readKey).toHaveBeenCalledWith(row("a").id);
     const basic = screen.getByRole("form", { name: "Basic information" });
-    const keys = screen.getByRole("form", { name: "Keys" });
+    expect(screen.getAllByRole("form")).toHaveLength(1);
+    const key = within(basic).getByLabelText("API key");
+    expect(key).toHaveProperty("value", "");
+    expect(key).toHaveProperty("placeholder", "••••••••");
     expect(
-        basic.compareDocumentPosition(keys) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-    // Only the create form has a key field; here it is the replacement field.
-    expect(within(basic).queryByLabelText(/API key/)).toBeNull();
-    expect(within(keys).getByLabelText("New API key")).toBeDefined();
-    // One primary action per view: the basic information Save.
+        screen.queryByText(
+            /updated|This field is cleared|system credential store/i,
+        ),
+    ).toBeNull();
     const primaries = screen
         .getAllByRole("button")
         .filter((button) => /primary/.test(button.className));
     expect(primaries.map((button) => button.textContent)).toEqual(["Save"]);
 });
 
-test("replacing a key neither saves the basic information nor leaves the page", async () => {
-    const pending = deferred<ProviderSecretStatus>();
+test("one Save sends both edited settings and a replacement key and leaves only after success", async () => {
+    const pending = deferred<ProviderRecord>();
     list.mockResolvedValue(page([row("a")]));
-    replaceKey.mockReturnValue(pending.promise);
+    update.mockReturnValue(pending.promise);
     await mount();
     await click("Edit “Work” (ID aaaaaaaa)");
     fireEvent.change(screen.getByLabelText("Name"), {
-        target: { value: "Unsaved name" },
+        target: { value: "Renamed" },
     });
-    fireEvent.change(screen.getByLabelText("New API key"), {
-        target: { value: SECRET },
-    });
-    await click("Replace key");
-    expect(replaceKey).toHaveBeenCalledExactlyOnceWith({
-        providerId: row("a").id,
+    typeKey();
+    await click("Save");
+    expect(update).toHaveBeenCalledExactlyOnceWith({
+        id: row("a").id,
+        expectedRevision: row("a").revision,
+        displayName: "Renamed",
+        baseUrl: row("a").baseUrl,
+        protocol: row("a").protocol,
+        extensions: {},
         secret: SECRET,
     });
-    // Going back is blocked while the replacement is pending.
+    expect(replaceKey).not.toHaveBeenCalled();
     const back = screen.getByRole("button", { name: "Back to provider list" });
     expect(back.getAttribute("aria-disabled")).toBe("true");
     await click("Back to provider list");
-    expect(screen.getByRole("form", { name: "Keys" })).toBeDefined();
+    expect(
+        screen.getByRole("form", { name: "Basic information" }),
+    ).toBeDefined();
+    expect(screen.getByLabelText("API key")).toHaveProperty("value", "");
+    const edited = {
+        ...row("a"),
+        displayName: "Renamed",
+        revision: row("a").revision + 1,
+    };
+    list.mockResolvedValue(page([edited]));
     await act(async () => {
-        pending.resolve({
-            providerId: row("a").id,
-            state: "set",
-            updatedAtMs: 9000,
-        });
+        pending.resolve(edited);
         await pending.promise;
     });
-    expect(update).not.toHaveBeenCalled();
-    expect(screen.getByLabelText("Name")).toHaveProperty(
-        "value",
-        "Unsaved name",
-    );
-    expect(back.getAttribute("aria-disabled")).toBe("false");
-    // The app-level notification confirms it; the page stays open.
-    const status = screen
-        .getAllByRole("status")
-        .find((element) => !view().contains(element));
-    expect(status?.textContent).toBe("API key replaced.");
-    expect(screen.getByRole("heading", { level: 1, name: "Edit “Work”" }));
+    expect(screen.queryByRole("form")).toBeNull();
+    expect(screen.getByText("Saved “Renamed”.")).toBeDefined();
     expect(document.body.textContent).not.toContain(SECRET);
 });
 
@@ -831,13 +829,13 @@ test("a typed key is cleared when the page is hidden or left, while other drafts
     await click("Cancel");
 
     await click("Edit “Work” (ID aaaaaaaa)");
-    typeKey("New API key");
+    typeKey("API key");
     setViewHidden(true);
     setViewHidden(false);
-    expect(screen.getByLabelText("New API key")).toHaveProperty("value", "");
-    typeKey("New API key");
+    expect(screen.getByLabelText("API key")).toHaveProperty("value", "");
+    typeKey("API key");
     await click("Back to provider list");
     await click("Edit “Work” (ID aaaaaaaa)");
-    expect(screen.getByLabelText("New API key")).toHaveProperty("value", "");
+    expect(screen.getByLabelText("API key")).toHaveProperty("value", "");
     expect(replaceKey).not.toHaveBeenCalled();
 });

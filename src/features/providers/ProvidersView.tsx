@@ -15,7 +15,6 @@ import {
 } from "../../lib/desktop/providers";
 import { ProviderForm } from "./ProviderForm";
 import { ProviderIcon } from "./ProviderIcon";
-import { ProviderKeys } from "./ProviderKeys";
 import { ProviderPage } from "./ProviderPage";
 import buttons from "./providerButtons.module.css";
 import styles from "./ProvidersView.module.css";
@@ -92,8 +91,8 @@ function mergeRows(
  * cursor paging and a single primary "New" action. "New" opens the form, whose
  * first field picks the provider and which also takes the required API key; a
  * row's "Edit" opens its detail page, grouped like the Settings page: "Basic
- * information", then "Keys" / 「密钥」 (`ProviderKeys`), so later groups (models) do not
- * lengthen one form. The list never shows keys or a "needs a key" state.
+ * information", including an optional replacement key under the same Save.
+ * The list never shows keys or a "needs a key" state.
  *
  * Saved settings are not used to connect anywhere yet, and the page never
  * claims otherwise. Browser preview shows that nothing can be read or saved.
@@ -116,7 +115,6 @@ export function ProvidersView({
     const [listAttempt, setListAttempt] = useState(0);
     const [page, setPage] = useState<ProvidersPage>({ kind: "list" });
     const [formBusy, setFormBusy] = useState(false);
-    const [keysBusy, setKeysBusy] = useState(false);
     // Each list read takes a new generation; a result from an older generation
     // (superseded by a reload, or after unmount) is discarded.
     const listGeneration = useRef(0);
@@ -297,9 +295,6 @@ export function ProvidersView({
     const reportBusy = useCallback((busy: boolean) => {
         setFormBusy(busy);
     }, []);
-    const reportKeysBusy = useCallback((busy: boolean) => {
-        setKeysBusy(busy);
-    }, []);
 
     function open(next: ProvidersPage): void {
         // A secondary page focuses its own title when it opens.
@@ -358,7 +353,7 @@ export function ProvidersView({
                                 : t("providers.form.createTitle")
                         }
                         onBack={backToList}
-                        backBlocked={formBusy || keysBusy}
+                        backBlocked={formBusy}
                     >
                         <ProviderForm
                             templates={availableTemplates}
@@ -370,16 +365,6 @@ export function ProvidersView({
                             onBusyChange={reportBusy}
                             hidden={hidden}
                         />
-                        {/* A separate group with its own form: replacing the key
-                            never saves the basic information or leaves the page.
-                            Going back unmounts it, which discards a typed key. */}
-                        {page.kind === "edit" && (
-                            <ProviderKeys
-                                providerId={page.record.id}
-                                onBusyChange={reportKeysBusy}
-                                hidden={hidden}
-                            />
-                        )}
                     </ProviderPage>
                 );
         }

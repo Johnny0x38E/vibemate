@@ -555,6 +555,12 @@ const savedProvider: ProviderRecord = {
 };
 
 function useDesktopProviders(): void {
+    vi.mocked(getProviderSecretStatus).mockImplementation((providerId) =>
+        Promise.resolve({
+            kind: "desktop",
+            status: { providerId, state: "set", updatedAtMs: 1000 },
+        }),
+    );
     vi.mocked(listProviderTemplates).mockResolvedValue({
         kind: "desktop",
         templates: [
@@ -688,6 +694,9 @@ test.each([
         render(<App />);
         fireEvent.click(screen.getByRole("button", { name: providers }));
         fireEvent.click(await screen.findByRole("button", { name: edit }));
+        await screen.findByTitle(
+            locale === "en" ? "API key configured" : "已配置 API 密钥",
+        );
         fireEvent.change(screen.getByRole("textbox", { name }), {
             target: { value: "Renamed" },
         });

@@ -17,7 +17,16 @@ import {
     type ProviderRecord,
     type ProviderTemplate,
 } from "../../lib/desktop/providers";
+import { getProviderSecretStatus } from "../../lib/desktop/providerSecrets";
 import { ProviderForm, type ProviderFormMode } from "./ProviderForm";
+
+vi.mock(
+    import("../../lib/desktop/providerSecrets"),
+    async (importOriginal) => ({
+        ...(await importOriginal()),
+        getProviderSecretStatus: vi.fn(),
+    }),
+);
 
 // Keep the real error class and types; only the IPC calls are replaced.
 vi.mock(import("../../lib/desktop/providers"), async (importOriginal) => ({
@@ -32,6 +41,14 @@ const read = vi.mocked(getProvider);
 
 afterEach(cleanup);
 beforeEach(() => {
+    vi.mocked(getProviderSecretStatus)
+        .mockReset()
+        .mockImplementation((providerId) =>
+            Promise.resolve({
+                kind: "desktop",
+                status: { providerId, state: "set", updatedAtMs: 1000 },
+            }),
+        );
     create.mockReset();
     update.mockReset();
     read.mockReset();
@@ -117,8 +134,12 @@ async function mount(
             </I18nextProvider>
         </StrictMode>
     );
-    const { rerender } = render(tree(hidden));
+    const { rerender, unmount } = render(tree(hidden));
+    await act(async () => {
+        await Promise.resolve();
+    });
     return {
+        unmount,
         setHidden: (isHidden: boolean) => {
             rerender(tree(isHidden));
         },
@@ -174,7 +195,8 @@ async function submit(
     if (
         key !== null &&
         SAVE_BUTTON.test(name) &&
-        screen.queryByLabelText(KEY_LABEL) !== null
+        screen.queryByLabelText(KEY_LABEL) !== null &&
+        keyField().required
     ) {
         fireEvent.change(keyField(), { target: { value: key } });
     }
@@ -211,18 +233,12 @@ test("starts with the first template selected and its defaults filled", async ()
     expect(key.getAttribute("autocomplete")).toBe("new-password");
     expect(key.getAttribute("spellcheck")).toBe("false");
     expect(key.required).toBe(true);
-    // It comes after the other fields and has a hint about where it is kept.
+    // It belongs to the same form, without a persistent storage/clearing hint.
     expect(
         input("Protocol").compareDocumentPosition(key) &
             Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    expect(
-        document.getElementById(
-            key.getAttribute("aria-describedby") ?? "missing",
-        )?.textContent,
-    ).toBe(
-        "The key is stored only in the system credential store, never in vibemate's settings. This field is cleared after every save attempt.",
-    );
+    expect(key.getAttribute("aria-describedby")).toBeNull();
 });
 
 test("switching provider replaces untouched defaults and only allowed protocols are listed", async () => {
@@ -610,10 +626,25 @@ test("reports pending work so the page can block going back", async () => {
     expect(onBusyChange).toHaveBeenLastCalledWith(false);
 });
 
-test("an edit has no key field; keys are replaced in their own group", async () => {
-    await mount({ kind: "edit", record: saved });
-    expect(screen.queryByLabelText(KEY_LABEL)).toBeNull();
-    expect(document.querySelector('input[type="password"]')).toBeNull();
+test("an edit has a fixed configured indicator, never a fetched or submitted key", async () => {
+    update.mockResolvedValue({ ...saved, revision: saved.revision + 1 });
+    const { onSaved } = await mount({ kind: "edit", record: saved });
+    const key = keyField();
+    expect(key.type).toBe("password");
+    expect(key.value).toBe("");
+    expect(key.placeholder).toBe("••••••••");
+    expect(key.required).toBe(false);
+    const indicator = screen.getByTitle("API key configured");
+    expect(indicator.querySelector("svg")).not.toBeNull();
+    expect(
+        document.getElementById(key.getAttribute("aria-describedby") ?? "")
+            ?.textContent,
+    ).toBe("API key configured");
+    await submit("Save", null);
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(update.mock.calls[0]?.[0]).not.toHaveProperty("secret");
+    expect(JSON.stringify(update.mock.calls)).not.toContain("••••••••");
+    expect(onSaved).toHaveBeenCalledTimes(1);
 });
 
 test.each([

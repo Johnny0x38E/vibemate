@@ -119,11 +119,55 @@ describe("provider desktop boundary", () => {
                 protocol: "chat_completions",
                 extensions: {},
             },
+            secret: null,
         });
 
         vi.mocked(invoke).mockResolvedValueOnce(record);
         expect(await getProvider(ID)).toEqual(record);
         expect(invoke).toHaveBeenLastCalledWith("get_provider", { id: ID });
+    });
+
+    it("sends a replacement key separately from non-secret settings in one update", async () => {
+        const secret = "synthetic-unified-key";
+        vi.mocked(invoke).mockResolvedValue({ ...record, revision: 2 });
+        await updateProvider({
+            ...editInput,
+            id: ID,
+            expectedRevision: 1,
+            secret,
+        });
+        expect(invoke).toHaveBeenCalledExactlyOnceWith("update_provider", {
+            request: { ...editInput, id: ID, expectedRevision: 1 },
+            secret,
+        });
+    });
+
+    it("does not retain a replacement key in an error or response", async () => {
+        const secret = "synthetic-unified-key";
+        vi.mocked(invoke).mockRejectedValue(new Error(secret));
+        await expect(
+            updateProvider({
+                ...editInput,
+                id: ID,
+                expectedRevision: 1,
+                secret,
+            }),
+        ).rejects.toMatchObject({
+            code: "operation_failed",
+            message: "Provider request failed.",
+        });
+        vi.mocked(invoke).mockResolvedValue({ ...record, revision: 2, secret });
+        await expect(
+            updateProvider({
+                ...editInput,
+                id: ID,
+                expectedRevision: 1,
+                secret,
+            }),
+        ).rejects.toMatchObject({
+            code: "invalid_response",
+            message: "Provider request failed.",
+        });
     });
 
     it("validates templates from Rust", async () => {

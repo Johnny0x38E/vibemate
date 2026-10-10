@@ -6,7 +6,7 @@
 - Desktop: current stable Rust + stable Tauri + React + TypeScript.
   Use the latest stable Rust edition and APIs; no nightly features.
   The initial scaffold uses edition 2024 and Tauri 2.
-- Providers: Command Code GOAT, DeepSeek, OpenRouter.
+- Providers: Command Code, DeepSeek, OpenRouter.
 - Agents: Pi, Grok Build.
 - Shared skills with source tracking and updates; shared MCP definitions.
 - Phase-1 UI internationalization: Simplified Chinese (`zh-CN`) and English (`en`),
@@ -23,10 +23,13 @@ themes and full-width General/About settings. Theme order is Forest, Ink,
 Graphite, Linen, Iris, Ocean; schema v4 preserves existing preferences.
 
 CI and changelog-driven draft release workflows are present. Integration
-contracts are documented in `docs/integrations/`, but provider and agent business
-behavior remains unimplemented. No provider credentials have been collected and
-no agent configuration has been changed. P09 (whole-interface i18n/resource
-validation) is complete; P10 (saving a provider configuration) is next. [todo.md](todo.md) is the sole
+contracts are documented in `docs/integrations/`. P10 adds the Providers page:
+non-secret provider instances (schema v5) can be created, listed and edited; the
+manual save-and-restart check in the real desktop runtime is still pending.
+Provider keys, connections, models and all agent behavior remain unimplemented.
+No provider credentials have been collected and no agent configuration has been
+changed. P11 (provider keys) follows P10. P12 (fetch the model list and tick
+models; the old P13 and P14 are merged into it) is planned. [todo.md](todo.md) is the sole
 status source; current UI rules and verification are in
 [desktop-shell-design.md](desktop-shell-design.md) and [frontend.md](../frontend.md).
 
@@ -45,11 +48,13 @@ do not establish a working connection or runtime compatibility.
 1. **Verify integration contracts.** Record exact product identities, official
    URLs, API protocols, authentication, and model discovery behavior. Inspect
    installed Pi and Grok Build versions, supported config locations, precedence,
-   skills, and MCP support. The exact Command Code GOAT and Grok Build contracts
+   skills, and MCP support. The exact Command Code and Grok Build contracts
    need confirmation; do not invent endpoints or assume MCP support.
 2. **Provider and model configuration.** Add validated provider/model records,
-   OS credential references, persistence with schema migrations, connection
-   checks, model discovery where supported, and manual model entries. Separate
+   OS credential references, persistence with schema migrations, a model list
+   fetch that runs only when the user asks (it reads the system proxy and can be
+   cancelled at once), ticked model selections, and manual model entries as a
+   supplement. A minimal user-triggered inference check comes later. Separate
    capabilities from request parameters; support provider-specific fields.
 3. **Agent injection.** Implement the first verified agent adapter end to end,
    then the second. Detect installations, preview changes, preserve unrelated

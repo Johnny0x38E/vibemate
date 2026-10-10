@@ -10,6 +10,8 @@
 //! text. `Secret` hides its value in `Debug` output, and `CredentialError` carries no
 //! payload because some platform errors contain the raw secret bytes.
 
+use serde::{Deserialize, Deserializer};
+
 /// Service name for every vibemate entry in the OS credential store.
 ///
 /// Changing this value makes previously saved secrets unreachable, so treat it as
@@ -40,6 +42,69 @@ impl std::fmt::Debug for Secret {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str("Secret(<redacted>)")
     }
+}
+
+/// Read a secret from an IPC request field, which must be a JSON string.
+///
+/// This only wraps the text; call `validate_secret` before storing it. Validation
+/// is separate so a bad value gets a stable error code instead of a raw
+/// deserialization message. `Secret` deliberately has no `Serialize`, so it can
+/// never be sent back to the frontend.
+impl<'de> Deserialize<'de> for Secret {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        String::deserialize(deserializer).map(Secret::new)
+    }
+}
+
+/// Largest secret, in UTF-16 code units, after trimming.
+///
+/// This is the tightest hard limit of the supported stores: Windows Credential
+/// Manager stores the secret as UTF-16 with at most 2560 bytes
+/// (`CRED_MAX_CREDENTIAL_BLOB_SIZE`), and each code unit takes 2 bytes. Most
+/// characters are one unit; characters outside the Basic Multilingual Plane, such
+/// as many emoji, are two. The same limit applies on every platform, so a key that
+/// works on one computer also works on another.
+pub const MAX_SECRET_UTF16_UNITS: usize = 1280;
+
+/// A secret was rejected by `validate_secret`. It carries no copy of the value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct InvalidSecret;
+
+impl std::fmt::Display for InvalidSecret {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("The key is empty, contains a control character, or is too long.")
+    }
+}
+
+impl std::error::Error for InvalidSecret {}
+
+/// Check a user-entered secret and return the value to store.
+///
+/// The vendor decides which characters a key may contain, so this does not guess a
+/// format. It only:
+/// - removes leading and trailing whitespace, which copying and pasting often adds;
+/// - rejects an empty value;
+/// - rejects control characters such as line breaks (CR, LF) and tabs, which cannot
+///   be sent in an HTTP header;
+/// - rejects a value longer than `MAX_SECRET_UTF16_UNITS`.
+///
+/// Everything else is allowed, including spaces inside the key and non-ASCII text.
+///
+/// # Errors
+/// Returns `InvalidSecret` for an empty, control-character, or too-long value.
+pub fn validate_secret(secret: Secret) -> Result<Secret, InvalidSecret> {
+    let trimmed = secret.expose().trim();
+    if trimmed.is_empty()
+        || trimmed.chars().any(char::is_control)
+        || trimmed.encode_utf16().count() > MAX_SECRET_UTF16_UNITS
+    {
+        return Err(InvalidSecret);
+    }
+    if trimmed.len() == secret.expose().len() {
+        // Nothing was trimmed: keep the original value instead of copying it.
+        return Ok(secret);
+    }
+    Ok(Secret::new(trimmed.to_string()))
 }
 
 /// Why a credential operation failed.
@@ -156,6 +221,76 @@ fn map_keyring_error(error: keyring::Error) -> CredentialError {
     }
 }
 
+/// How a commit step failed. This decides whether the credential change is undone.
+#[derive(Debug, PartialEq, Eq)]
+pub enum CommitFailure<E> {
+    /// The database is unchanged: the failure happened before `COMMIT` (for
+    /// example an `INSERT` was rejected). Undo the credential change.
+    NotCommitted(E),
+    /// `COMMIT` itself failed. The change may or may not have reached the database,
+    /// so undoing the credential change could leave a reference with no secret
+    /// behind it. Leave the credential store as it is and report an unknown outcome.
+    Uncertain(E),
+}
+
+/// Why saving a secret under a new reference and committing its record failed.
+#[derive(Debug)]
+pub enum SaveNewError<E> {
+    /// Writing the secret failed, so the commit step never ran and nothing was saved.
+    Credential(CredentialError),
+    /// The commit step failed after the secret was written.
+    CommitFailed {
+        /// The error returned by the commit step.
+        source: E,
+        /// `true` when the new entry was deleted again, so nothing is left behind.
+        ///
+        /// `false` means the store may still hold an entry that no database row
+        /// references. The app never reads such an entry, but the caller must
+        /// report that the outcome is not clean.
+        cleaned_up: bool,
+    },
+    /// `COMMIT` failed and may have taken effect, so the new entry was kept: if the
+    /// record was saved, it still has its secret. The caller must report that the
+    /// outcome is unknown.
+    CommitUncertain {
+        /// The error returned by the commit step.
+        source: E,
+    },
+}
+
+/// Save `secret` under a newly generated `reference`, then run `commit`.
+///
+/// Use this when a record and its secret are created together, for example a new
+/// provider and its API key. Steps:
+/// 1. Write the secret. Stop if the write fails; there is nothing to undo.
+/// 2. Run `commit`, usually the database transaction that inserts the record and
+///    its credential reference, and return its value on success.
+/// 3. If `commit` fails before `COMMIT` (`CommitFailure::NotCommitted`), delete the
+///    entry again so no unreferenced secret stays. If `COMMIT` itself failed
+///    (`CommitFailure::Uncertain`), keep the entry: deleting it could leave a saved
+///    record without its secret, while a kept entry is at worst unreferenced.
+///
+/// The reference must be new (built from a freshly generated ID), so no earlier
+/// secret is overwritten and none needs a backup.
+pub fn save_new_then_commit<T, E>(
+    store: &dyn CredentialStore,
+    reference: &str,
+    secret: &Secret,
+    commit: impl FnOnce() -> Result<T, CommitFailure<E>>,
+) -> Result<T, SaveNewError<E>> {
+    store
+        .save(reference, secret)
+        .map_err(SaveNewError::Credential)?;
+    match commit() {
+        Ok(value) => Ok(value),
+        Err(CommitFailure::NotCommitted(source)) => Err(SaveNewError::CommitFailed {
+            source,
+            cleaned_up: store.delete(reference).is_ok(),
+        }),
+        Err(CommitFailure::Uncertain(source)) => Err(SaveNewError::CommitUncertain { source }),
+    }
+}
+
 /// Why replacing a credential and committing its database record failed.
 #[derive(Debug)]
 pub enum ReplaceError<E> {
@@ -167,65 +302,108 @@ pub enum ReplaceError<E> {
         source: E,
         /// `true` when the previous credential state was restored.
         ///
-        /// `false` means the store may still hold the new secret while the database
-        /// does not reference it. The caller must keep a recovery record.
+        /// `false` means the store may now hold the new secret even though the
+        /// commit failed: either restoring failed, or the previous secret was
+        /// unreadable and could not be put back. The caller must report that the
+        /// outcome is unknown.
         restored: bool,
     },
+    /// `COMMIT` failed and may have taken effect, so the new secret was kept
+    /// instead of restoring the old one. The caller must report that the outcome
+    /// is unknown.
+    CommitUncertain {
+        /// The error returned by the commit step.
+        source: E,
+    },
+}
+
+/// What the store held before a replacement, kept only in memory.
+enum Backup {
+    /// No secret was stored; undo by deleting the new one.
+    Missing,
+    /// The previous secret; undo by writing it back.
+    Saved(Secret),
+    /// A value existed but could not be read, so it cannot be restored.
+    Unreadable,
 }
 
 /// Replace the secret for `reference`, then run `commit` to record the change.
 ///
 /// Steps:
-/// 1. Read the previous secret as a private backup. Stop if the read fails.
+/// 1. Read the previous secret as a private backup. Stop if the read fails, except
+///    when the stored value is unreadable (see below).
 /// 2. Write the new secret. Stop if the write fails; the previous secret remains.
-/// 3. Run `commit`, usually the database update that points at this reference.
-/// 4. If `commit` fails, restore the previous state: write the old secret back, or
-///    delete the new reference when no old secret existed.
+/// 3. Run `commit`, usually the database update that points at this reference, and
+///    return its value on success.
+/// 4. If `commit` fails before `COMMIT` (`CommitFailure::NotCommitted`), restore
+///    the previous state: write the old secret back, or delete the new reference
+///    when no old secret existed.
+/// 5. If `COMMIT` itself failed (`CommitFailure::Uncertain`), keep the new secret.
+///    The database may already record the change; for a first key, deleting the
+///    new secret would then leave a reference with no secret at all. Keeping it
+///    means every possible database state still has a secret behind it.
+///
+/// An unreadable previous value (`CorruptValue`) does not stop the replacement:
+/// replacing is the only way to repair it. If `commit` then fails, the new secret
+/// stays, because deleting it would leave a referenced entry with no secret at
+/// all, and `restored` is `false`.
 ///
 /// The backup lives only in a local variable and is dropped when this function returns.
 /// It is never written to disk, logged, or returned.
-pub fn replace_then_commit<E>(
+pub fn replace_then_commit<T, E>(
     store: &dyn CredentialStore,
     reference: &str,
     secret: &Secret,
-    commit: impl FnOnce() -> Result<(), E>,
-) -> Result<(), ReplaceError<E>> {
-    let previous = store.load(reference).map_err(ReplaceError::Credential)?;
+    commit: impl FnOnce() -> Result<T, CommitFailure<E>>,
+) -> Result<T, ReplaceError<E>> {
+    let backup = match store.load(reference) {
+        Ok(Some(old)) => Backup::Saved(old),
+        Ok(None) => Backup::Missing,
+        Err(CredentialError::CorruptValue) => Backup::Unreadable,
+        Err(error) => return Err(ReplaceError::Credential(error)),
+    };
     store
         .save(reference, secret)
         .map_err(ReplaceError::Credential)?;
     match commit() {
-        Ok(()) => Ok(()),
-        Err(source) => {
-            let restore = match &previous {
-                Some(old) => store.save(reference, old),
-                None => store.delete(reference),
+        Ok(value) => Ok(value),
+        Err(CommitFailure::Uncertain(source)) => Err(ReplaceError::CommitUncertain { source }),
+        Err(CommitFailure::NotCommitted(source)) => {
+            let restored = match &backup {
+                Backup::Saved(old) => store.save(reference, old).is_ok(),
+                Backup::Missing => store.delete(reference).is_ok(),
+                Backup::Unreadable => false,
             };
-            Err(ReplaceError::CommitFailed {
-                source,
-                restored: restore.is_ok(),
-            })
+            Err(ReplaceError::CommitFailed { source, restored })
         }
     }
 }
 
+/// An in-memory credential store for tests in any module of this crate.
+///
+/// It never touches the real OS store. Tests can make each operation fail on
+/// purpose and count calls, for example to prove that reading a status does not
+/// access the credential store at all.
 #[cfg(test)]
-mod tests {
-    use super::*;
+pub(crate) mod fake {
+    use super::{CredentialError, CredentialStore, Secret};
     use std::collections::HashMap;
     use std::sync::Mutex;
 
-    /// An in-memory store where tests can make saves or deletes fail on purpose.
+    /// The fake store. Every field is behind a `Mutex` because the trait methods
+    /// take `&self`.
     #[derive(Default)]
-    struct FakeStore {
+    pub(crate) struct FakeStore {
         values: Mutex<HashMap<String, String>>,
         save_error: Mutex<Option<CredentialError>>,
+        load_error: Mutex<Option<CredentialError>>,
         delete_error: Mutex<Option<CredentialError>>,
+        calls: Mutex<usize>,
     }
 
     impl FakeStore {
         /// Create a store that already holds one secret.
-        fn holding(reference: &str, value: &str) -> Self {
+        pub(crate) fn holding(reference: &str, value: &str) -> Self {
             let store = Self::default();
             store
                 .values
@@ -236,7 +414,7 @@ mod tests {
         }
 
         /// Return the stored value, if any, for assertions.
-        fn stored(&self, reference: &str) -> Option<String> {
+        pub(crate) fn stored(&self, reference: &str) -> Option<String> {
             self.values
                 .lock()
                 .expect("lock fake values")
@@ -244,17 +422,43 @@ mod tests {
                 .cloned()
         }
 
-        fn fail_saves(&self, error: Option<CredentialError>) {
+        /// Whether any entry holds `value`, for tests that cannot know the entry name.
+        pub(crate) fn holds_value(&self, value: &str) -> bool {
+            self.values
+                .lock()
+                .expect("lock fake values")
+                .values()
+                .any(|stored| stored == value)
+        }
+
+        /// Make every later `save` fail with `error`, or succeed again with `None`.
+        pub(crate) fn fail_saves(&self, error: Option<CredentialError>) {
             *self.save_error.lock().expect("lock save failure") = error;
         }
 
-        fn fail_deletes(&self, error: Option<CredentialError>) {
+        /// Make every later `load` fail with `error`, or succeed again with `None`.
+        pub(crate) fn fail_loads(&self, error: Option<CredentialError>) {
+            *self.load_error.lock().expect("lock load failure") = error;
+        }
+
+        /// Make every later `delete` fail with `error`, or succeed again with `None`.
+        pub(crate) fn fail_deletes(&self, error: Option<CredentialError>) {
             *self.delete_error.lock().expect("lock delete failure") = error;
+        }
+
+        /// How many `save`, `load`, and `delete` calls were made, failed ones included.
+        pub(crate) fn call_count(&self) -> usize {
+            *self.calls.lock().expect("lock call count")
+        }
+
+        fn count_call(&self) {
+            *self.calls.lock().expect("lock call count") += 1;
         }
     }
 
     impl CredentialStore for FakeStore {
         fn save(&self, reference: &str, secret: &Secret) -> Result<(), CredentialError> {
+            self.count_call();
             if let Some(error) = *self.save_error.lock().expect("lock save failure") {
                 return Err(error);
             }
@@ -266,6 +470,10 @@ mod tests {
         }
 
         fn load(&self, reference: &str) -> Result<Option<Secret>, CredentialError> {
+            self.count_call();
+            if let Some(error) = *self.load_error.lock().expect("lock load failure") {
+                return Err(error);
+            }
             Ok(self
                 .values
                 .lock()
@@ -275,6 +483,7 @@ mod tests {
         }
 
         fn delete(&self, reference: &str) -> Result<(), CredentialError> {
+            self.count_call();
             if let Some(error) = *self.delete_error.lock().expect("lock delete failure") {
                 return Err(error);
             }
@@ -284,6 +493,96 @@ mod tests {
                 .remove(reference);
             Ok(())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::fake::FakeStore;
+    use super::*;
+    use serde::de::IntoDeserializer;
+    use serde::de::value::Error as ValueError;
+
+    fn secret(value: &str) -> Secret {
+        Secret::new(value.to_string())
+    }
+
+    #[test]
+    fn secret_is_read_from_a_string_field_only() {
+        let parsed = Secret::deserialize(IntoDeserializer::<ValueError>::into_deserializer(
+            "synthetic-test-value",
+        ))
+        .expect("a string is accepted");
+        assert_eq!(parsed.expose(), "synthetic-test-value");
+        assert_eq!(format!("{parsed:?}"), "Secret(<redacted>)");
+
+        let number = Secret::deserialize(IntoDeserializer::<ValueError>::into_deserializer(5_u32));
+        assert!(number.is_err());
+    }
+
+    #[test]
+    fn secrets_are_trimmed_and_any_printable_text_is_allowed() {
+        for (input, expected) in [
+            ("sk-synthetic", "sk-synthetic"),
+            ("  sk-synthetic \n", "sk-synthetic"),
+            ("\u{3000}key\u{3000}", "key"),
+            ("inner space key", "inner space key"),
+            ("密钥-é-ключ-🔑", "密钥-é-ключ-🔑"),
+        ] {
+            let validated = validate_secret(secret(input)).expect("valid secret");
+            assert_eq!(validated.expose(), expected, "input: {input:?}");
+        }
+    }
+
+    #[test]
+    fn empty_or_control_character_secrets_are_rejected() {
+        for input in [
+            "",
+            "   ",
+            " \t\r\n ",
+            "line\nbreak",
+            "carriage\rreturn",
+            "inner\ttab",
+            "nul\u{0}byte",
+            "delete\u{7F}char",
+            "next\u{85}line",
+        ] {
+            assert_eq!(
+                validate_secret(secret(input)).map(|_| ()),
+                Err(InvalidSecret),
+                "input: {input:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn secret_length_is_limited_by_utf16_units_after_trimming() {
+        let ascii_limit = "a".repeat(MAX_SECRET_UTF16_UNITS);
+        let bmp_limit = "密".repeat(MAX_SECRET_UTF16_UNITS);
+        // Each emoji outside the Basic Multilingual Plane takes two UTF-16 units.
+        let emoji_limit = "🔑".repeat(MAX_SECRET_UTF16_UNITS / 2);
+        let padded = format!("  {ascii_limit}\n");
+        for valid in [&ascii_limit, &bmp_limit, &emoji_limit, &padded] {
+            assert!(validate_secret(secret(valid)).is_ok());
+        }
+        for too_long in [
+            format!("{ascii_limit}a"),
+            format!("{bmp_limit}密"),
+            format!("{emoji_limit}🔑"),
+            format!("{emoji_limit}a"),
+        ] {
+            assert_eq!(
+                validate_secret(secret(&too_long)).map(|_| ()),
+                Err(InvalidSecret)
+            );
+        }
+    }
+
+    #[test]
+    fn invalid_secret_error_never_contains_the_value() {
+        let error = validate_secret(secret("synthetic\nvalue")).map(|_| ());
+        let error = error.expect_err("rejected");
+        assert!(!format!("{error:?} {error}").contains("synthetic"));
     }
 
     #[test]
@@ -305,7 +604,7 @@ mod tests {
             &Secret::new("new".to_string()),
             || {
                 committed = true;
-                Ok::<(), &'static str>(())
+                Ok::<(), CommitFailure<&'static str>>(())
             },
         );
 
@@ -326,7 +625,7 @@ mod tests {
             &store,
             "provider-1",
             &Secret::new("new".to_string()),
-            || Ok::<(), &'static str>(()),
+            || Ok::<(), CommitFailure<&'static str>>(()),
         );
 
         assert!(matches!(
@@ -344,7 +643,7 @@ mod tests {
             &store,
             "provider-1",
             &Secret::new("new".to_string()),
-            || Err::<(), &'static str>("database write failed"),
+            || Err::<(), _>(CommitFailure::NotCommitted("database write failed")),
         );
 
         assert!(matches!(
@@ -362,7 +661,7 @@ mod tests {
             &store,
             "provider-1",
             &Secret::new("new".to_string()),
-            || Err::<(), &'static str>("database write failed"),
+            || Err::<(), _>(CommitFailure::NotCommitted("database write failed")),
         );
 
         assert!(matches!(
@@ -373,7 +672,7 @@ mod tests {
     }
 
     #[test]
-    fn failed_restore_is_reported_so_a_recovery_record_can_be_kept() {
+    fn failed_restore_is_reported_as_not_restored() {
         let store = FakeStore::holding("provider-1", "old");
 
         let result = replace_then_commit(
@@ -383,7 +682,7 @@ mod tests {
             || {
                 // Simulate the store failing again during the compensation step.
                 store.fail_saves(Some(CredentialError::OperationFailed));
-                Err::<(), &'static str>("database write failed")
+                Err::<(), _>(CommitFailure::NotCommitted("database write failed"))
             },
         );
 
@@ -407,7 +706,7 @@ mod tests {
             &Secret::new("new".to_string()),
             || {
                 store.fail_deletes(Some(CredentialError::OperationFailed));
-                Err::<(), &'static str>("database write failed")
+                Err::<(), _>(CommitFailure::NotCommitted("database write failed"))
             },
         );
 
@@ -419,6 +718,182 @@ mod tests {
             })
         ));
         assert_eq!(store.stored("provider-1").as_deref(), Some("new"));
+    }
+
+    #[test]
+    fn replace_returns_the_commit_value_and_keeps_the_new_secret() {
+        let store = FakeStore::holding("provider-1", "old");
+
+        let result = replace_then_commit(&store, "provider-1", &secret("new"), || {
+            Ok::<_, CommitFailure<&'static str>>(42)
+        });
+
+        assert!(matches!(result, Ok(42)));
+        assert_eq!(store.stored("provider-1").as_deref(), Some("new"));
+    }
+
+    #[test]
+    fn unreadable_backup_stops_before_writing_unless_it_is_corrupt() {
+        let store = FakeStore::holding("provider-1", "old");
+        store.fail_loads(Some(CredentialError::AccessDenied));
+        let mut committed = false;
+
+        let result = replace_then_commit(&store, "provider-1", &secret("new"), || {
+            committed = true;
+            Ok::<(), CommitFailure<&'static str>>(())
+        });
+
+        assert!(matches!(
+            result,
+            Err(ReplaceError::Credential(CredentialError::AccessDenied))
+        ));
+        assert!(!committed);
+        // Only the failed backup read reached the store; nothing was written.
+        assert_eq!(store.call_count(), 1);
+        store.fail_loads(None);
+        assert_eq!(store.stored("provider-1").as_deref(), Some("old"));
+    }
+
+    #[test]
+    fn corrupt_previous_secret_can_be_replaced() {
+        let store = FakeStore::holding("provider-1", "old");
+        store.fail_loads(Some(CredentialError::CorruptValue));
+
+        let result = replace_then_commit(&store, "provider-1", &secret("new"), || {
+            Ok::<(), CommitFailure<&'static str>>(())
+        });
+
+        assert!(result.is_ok());
+        assert_eq!(store.stored("provider-1").as_deref(), Some("new"));
+    }
+
+    #[test]
+    fn failed_commit_after_a_corrupt_backup_keeps_the_new_secret() {
+        let store = FakeStore::holding("provider-1", "old");
+        store.fail_loads(Some(CredentialError::CorruptValue));
+
+        let result = replace_then_commit(&store, "provider-1", &secret("new"), || {
+            Err::<(), _>(CommitFailure::NotCommitted("database write failed"))
+        });
+
+        assert!(matches!(
+            result,
+            Err(ReplaceError::CommitFailed {
+                restored: false,
+                ..
+            })
+        ));
+        // Deleting would leave the referenced entry empty, so the new value stays.
+        assert_eq!(store.stored("provider-1").as_deref(), Some("new"));
+    }
+
+    #[test]
+    fn save_new_returns_the_commit_value_and_keeps_the_entry() {
+        let store = FakeStore::default();
+
+        let result = save_new_then_commit(&store, "provider-2", &secret("new"), || {
+            Ok::<_, CommitFailure<&'static str>>("record")
+        });
+
+        assert!(matches!(result, Ok("record")));
+        assert_eq!(store.stored("provider-2").as_deref(), Some("new"));
+    }
+
+    #[test]
+    fn save_new_stops_before_the_commit_when_the_store_fails() {
+        let store = FakeStore::default();
+        store.fail_saves(Some(CredentialError::Unavailable));
+        let mut committed = false;
+
+        let result = save_new_then_commit(&store, "provider-2", &secret("new"), || {
+            committed = true;
+            Ok::<(), CommitFailure<&'static str>>(())
+        });
+
+        assert!(matches!(
+            result,
+            Err(SaveNewError::Credential(CredentialError::Unavailable))
+        ));
+        assert!(!committed);
+        assert_eq!(store.stored("provider-2"), None);
+    }
+
+    #[test]
+    fn save_new_deletes_the_entry_when_the_commit_fails() {
+        let store = FakeStore::default();
+
+        let result = save_new_then_commit(&store, "provider-2", &secret("new"), || {
+            Err::<(), _>(CommitFailure::NotCommitted("database write failed"))
+        });
+
+        assert!(matches!(
+            result,
+            Err(SaveNewError::CommitFailed {
+                source: "database write failed",
+                cleaned_up: true
+            })
+        ));
+        assert_eq!(store.stored("provider-2"), None);
+    }
+
+    #[test]
+    fn save_new_reports_an_entry_it_could_not_delete() {
+        let store = FakeStore::default();
+        store.fail_deletes(Some(CredentialError::OperationFailed));
+
+        let result = save_new_then_commit(&store, "provider-2", &secret("new"), || {
+            Err::<(), _>(CommitFailure::NotCommitted("database write failed"))
+        });
+
+        assert!(matches!(
+            result,
+            Err(SaveNewError::CommitFailed {
+                cleaned_up: false,
+                ..
+            })
+        ));
+        assert_eq!(store.stored("provider-2").as_deref(), Some("new"));
+    }
+
+    #[test]
+    fn uncertain_commit_keeps_a_new_entry() {
+        let store = FakeStore::default();
+
+        let result = save_new_then_commit(&store, "provider-2", &secret("new"), || {
+            Err::<(), _>(CommitFailure::Uncertain("commit failed"))
+        });
+
+        assert!(matches!(
+            result,
+            Err(SaveNewError::CommitUncertain {
+                source: "commit failed"
+            })
+        ));
+        assert_eq!(store.stored("provider-2").as_deref(), Some("new"));
+        // save only; no compensating delete.
+        assert_eq!(store.call_count(), 1);
+    }
+
+    #[test]
+    fn uncertain_commit_keeps_the_replacement_instead_of_restoring() {
+        for previous in [Some("old"), None] {
+            let store = match previous {
+                Some(value) => FakeStore::holding("provider-1", value),
+                None => FakeStore::default(),
+            };
+
+            let result = replace_then_commit(&store, "provider-1", &secret("new"), || {
+                Err::<(), _>(CommitFailure::Uncertain("commit failed"))
+            });
+
+            assert!(matches!(
+                result,
+                Err(ReplaceError::CommitUncertain {
+                    source: "commit failed"
+                })
+            ));
+            assert_eq!(store.stored("provider-1").as_deref(), Some("new"));
+        }
     }
 
     #[test]
@@ -446,6 +921,25 @@ mod tests {
         assert_eq!(
             map_keyring_error(keyring::Error::TooLong("account".to_string(), 10)),
             CredentialError::InvalidReference
+        );
+        assert_eq!(
+            map_keyring_error(keyring::Error::Invalid(
+                "service".to_string(),
+                "empty".to_string()
+            )),
+            CredentialError::InvalidReference
+        );
+        assert_eq!(
+            map_keyring_error(keyring::Error::BadStoreFormat("broken".to_string())),
+            CredentialError::CorruptValue
+        );
+        assert_eq!(
+            map_keyring_error(keyring::Error::Ambiguous(Vec::new())),
+            CredentialError::OperationFailed
+        );
+        assert_eq!(
+            map_keyring_error(keyring::Error::NotSupportedByStore("search".to_string())),
+            CredentialError::OperationFailed
         );
     }
 

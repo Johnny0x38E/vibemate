@@ -1,0 +1,153 @@
+/*
+ * Page layout mirrors SettingsView. Row hierarchy: the name is primary
+ * (foreground, semibold); provider · protocol and the URL are secondary
+ * (muted, regular); the short ID is weakest (muted, smaller). Buttons come
+ * from providerButtons.module.css.
+ */
+.view {
+    width: 100%;
+    max-width: none;
+}
+
+.header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-md);
+}
+
+.title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.note,
+.notice {
+    margin: 0;
+    color: var(--color-summary);
+    font-size: 0.8125rem;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+
+.note {
+    max-width: 44rem;
+    margin-top: var(--space-sm);
+}
+
+.notice {
+    display: grid;
+    justify-items: start;
+    gap: var(--space-sm);
+    margin-top: var(--space-lg);
+}
+
+/* Programmatic focus targets (tabIndex -1) still show where focus went. */
+.title:focus-visible,
+.notice:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+}
+
+/* Errors read differently from muted notes: foreground, semibold, a rule. */
+.error {
+    margin: 0;
+    padding-inline-start: var(--space-sm);
+    border-inline-start: 2px solid var(--color-text);
+    color: var(--color-text);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+
+.notice + .error,
+.list + .error {
+    margin-top: var(--space-md);
+}
+
+.list {
+    width: 100%;
+    margin: var(--space-lg) 0 0;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    background: var(--color-surface);
+    list-style: none;
+}
+
+.item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-lg);
+    padding: 14px var(--space-md);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.item:last-child {
+    border-bottom: 0;
+}
+
+.details {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+/* The brand icon (20px box) sits before the name, centred on its first line. */
+.name {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin: 0;
+    color: var(--color-text);
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.nameText {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.summary,
+.url,
+.id {
+    margin: 0;
+    color: var(--color-summary);
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.summary,
+.url {
+    font-size: 0.8125rem;
+}
+
+.id {
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.item > button {
+    flex-shrink: 0;
+}
+
+.more {
+    margin-top: var(--space-md);
+}
+
+@media (max-width: 520px) {
+    .item {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .item > button {
+        align-self: flex-start;
+    }
+}

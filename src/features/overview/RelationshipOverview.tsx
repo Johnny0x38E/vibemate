@@ -24,16 +24,14 @@ export function RelationshipOverview(): JSX.Element {
                     className={styles["providers"]}
                     aria-label={t("desktop.overview.providers")}
                 >
-                    {["Command Code GOAT", "DeepSeek", "OpenRouter"].map(
-                        (name) => (
-                            <li className={styles["node"]} key={name}>
-                                <span className={styles["name"]}>{name}</span>
-                                <span className={styles["state"]}>
-                                    {t("desktop.overview.planned")}
-                                </span>
-                            </li>
-                        ),
-                    )}
+                    {["Command Code", "DeepSeek", "OpenRouter"].map((name) => (
+                        <li className={styles["node"]} key={name}>
+                            <span className={styles["name"]}>{name}</span>
+                            <span className={styles["state"]}>
+                                {t("desktop.overview.planned")}
+                            </span>
+                        </li>
+                    ))}
                 </ul>
                 <svg
                     className={styles["connections"]}

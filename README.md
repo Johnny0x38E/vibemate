@@ -9,8 +9,10 @@ This repository contains a runnable desktop scaffold and development rules.
 Provider connections, agent injection, skill management, and MCP management
 are planned and are not implemented yet.
 
-The first release targets **Command Code GOAT, DeepSeek, and OpenRouter** with
+The first release targets **Command Code, DeepSeek, and OpenRouter** with
 **Pi and Grok Build**. macOS, Windows, and Linux are the target platforms.
+
+Provider names and logos are trademarks of their respective owners and are used only to identify the providers.
 
 ## Start developing
 
@@ -32,11 +34,11 @@ Use pnpm for all project commands; npm is only used here to bootstrap pnpm.
 
 ```sh
 pnpm install --frozen-lockfile
-pnpm run tauri dev
+pnpm tauri dev
 ```
 
-For a frontend-only preview, run `pnpm run dev`. The UI explains that the Rust
-runtime is unavailable in this mode. `pnpm run tauri build --no-bundle -- --locked`
+For a frontend-only preview, run `pnpm dev`. The UI explains that the Rust
+runtime is unavailable in this mode. `pnpm tauri build --no-bundle -- --locked`
 builds a desktop executable without an installer.
 
 ## Find your way around

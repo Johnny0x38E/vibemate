@@ -2,11 +2,27 @@
 
 ## Implemented foundation
 
-The app currently has one React screen and one read-only Tauri command.
-`src/main.tsx` mounts React. `src/App.tsx` renders the initial scope.
-`src/lib/desktop.ts` owns the frontend IPC wrapper.
-`src-tauri/src/commands.rs` exposes version information.
-`src-tauri/src/lib.rs` registers commands and starts Tauri.
+- **Frontend.** `src/main.tsx` mounts React behind the language startup gate.
+  `src/App.tsx` composes the desktop shell: Overview, the Providers page
+  (`src/features/providers/`), planned pages for Agents/Skills/MCP, and Settings
+  (`src/features/settings/`). UI code calls Rust only through the typed wrappers
+  in `src/lib/desktop.ts` and `src/lib/desktop/`, which validate every response.
+- **Commands.** `src-tauri/src/commands.rs` holds thin Tauri commands for app
+  metadata, the repository link, language and appearance preferences, provider
+  instances, and provider API keys. `src-tauri/src/lib.rs` opens storage and
+  registers them.
+- **Persistence.** `src-tauri/src/storage.rs` owns the private SQLite database in
+  the app-data folder and its forward-only migrations (currently schema v6).
+  `settings.rs` and `appearance.rs` store preferences; `providers.rs` validates
+  and stores provider instances (stable random IDs, cursor pages, optimistic
+  `revision` checks); `provider_secrets.rs` reads key status and replaces keys.
+  SQLite stores only a `provider-<id>` reference per key, never the key itself.
+- **Credentials.** `src-tauri/src/credentials.rs` provides the OS credential-store
+  interface, key validation and the compensation helpers that keep the store and
+  SQLite consistent when providers are created and keys are replaced.
+
+Saved provider instances are configuration records only: nothing connects to a
+provider, discovers models, or writes agent configuration yet.
 
 Keep one Rust crate while learning the framework. Create feature modules as
 behavior is implemented rather than adding empty abstractions now.

@@ -26,6 +26,18 @@ import {
     saveAppearancePreference,
 } from "./lib/desktop/appearance";
 import { getAppInfo, openProjectRepository } from "./lib/desktop";
+import {
+    createProvider,
+    getProvider,
+    listProviders,
+    listProviderTemplates,
+    updateProvider,
+    type ProviderRecord,
+} from "./lib/desktop/providers";
+import {
+    getProviderSecretStatus,
+    replaceProviderSecret,
+} from "./lib/desktop/providerSecrets";
 import en from "./locales/en.json";
 
 let translator: i18n;
@@ -80,7 +92,39 @@ vi.mock(import("./lib/desktop"), async (importOriginal) => ({
     openProjectRepository: vi.fn<typeof openProjectRepository>(),
 }));
 
+vi.mock(import("./lib/desktop/providers"), async (importOriginal) => ({
+    ...(await importOriginal()),
+    createProvider: vi.fn<typeof createProvider>(),
+    getProvider: vi.fn<typeof getProvider>(),
+    listProviders: vi.fn<typeof listProviders>(),
+    listProviderTemplates: vi.fn<typeof listProviderTemplates>(),
+    updateProvider: vi.fn<typeof updateProvider>(),
+}));
+
+vi.mock(import("./lib/desktop/providerSecrets"), async (importOriginal) => ({
+    ...(await importOriginal()),
+    getProviderSecretStatus: vi.fn<typeof getProviderSecretStatus>(),
+    replaceProviderSecret: vi.fn<typeof replaceProviderSecret>(),
+}));
+
 beforeEach(async () => {
+    // jsdom is a browser, so the Providers page defaults to its preview state.
+    vi.mocked(listProviderTemplates)
+        .mockReset()
+        .mockResolvedValue({ kind: "preview" });
+    vi.mocked(listProviders).mockReset().mockResolvedValue({ kind: "preview" });
+    vi.mocked(createProvider).mockReset();
+    vi.mocked(getProvider).mockReset();
+    vi.mocked(updateProvider).mockReset();
+    vi.mocked(getProviderSecretStatus)
+        .mockReset()
+        .mockImplementation((providerId) =>
+            Promise.resolve({
+                kind: "desktop",
+                status: { providerId, state: "set", updatedAtMs: 1000 },
+            }),
+        );
+    vi.mocked(replaceProviderSecret).mockReset();
     vi.mocked(getAppInfo)
         .mockReset()
         .mockResolvedValue({ name: "vibemate", version: "0.1.0" });
@@ -104,7 +148,7 @@ afterEach(() => {
     document.documentElement.removeAttribute("lang");
 });
 
-test("collapses navigation without losing accessible destinations or changing the current page", () => {
+test("collapses navigation without losing accessible destinations or changing the current page", async () => {
     render(<App />);
     const collapse = screen.getByRole("button", {
         name: "Collapse navigation",
@@ -123,7 +167,7 @@ test("collapses navigation without losing accessible destinations or changing th
             .getAttribute("aria-current"),
     ).toBe("page");
     expect(
-        screen.getByRole("heading", { name: "Not implemented" }),
+        await screen.findByRole("heading", { level: 1, name: "Providers" }),
     ).toBeDefined();
     fireEvent.click(collapse);
     expect(collapse.getAttribute("aria-expanded")).toBe("true");
@@ -487,7 +531,215 @@ test("an untranslated Chinese entry falls back to English instead of its key", a
     expect(screen.getByRole("button", { name: "技能" })).toBeDefined();
     fireEvent.click(providers);
     expect(screen.getByRole("main", { name: "Providers" })).toBeDefined();
-    expect(screen.getByRole("heading", { name: "功能尚未实现" })).toBeDefined();
+    expect(
+        screen.getByRole("heading", { level: 1, name: "Providers" }),
+    ).toBeDefined();
+    expect(
+        await screen.findByText(
+            "浏览器预览无法读取或保存服务商配置。请在 vibemate 桌面应用中打开此页面。",
+        ),
+    ).toBeDefined();
+    expectNoKeysOrDiagnostics();
+});
+
+const savedProvider: ProviderRecord = {
+    id: "0123456789abcdef0123456789abcdef",
+    kind: "deepseek",
+    displayName: "Personal DeepSeek",
+    baseUrl: "https://api.deepseek.com",
+    protocol: "chat_completions",
+    extensions: {},
+    revision: 1,
+    createdAtMs: 1000,
+    updatedAtMs: 1000,
+};
+
+function useDesktopProviders(): void {
+    vi.mocked(listProviderTemplates).mockResolvedValue({
+        kind: "desktop",
+        templates: [
+            {
+                kind: "deepseek",
+                brandName: "DeepSeek",
+                defaultBaseUrl: "https://api.deepseek.com",
+                protocols: ["chat_completions"],
+                defaultProtocol: "chat_completions",
+                extensionFields: [],
+            },
+        ],
+    });
+    vi.mocked(listProviders).mockResolvedValue({
+        kind: "desktop",
+        page: { items: [savedProvider], nextCursor: null },
+    });
+}
+
+test("the Providers page reads nothing until first visited", async () => {
+    useDesktopProviders();
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Agents" }));
+    expect(listProviders).not.toHaveBeenCalled();
+    expect(listProviderTemplates).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Providers" }));
+    expect(await screen.findByText("Personal DeepSeek")).toBeDefined();
+    expect(screen.queryByText("Not implemented")).toBeNull();
+});
+
+test.each([
+    {
+        locale: "en",
+        providers: "Providers",
+        agents: "Agents",
+        add: "New configuration",
+        name: "Name",
+        key: "API key",
+        edit: "Edit “Personal DeepSeek” (ID 01234567)",
+        planned: "Not implemented",
+    },
+    {
+        locale: "zh-CN",
+        providers: "服务商",
+        agents: "Agent",
+        add: "新建配置",
+        name: "名称",
+        key: "API 密钥",
+        edit: "编辑「Personal DeepSeek」（ID 01234567）",
+        planned: "功能尚未实现",
+    },
+] as const)(
+    "in $locale the Providers page shows saved configurations and keeps a draft across navigation",
+    async ({ locale, providers, agents, add, name, key, edit, planned }) => {
+        translator = await createAppI18n(locale);
+        useDesktopProviders();
+        render(<App />);
+        fireEvent.click(screen.getByRole("button", { name: providers }));
+        expect(await screen.findByRole("button", { name: edit })).toBeDefined();
+        expect(screen.queryByText(planned)).toBeNull();
+        // Saved settings are never presented as a live connection.
+        expect(document.body.textContent).not.toMatch(
+            /\bconnected\b|available|已连接|可用/i,
+        );
+        const reads = vi.mocked(listProviders).mock.calls.length;
+
+        fireEvent.click(screen.getByRole("button", { name: add }));
+        const draft = screen.getByRole("textbox", { name });
+        fireEvent.change(draft, { target: { value: "Draft name" } });
+        // Synthetic; never a real key.
+        fireEvent.change(screen.getByLabelText(key), {
+            target: { value: "sk-synthetic-app-5555" },
+        });
+        fireEvent.click(screen.getByRole("button", { name: agents }));
+        expect(screen.getByText(planned)).toBeDefined();
+        expect(screen.queryByRole("textbox", { name })).toBeNull();
+
+        fireEvent.click(screen.getByRole("button", { name: providers }));
+        expect(screen.getByRole("textbox", { name })).toBe(draft);
+        expect(draft).toHaveProperty("value", "Draft name");
+        // The draft stays, but a typed key is cleared while the page is hidden.
+        expect(screen.getByLabelText(key)).toHaveProperty("value", "");
+        // Returning does not remount the page or read the list again.
+        expect(listProviders).toHaveBeenCalledTimes(reads);
+        expect(createProvider).not.toHaveBeenCalled();
+        expectNoKeysOrDiagnostics();
+    },
+);
+
+test.each([
+    {
+        locale: "en",
+        providers: "Providers",
+        agents: "Agents",
+        edit: "Edit “Personal DeepSeek” (ID 01234567)",
+        renamedEdit: "Edit “Renamed” (ID 01234567)",
+        name: "Name",
+        save: "Save",
+        saved: "Saved “Renamed”.",
+    },
+    {
+        locale: "zh-CN",
+        providers: "服务商",
+        agents: "Agent",
+        edit: "编辑「Personal DeepSeek」（ID 01234567）",
+        renamedEdit: "编辑「Renamed」（ID 01234567）",
+        name: "名称",
+        save: "保存",
+        saved: "已保存「Renamed」。",
+    },
+] as const)(
+    "in $locale a save shows an app-level notification that outlives the jump back and page changes",
+    async ({
+        locale,
+        providers,
+        agents,
+        edit,
+        renamedEdit,
+        name,
+        save,
+        saved,
+    }) => {
+        translator = await createAppI18n(locale);
+        useDesktopProviders();
+        const renamed = {
+            ...savedProvider,
+            displayName: "Renamed",
+            revision: savedProvider.revision + 1,
+        };
+        vi.mocked(updateProvider).mockResolvedValue(renamed);
+        render(<App />);
+        fireEvent.click(screen.getByRole("button", { name: providers }));
+        fireEvent.click(await screen.findByRole("button", { name: edit }));
+        fireEvent.change(screen.getByRole("textbox", { name }), {
+            target: { value: "Renamed" },
+        });
+        vi.mocked(listProviders).mockResolvedValue({
+            kind: "desktop",
+            page: { items: [renamed], nextCursor: null },
+        });
+        fireEvent.click(screen.getByRole("button", { name: save }));
+
+        const notice = await screen.findByText(saved);
+        expect(notice.closest('[role="status"]')).not.toBeNull();
+        expect(notice.closest("main")).toBeNull();
+        // Back on the list, focus is on the saved row, not the notification.
+        expect(document.activeElement).toBe(
+            screen.getByRole("button", { name: renamedEdit }),
+        );
+        fireEvent.click(screen.getByRole("button", { name: agents }));
+        expect(screen.getByText(saved)).toBe(notice);
+        expectNoKeysOrDiagnostics();
+    },
+);
+
+test("switching language keeps the Providers list and an open form in place", async () => {
+    useDesktopProviders();
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Providers" }));
+    fireEvent.click(
+        await screen.findByRole("button", {
+            name: "Edit “Personal DeepSeek” (ID 01234567)",
+        }),
+    );
+    const field = screen.getByRole("textbox", { name: "Name" });
+    fireEvent.change(field, { target: { value: "Renamed" } });
+    const reads = vi.mocked(listProviders).mock.calls.length;
+    await act(async () => {
+        await translator.changeLanguage("zh-CN");
+    });
+    expect(screen.getByRole("textbox", { name: "名称" })).toBe(field);
+    expect(field).toHaveProperty("value", "Renamed");
+    expect(
+        screen.getByRole("heading", {
+            level: 1,
+            name: "编辑「Personal DeepSeek」",
+        }),
+    ).toBeDefined();
+    expect(
+        screen
+            .getByRole("button", { name: "服务商" })
+            .getAttribute("aria-current"),
+    ).toBe("page");
+    expect(listProviders).toHaveBeenCalledTimes(reads);
+    expect(updateProvider).not.toHaveBeenCalled();
     expectNoKeysOrDiagnostics();
 });
 

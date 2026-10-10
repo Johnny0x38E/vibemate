@@ -5,7 +5,7 @@
 vibemate is an MIT-licensed desktop configuration manager built with Rust,
 Tauri 2, React, and TypeScript. Target macOS, Windows, and Linux.
 
-Phase 1 providers: Command Code GOAT, DeepSeek, and OpenRouter.
+Phase 1 providers: Command Code, DeepSeek, and OpenRouter.
 Phase 1 agents: Pi and Grok Build.
 Phase 1 also includes shared skills, skill updates, MCP configuration, and
 Simplified Chinese/English UI internationalization. Complete the i18n foundation

@@ -1,0 +1,43 @@
+/* A fixed box; brand files keep their own aspect ratio and colours inside it. */
+.icon {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+}
+
+.icon img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+/*
+ * Light/dark brand variants follow the exact conditions App.css uses to resolve
+ * dark tokens: an explicit data-appearance="dark", or the system scheme unless
+ * the user chose light.
+ */
+.icon .dark {
+    display: none;
+}
+
+@media (prefers-color-scheme: dark) {
+    :global(:root:not([data-appearance="light"])) .icon .light {
+        display: none;
+    }
+
+    :global(:root:not([data-appearance="light"])) .icon .dark {
+        display: block;
+    }
+}
+
+:global(:root[data-appearance="dark"]) .icon .light {
+    display: none;
+}
+
+:global(:root[data-appearance="dark"]) .icon .dark {
+    display: block;
+}

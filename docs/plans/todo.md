@@ -1,6 +1,6 @@
 # vibemate 第一阶段执行清单
 
-状态：P00–P09 与基础外观 I02–I14 已完成；维护者于 2026-10-10 确认基础外观本轮收尾，并人工确认 P09 双语界面。**下一项**：P10（阶段 C 的第一个 Provider/Model 任务）。业务 Provider/Agent 等功能未开始。当前设计见 [desktop-shell-design.md](desktop-shell-design.md)，实现与验证记录见 [frontend.md](../frontend.md)。
+状态：P00–P09 与基础外观 I02–I14 已完成；维护者于 2026-10-10 确认基础外观本轮收尾，并人工确认 P09 双语界面。**进行中**：P10 自动检查与文档已完成，仅剩真实 Tauri 保存→重启的人工验证；之后是 P11。密钥、连接、Model 与 Agent 等业务功能未开始。当前设计见 [desktop-shell-design.md](desktop-shell-design.md)，实现与验证记录见 [frontend.md](../frontend.md)。
 这里是唯一任务状态来源，不能在其他文件维护第二份勾选清单。
 
 ## 执行约定
@@ -94,7 +94,7 @@
 
 - [x] 记录三家产品的准确名称、官方来源、证据日期和可确认的 API 类型；未知项明确标记。
 - [x] 整理认证、模型列表、工具/图像/推理字段及错误响应，示例不含真实密钥。
-- [x] 确认第一条兼容路径；缺少 Command Code GOAT 资料时列出具体待补链接，不猜测端点。
+- [x] 确认第一条兼容路径；缺少 Command Code 资料时列出具体待补链接，不猜测端点。
 
 **Verification:**
 
@@ -872,8 +872,8 @@ Provider/Agent 品牌名（按规则保留原值）。缺口在资源校验、me
 
 **Verification:**
 
-- [ ] 运行 Rust `providers` 过滤测试与 ProviderForm UI 测试，覆盖非法 URL 和持久化重读。
-- [ ] 运行 `pnpm run check:frontend` 与 Rust fmt/Clippy。
+- [x] 运行 Rust `providers` 过滤测试与 ProviderForm UI 测试，覆盖非法 URL 和持久化重读。
+- [x] 运行 `pnpm run check:frontend` 与 Rust fmt/Clippy。
 - [ ] 实际 Tauri 保存非敏感配置，重启验证；需要额外注册/样式文件时先拆子任务。
 
 **Dependencies:** P04,P05,P09。
@@ -887,22 +887,135 @@ Provider/Agent 品牌名（按规则保留原值）。缺口在资源校验、me
 - `src/features/providers/ProviderForm.test.tsx`
 
 **Estimated scope:** M：5 个建议主文件；如需额外文件先按执行约定拆分。
+P10 超过五个文件，按以下顺序拆分；每个子任务单独检查，全部完成后勾选上方验收项。
+维护者决定（2026-10-10）：三家 kind 的扩展字段允许列表为空，非空 `extensions` 以 `extension_field_not_supported` 拒绝，P10 不建扩展子表，有证据后再增加键与存储；
+Command Code 实例暂只允许 `chat_completions`，按模型覆盖留给 P12/P15；新增直接依赖 `url`（锁文件已有）；ID 用 SQLite `lower(hex(randomblob(16)))`，不加 uuid；
+服务商 kind 为 `command-code`（品牌名 "Command Code"），不按订阅套餐命名：GOAT 只是 Command Code 的套餐之一；改名直接修改未发布的 v5 定义，不另加迁移。
+不做删除；游标分页（limit 1..=100，`created_at ASC, id ASC`）；`revision` 乐观并发；未知 kind/protocol 返回稳定错误码；错误码精简到前端需要区分提示的粒度。
+
+### P10.0：拆分记录
+
+- [x] 在本清单写入子任务与维护者决定；在 `docs/integrations/providers.md` 记录 Command Code 暂只允许 Chat Completions 的理由。
+
+**Files:** `docs/plans/todo.md`、`docs/integrations/providers.md`。
+**Verification:** 格式与差异检查。
+**Dependencies:** P05,P09。
+
+### P10.a.1：领域类型与校验
+
+- [x] `ProviderKind`/`ProviderProtocol`/`ProviderId`、内置模板、名称/URL/协议/扩展字段校验与稳定错误码；不访问数据库，不依赖 Tauri。
+
+**Files:** `src-tauri/src/providers.rs`（新）、`src-tauri/src/lib.rs`、`src-tauri/Cargo.toml`、`src-tauri/Cargo.lock`。
+**Verification:** `cargo test --manifest-path src-tauri/Cargo.toml --locked providers`（条数非零）、fmt、Clippy。
+**Dependencies:** P10.0。
+
+### P10.a.2：schema v5 与持久化
+
+- [x] v5 迁移 `provider_instance`；创建/更新/读取/游标分页，编辑保持 `id`/`created_at` 并以 `revision` 拒绝过期写入；覆盖重开重读、写失败、坏数据与 v4→v5 升级。
+
+**Files:** `src-tauri/src/providers.rs`、`src-tauri/src/storage.rs`、`src-tauri/src/settings.rs` 与 `src-tauri/src/appearance.rs`（两处写死的 schema 版本断言）。
+**Verification:** `cargo test ... providers`（条数非零）、fmt、Clippy。
+**Dependencies:** P10.a.1。
+
+### P10.b：Tauri 命令与类型化 IPC 包装
+
+- [x] 薄命令 `list_provider_templates`/`list_providers`/`get_provider`/`create_provider`/`update_provider` 与注册；TS 包装运行时校验响应、收敛错误码，浏览器预览不调用 IPC、不伪造保存。
+
+**Files:** `src-tauri/src/commands.rs`、`src-tauri/src/lib.rs`、`src/lib/desktop/providers.ts`（新）、`src/lib/desktop/providers.test.ts`（新）。
+**Verification:** Rust fmt/Clippy/全部测试、`pnpm run check:frontend`。
+**Dependencies:** P10.a.2。
+
+### P10.c.1：Provider 表单（前端）
+
+- [x] `ProviderForm` 从模板创建/编辑，字段错误按错误码中英文提示，保存中/成功/失败/结果未知反馈，预览禁用保存。
+
+**Files:** `src/features/providers/ProviderForm.tsx`、`ProviderForm.module.css`、`ProviderForm.test.tsx`、`src/locales/en.json`、`src/locales/zh-CN.json`。
+**Verification:** `pnpm run test:ui src/features/providers`、`pnpm run check:frontend`。
+**Dependencies:** P10.b。
+
+### P10.c.2：Provider 列表与页面（前端）
+
+- [x] `ProvidersView` 加载/空/错误+重试/加载更多，按 `id` 选择编辑，丢弃过期异步结果；不显示为已连接。
+
+**Files:** `src/features/providers/ProvidersView.tsx`、`ProvidersView.module.css`、`ProvidersView.test.tsx`、两份 locale。
+**Verification:** 同 P10.c.1。
+**Dependencies:** P10.c.1。
+
+### P10.c.3：App 接线
+
+- [x] 用 `ProvidersView` 替换 providers 占位并保持挂载；App 级双语导航回归。
+
+**Files:** `src/App.tsx`、`src/App.test.tsx`。
+**Verification:** `pnpm run test:ui src/App.test.tsx`、`pnpm run check:frontend`。
+**Dependencies:** P10.c.2。
+
+### P10.c.4：服务商页交互重构（前端）
+
+- [x] 按用户反馈改为列表主页 + 二级页面（页面内切换，无路由库）：「新建配置」直接进入表单，首个字段为「服务商」下拉（默认选中模板列表第一项并填入其默认值，切换时只替换未改动的默认值），编辑页按分组组织（目前仅「基本信息」，P11「密钥」/P12「模型」各自成组，不加长单个表单），服务商只读；「服务商类型」统一改称「服务商」；每个视图只有一个主按钮（实心强调色），取消/返回为次按钮，行内编辑为弱按钮；label/value/提示/错误分层；保留焦点管理、结果未知先刷新、冲突重载、过期结果丢弃、保存中 aria-disabled/readOnly、隐藏保持挂载；返回链接使用 `Icon` 的 back 箭头，可见文字为「返回」、可访问名称为「返回服务商列表」；「新建配置」和行内「编辑」带 18px 的 plus/edit 图标（保存/取消保持纯文字）；列表行名称前、详情页只读服务商值前、新建页服务商下拉旁显示官方品牌图标（`assets/providers/`，20×20、`object-fit: contain`、`alt=""`，OpenRouter 按深浅色切换两个官方文件，未知类型不显示）；去掉列表页常驻的「已保存」提示，改为应用级通知（新增 `src/components/Notifications.tsx`，右上角，约 3.5 秒自动消失，悬停/聚焦暂停，可手动关闭，`role="status"` 播报不抢焦点）；保存成功后焦点回到该行「编辑」按钮，新项不在已加载页时聚焦页标题。
+- [ ] 维护者在 Tauri 中目视检查各主题按钮对比度、文本层级与 720×560 布局。
+
+**Files:** `src/features/providers/`（`ProvidersView`、新增 `ProviderPage`/`providerButtons.module.css`、`ProviderForm` 及测试）、两份 locale、`src/App.test.tsx`、`src/components/Icon.tsx`、`assets/providers/`、`src/components/Notifications.*`、`src/App.tsx`、`docs/frontend.md`、`CHANGELOG.md`。
+**Verification:** `pnpm run test:ui src/features/providers src/App.test.tsx`、`pnpm run check:frontend`（208 项 UI 测试）。
+**Split note:** 本项超过 5 个文件，因为它是按同一轮用户反馈对已完成页面做的一次整体交互重构，各文件改动需同时落地才能通过同一组 UI 测试；事后不再拆分，后续前端项仍按 1–5 个文件拆分。
+**Dependencies:** P10.c.3。
+
+### P10.d：真实验证与文档
+
+- [x] 按实际实现更新学习说明（含错误码与中英文提示表）、架构现状、开发计划与 phase-1 现状、英文 changelog。
+- [x] 完整自动检查：Rust fmt/Clippy、全部 Rust 测试（60 通过，钥匙串 smoke 测试保持 ignored）、`check:frontend`（188 项 UI 测试）、`pnpm run tauri build --no-bundle -- --locked`（macOS）。
+- [ ] 维护者先备份 app-data，再在实际 Tauri 中保存非敏感配置→完全退出→重启重读；通过后勾选上方 P10 验收项。
+
+**Files:** `docs/frontend.md`、`docs/architecture.md`、`docs/plans/development-plan.md`、`docs/plans/phase-1.md`、`CHANGELOG.md`；本清单随子任务更新。
+**Verification:** 完整检查与实际 Tauri 运行。
+**Dependencies:** P10.c.3。
+
+### P10.0.1：Command Code 改名（代码）
+
+- [x] kind `command-code-goat` → `command-code`，品牌名 "Command Code"（GOAT 只是 Command Code 的订阅套餐之一）；直接修改未发布的 v5 CHECK 约束，不加迁移；同步测试、TS 类型和总览页名称。
+
+**Files:** `src-tauri/src/providers.rs`、`src-tauri/src/storage.rs`、`src/lib/desktop/providers.ts`、`src/features/overview/RelationshipOverview.tsx`、`docs/plans/desktop-shell-preview.html`（设计稿中的名称）。
+**Verification:** `git grep --untracked -i goat` 只剩对 GOAT 套餐的准确描述（另有 logo 内嵌 base64 的偶然匹配）；Rust fmt/Clippy/全部测试与 `providers` 过滤测试（条数非零）、`pnpm run check:frontend`、`pnpm run tauri build --no-bundle -- --locked`。
+**Dependencies:** P10.c.3。
+
+### P10.0.2：Command Code 改名（文档）
+
+- [x] 文档改用 "Command Code"；GOAT 套餐的事实保留并写作“Command Code 的 GOAT 套餐”，明确证据只覆盖 GOAT 套餐，Pro/Provider 套餐待 P15 核实；P15 改名并加入该核实项。
+
+**Files:** `README.md`、`AGENTS.md`、`CHANGELOG.md`、`docs/frontend.md`、`docs/integrations/providers.md`、`docs/integrations/compatibility.md`、`docs/plans/development-plan.md`、`docs/plans/phase-1.md`、`docs/plans/todo.md`。
+**Verification:** 同 P10.0.1 的 `git grep` 检查与 `pnpm run check:frontend`（含 Prettier）。
+**Dependencies:** P10.0.1。
+
+### P10.e.1：评审修正（Rust）
+
+- [x] 名称拒绝零宽/BOM/双向控制等隐藏格式字符并要求可见字符；URL 去掉首尾空白后拒绝内部空白与控制字符；更新影响行数不为 1 时返回 `revision_conflict`；游标时间戳只接受 ASCII 数字；模板按 kind 对应的测试；settings/appearance 的 schema 版本断言改用最新迁移版本。
+
+**Files:** `src-tauri/src/providers.rs`、`src-tauri/src/storage.rs`（测试用 `latest_schema_version`）、`src-tauri/src/settings.rs`、`src-tauri/src/appearance.rs`。
+**Verification:** Rust fmt/Clippy、全部测试（60 通过，1 ignored）、`providers` 过滤测试（27 条）、`pnpm run check:frontend`。
+**Dependencies:** P10.0.1。
+
+### P10.e.2：评审修正（文档）
+
+- [x] 在 `docs/integrations/providers.md` 记录 URL/名称校验边界：结尾只去一个 `/`、拒绝内部空白与控制字符、回环与私有地址暂允许并留给 P13。
+
+**Files:** `docs/integrations/providers.md`、`docs/plans/todo.md`、`CHANGELOG.md`。
+**Verification:** `pnpm run check:frontend`（含 Prettier）。
+**Dependencies:** P10.e.1。
 
 ### Task P11: 维护 Provider 密钥
 
-**Description:** 让用户保存、替换、清除账户密钥，同时只显示凭据存在状态。
+**Description:** 让用户在创建 Provider 时必填密钥，并在详情页替换密钥，同时只显示凭据存在状态。清除密钥随以后删除 Provider 一起实现（维护者决定，2026-10-10）。
 
 **Acceptance criteria:**
 
 - [ ] UI 临时输入密钥，提交/取消后清理；配置、错误、日志与列表不回传密钥。
 - [ ] 数据库保存引用；凭据/元数据任一步失败按约定补偿并报告结果。
-- [ ] 清除密钥使账户进入明确的待配置状态，不能继续使用旧密钥。
+- [ ] 创建时 Provider 行与凭据条目同时成功，否则两者都不留下；补偿失败返回明确的结果未知错误码。
 
 **Verification:**
 
 - [ ] 运行 Rust `credentials`/`providers` 测试，注入两种资源的保存失败。
 - [ ] 运行 UI 测试与 `check:frontend`，检查敏感字段清理。
-- [ ] Tauri 使用临时凭据完成替换/删除，确认日志脱敏。
+- [ ] Tauri 使用临时凭据完成创建/替换并重启，确认日志脱敏。
 
 **Dependencies:** P06,P10。
 
@@ -915,116 +1028,291 @@ Provider/Agent 品牌名（按规则保留原值）。缺口在资源校验、me
 - `src/features/providers/ProviderForm.test.tsx`
 
 **Estimated scope:** M：5 个建议主文件；如需额外文件先按执行约定拆分。
+P11 超过五个文件，按以下顺序拆分；每个子任务单独检查，全部完成后勾选上方验收项。
+维护者决定（2026-10-10）：状态只来自 SQLite 引用行 `provider_credential`，不查询凭据库；不加 zeroize/secrecy，沿用脱敏的 `Secret(String)`；不建清理表；
+没有“待配置”状态：创建时密钥必填，顺序为“全部校验 → 事务外 `randomblob` 生成 ID → 写凭据 `provider-<id>` → 同一事务插入 `provider_instance` 与 `provider_credential` → 失败则删除凭据”，删除也失败返回 `create_outcome_unknown`；
+详情页只显示状态并替换（`replace_then_commit`），无清除命令，清除随以后删除 Provider 实现；替换不改 Provider `revision`；
+密钥字符由服务商决定：只去首尾空白，拒绝空值与控制字符（含 CR/LF），上限为 Windows 凭据 2560 字节（UTF-16，即 1280 码元），各平台统一；
+P10 遗留的无密钥测试行不在迁移中删除，状态报告为 `missing`，替换动作兼作设置。
 
-### Task P12: 维护手动 Model 配置
+### P11.0：拆分记录
 
-**Description:** 让用户在某个 Provider 实例下建立模型并配置基础能力信息和请求参数。
+- [x] 在本清单写入子任务与维护者决定；完整设计（流程、补偿、错误码、IPC 草案）见维护者保存的 P11 计划。
+
+**Files:** `docs/plans/todo.md`。
+**Verification:** 格式与差异检查。
+**Dependencies:** P10。
+
+### P11.a.1：凭据层准备
+
+- [x] `Secret` 从 IPC 字符串反序列化；`validate_secret`；创建用 `save_new_then_commit`（失败删除新条目并报告是否清理成功）；`replace_then_commit` 泛型返回值并在旧值损坏时继续替换；共享测试用 `FakeStore`（可注入读取失败、计数调用）。
+
+**Files:** `src-tauri/src/credentials.rs`。
+**Verification:** `cargo test --manifest-path src-tauri/Cargo.toml --locked credentials`（条数非零）、全部测试、fmt、Clippy。
+**Dependencies:** P11.0。
+
+### P11.a.2：schema v6 与错误码
+
+- [x] v6 迁移 `provider_credential`（外键级联、`credential_ref = 'provider-' || provider_id`），不改遗留行；v4→v5 测试只运行前五个迁移；`ProviderError` 增加密钥与凭据库错误码。
+
+**Files:** `src-tauri/src/storage.rs`、`src-tauri/src/providers.rs`。
+**Verification:** `cargo test ... storage`、`cargo test ... providers`（条数非零）、fmt、Clippy。
+**Dependencies:** P11.a.1。
+
+### P11.a.3：创建时必填密钥（Rust）
+
+- [x] `CreateProviderRequest.secret`；凭据与 SQLite 的创建补偿；注入凭据写入、SQLite 写入与补偿删除失败；数据库文件不含密钥；命令使用 OS 凭据库与进程内凭据写锁。
+
+**Files:** `src-tauri/src/providers.rs`、`src-tauri/src/commands.rs`、`src-tauri/src/lib.rs`。
+**Verification:** `cargo test ... providers`（条数非零）、全部测试、fmt、Clippy。
+**Dependencies:** P11.a.2。
+
+### P11.a.4：密钥状态与替换（Rust）
+
+- [x] `get_secret_status` 只读 SQLite（`set`/`missing`）；`replace_provider_secret` 先确认 Provider 存在，再替换并 upsert 引用行，不改 Provider `revision`。Tauri 命令移到 P11.b.1。
+
+**Files:** `src-tauri/src/provider_secrets.rs`（新）、`src-tauri/src/lib.rs`（模块注册）。
+**Verification:** `cargo test ... provider_secrets`（条数非零）、全部测试、fmt、Clippy。
+**Dependencies:** P11.a.3。
+
+### P11.b.1：状态与替换的 TS 包装
+
+- [x] 薄命令 `get_provider_secret_status`（参数 `providerId`）/`replace_provider_secret`（参数 `request: { providerId, secret }`，凭据写锁、OS 凭据库）与注册。
+- [x] TS 包装运行时校验状态响应（严格键集合），浏览器预览不调用 IPC、不伪造保存（与 P11.b.2 一起和前端协调）。`providerSecrets.ts` 复用 `providers.ts` 的错误类与错误码白名单；`providerId` 必须与请求一致，`set` 带非负整数时间、`missing` 为 `null`，替换成功必须为 `set`（29 个测试）。
+
+**Files:** `src-tauri/src/commands.rs`、`src-tauri/src/lib.rs`、`src/lib/desktop/providerSecrets.ts`（新）、`src/lib/desktop/providerSecrets.test.ts`（新）。
+**Verification:** Rust fmt/Clippy/全部测试、`pnpm run check:frontend`。
+**Dependencies:** P11.a.4。
+
+### P11.b.2：`createProvider` 带密钥
+
+- [x] `CreateProviderInput.secret` 与新错误码；错误与响应不含密钥。与 P11.c.1 连续完成，否则表单类型检查失败。`validateRecord` 改为严格键集合（多出字段即 `invalid_response`）；`providers.test.ts` 29 → 39。
+
+**Files:** `src/lib/desktop/providers.ts`、`src/lib/desktop/providers.test.ts`。
+**Verification:** `pnpm run test:ui src/lib/desktop`，P11.c.1 后 `check:frontend`。
+**Dependencies:** P11.a.3。
+
+### P11.c.1：创建表单的必填密钥（Frontend Developer）
+
+- [x] 仅创建模式显示密码字段；提交（任何结果）、取消、卸载、隐藏后清空；新错误码的字段/表单级提示；结果未知时重新保存需重新输入密钥。前端只检查去首尾空白后非空；`secret_invalid` 在字段旁，`credential_store_*` 在表单顶部（`ProviderForm.test.tsx` 21 → 31）。
+
+**Files:** `src/features/providers/ProviderForm.tsx`、`ProviderForm.test.tsx`、`src/locales/en.json`、`src/locales/zh-CN.json`。
+**Verification:** `pnpm run test:ui src/features/providers`、`pnpm run check:frontend`。
+**Dependencies:** P11.b.2。
+
+### P11.c.2：密钥区块（Frontend Developer）
+
+- [x] `ProviderKeys` 显示“已设置 · 更新时间”或遗留的“未设置”，替换（`missing` 时为设置），加载/错误/结果未知刷新/预览禁用；无清除按钮。成功后用应用级通知，按钮为次按钮（页面唯一主按钮仍是基本信息的「保存」）；22 个测试。
+
+**Files:** `src/features/providers/ProviderKeys.tsx`、`ProviderKeys.module.css`、`ProviderKeys.test.tsx`、两份 locale。
+**Verification:** 同 P11.c.1。
+**Dependencies:** P11.b.1。
+
+### P11.c.3：接入详情页（Frontend Developer）
+
+- [x] 编辑页表单下方独立“密钥”区块；页面隐藏或返回时清空未提交的密钥。替换进行中阻止返回；替换不触发基本信息保存、不离开页面（`ProvidersView.test.tsx` 24 → 27，`App.test.tsx` 覆盖跨页面隐藏清空）。真实 Tauri 运行仍待 P11.d 人工验证。
+
+**Files:** `src/features/providers/ProvidersView.tsx`、`ProvidersView.test.tsx`。
+**Verification:** 同 P11.c.1。
+**Dependencies:** P11.c.2。
+
+### P11.d：文档与真实验证
+
+- [ ] 更新架构/计划现状与英文 changelog（`docs/frontend.md` 由 Frontend Developer 维护）；完整自动检查与 `tauri build --no-bundle`。
+- [ ] 维护者先备份 app-data，在实际 Tauri 中带临时合成密钥创建→替换→重启，确认钥匙串条目为 `provider-<id>`、日志无密钥，并手动运行 ignored 凭据冒烟测试。Windows/Linux 未测时在此注明。
+
+**Files:** `docs/architecture.md`、`docs/plans/development-plan.md`、`docs/plans/phase-1.md`、`CHANGELOG.md`；本清单随子任务更新。
+**Verification:** 完整检查与实际 Tauri 运行。
+**Dependencies:** P11.c.3。
+
+### Task P12: 获取模型列表并勾选
+
+**Description:** 用户配置基础 URL 和密钥后，点击「获取模型」拉取服务商的模型列表（三家都用 `GET {base}/models`），逐个勾选要用的模型；手动添加模型作为补充。这是项目第一个网络请求，承接原 P13 的超时、取消、脱敏、模拟服务测试与“只在用户触发时请求”的要求，并吸收原 P14 的 OpenRouter 模型发现。
 
 **Acceptance criteria:**
 
-- [ ] 按 Provider ID + 模型 ID 关联，支持别名，能力与请求参数分开存储。
-- [ ] 校验上下文/输出上限等基础值；未知能力和手动覆盖有来源标识。
-- [ ] 支持保存、编辑、选择模型，列表分页；删除正在被引用的模型需明确处理。
+- [ ] 获取只由用户点击触发；按 Provider ID + 模型 ID 保存，新获取的模型默认不勾选，合并从不修改勾选状态。
+- [ ] 完整获取后：已勾选但上游消失的模型保留并标记「上游已不可用 · 自 <日期>」，不自动删除；未勾选且消失的获取行删除；手动行不删除。达到页数或模型数上限、或列表为空时只新增和更新。
+- [ ] 连接 10 s、单次 30 s、整次 90 s 超时；响应体最多 8 MiB；每个 Provider 最多 5000 个模型；OpenRouter 每页 500、最多 10 页；不跟随重定向，只用 HTTPS。
+- [ ] 取消立即中断进行中的请求（异步 reqwest 与取消信号用 `tokio::select!` 竞争），不写库；获取期间 Provider 设置被修改则不保存（`model_fetch_stale`）。
+- [ ] 密钥不出现在错误、日志、URL、响应、数据库与测试快照中；错误码无负载，中英文提示。
+- [ ] 生产客户端读取系统代理（环境变量，以及 macOS/Windows 系统设置；Linux 只读环境变量）；测试客户端通过可注入设置使用 `.no_proxy()`，不受 `HTTP_PROXY`/`HTTPS_PROXY`/`ALL_PROXY`/`NO_PROXY` 及小写变体影响。
+- [ ] 手动添加：ID 只去首尾空白，1–256 字符，不含空白或控制字符；与之后获取的同 ID 模型合并为一行，保持手动来源。
+- [ ] `list_provider_models` 的搜索为模糊搜索：不区分大小写；匹配模型 ID、显示名称和别名；多个词必须全部匹配；`-`、`_`、`/`、`.` 与空白等价；按 exact > prefix > contains > subsequence 排序，多词先比较是否整体精确匹配，再比较最弱词的档位、档位之和，最后按 `model_id` 稳定排序。搜索在 Rust 内存中执行（SQLite 只按 Provider 和勾选状态过滤），有查询时返回前 `limit` 条与匹配总数、不带游标；无查询时保持稳定游标分页；查询超过 200 个字符返回 `invalid_request`。
+- [ ] Command Code 显示每个模型的 `supported_endpoints`（比较时接受带或不带 `/v1` 前缀的值），获取的模型只有路由支持当前协议时才可勾选；含 `/` 的模型 ID（如 `mistral/mistral-large-4`）可正常保存、勾选、分页与搜索。
+- [ ] 界面与文案不把“获取成功”说成“密钥正确”：Command Code 的列表不带密钥也能获取，获取成功只说明列表请求成功；三家请求都带 `Authorization: Bearer <key>`（DeepSeek 与 OpenRouter 文档要求认证，Command Code 带上无害且与同一服务商的推理请求一致），脱敏规则不变。
 
 **Verification:**
 
-- [ ] 运行 Rust `models` 与 ModelForm 测试，覆盖无效参数和跨 Provider 同名模型。
-- [ ] 运行 `check:frontend` 与 Rust fmt/Clippy。
-- [ ] Tauri 重启后验证选择与保存结果。
+- [ ] Rust `http_client`、`model_catalog`、`models`、`model_search`、`model_fetch` 测试（条数非零），使用本地模拟 HTTP 服务。
+- [ ] `check:frontend`、Rust fmt/Clippy/全部测试；`cargo tree --locked -i aws-lc-rs` 与 `-i native-tls` 为空。
+- [ ] 真实 Tauri 中由用户触发获取、勾选、重启后确认勾选保留，并确认日志无密钥。
 
-**Dependencies:** P10。
+**Dependencies:** P10,P11。
 
 **Files likely touched:**
 
+- `src-tauri/src/http_client.rs`
+- `src-tauri/src/model_catalog.rs`
 - `src-tauri/src/models.rs`
-- `src-tauri/src/commands.rs`
-- `src/lib/desktop/models.ts`
-- `src/features/models/ModelForm.tsx`
-- `src/features/models/ModelForm.test.tsx`
+- `src-tauri/src/model_fetch.rs`
+- `src/features/providers/ProviderModels.tsx`
 
-**Estimated scope:** M：5 个建议主文件；如需额外文件先按执行约定拆分。
+**Estimated scope:** L：超过五个文件，按以下子任务拆分。
+维护者决定（2026-10-10）：HTTP 使用 `reqwest 0.13.5`（`default-features = false`，特性 `rustls-no-provider` + `system-proxy`），直接依赖 `rustls 0.23`（`ring`、`std`、`tls12`）并在构建客户端前安装 ring 加密实现，不引入 aws-lc 或 native-tls；
+读取系统代理；取消立即中断请求；新获取的模型默认不勾选；不单独做“测试连接”按钮（最小推理检查在 P24/P38）；获取后直接合并、不先预览；回环与私有地址继续允许；
+P13、P14 并入本任务并保留占位标题；P12 只保存显示字段，完整能力字段在 P16。完整设计见维护者保存的 P12 计划；协议证据见 `docs/integrations/providers.md`「模型列表获取（P12）」。
+D16（维护者批准，2026-10-10 完成）：2026-10-10 20:10（UTC+8）不带认证头请求 `GET https://api.commandcode.ai/provider/v1/models`，HTTP 200、17079 字节；结构为 `{object:"list", data:[…]}`，无分页字段，87 个模型，每个模型恰有 `id`、`object:"model"`、`created`（秒级时间戳）、`owned_by:"command-code"`、`name`、`context_length`、`supported_endpoints` 7 个字段；`supported_endpoints` 不带 `/v1` 前缀（与文档写法不同），只有三种组合：`["/chat/completions","/responses"]` 68 个、`["/messages"]` 11 个（均为 Claude）、`["/chat/completions"]` 8 个；65 个模型 ID 含 `/`。原样保存为 `src-tauri/tests/fixtures/command-code-models-2026-10-10.json`（不含密钥，已加入 `.prettierignore` 以保持原字节）。
+
+### P12.0：拆分记录与证据核实
+
+- [x] 写入子任务与维护者决定；按官方文档核实 G1–G3（Command Code、DeepSeek、OpenRouter 的列表结构）与 G9（内置 SQLite 带 JSON 函数），写入 `providers.md`；P13/P14 留占位标题，调整 P15/C15/P16/P24 依赖。G1 当时只部分确认，之后由 D16 的真实响应补全。
+
+**Files:** `docs/plans/todo.md`、`docs/integrations/providers.md`、`docs/plans/development-plan.md`、`docs/plans/phase-1.md`。
+**Verification:** Prettier 检查与差异检查。
+**Dependencies:** P10、P11.a.4。
+
+### P12.a.1：HTTP 传输层
+
+- [x] 加入依赖（reqwest、rustls、`tokio` 的 `macros`/`time`/`sync`、`serde_json`）；只安装一次 ring 加密实现；`HttpSettings` + `ProxyMode`（生产为 `System`，`#[cfg(test)]` 的 `for_mock_server()` 为 `Disabled` 并调用 `.no_proxy()`，允许 `http://127.0.0.1`）；`build_client` 设置连接超时、不跟随重定向、只用 HTTPS 与 User-Agent；按上限逐块读取；`reqwest::Error` 只用于分类，不输出文本。
+- [x] `TcpListener` 模拟服务器测试：超时、慢速响应、超大响应、连接中断、3xx、401/402/403/429/5xx，密钥不进入 URL 与错误；取消时服务器挂起，`select!` 立即返回，并且服务器观察到连接关闭。实现为 `HttpClient::new`/`get_bounded`、`run_cancellable`、`with_deadline` 与可复用的 `test_server`（14 个测试，另含 TLS 握手失败、拒绝明文 HTTP 与 URL 内凭据）。
+
+**Files:** `src-tauri/src/http_client.rs`（新）、`src-tauri/src/lib.rs`、`src-tauri/Cargo.toml`、`src-tauri/Cargo.lock`。
+**Verification:** `cargo test --manifest-path src-tauri/Cargo.toml --locked http_client`（条数非零）、全部测试、fmt、Clippy；`cargo tree --locked -i aws-lc-rs` 与 `-i native-tls` 为空；在 `HTTP_PROXY`/`HTTPS_PROXY`/`ALL_PROXY`（含小写）指向 `http://127.0.0.1:9`、`NO_PROXY` 为空时重跑 `http_client` 测试，仍全部通过。
+**Dependencies:** P12.0。
+
+### P12.a.2：模型列表解析
+
+- [x] DeepSeek（`object`/`data[].id/name/context_window/max_output_tokens/input_modalities/output_modalities`）与 OpenRouter（`data`/`total_count`/`links.next`，`limit=500`、自己累加 `offset`、不跟随 `links.next` URL、最多 10 页）解析；跳过无效 ID 并计数、同 ID 保留第一条；Command Code（`object`/`data[].id/name/context_length/supported_endpoints`，单次请求无分页；`supported_endpoints` 去掉可选的 `/v1` 前缀后与 `/chat/completions`、`/responses`、`/messages` 比较，缺少该字段时路由为 `unknown`）。用 D16 夹具测试：87 个模型、65 个 ID 含 `/`、三种路由组合 68/11/8、`chat_completions` 协议下 76 个可勾选与 11 个不可勾选；另用合成数据确认带 `/v1` 前缀的值同样识别。实现为 `model_catalog.rs`：三家解析函数、`route_support`、`models_url`/`openrouter_page_url`、`CatalogCollector`（去重、5000 上限、不完整原因）与 `OpenRouterPager`（14 个测试）；`providers.rs` 中过时的 P13 注释已更新。
+
+**Files:** `src-tauri/src/model_catalog.rs`（新）、`src-tauri/src/lib.rs`、`src-tauri/src/providers.rs`（`is_hidden_format_character` 改为 `pub(crate)`）、`src-tauri/tests/fixtures/command-code-models-2026-10-10.json`（已存在，只读）。
+**Verification:** `cargo test ... model_catalog`（条数非零）、fmt、Clippy。
+**Dependencies:** P12.0。
+
+### P12.a.3：schema v7 与模型存储
+
+- [x] v7 迁移 `provider_model`（主键 `(provider_id, model_id)`，外键级联，`source`、`selected`、显示字段、`last_seen_at`/`missing_since`）与 `provider_model_fetch`；无查询的稳定游标列表（`ORDER BY model_id`，游标为最后一个 `model_id` 的 UTF-8 字节小写十六进制编码，不用分隔符拆分，因此含 `/`、`.`、`:` 的 ID 都安全）与「全部/已勾选」筛选、批量勾选、手动添加与删除、`ModelError`。测试含跨页边界的带 `/`、`.`、`:` 的模型 ID 与损坏游标。
+
+**Files:** `src-tauri/src/storage.rs`、`src-tauri/src/models.rs`（新）、`src-tauri/src/lib.rs`。
+**Verification:** `cargo test ... storage`、`cargo test ... models`（条数非零）、fmt、Clippy。
+**Dependencies:** P12.0。
+
+> 完成（2026-10-10）：`models.rs` 提供 `list_provider_models`（无查询，`all`/`selected`，每页 1–200）、`set_models_selected`（单事务全成或全不成，每批 ≤500，勾选获取行按 D9 只允许 `supported`/`not_applicable`）、`add_manual_model`（trim 后复用 `is_valid_model_id`，别名复用 `validate_display_name`，默认勾选）、`delete_manual_model`（只删手动行）与 `ModelError`。`fetch_provider_models` 所需错误码与合并在 P12.a.4 增补。v5→v6 测试改为 `MIGRATIONS[..6]` 固定版本。验证：fmt、Clippy 通过；`storage::` 16、`models::` 10、全量 136 通过 1 忽略；`check:frontend` 通过。
+
+### P12.a.4：合并与异步获取
+
+- [x] 合并规则（完整与不完整获取）；`model_fetch.rs`：登记 → 读快照与密钥 → 下载 → `select!` 取消 → 过期检查 → 在一个事务中合并；`ModelFetchRegistry` 拒绝同一 Provider 的并发获取；`#[tokio::test]` 端到端测试使用 `FakeStore` 与模拟服务器，并检查数据库文件中没有密钥。
+
+**Files:** `src-tauri/src/model_fetch.rs`（新）、`src-tauri/src/models.rs`、`src-tauri/src/lib.rs`；另有两处小改：`src-tauri/src/model_catalog.rs`（`models_url` 无法解析时改为 `invalid_stored_provider`）、`src-tauri/src/http_client.rs`（`run_cancellable`/`with_deadline` 的错误类型改为泛型 `E: From<HttpError>`）。
+**Verification:** `cargo test ... model_fetch`、`cargo test ... models`（条数非零）、全部测试、fmt、Clippy。
+**Dependencies:** P12.a.1、P12.a.2、P12.a.3。
+
+> 完成（2026-10-10）：`model_fetch.rs` 分为 `ModelFetchRegistry`（每个 Provider 只允许一次获取；`cancel` 只在下载阶段返回 `true`，`enter_merge` 之后返回 `false`）、`prepare_fetch`（在锁内读取 `kind`/`protocol`/`base_url`/`revision` 与凭据引用，释放锁后再读密钥）、`download_catalog`（三家都带 Bearer，OpenRouter 用 `OpenRouterPager` 分页；`run_cancellable(with_deadline(90 s, …))`）、`merge_catalog`（一个 `IMMEDIATE` 事务：`revision` 或 `base_url` 变化返回 `model_fetch_stale`，Provider 已删除返回 `not_found`；然后合并并写入 `provider_model_fetch`）、`fetch_provider_models`（依次执行以上步骤）和 `fetch_status`。P12.b.1 用 `spawn_blocking` 包装快照与合并两步。`ModelFetchSummary.skippedInvalid` 包含无效 ID 与同次重复 ID。
+> `ModelError` 当前错误码：`storage_unavailable`、`read_failed`、`write_failed`、`operation_failed`、`invalid_request`、`not_found`、`invalid_stored_provider`、`invalid_stored_model`（a.3 新增）、`model_id_invalid`、`model_alias_invalid`、`model_already_exists`、`model_not_found`、`model_route_not_supported`，以及 a.4 新增的 `secret_missing`、`secret_invalid`、`base_url_invalid`、`credential_store_unavailable`、`credential_store_access_denied`、`credential_store_failed`、`model_fetch_in_progress`、`model_fetch_cancelled`、`model_fetch_stale`、`connection_failed`、`tls_failed`、`request_timed_out`、`auth_rejected`、`insufficient_balance`、`rate_limited`、`upstream_unavailable`、`upstream_response_invalid`、`response_too_large`。网络错误码与 `HttpError::code()` 一致（有测试）。P12.b.2 的错误码白名单以此为准。
+> 验证：fmt、Clippy 通过；`model_fetch` 14、`models::` 10、`model_catalog` 14、`http_client` 14，全量 150 通过 1 忽略；代理变量指向 `http://127.0.0.1:9` 时 `model_fetch` 与 `http_client` 28 个测试通过；`check:frontend` 通过。
+
+### P12.a.5：模型列表模糊搜索
+
+- [x] `model_search.rs`：规范化（Unicode 小写；`-`、`_`、`/`、`.` 与空白视为同一分隔符；只按分隔符切词，不按字符切分中文）、单词档位（exact 3 / prefix 2 / contains 1 / subsequence 0）、多词排序键（整体精确匹配、最弱档位、档位之和、`model_id`）。`models.rs` 接入 `query`：SQLite 只按 Provider 和勾选状态过滤，不用 `LIKE`；内存打分排序后返回前 `limit` 条与 `totalMatches`，`nextCursor` 为 `null`；规范化后为空的查询按无查询处理；查询超过 200 个字符，或有查询时 `after` 非空，返回 `invalid_request`。
+- [x] 测试覆盖：中文显示名称（“求索”包含、“深求”子序列，“深度求索”是一个词）；空查询、全空白与只有分隔符的查询等同无查询；`%`、`_`、`\`、引号与正则元字符按字面处理，不会匹配全部或报错；分隔符等价；多词 AND（“ds chat” 命中 `deepseek-chat`，不命中 `deepseek-reasoner`，不同词可命中不同字段）；档位顺序与同分时的稳定顺序；200 个字符通过、201 个字符被拒（按字符计数）；匹配数超过 `limit` 时截断并返回总数；与「已勾选」筛选组合；5000 行冒烟测试。
+
+**Files:** `src-tauri/src/model_search.rs`（新）、`src-tauri/src/models.rs`、`src-tauri/src/lib.rs`。
+**Verification:** `cargo test ... model_search`、`cargo test ... models`（条数非零）、fmt、Clippy。
+**Dependencies:** P12.a.3。
+
+> 完成（2026-10-10）：`model_search.rs` 提供 `SearchQuery::parse`（按字符计数，超过 200 个返回错误；规范化后为空返回 `None`）、`SearchQuery::score`（每个词取各字段中的最高档位，`MatchScore` 依次比较 `full_exact`、`weakest`、`sum`）与 `sort_ranked`（同分按 `model_id` 字节序）。`ListProviderModelsRequest` 增加可省略的 `query`；`ProviderModelPage` 增加 `totalMatches`（无查询时为 `null`）。有查询时 SQLite 只按 `provider_id` 与 `selected` 过滤，不用 `LIKE`，查询文本不进入 SQL。验证：fmt、Clippy 通过；`model_search` 7、`models::` 16，全量 163 通过 1 忽略；5000 行 3 次查询在 debug 构建中约 145 ms（测试上限 10 s，只防止平方级退化）；`check:frontend` 通过。
+
+### P12.b.1：Tauri 命令
+
+- [ ] 薄命令 `fetch_provider_models`（async，`select!` 取消；数据库与凭据操作放在 `spawn_blocking`）、`cancel_provider_model_fetch`、`get_provider_model_fetch_status`、`list_provider_models`、`set_provider_models_selected`、`add_manual_provider_model`、`delete_manual_provider_model` 与注册。
+
+**Files:** `src-tauri/src/commands.rs`、`src-tauri/src/lib.rs`。
+**Verification:** Rust fmt/Clippy/全部测试。
+**Dependencies:** P12.a.4、P12.a.5。
+
+### P12.b.2：模型 TS 包装
+
+- [ ] `models.ts` 运行时校验响应（严格键集合）、错误码白名单；浏览器预览列表返回 `{ kind: "preview" }`，写入与获取抛 `desktop_required`，取消返回 `{ wasRunning: false }`。
+
+**Files:** `src/lib/desktop/models.ts`（新）、`src/lib/desktop/models.test.ts`（新）。
+**Verification:** `pnpm run test:ui src/lib/desktop`、`pnpm run check:frontend`。
+**Dependencies:** P12.b.1。
+
+### P12.c.1：模型列表与勾选（Frontend Developer）
+
+- [ ] `ProviderModels` 列表：搜索框（防抖；有查询时按相关度排序并显示“共 N 个匹配，显示前 M 个”）、「全部/已勾选」筛选、无查询时加载更多、复选框、上游消失与路由标记，逐行保存与失败回滚。
+
+**Files:** `src/features/providers/ProviderModels.tsx`（新）、`ProviderModels.module.css`（新）、`ProviderModels.test.tsx`（新）、两份 locale。
+**Verification:** `pnpm run test:ui src/features/providers`、`pnpm run check:frontend`。
+**Dependencies:** P12.b.2、P11.c.3。
+
+### P12.c.2：获取、取消与错误状态（Frontend Developer）
+
+- [ ] 「获取模型」与「取消」、`aria-busy`、`role="status"` 播报、摘要通知、不完整提示、各错误码文案与重试；页面隐藏时取消并丢弃晚到结果；无密钥时引导到「密钥」。
+
+**Files:** `src/features/providers/ProviderModels.tsx`、`ProviderModels.test.tsx`、两份 locale。
+**Verification:** 同 P12.c.1。
+**Dependencies:** P12.c.1。
+
+### P12.c.3：手动添加（Frontend Developer）
+
+- [ ] `ManualModelForm`：模型 ID 与可选别名，字段级错误，删除手动行。
+
+**Files:** `src/features/providers/ManualModelForm.tsx`（新）、`ManualModelForm.test.tsx`（新）、`ProviderModels.tsx`、两份 locale。
+**Verification:** 同 P12.c.1。
+**Dependencies:** P12.c.2。
+
+### P12.c.4：接入详情页（Frontend Developer）
+
+- [ ] 编辑页「模型」分组；页面隐藏或返回时取消获取。
+
+**Files:** `src/features/providers/ProvidersView.tsx`、`ProvidersView.test.tsx`、`src/App.test.tsx`。
+**Verification:** 同 P12.c.1。
+**Dependencies:** P12.c.3。
+
+### P12.d：文档与真实验证
+
+- [ ] 更新架构/计划现状与英文 changelog；完整自动检查与 `tauri build --no-bundle`。
+- [ ] 维护者在实际 Tauri 中对三家各做一次由用户触发的获取，确认 G4（真实响应大小）、Command Code 结构与 D16 夹具一致，以及 DeepSeek 不带密钥时的行为；Windows/Linux 未测时在此注明。
+
+**Files:** `docs/architecture.md`、`docs/plans/development-plan.md`、`docs/plans/phase-1.md`、`docs/integrations/providers.md`、`CHANGELOG.md`。
+**Verification:** 完整检查与实际 Tauri 运行。
+**Dependencies:** P12.c.4。
 
 ### Checkpoint C12（P10–P12）
 
 - [ ] P10–P12 均已勾选。
 
-### Task P13: 验证 DeepSeek 连接
+### Task P13: 验证 DeepSeek 连接（已并入 P12）
 
-**Description:** 实现已核实的 DeepSeek 协议适配，并从 UI 明确触发最小连接检查。
+维护者决定（2026-10-10）：并入 P12。超时、取消、脱敏、模拟 HTTP 服务测试和“只在用户触发时请求”的要求由 P12 承接；“获取模型”成功即说明列表请求成功，不单独做连接检查按钮；由用户触发的最小推理检查放在 P24/P38。保留本标题以免旧引用失效。
 
-**Acceptance criteria:**
+### Task P14: 接入 OpenRouter 模型发现（已并入 P12）
 
-- [ ] 使用文档确认的认证和请求结构，显示连通性与能力限制，不假定所有模型相同。
-- [ ] 网络请求有超时与取消/失效结果处理；认证失败、限流与协议错误脱敏。
-- [ ] 默认用模拟 HTTP 服务测试；真实请求只在用户触发时发送，并提示可能计费。
+维护者决定（2026-10-10）：并入 P12，删除与 P12 重复的模型发现任务。OpenRouter 的分页（每页 500、最多 10 页、每个 Provider 最多 5000 个模型）、勾选与手动补充都在 P12 完成；完整能力与参数字段映射在 P16。保留本标题以免旧引用失效。
 
-**Verification:**
-
-- [ ] 运行 Rust `deepseek` 模拟服务测试与 ProviderForm 状态测试。
-- [ ] 运行 `check:frontend`、Rust fmt/Clippy；新增网络依赖若扩大范围先拆分。
-- [ ] 提供测试凭据时才做真实连接验证并记录结果。
-
-**Dependencies:** P01,P11,P12。
-
-**Files likely touched:**
-
-- `src-tauri/src/providers/deepseek.rs`
-- `src-tauri/src/providers.rs`
-- `src/lib/desktop/providers.ts`
-- `src/features/providers/ProviderForm.tsx`
-- `src/features/providers/ProviderForm.test.tsx`
-
-**Estimated scope:** M：5 个建议主文件；如需额外文件先按执行约定拆分。
-
-### Task P14: 接入 OpenRouter 模型发现
-
-**Description:** 增加 OpenRouter 模板和模型发现，把返回信息用于已有 Model 管理流程。
-
-**Acceptance criteria:**
-
-- [ ] 按真实协议连通并查询模型，映射支持的能力/参数字段，不复制 DeepSeek 假设。
-- [ ] 能选择并保存返回模型，保留手动覆盖；无列表、失败或字段缺失时可手动配置。
-- [ ] 覆盖分页/大列表、超时、限流与缓存来源时间，错误不含认证值。
-
-**Verification:**
-
-- [ ] 运行 Rust `openrouter`/`models` 模拟测试和 ModelForm 测试。
-- [ ] 运行 `check:frontend` 与 Rust fmt/Clippy。
-- [ ] 有测试凭据时检查实际模型字段来源；更新 integrations 证据记录。
-
-**Dependencies:** P01,P13。
-
-**Files likely touched:**
-
-- `src-tauri/src/providers/openrouter.rs`
-- `src-tauri/src/models.rs`
-- `src/lib/desktop/models.ts`
-- `src/features/models/ModelForm.tsx`
-- `src/features/models/ModelForm.test.tsx`
-
-**Estimated scope:** M：5 个建议主文件；如需额外文件先按执行约定拆分。
-
-### Task P15: 接入 Command Code GOAT
+### Task P15: 接入 Command Code
 
 **Description:** 使用 P01 的准确接入约定新增服务商适配，复用账户与 Model 页面。
 
 **Acceptance criteria:**
 
+- [ ] 核实 Pro 与 Provider 套餐的 API 访问、模型权限与路由证据；P01 只覆盖 Command Code 的 GOAT 套餐，未核实前不套用其结论。
 - [ ] 按照其真实认证、协议和扩展字段保存与验证，不凭名称猜 URL。
-- [ ] 有模型发现接口就映射；没有则支持手动模型且清楚说明能力信息来源。
+- [ ] 基于 P12 获取的 `supported_endpoints` 实现按模型的协议路由（Responses/Anthropic Messages 覆盖）；手动模型清楚说明能力信息来源。
 - [ ] 未核实的特有行为保持不可用，不写死为 OpenAI 兼容或伪造成功。
 
 **Verification:**
 
-- [ ] 运行 Rust `command_code_goat` 模拟服务测试与表单行为测试。
+- [ ] 运行 Rust `command_code` 模拟服务测试与表单行为测试。
 - [ ] 运行 `check:frontend` 与 Rust fmt/Clippy。
 - [ ] 真实连接依赖准确文档和明确提供的测试凭据，未满足时保留待验状态。
 
-**Dependencies:** P01,P13。
+**Dependencies:** P01,P12。
 
 **Files likely touched:**
 
-- `src-tauri/src/providers/command_code_goat.rs`
+- `src-tauri/src/providers/command_code.rs`
 - `src-tauri/src/providers.rs`
 - `src/lib/desktop/providers.ts`
 - `src/features/providers/ProviderForm.tsx`
@@ -1032,9 +1320,9 @@ Provider/Agent 品牌名（按规则保留原值）。缺口在资源校验、me
 
 **Estimated scope:** M：5 个建议主文件；如需额外文件先按执行约定拆分。
 
-### Checkpoint C15（P13–P15）
+### Checkpoint C15（P15；P13/P14 已并入 P12）
 
-- [ ] P13–P15 均已勾选。
+- [ ] P15 已勾选（P13、P14 已并入 P12，随 C12 检查）。
 
 ### Task P16: 校验 Provider 特有参数
 
@@ -1045,13 +1333,14 @@ Provider/Agent 品牌名（按规则保留原值）。缺口在资源校验、me
 - [ ] 根据协议声明允许的字段类型、枚举和范围，区分默认、继承与显式覆盖。
 - [ ] 保留可验证的自定义请求头/参数；拒绝危险认证覆盖、未知注入字段和不支持的值。
 - [ ] UI 显示能力信息来源与具体校验原因，不因手动标签就宣称实际支持。
+- [ ] 承接 P12 未做的部分：模型别名编辑、手动能力覆盖，以及 schema v8 的能力/参数字段（如 DeepSeek `effort`、OpenRouter `supported_parameters`）。
 
 **Verification:**
 
 - [ ] 运行 Rust `model_parameters` 测试，覆盖 effort/预算、图像、工具与输出限制的差异。
 - [ ] 运行 ModelForm 测试、`check:frontend` 与 Rust fmt/Clippy。
 
-**Dependencies:** P12,P13,P14,P15。
+**Dependencies:** P12,P15。
 
 **Files likely touched:**
 
@@ -1278,13 +1567,14 @@ Provider/Agent 品牌名（按规则保留原值）。缺口在资源校验、me
 - [ ] 每个组合有 supported/unsupported/unverified 状态及原因、版本与证据。
 - [ ] 切换账户或模型保持稳定绑定，并正确提示项目/环境变量覆盖。
 - [ ] 回归工具调用、推理/图像参数等已支持能力，未支持项不被静默丢弃。
+- [ ] 提供由用户触发、提示可能计费的最小推理检查（原 P13 的连接验证意图），区分网络、密钥、套餐与模型请求失败。
 
 **Verification:**
 
 - [ ] 运行 Rust `compatibility` 映射样本测试与 UI 切换测试。
 - [ ] 运行完整项目检查；真实用例仅使用许可的测试凭据。
 
-**Dependencies:** P13,P14,P15,P16,P20,P23。
+**Dependencies:** P12,P15,P16,P20,P23。
 
 **Files likely touched:**
 

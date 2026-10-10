@@ -1,0 +1,147 @@
+/*
+ * Rows follow settingsField.module.css. Text hierarchy: labels and values use
+ * the foreground at 0.8125rem and normal weight; hints and secondary values are
+ * smaller and muted (--color-summary); errors use the foreground, semibold and
+ * a leading rule, so they never read as a hint.
+ */
+.group {
+    width: 100%;
+    margin-top: var(--space-lg);
+}
+
+.groupTitle {
+    margin: 0;
+    color: var(--color-text);
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.control {
+    display: grid;
+    gap: 6px;
+    width: min(26rem, 100%);
+    min-width: 0;
+}
+
+.value,
+.secondaryValue {
+    min-width: 0;
+    text-align: end;
+    overflow-wrap: anywhere;
+}
+
+.value {
+    color: var(--color-text);
+    font-size: 0.8125rem;
+}
+
+/* Brand icon before the read-only provider value. */
+.valueWithIcon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-sm);
+}
+
+/* Brand icon beside the provider select; the select keeps the rest. */
+.controlWithIcon {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.controlWithIcon > div {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.secondaryValue {
+    color: var(--color-summary);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.input {
+    width: 100%;
+    height: 36px;
+    min-height: 36px;
+    padding: 0 10px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    color: var(--color-text);
+    background: var(--color-background);
+    font: inherit;
+    font-size: 0.8125rem;
+}
+
+.input:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+}
+
+/* Blocked controls stay focusable (readOnly/aria-disabled), see ProviderForm. */
+.input:read-only {
+    color: var(--color-summary);
+    cursor: not-allowed;
+}
+
+.input[aria-invalid="true"] {
+    border-width: 2px;
+}
+
+.group select:focus-visible {
+    outline-color: var(--color-focus);
+}
+
+.group select[aria-disabled="true"] {
+    color: var(--color-summary);
+    cursor: not-allowed;
+}
+
+.group select[aria-disabled="true"]:hover {
+    background: var(--color-background);
+}
+
+.hint,
+.message {
+    margin: 0;
+    color: var(--color-summary);
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+
+.hint {
+    font-size: 0.75rem;
+}
+
+.message {
+    font-size: 0.8125rem;
+}
+
+.error {
+    margin: 0;
+    padding-inline-start: var(--space-sm);
+    border-inline-start: 2px solid var(--color-text);
+    color: var(--color-text);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+
+.feedback {
+    display: grid;
+    gap: var(--space-sm);
+    margin-top: var(--space-md);
+}
+
+.feedback:empty {
+    display: none;
+}
+
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+    margin-top: var(--space-md);
+}

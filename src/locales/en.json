@@ -100,5 +100,127 @@
             "preview": "Browser preview applies colors only in this window; preferences are not saved.",
             "reload": "Reload saved appearance"
         }
+    },
+    "notifications": {
+        "dismiss": "Dismiss notification"
+    },
+    "providers": {
+        "note": "These are saved configurations only. vibemate does not use them for connections or apply them to any agent yet.",
+        "preview": "The browser preview cannot read or save provider configurations. Open this page in the vibemate desktop app.",
+        "loading": "Reading saved provider configurations…",
+        "empty": "No provider configurations are saved yet.",
+        "add": "New configuration",
+        "retry": "Try again",
+        "retryTemplates": "Try reading available providers again",
+        "saved": "Saved “{{name}}”.",
+        "loadMore": "Load more",
+        "loadingMore": "Loading more…",
+        "back": "Back",
+        "backLabel": "Back to provider list",
+        "list": {
+            "label": "Saved provider configurations",
+            "summary": "{{brand}} · {{protocol}}",
+            "id": "ID {{id}}",
+            "edit": "Edit",
+            "editLabel": "Edit “{{name}}” (ID {{id}})"
+        },
+        "groups": {
+            "basic": "Basic information",
+            "keys": "Keys"
+        },
+        "fields": {
+            "kind": "Provider",
+            "id": "ID",
+            "displayName": "Name",
+            "baseUrl": "Base URL",
+            "baseUrlHint": "Must start with https:// and contain no query or fragment.",
+            "protocol": "Protocol",
+            "secret": "API key",
+            "secretHint": "The key is stored only in the system credential store, never in vibemate's settings. This field is cleared after every save attempt.",
+            "secretRequired": "Enter the API key."
+        },
+        "protocols": {
+            "chat_completions": "Chat Completions",
+            "responses": "Responses",
+            "anthropic_messages": "Anthropic Messages"
+        },
+        "form": {
+            "createTitle": "New provider configuration",
+            "editTitle": "Edit “{{name}}”",
+            "save": "Save",
+            "saving": "Saving…",
+            "cancel": "Cancel",
+            "saveAgain": "Save again",
+            "refreshList": "Refresh list",
+            "refreshing": "Refreshing the list to check the result of this save…",
+            "unknownRefreshed": "The list was refreshed. Check whether this configuration already appears in it, and save again only if it does not.",
+            "refreshFailed": "The list could not be refreshed, so saving again is blocked. Refresh the list to check first.",
+            "reloadLatest": "Reload latest settings",
+            "reloading": "Reloading the latest settings…",
+            "reloaded": "The latest saved settings were loaded. Review them before saving.",
+            "unknownRefreshedSecret": "The list was refreshed. Check whether this configuration already appears in it, and save again only if it does not. The API key field was cleared, so enter the key again before saving."
+        },
+        "keys": {
+            "current": "Current key",
+            "set": "Set · updated {{time}}",
+            "missing": "No key set",
+            "unknown": "Status unknown",
+            "loading": "Reading the key status…",
+            "preview": "The browser preview cannot read or change API keys. Open this page in the vibemate desktop app.",
+            "newSecret": "New API key",
+            "secret": "API key",
+            "hint": "The key is stored only in the system credential store and cannot be viewed in vibemate. This field is cleared after every attempt.",
+            "replace": "Replace key",
+            "setKey": "Set key",
+            "replacing": "Replacing the key…",
+            "setting": "Setting the key…",
+            "replaced": "API key replaced.",
+            "keySet": "API key set.",
+            "refresh": "Refresh key status",
+            "retry": "Read key status again",
+            "refreshing": "Refreshing the key status…",
+            "refreshed": "The key status was refreshed. “Set” does not prove that the new key was saved; if you are not sure, replace it again.",
+            "replaceErrors": {
+                "read_failed": "The key was not changed because the saved configuration could not be read. Try again.",
+                "write_failed": "The key was not changed, and the previous key status is unchanged. Try again.",
+                "storage_unavailable": "Local configuration storage is unavailable, so the key was not changed. Restart vibemate.",
+                "invalid_request": "The request is invalid, so the key was not changed. Go back, refresh the list and try again.",
+                "not_found": "This provider configuration was not found, so its key was not changed. Go back and refresh the list.",
+                "operation_failed": "The operation could not finish and its result is unknown. Refresh the key status before trying again.",
+                "invalid_response": "The app received an unrecognized response, so the result is unknown. Refresh the key status to check.",
+                "desktop_required": "API keys cannot be changed in the browser preview, so nothing was changed. Use the vibemate desktop app."
+            },
+            "readErrors": {
+                "read_failed": "The key status could not be read. Try again.",
+                "not_found": "This provider configuration was not found; it may no longer exist. Go back and refresh the list.",
+                "operation_failed": "The key status could not be read because the operation did not finish. Nothing was changed. Try again.",
+                "invalid_response": "The app received an unrecognized key status. Nothing was changed. Try again."
+            }
+        },
+        "errors": {
+            "storage_unavailable": "Local configuration storage is unavailable. Restart vibemate.",
+            "read_failed": "Provider settings could not be read. Try again.",
+            "write_failed": "The provider settings were not saved. The previous settings are unchanged. Try again.",
+            "operation_failed": "The operation could not finish and its result is unknown. Refresh the list before trying again.",
+            "invalid_stored_provider": "A saved provider configuration is not recognized, possibly from a newer vibemate version. It was left unchanged.",
+            "not_found": "This provider configuration was not found. Refresh the list.",
+            "revision_conflict": "This configuration was changed elsewhere. Reload it before editing.",
+            "invalid_request": "The request is invalid. Refresh and try again.",
+            "kind_not_supported": "This provider is not supported.",
+            "protocol_not_supported": "The selected protocol is not supported for this provider yet.",
+            "display_name_invalid": "Enter a name of 1–64 visible characters without line breaks, control characters or invisible formatting characters.",
+            "base_url_invalid": "Enter a valid base URL without spaces, a query (?) or fragment (#), up to 2048 characters.",
+            "base_url_not_https": "The base URL must start with https://.",
+            "base_url_has_credentials": "The base URL must not contain a user name or password.",
+            "extension_field_not_supported": "The settings include an extension field that is not supported yet. Nothing was saved.",
+            "invalid_response": "The app received an unrecognized response, so the result is unknown. Refresh to check.",
+            "desktop_required": "Settings cannot be saved in the browser preview. Use the vibemate desktop app.",
+            "secret_invalid": "Enter the API key. It must not contain line breaks or other control characters, and must fit the system credential store's size limit.",
+            "credential_store_unavailable": "No system credential store is available on this device (for example, no Secret Service on Linux). Nothing was saved, and vibemate never stores keys as plain text.",
+            "credential_store_access_denied": "vibemate could not access the system credential store. It may be locked or access was refused, and nothing was changed. Unlock it or allow access, then try again.",
+            "credential_store_failed": "The system credential store reported an error and nothing was changed. If you denied access in a system prompt, try again and allow it.",
+            "create_outcome_unknown": "vibemate could not confirm whether this configuration was saved, and an unused key entry may remain in the system credential store (vibemate never reads it). Refresh the list to check before adding it again.",
+            "secret_outcome_unknown": "vibemate could not confirm whether the key was replaced; the system credential store may already hold the new key. Refresh the key status and replace it again if unsure."
+        }
     }
 }

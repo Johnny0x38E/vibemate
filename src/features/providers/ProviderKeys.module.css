@@ -1,0 +1,8 @@
+/*
+ * The key group reuses ProviderForm.module.css for its layout and text
+ * hierarchy. Only the status value is specific: the update time keeps its
+ * digits aligned, and a long translated status wraps instead of overflowing.
+ */
+.state {
+    font-variant-numeric: tabular-nums;
+}

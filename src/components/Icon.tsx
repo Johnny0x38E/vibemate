@@ -1,6 +1,6 @@
 import type { JSX, ReactNode } from "react";
 
-/** Small decorative icons shared by navigation and appearance controls. */
+/** Small decorative icons shared by navigation, appearance and page controls. */
 export type IconName =
     | "home"
     | "providers"
@@ -11,7 +11,11 @@ export type IconName =
     | "collapse"
     | "system"
     | "light"
-    | "dark";
+    | "dark"
+    | "back"
+    | "close"
+    | "plus"
+    | "edit";
 
 /** Render an inline SVG; the containing control must provide its accessible name. */
 export function Icon({ name }: { name: IconName }): JSX.Element {
@@ -89,6 +93,18 @@ export function Icon({ name }: { name: IconName }): JSX.Element {
             content = (
                 <path d="M20.5 14.2A9 9 0 0 1 9.8 3.5a9 9 0 1 0 10.7 10.7Z" />
             );
+            break;
+        case "back":
+            content = <path d="M19 12H5m6-6-6 6 6 6" />;
+            break;
+        case "close":
+            content = <path d="M6 6l12 12M18 6 6 18" />;
+            break;
+        case "plus":
+            content = <path d="M12 5v14M5 12h14" />;
+            break;
+        case "edit":
+            content = <path d="M4 20h4L19 9l-4-4L4 16Zm9-13 4 4" />;
             break;
     }
     return (

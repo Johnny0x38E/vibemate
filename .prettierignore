@@ -5,6 +5,8 @@ src-tauri/gen/
 *.rs
 Cargo.lock
 pnpm-lock.yaml
+# Captured vendor responses stay byte-for-byte as recorded.
+src-tauri/tests/fixtures/
 .codegraph/
 .pnpm-store/
 

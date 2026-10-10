@@ -5,7 +5,7 @@
 ## 目标与范围
 
 做一个集中管理 Provider、Model、Skill 和 MCP Server 的桌面工具，将配置
-按各 Agent 的实际能力注入。第一阶段的 Provider 是 Command Code GOAT、
+按各 Agent 的实际能力注入。第一阶段的 Provider 是 Command Code、
 DeepSeek、OpenRouter；Agent 是 Pi、Grok Build。目标平台是 macOS、Windows、Linux；第一阶段界面支持简体中文与英文。
 
 使用当前稳定版 Rust、最新稳定 Edition、稳定版 Tauri、React 和 TypeScript。
@@ -25,7 +25,9 @@ DeepSeek、OpenRouter；Agent 是 Pi、Grok Build。目标平台是 macOS、Wind
 - 已有 CHANGELOG 分版本提取、发布校验测试及四目标安装包草稿 Release 工作流。
 - 已有 UI 行为测试、SQLite 私有存储与迁移、OS 凭据接口，以及覆盖现有全部界面的中英文资源。
 - 语言偏好、启动门禁与桌面壳（双语导航、Settings 常规/关于、语言/外观下拉）已接入。
-- **没有** Provider 接入、Model 管理、Agent 配置写入或 Skill/MCP 管理。
+- P10：Providers 页可保存非敏感 Provider 配置（schema v5，稳定随机 ID、游标分页、`revision` 并发检查，同一服务商可有多个实例）；
+  真实 Tauri 保存→重启的人工验证待完成。
+- **没有** 密钥保存、Provider 连接、Model 管理、Agent 配置写入或 Skill/MCP 管理。
   现有界面文案已全部接入翻译，`check:i18n` 校验资源一致性（P09 已完成，维护者 2026-10-10 人工确认双语界面）；
   不要把发布校验或基础测试当作业务接入验收。
 - 当前 codegraph 索引可查询；仓库上下文和跨模块分析使用项目绝对路径。
@@ -85,6 +87,13 @@ IPC 返回值要做运行时校验，复杂数据出现时再引入适合的 sch
 数据库与凭据库不共享事务。密钥写入、元数据保存和删除必须设计补偿步骤，避免
 失败后残留不可恢复的配置或泄漏孤立凭据。OS 凭据库不可用时显示明确错误，不能
 回退为明文 SQLite。UI 只临时持有用户输入的密钥，提交/取消后清理。
+
+第一个网络请求是 P12 的「获取模型」，只在用户点击时发送。HTTP 客户端为
+`reqwest 0.13.5`（关闭默认特性，使用 `rustls-no-provider` 与 `system-proxy`），加密实现为
+rustls 的 ring，不引入 aws-lc 或 native-tls；证书用操作系统信任库校验。应用读取系统代理：
+先读 `ALL_PROXY`/`HTTPS_PROXY`/`HTTP_PROXY`/`NO_PROXY`（含小写），未设置时读 macOS/Windows
+系统设置，Linux 只读环境变量。测试通过可注入的客户端设置调用 `.no_proxy()`，模拟服务器不受
+代理环境变量影响。请求在 Tauri 已有的 tokio 运行时上异步执行，用户取消时立即中断。
 
 ### 4. 注入必须可预览、可恢复
 
@@ -151,7 +160,7 @@ Rust 使用稳定错误 code 与安全参数，前端决定语言；不翻译配
 | -------------------- | ------- | ------------------------------------------------------ |
 | A：先排除接入风险    | P01–P03 | Provider 与两个 Agent 的有证据支持矩阵                 |
 | B：测试、存储与 i18n | P04–P09 | UI 测试、SQLite、OS 凭据边界与中英文界面               |
-| C：Provider/Model    | P10–P16 | 可保存账户、选择模型、校验连接与特有参数               |
+| C：Provider/Model    | P10–P16 | 可保存账户、获取并勾选模型、校验特有参数               |
 | D：Pi 配置           | P17–P21 | 发现、预览、可靠写入、回滚                             |
 | E：Grok Build        | P22–P24 | 第二个 Agent 接入与组合兼容检查                        |
 | F：Skill             | P25–P30 | 来源登记、安装、部署、更新、恢复                       |
@@ -164,7 +173,9 @@ Rust 使用稳定错误 code 与安全参数，前端决定语言；不翻译配
 - P04 为现有元数据行为建立 UI 测试入口；P05/P06 存储边界与 P07–P09 i18n
   支撑首个 Provider 保存，
   避免先写全部实体和全部界面。
-- P10–P13 构成第一条 Provider/Model 路径；P14/P15 复用它增加另两家提供商。
+- P10–P12 构成第一条 Provider/Model 路径：P12 为三家获取模型列表并勾选，原 P13（DeepSeek
+  连接验证）与 P14（OpenRouter 模型发现）已并入 P12；P15 补 Command Code 按模型路由，
+  P16 补特有参数，最小推理检查在 P24/P38。
 - P18 生成 Pi 计划；P19 提供写入安全基础；P20/P21 完成应用与恢复。
 - P22/P23 使用同一安全写入机制接入 Grok Build；P24 检查具体组合。
 - Skill 和 MCP 管理复用存储、凭据、Agent 发现和操作日志，但各自维护格式与能力声明。
@@ -232,7 +243,8 @@ UI 验证使用 `pnpm run test:ui`（已纳入 `check:frontend`）或
 
 ## 待核实事项
 
-- Command Code GOAT 与 Grok Build 的准确官网/文档/发行来源、账户/API 类型。
+- Command Code 与 Grok Build 的准确官网/文档/发行来源、账户/API 类型。Command Code 的 API 访问证据目前只覆盖其 GOAT 套餐；
+  Pro 与 Provider 套餐的 API 访问、模型权限与路由尚未核实，不能套用 GOAT 套餐的结论。
 - Pi 与 Grok Build 的安装方式、本机版本、跨平台可用性、原生协议、Skill/MCP 支持。
 - MCP 无原生支持时，是否需要第一阶段增加桥接器；决定前对应交付保持未完成。
 - npx/Vercel Skill 的具体安装器、源仓库记录方式、更新命令与覆盖行为。
@@ -251,5 +263,6 @@ UI 验证使用 `pnpm run test:ui`（已纳入 `check:frontend`）或
 - 三平台检查、真实接入证据、严格前端检查、英文注释、MIT 和 CHANGELOG 发布规则通过。
 
 配置导入导出、额度监测、token 热力图、云同步、自动路由、动态插件、自动应用更新
-和代理默认不实施。普通配置导出将来必须排除密钥、敏感 env/header 与私有备份。
+和代理默认不实施（指 vibemate 自建的转发代理；P12 的请求读取系统代理设置不属于此项）。
+普通配置导出将来必须排除密钥、敏感 env/header 与私有备份。
 保留可扩展的适配边界；后续再引入 UsageSource 等实际需要的接口。

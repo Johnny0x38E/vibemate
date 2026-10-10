@@ -6,11 +6,11 @@
 
 ## Provider 到 Agent
 
-| Provider          | Pi 1.1.0                                                    | Grok Build 1.0.50                    | 当前结果                                                      |
-| ----------------- | ----------------------------------------------------------- | ------------------------------------ | ------------------------------------------------------------- |
-| DeepSeek          | openai-completions，可配置 DeepSeek thinking/maxTokensField | chat_completions，自定义模型/env_key | 有文档级路径与配置解析证据；首条选 Pi，请求参数和真实调用待验 |
-| OpenRouter        | openai-completions，有专有 thinking/routing 兼容字段        | chat_completions，自定义 base_url    | 文档级协议匹配；模型/路由/参数逐项映射待验                    |
-| Command Code GOAT | 按目录支持的 Chat/Responses/Messages 选择                   | 按模型 api_backend 选择              | Claude 使用 Messages；不能统一当 Chat；套餐认证与模型权限待验 |
+| Provider     | Pi 1.1.0                                                    | Grok Build 1.0.50                    | 当前结果                                                                                     |
+| ------------ | ----------------------------------------------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------- |
+| DeepSeek     | openai-completions，可配置 DeepSeek thinking/maxTokensField | chat_completions，自定义模型/env_key | 有文档级路径与配置解析证据；首条选 Pi，请求参数和真实调用待验                                |
+| OpenRouter   | openai-completions，有专有 thinking/routing 兼容字段        | chat_completions，自定义 base_url    | 文档级协议匹配；模型/路由/参数逐项映射待验                                                   |
+| Command Code | 按目录支持的 Chat/Responses/Messages 选择                   | 按模型 api_backend 选择              | Claude 使用 Messages；不能统一当 Chat；证据只覆盖 GOAT 套餐，Pro/Provider 套餐与模型权限待验 |
 
 模型能力来源与请求字段分开；Provider 目录返回不代表账户授权，也不代表运行中的
 Agent 使用了该配置。绿色表达已启用的配置关系，不代表模型推理连接已验证。

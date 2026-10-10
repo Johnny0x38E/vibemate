@@ -1,0 +1,29 @@
+.page {
+    width: 100%;
+}
+
+.header {
+    display: grid;
+    justify-items: start;
+    gap: var(--space-sm);
+}
+
+/*
+ * Back link: icon layout comes from buttons.withIcon and the 32px minimum height
+ * from buttons.text; this shift lines the arrow up with the title below.
+ */
+.back {
+    margin-inline-start: calc(-1 * var(--space-sm));
+}
+
+.title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.title:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+}

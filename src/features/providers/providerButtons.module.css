@@ -1,0 +1,92 @@
+/*
+ * Button hierarchy shared by the Providers pages. Each view has exactly one
+ * `primary` action (solid accent); Cancel/Back and recovery actions are
+ * `secondary` (outline); inline row actions and the back link are `text`.
+ * Blocked buttons keep focus, so they are styled by aria-disabled, never
+ * :disabled. Only existing theme tokens are used; text on the accent uses the
+ * page background, which contrasts with the accent in light and dark themes.
+ */
+.primary,
+.secondary,
+.text {
+    min-height: 36px;
+    max-width: 100%;
+    padding: 0 var(--space-md);
+    border-radius: var(--radius-control);
+    font: inherit;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    white-space: normal;
+    text-align: start;
+    cursor: pointer;
+}
+
+.primary {
+    border: 1px solid var(--color-accent);
+    color: var(--color-background);
+    background: var(--color-accent);
+    font-weight: 600;
+}
+
+.primary:hover:not([aria-disabled="true"]) {
+    opacity: 0.88;
+}
+
+.secondary {
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    background: transparent;
+}
+
+.text {
+    min-height: 32px;
+    padding: 0 var(--space-sm);
+    border: 1px solid transparent;
+    color: var(--color-text);
+    background: none;
+}
+
+.secondary:hover:not([aria-disabled="true"]),
+.text:hover:not([aria-disabled="true"]) {
+    background: var(--color-hover);
+}
+
+.primary:focus-visible,
+.secondary:focus-visible,
+.text:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+}
+
+.primary[aria-disabled="true"] {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.secondary[aria-disabled="true"],
+.text[aria-disabled="true"] {
+    color: var(--color-summary);
+    cursor: not-allowed;
+}
+
+/*
+ * A button with a leading icon. The icon matches the 0.8125rem label's line box
+ * (18px, like the back arrow), is centered with it, and never shrinks.
+ */
+.withIcon {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.withIcon svg {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+}
+
+@media (forced-colors: active) {
+    .primary {
+        border-color: ButtonText;
+    }
+}

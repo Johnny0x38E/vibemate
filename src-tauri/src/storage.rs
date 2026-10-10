@@ -75,6 +75,86 @@ const MIGRATIONS: &[Migration] = &[
         DROP TABLE appearance_preference;
         ALTER TABLE appearance_preference_v4 RENAME TO appearance_preference;",
     },
+    Migration {
+        version: 5,
+        // Non-secret provider instances (see `crate::providers`). The CHECKs repeat
+        // the Rust validation so a row written by other means cannot hold an unknown
+        // kind or protocol. Which protocols a kind may use is decided in Rust, so it
+        // can widen without rebuilding this table. The index serves the stable
+        // `ORDER BY created_at, id` list order.
+        sql: "CREATE TABLE provider_instance (
+            id TEXT PRIMARY KEY CHECK (length(id) = 32 AND id NOT GLOB '*[^0-9a-f]*'),
+            kind TEXT NOT NULL CHECK (kind IN ('command-code', 'deepseek', 'openrouter')),
+            display_name TEXT NOT NULL CHECK (length(display_name) BETWEEN 1 AND 64),
+            base_url TEXT NOT NULL CHECK (length(base_url) BETWEEN 1 AND 2048),
+            protocol TEXT NOT NULL CHECK (protocol IN ('chat_completions', 'responses', 'anthropic_messages')),
+            revision INTEGER NOT NULL CHECK (revision >= 1),
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            CHECK (updated_at >= created_at)
+        ) STRICT;
+        CREATE INDEX provider_instance_list_order ON provider_instance (created_at, id);",
+    },
+    Migration {
+        version: 6,
+        // One row per provider whose API key is in the OS credential store. The row
+        // holds only the non-secret entry name, never the key. Status reads come from
+        // this table, so showing a page never touches the credential store.
+        // - The CHECK ties the name to the ID (`provider-<id>`), never to a display name.
+        // - Deleting a provider removes its row (`foreign_keys` is on); the
+        //   credential entry itself must be deleted by Rust before that.
+        // Existing provider rows are left alone. Rows saved before keys existed have
+        // no row here and report a missing key. A constraint cannot require a child
+        // row, so "every provider has a key" is kept by the create flow instead.
+        sql: "CREATE TABLE provider_credential (
+            provider_id TEXT PRIMARY KEY
+                REFERENCES provider_instance(id) ON DELETE CASCADE,
+            credential_ref TEXT NOT NULL UNIQUE
+                CHECK (credential_ref = 'provider-' || provider_id),
+            updated_at INTEGER NOT NULL
+        ) STRICT;",
+    },
+    Migration {
+        version: 7,
+        // Models per provider instance (see `crate::models`), fetched from the
+        // vendor's list or added by hand, and the outcome of the last fetch.
+        // - The primary key is the pair (provider, model ID); `WITHOUT ROWID` stores
+        //   rows in that order, which also serves the `ORDER BY model_id` list.
+        // - `model_id` keeps the vendor's exact text, including `/`, `.` and `:`.
+        // - `selected` is the user's choice; merging fetched lists never changes it.
+        // - `last_seen_at` is set when a complete fetch listed the model and
+        //   `missing_since` when a later complete fetch no longer did.
+        // - The JSON columns hold short string arrays validated in Rust.
+        // - Deleting a provider deletes its models and fetch record.
+        sql: "CREATE TABLE provider_model (
+            provider_id TEXT NOT NULL
+                REFERENCES provider_instance(id) ON DELETE CASCADE,
+            model_id TEXT NOT NULL CHECK (length(model_id) BETWEEN 1 AND 256),
+            source TEXT NOT NULL CHECK (source IN ('fetched', 'manual')),
+            selected INTEGER NOT NULL CHECK (selected IN (0, 1)),
+            alias TEXT CHECK (alias IS NULL OR length(alias) BETWEEN 1 AND 64),
+            upstream_name TEXT CHECK (upstream_name IS NULL OR length(upstream_name) BETWEEN 1 AND 256),
+            context_window INTEGER CHECK (context_window IS NULL OR context_window > 0),
+            max_output_tokens INTEGER CHECK (max_output_tokens IS NULL OR max_output_tokens > 0),
+            input_modalities TEXT CHECK (input_modalities IS NULL OR json_valid(input_modalities)),
+            output_modalities TEXT CHECK (output_modalities IS NULL OR json_valid(output_modalities)),
+            supported_endpoints TEXT CHECK (supported_endpoints IS NULL OR json_valid(supported_endpoints)),
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            last_seen_at INTEGER,
+            missing_since INTEGER,
+            PRIMARY KEY (provider_id, model_id),
+            CHECK (updated_at >= created_at),
+            CHECK (missing_since IS NULL OR last_seen_at IS NOT NULL)
+        ) STRICT, WITHOUT ROWID;
+        CREATE TABLE provider_model_fetch (
+            provider_id TEXT PRIMARY KEY
+                REFERENCES provider_instance(id) ON DELETE CASCADE,
+            fetched_at INTEGER NOT NULL,
+            complete INTEGER NOT NULL CHECK (complete IN (0, 1)),
+            listed_count INTEGER NOT NULL CHECK (listed_count >= 0)
+        ) STRICT;",
+    },
 ];
 
 /// Errors from opening or migrating the private database.
@@ -317,6 +397,13 @@ fn read_schema_version(connection: &Connection) -> Result<u32, StorageError> {
         .map_err(StorageError::Database)
 }
 
+/// The schema version this build migrates to, for tests in other modules that
+/// should keep passing when a later migration is added.
+#[cfg(test)]
+pub(crate) fn latest_schema_version() -> u32 {
+    latest_version(MIGRATIONS)
+}
+
 /// Return the version reached after all of `migrations` have run (0 when empty).
 fn latest_version(migrations: &[Migration]) -> u32 {
     migrations.last().map_or(0, |migration| migration.version)
@@ -388,7 +475,10 @@ mod tests {
                 .expect("unrelated row");
             drop(old);
             let upgraded = Storage::open_in_directory(&directory.path).expect("upgrade");
-            assert_eq!(upgraded.schema_version().expect("schema"), 4);
+            assert_eq!(
+                upgraded.schema_version().expect("schema"),
+                latest_version(MIGRATIONS)
+            );
             assert_eq!(
                 crate::appearance::load_appearance_preference(&upgraded),
                 Ok(previous)
@@ -446,6 +536,234 @@ mod tests {
             )
             .expect("rolled back table");
         assert_eq!(temporary_tables, 0);
+    }
+
+    #[test]
+    fn providers_migration_from_v4_keeps_preferences_and_adds_an_empty_table() {
+        use crate::appearance::{Appearance, AppearancePreference, Theme};
+        let directory = TestDirectory::new("providers-upgrade");
+        let path = directory.path.join(DATABASE_FILE_NAME);
+        let old = Storage::open_file(&path, &MIGRATIONS[..4]).expect("v4 database");
+        let appearance = AppearancePreference {
+            appearance: Appearance::Light,
+            theme: Theme::Notion,
+        };
+        crate::appearance::save_appearance_preference(&old, appearance).expect("save appearance");
+        crate::settings::save_locale_preference(
+            &old,
+            crate::settings::LocalePreference::SimplifiedChinese,
+        )
+        .expect("save language");
+        drop(old);
+
+        // Stop at v5 so this test keeps checking exactly the v4 -> v5 step.
+        let upgraded = Storage::open_file(&path, &MIGRATIONS[..5]).expect("upgrade to v5");
+        assert_eq!(upgraded.schema_version().expect("schema"), 5);
+        assert_eq!(
+            crate::appearance::load_appearance_preference(&upgraded),
+            Ok(appearance)
+        );
+        assert_eq!(
+            crate::settings::load_locale_preference(&upgraded),
+            Ok(crate::settings::LocalePreference::SimplifiedChinese)
+        );
+        let page = crate::providers::list_providers(
+            &upgraded,
+            &crate::providers::ListProvidersRequest {
+                after: None,
+                limit: 10,
+            },
+        )
+        .expect("list after upgrade");
+        assert!(page.items.is_empty());
+    }
+
+    /// Insert a provider row directly, as a P10 build without keys would have saved it.
+    fn insert_keyless_provider(connection: &Connection, id: &str) {
+        connection
+            .execute(
+                "INSERT INTO provider_instance
+                     (id, kind, display_name, base_url, protocol, revision, created_at, updated_at)
+                 VALUES (?1, 'deepseek', 'Legacy', 'https://api.deepseek.com', 'chat_completions', 1, 10, 10)",
+                [id],
+            )
+            .expect("insert provider");
+    }
+
+    #[test]
+    fn credential_migration_from_v5_keeps_providers_and_preferences() {
+        let directory = TestDirectory::new("credential-upgrade");
+        let path = directory.path.join(DATABASE_FILE_NAME);
+        let old = Storage::open_file(&path, &MIGRATIONS[..5]).expect("v5 database");
+        crate::settings::save_locale_preference(&old, crate::settings::LocalePreference::English)
+            .expect("save language");
+        let legacy_id = "a".repeat(32);
+        insert_keyless_provider(&old.lock().expect("lock"), &legacy_id);
+        drop(old);
+
+        let upgraded = Storage::open_file(&path, &MIGRATIONS[..6]).expect("upgrade to v6");
+        assert_eq!(upgraded.schema_version().expect("schema"), 6);
+        assert_eq!(
+            crate::settings::load_locale_preference(&upgraded),
+            Ok(crate::settings::LocalePreference::English)
+        );
+        let connection = upgraded.lock().expect("lock");
+        let providers: u32 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM provider_instance WHERE id = ?1",
+                [&legacy_id],
+                |row| row.get(0),
+            )
+            .expect("count providers");
+        assert_eq!(providers, 1, "the keyless legacy row is kept");
+        let credentials: u32 = connection
+            .query_row("SELECT COUNT(*) FROM provider_credential", [], |row| {
+                row.get(0)
+            })
+            .expect("count credentials");
+        assert_eq!(credentials, 0, "no reference is invented for it");
+    }
+
+    #[test]
+    fn credential_references_are_tied_to_existing_provider_ids() {
+        let directory = TestDirectory::new("credential-constraints");
+        let storage = Storage::open_in_directory(&directory.path).expect("open");
+        let connection = storage.lock().expect("lock");
+        let id = "b".repeat(32);
+        let other = "c".repeat(32);
+        insert_keyless_provider(&connection, &id);
+        insert_keyless_provider(&connection, &other);
+        let insert = |provider_id: &str, reference: &str| {
+            connection.execute(
+                "INSERT INTO provider_credential (provider_id, credential_ref, updated_at)
+                 VALUES (?1, ?2, 20)",
+                [provider_id, reference],
+            )
+        };
+
+        // A reference must be exactly `provider-<id>`: not a name, not another ID.
+        assert!(insert(&id, "Legacy").is_err());
+        assert!(insert(&id, &format!("provider-{other}")).is_err());
+        // The provider must exist (foreign key).
+        let missing = "d".repeat(32);
+        assert!(insert(&missing, &format!("provider-{missing}")).is_err());
+        assert!(insert(&id, &format!("provider-{id}")).is_ok());
+        // One reference per provider.
+        assert!(insert(&id, &format!("provider-{id}")).is_err());
+
+        // Deleting the provider removes its reference with it.
+        connection
+            .execute("DELETE FROM provider_instance WHERE id = ?1", [&id])
+            .expect("delete provider");
+        let remaining: u32 = connection
+            .query_row("SELECT COUNT(*) FROM provider_credential", [], |row| {
+                row.get(0)
+            })
+            .expect("count credentials");
+        assert_eq!(remaining, 0);
+    }
+
+    #[test]
+    fn model_migration_from_v6_keeps_providers_and_key_references() {
+        let directory = TestDirectory::new("model-upgrade");
+        let path = directory.path.join(DATABASE_FILE_NAME);
+        let old = Storage::open_file(&path, &MIGRATIONS[..6]).expect("v6 database");
+        let id = "e".repeat(32);
+        {
+            let connection = old.lock().expect("lock");
+            insert_keyless_provider(&connection, &id);
+            connection
+                .execute(
+                    "INSERT INTO provider_credential (provider_id, credential_ref, updated_at)
+                     VALUES (?1, 'provider-' || ?1, 20)",
+                    [&id],
+                )
+                .expect("insert reference");
+        }
+        drop(old);
+
+        let upgraded = Storage::open_file(&path, &MIGRATIONS[..7]).expect("upgrade to v7");
+        assert_eq!(upgraded.schema_version().expect("schema"), 7);
+        let connection = upgraded.lock().expect("lock");
+        let count = |table: &str| -> u32 {
+            connection
+                .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+                    row.get(0)
+                })
+                .expect("count rows")
+        };
+        assert_eq!(count("provider_instance"), 1);
+        assert_eq!(count("provider_credential"), 1);
+        assert_eq!(count("provider_model"), 0);
+        assert_eq!(count("provider_model_fetch"), 0);
+    }
+
+    #[test]
+    fn model_rows_are_constrained_and_follow_their_provider() {
+        let directory = TestDirectory::new("model-constraints");
+        let storage = Storage::open_in_directory(&directory.path).expect("open");
+        let connection = storage.lock().expect("lock");
+        let id = "f".repeat(32);
+        insert_keyless_provider(&connection, &id);
+        let insert = |provider_id: &str, model_id: &str, source: &str, endpoints: Option<&str>| {
+            connection.execute(
+                "INSERT INTO provider_model
+                     (provider_id, model_id, source, selected, supported_endpoints,
+                      created_at, updated_at)
+                 VALUES (?1, ?2, ?3, 0, ?4, 10, 10)",
+                rusqlite::params![provider_id, model_id, source, endpoints],
+            )
+        };
+
+        // IDs keep `/`, `.` and `:`; the JSON column must hold valid JSON.
+        assert!(
+            insert(
+                &id,
+                "mistral/mistral-large-4",
+                "fetched",
+                Some(r#"["/messages"]"#)
+            )
+            .is_ok()
+        );
+        assert!(insert(&id, "ling-3.1-flash:free", "manual", None).is_ok());
+        assert!(insert(&id, "bad-json", "fetched", Some("[")).is_err());
+        assert!(insert(&id, "bad-source", "imported", None).is_err());
+        assert!(insert(&id, "", "manual", None).is_err());
+        assert!(insert(&id, &"m".repeat(257), "manual", None).is_err());
+        // One row per (provider, model); the provider must exist.
+        assert!(insert(&id, "ling-3.1-flash:free", "fetched", None).is_err());
+        assert!(insert(&"0".repeat(32), "other", "manual", None).is_err());
+        // A model cannot be missing without having been seen.
+        assert!(
+            connection
+                .execute(
+                    "INSERT INTO provider_model
+                         (provider_id, model_id, source, selected, created_at, updated_at,
+                          missing_since)
+                     VALUES (?1, 'never-seen', 'fetched', 1, 10, 10, 20)",
+                    [&id],
+                )
+                .is_err()
+        );
+        connection
+            .execute(
+                "INSERT INTO provider_model_fetch (provider_id, fetched_at, complete, listed_count)
+                 VALUES (?1, 30, 1, 2)",
+                [&id],
+            )
+            .expect("insert fetch record");
+
+        connection
+            .execute("DELETE FROM provider_instance WHERE id = ?1", [&id])
+            .expect("delete provider");
+        for table in ["provider_model", "provider_model_fetch"] {
+            let remaining: u32 = connection
+                .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+                    row.get(0)
+                })
+                .expect("count rows");
+            assert_eq!(remaining, 0, "{table} follows its provider");
+        }
     }
 
     /// Read the single row written by the test migrations.

@@ -214,7 +214,10 @@ mod tests {
         connection.execute_batch("PRAGMA user_version = 2; CREATE TABLE locale_preference (id INTEGER PRIMARY KEY, preference TEXT); INSERT INTO locale_preference VALUES (1, 'en'); CREATE TABLE sample (value TEXT); INSERT INTO sample VALUES ('kept');").expect("v2 fixture");
         drop(connection);
         let storage = Storage::open_in_directory(&directory.0).expect("upgrade");
-        assert_eq!(storage.schema_version().expect("version"), 4);
+        assert_eq!(
+            storage.schema_version().expect("version"),
+            crate::storage::latest_schema_version()
+        );
         assert_eq!(
             crate::settings::load_locale_preference(&storage),
             Ok(crate::settings::LocalePreference::English)

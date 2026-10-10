@@ -1,13 +1,33 @@
-//! Desktop metadata and preference commands exposed to the React interface.
+//! Desktop metadata, preference, and provider commands exposed to the React interface.
 //!
 //! Keep this boundary thin: future configuration behavior belongs in feature
 //! modules so it can be tested without starting a Tauri window.
 
 use crate::appearance::{self, AppearancePreference};
+use crate::credentials::OsCredentialStore;
+use crate::provider_secrets::{self, ProviderSecretStatus, ReplaceProviderSecretRequest};
+use crate::providers::{
+    self, CreateProviderRequest, ListProvidersRequest, ProviderError, ProviderPage, ProviderRecord,
+    ProviderTemplate, UpdateProviderRequest,
+};
 use crate::settings::{self, LocalePreference, SettingsError};
-use crate::storage::StorageStatus;
+use crate::storage::{Storage, StorageStatus};
 use serde::Serialize;
+use std::sync::{Mutex, PoisonError};
 use tauri::Manager;
+
+/// Serializes this app's writes to the OS credential store.
+///
+/// A replacement reads the old key as a backup, writes the new one, and may put
+/// the old one back. Two such sequences for the same provider must not interleave.
+/// This is a separate lock from the database connection: the credential store may
+/// wait for a system prompt, and database reads must not wait with it.
+///
+/// The mutex only excludes other threads of this process. It does not stop a
+/// second vibemate process from writing the same entry at the same time; the
+/// app does not prevent a second instance yet.
+#[derive(Default)]
+pub(crate) struct CredentialLock(Mutex<()>);
 
 /// Application metadata returned to the frontend without reading user config.
 #[derive(Serialize)]
@@ -119,4 +139,156 @@ pub(crate) async fn open_project_repository() -> Result<(), &'static str> {
     })
     .await
     .map_err(|_| "open_failed")?
+}
+
+/// Return the built-in provider templates (default URL, allowed protocols, and
+/// extension keys). Reads constants only, so it cannot fail and touches no storage.
+#[tauri::command]
+pub(crate) fn list_provider_templates() -> Vec<ProviderTemplate> {
+    providers::provider_templates().to_vec()
+}
+
+/// Read one bounded page of provider instances in stable order.
+/// Only safe provider error codes cross the boundary.
+#[tauri::command]
+pub(crate) async fn list_providers(
+    app: tauri::AppHandle,
+    request: ListProvidersRequest,
+) -> Result<ProviderPage, ProviderError> {
+    // Same reasoning as the preference commands: SQLite may wait for a lock, so
+    // the work runs on the blocking pool and owns `app` until it finishes.
+    tauri::async_runtime::spawn_blocking(move || {
+        with_provider_storage(&app, |storage| providers::list_providers(storage, &request))
+    })
+    .await
+    .map_err(|_| ProviderError::OperationFailed)?
+}
+
+/// Read one provider instance by its stable ID.
+#[tauri::command]
+pub(crate) async fn get_provider(
+    app: tauri::AppHandle,
+    id: String,
+) -> Result<ProviderRecord, ProviderError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        with_provider_storage(&app, |storage| providers::get_provider(storage, &id))
+    })
+    .await
+    .map_err(|_| ProviderError::OperationFailed)?
+}
+
+/// Validate and save a new provider instance and its API key, returning the
+/// instance after the commit. The key goes to the OS credential store only.
+/// A task failure has an unknown outcome: the caller must reload the list before
+/// retrying, or it may create a second instance.
+#[tauri::command]
+pub(crate) async fn create_provider(
+    app: tauri::AppHandle,
+    request: CreateProviderRequest,
+) -> Result<ProviderRecord, ProviderError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        with_provider_storage(&app, |storage| {
+            with_credential_writes(&app, || {
+                let now_ms = providers::current_unix_millis()?;
+                providers::create_provider(storage, &OsCredentialStore, request, now_ms)
+            })
+        })
+    })
+    .await
+    .map_err(|_| ProviderError::OperationFailed)?
+}
+
+/// Edit a provider instance if its revision still matches, returning the
+/// committed record. A task failure has an unknown outcome; reload before retrying.
+#[tauri::command]
+pub(crate) async fn update_provider(
+    app: tauri::AppHandle,
+    request: UpdateProviderRequest,
+) -> Result<ProviderRecord, ProviderError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        with_provider_storage(&app, |storage| {
+            let now_ms = providers::current_unix_millis()?;
+            providers::update_provider(storage, &request, now_ms)
+        })
+    })
+    .await
+    .map_err(|_| ProviderError::OperationFailed)?
+}
+
+/// Read whether a provider has an API key. Reads SQLite only: this never touches
+/// the OS credential store, so it cannot trigger a system prompt.
+#[tauri::command]
+pub(crate) async fn get_provider_secret_status(
+    app: tauri::AppHandle,
+    provider_id: String,
+) -> Result<ProviderSecretStatus, ProviderError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        with_provider_storage(&app, |storage| {
+            provider_secrets::get_secret_status(storage, &provider_id)
+        })
+    })
+    .await
+    .map_err(|_| ProviderError::OperationFailed)?
+}
+
+/// Replace a provider's API key (or set a missing one) and return the new status.
+/// The key goes to the OS credential store only. A task failure has an unknown
+/// outcome: the caller must re-read the status before acting.
+#[tauri::command]
+pub(crate) async fn replace_provider_secret(
+    app: tauri::AppHandle,
+    request: ReplaceProviderSecretRequest,
+) -> Result<ProviderSecretStatus, ProviderError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        with_provider_storage(&app, |storage| {
+            with_credential_writes(&app, || {
+                let now_ms = providers::current_unix_millis()?;
+                provider_secrets::replace_provider_secret(
+                    storage,
+                    &OsCredentialStore,
+                    request,
+                    now_ms,
+                )
+            })
+        })
+    })
+    .await
+    .map_err(|_| ProviderError::OperationFailed)?
+}
+
+/// Run `operation` while holding the app-wide `CredentialLock`.
+///
+/// The lock guards no data, only ordering, so a panic elsewhere ("poisoning")
+/// leaves nothing inconsistent to protect and the lock is used as usual.
+/// It gives mutual exclusion within this process only (see `CredentialLock`).
+///
+/// A missing lock means the app was wired up wrongly, not that storage failed,
+/// so it is reported as the generic internal `OperationFailed`, before anything
+/// was written.
+fn with_credential_writes<T>(
+    app: &tauri::AppHandle,
+    operation: impl FnOnce() -> Result<T, ProviderError>,
+) -> Result<T, ProviderError> {
+    let lock = app
+        .try_state::<CredentialLock>()
+        .ok_or(ProviderError::OperationFailed)?;
+    let _credential_writes = lock.0.lock().unwrap_or_else(PoisonError::into_inner);
+    operation()
+}
+
+/// Run one provider operation against the storage opened at startup.
+///
+/// Every provider command needs the same two lookups, and both failures mean
+/// `StorageUnavailable`. Keeping them here leaves each command one line of logic.
+fn with_provider_storage<T>(
+    app: &tauri::AppHandle,
+    operation: impl FnOnce(&Storage) -> Result<T, ProviderError>,
+) -> Result<T, ProviderError> {
+    let status = app
+        .try_state::<StorageStatus>()
+        .ok_or(ProviderError::StorageUnavailable)?;
+    let storage = status
+        .storage()
+        .map_err(|_| ProviderError::StorageUnavailable)?;
+    operation(storage)
 }

@@ -3,6 +3,13 @@
 pub mod appearance;
 mod commands;
 pub mod credentials;
+pub mod http_client;
+pub mod model_catalog;
+pub mod model_fetch;
+pub mod model_search;
+pub mod models;
+pub mod provider_secrets;
+pub mod providers;
 pub mod settings;
 pub mod storage;
 
@@ -33,6 +40,7 @@ pub fn run() {
             }
             // Managed state is shared by all commands; `StorageStatus` is safe across threads.
             app.manage(status);
+            app.manage(commands::CredentialLock::default());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -42,6 +50,13 @@ pub fn run() {
             commands::save_locale_preference,
             commands::get_appearance_preference,
             commands::save_appearance_preference,
+            commands::list_provider_templates,
+            commands::list_providers,
+            commands::get_provider,
+            commands::create_provider,
+            commands::update_provider,
+            commands::get_provider_secret_status,
+            commands::replace_provider_secret,
         ])
         .run(tauri::generate_context!())
         .expect("failed to start vibemate desktop runtime");

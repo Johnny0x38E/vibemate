@@ -14,6 +14,7 @@ pub mod models;
 pub mod provider_secrets;
 pub mod providers;
 pub mod settings;
+mod shared;
 pub mod storage;
 
 use tauri::Manager;

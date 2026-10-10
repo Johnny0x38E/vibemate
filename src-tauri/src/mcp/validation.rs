@@ -1,21 +1,14 @@
 //! Validate MCP metadata without executing servers or reading credentials.
 
 use super::types::*;
-use crate::providers::{ProviderId, validate_display_name};
+use crate::providers::ProviderId;
+use crate::shared::{bounded_text, validate_display_name};
 use std::collections::BTreeSet;
 
 pub(super) fn identity(value: &str) -> Result<(), McpError> {
     ProviderId::parse(value)
         .map(|_| ())
         .ok_or(McpError::InvalidRequest)
-}
-
-fn bounded_text(value: &str, max: usize, nonempty: bool) -> bool {
-    (!nonempty || !value.trim().is_empty())
-        && value.chars().count() <= max
-        && !value
-            .chars()
-            .any(|c| c.is_control() || crate::providers::is_hidden_format_character(c))
 }
 
 fn server_namespace(name: &str) -> Result<String, McpError> {
@@ -105,8 +98,8 @@ pub(super) fn validate(
     {
         return Err(McpError::InvalidRequest);
     }
-    let display_name =
-        validate_display_name(&request.display_name).map_err(|_| McpError::DisplayNameInvalid)?;
+    let display_name = validate_display_name(&request.display_name, 64)
+        .map_err(|_| McpError::DisplayNameInvalid)?;
     let server_name = request.server_name.trim().to_string();
     let namespace = server_namespace(&server_name)?;
     let (connection, mut fields, kind) = match request.connection {

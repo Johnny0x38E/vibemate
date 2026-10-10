@@ -1,0 +1,70 @@
+//! Small domain-neutral text, identity, and clock helpers. Business modules map
+//! failures into their own stable error codes; this module owns no persistence.
+
+/// Text violates the caller's length or visibility constraints.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct InvalidText;
+
+/// Trim a display name and reject empty, hidden, control, or overlong content.
+/// Joiners inside natural text and emoji remain accepted.
+pub(crate) fn validate_display_name(input: &str, max_chars: usize) -> Result<String, InvalidText> {
+    let name = input.trim();
+    let length = name.chars().count();
+    if length == 0 || length > max_chars {
+        return Err(InvalidText);
+    }
+    if name
+        .chars()
+        .any(|c| c.is_control() || is_hidden_format_character(c))
+    {
+        return Err(InvalidText);
+    }
+    let has_visible_character = name
+        .chars()
+        .any(|c| !c.is_whitespace() && !is_allowed_joiner(c));
+    if !has_visible_character {
+        return Err(InvalidText);
+    }
+    Ok(name.to_string())
+}
+
+/// Zero-width joiners that real text needs: U+200C (ZWNJ, used in Persian and
+/// Indic scripts) and U+200D (ZWJ, used in emoji such as family sequences). They
+/// are allowed inside a name but do not count as visible content.
+fn is_allowed_joiner(c: char) -> bool {
+    matches!(c, '\u{200C}' | '\u{200D}')
+}
+
+/// Invisible Unicode format (category Cf) characters a name must not contain.
+///
+/// The standard library has no Unicode category lookup, and a dependency for one
+/// check is not worth it, so this lists the Cf characters that can hide text or
+/// reorder how it is displayed. Bidi controls are the important case: in
+/// `"a\u{202E}b"` everything after U+202E is shown right to left, so two names can
+/// look identical while being different. The list is deliberately not all of Cf:
+/// the joiners above and emoji tag characters (U+E0020..=U+E007F, used in flags
+/// such as Scotland's) stay allowed so normal names and emoji keep working.
+pub(crate) fn is_hidden_format_character(c: char) -> bool {
+    matches!(
+        c,
+        '\u{00AD}'                    // soft hyphen
+            | '\u{061C}'              // Arabic letter mark (bidi)
+            | '\u{180E}'              // Mongolian vowel separator
+            | '\u{200B}'              // zero-width space
+            | '\u{200E}'..='\u{200F}' // left-to-right and right-to-left marks (bidi)
+            | '\u{202A}'..='\u{202E}' // bidi embeddings and overrides
+            | '\u{2060}'..='\u{2064}' // word joiner and invisible math operators
+            | '\u{2066}'..='\u{206F}' // bidi isolates and deprecated format controls
+            | '\u{FEFF}'              // zero-width no-break space (byte order mark)
+            | '\u{FFF9}'..='\u{FFFB}' // interlinear annotation controls
+    )
+}
+
+/// Check a bounded text field without trimming or altering its stored value.
+pub(crate) fn bounded_text(value: &str, max: usize, nonempty: bool) -> bool {
+    (!nonempty || !value.trim().is_empty())
+        && value.chars().count() <= max
+        && !value
+            .chars()
+            .any(|c| c.is_control() || is_hidden_format_character(c))
+}

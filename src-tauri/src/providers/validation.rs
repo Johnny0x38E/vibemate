@@ -1,6 +1,7 @@
 //! Provider-specific input validation, without persistence or credential writes.
 
 use super::types::*;
+pub(crate) use crate::shared::is_hidden_format_character;
 use std::collections::BTreeMap;
 use url::Url;
 
@@ -43,56 +44,8 @@ pub fn validate_settings(
 /// any character listed by `is_hidden_format_character`, or a name with nothing
 /// visible left (for example only spaces and zero-width joiners).
 pub fn validate_display_name(input: &str) -> Result<String, ProviderError> {
-    let name = input.trim();
-    let length = name.chars().count();
-    if length == 0 || length > MAX_DISPLAY_NAME_CHARS {
-        return Err(ProviderError::DisplayNameInvalid);
-    }
-    if name
-        .chars()
-        .any(|c| c.is_control() || is_hidden_format_character(c))
-    {
-        return Err(ProviderError::DisplayNameInvalid);
-    }
-    let has_visible_character = name
-        .chars()
-        .any(|c| !c.is_whitespace() && !is_allowed_joiner(c));
-    if !has_visible_character {
-        return Err(ProviderError::DisplayNameInvalid);
-    }
-    Ok(name.to_string())
-}
-
-/// Zero-width joiners that real text needs: U+200C (ZWNJ, used in Persian and
-/// Indic scripts) and U+200D (ZWJ, used in emoji such as family sequences). They
-/// are allowed inside a name but do not count as visible content.
-fn is_allowed_joiner(c: char) -> bool {
-    matches!(c, '\u{200C}' | '\u{200D}')
-}
-
-/// Invisible Unicode format (category Cf) characters a name must not contain.
-///
-/// The standard library has no Unicode category lookup, and a dependency for one
-/// check is not worth it, so this lists the Cf characters that can hide text or
-/// reorder how it is displayed. Bidi controls are the important case: in
-/// `"a\u{202E}b"` everything after U+202E is shown right to left, so two names can
-/// look identical while being different. The list is deliberately not all of Cf:
-/// the joiners above and emoji tag characters (U+E0020..=U+E007F, used in flags
-/// such as Scotland's) stay allowed so normal names and emoji keep working.
-pub(crate) fn is_hidden_format_character(c: char) -> bool {
-    matches!(
-        c,
-        '\u{00AD}'                    // soft hyphen
-            | '\u{061C}'              // Arabic letter mark (bidi)
-            | '\u{180E}'              // Mongolian vowel separator
-            | '\u{200B}'              // zero-width space
-            | '\u{200E}'..='\u{200F}' // left-to-right and right-to-left marks (bidi)
-            | '\u{202A}'..='\u{202E}' // bidi embeddings and overrides
-            | '\u{2060}'..='\u{2064}' // word joiner and invisible math operators
-            | '\u{2066}'..='\u{206F}' // bidi isolates and deprecated format controls
-            | '\u{FEFF}'              // zero-width no-break space (byte order mark)
-            | '\u{FFF9}'..='\u{FFFB}' // interlinear annotation controls
-    )
+    crate::shared::validate_display_name(input, MAX_DISPLAY_NAME_CHARS)
+        .map_err(|_| ProviderError::DisplayNameInvalid)
 }
 
 /// Parse and normalize a base URL without contacting it.

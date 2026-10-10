@@ -1415,7 +1415,7 @@ D16（维护者批准，2026-10-10 完成）：2026-10-10 20:10（UTC+8）不带
 ## 插入任务 BR：后端职责拆分
 
 维护者提出未来 GitHub 配置备份、MCP/Skill 来源安装、给 Agent 的 API 转发，可能直接安装 Agent，以及 Vercel/更多模型服务商接入，优先规划模块边界。
-设计见 [backend-modularity.md](backend-modularity.md)。本轮只完成规划，下面的代码迁移未实施。
+设计见 [backend-modularity.md](backend-modularity.md)。规划已推送，按下列小批任务迁移；勾选仅表示该批次已实施并完成适用回归。
 BR1–BR4 是建议的近期整理；BR5–BR7 按新增功能需求开展，不阻塞全部后续业务。
 表中范围包含本清单更新；若实际 import/测试 fixture 迁移超出五个文件，先继续拆批。
 
@@ -1423,7 +1423,7 @@ BR1–BR4 是建议的近期整理；BR5–BR7 按新增功能需求开展，不
 
 | 待办      | 一次迁移的职责                                                 | 建议实际文件范围（另含本清单）                                                               | 依赖  |
 | --------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ----- |
-| [ ] BR1.a | 原样迁出 Provider/Model 内联测试                               | `providers.rs`、`providers/tests.rs`、`models.rs`、`models/tests.rs`                         | BR0   |
+| [x] BR1.a | 原样迁出 Provider/Model 内联测试                               | `providers.rs`、`providers/tests.rs`、`models.rs`、`models/tests.rs`                         | BR0   |
 | [ ] BR1.b | 原样迁出 Fetch/Catalog 内联测试                                | `model_fetch.rs`、`model_fetch/tests.rs`、`model_catalog.rs`、`model_catalog/tests.rs`       | BR1.a |
 | [ ] BR1.c | 原样迁出 Storage/Credentials 测试；保留跨模块 fake helper 入口 | `storage.rs`、`storage/tests.rs`、`credentials.rs`、`credentials/tests.rs`                   | BR1.b |
 | [ ] BR1.d | 原样迁出 HTTP/Provider Secret 测试；保留本地服务 fixture       | `http_client.rs`、`http_client/tests.rs`、`provider_secrets.rs`、`provider_secrets/tests.rs` | BR1.c |

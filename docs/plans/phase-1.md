@@ -25,15 +25,18 @@ Graphite, Linen, Iris, Ocean; schema v4 preserves existing preferences.
 CI and changelog-driven draft release workflows are present. Integration
 contracts are documented in `docs/integrations/`. P10–P11 deliver the Providers
 page with API keys and unified save. P12 adds Rust-side model fetch, storage,
-search and IPC. The tabbed Models UI, create gate, and P12.c.5 dual-view browse
+search and IPC. The tabbed Models UI, create gate, dual-view browse/save and
+manual model form are implemented per [models-tab-ux.md](models-tab-ux.md).
+The maintainer verified browse/save for three providers in Tauri (2026-10-11);
+manual-model native acceptance remains pending.
 
-- save UX are implemented per [models-tab-ux.md](models-tab-ux.md); the maintainer
-  verified the three providers in Tauri (2026-10-11). **Manual model add (P12.c.3)**
-  is the remaining Models-tab frontend work; see [todo.md](todo.md). Agent
-  configuration and all non-provider features remain
-  unimplemented. [todo.md](todo.md) is the sole status
-  source; current UI rules and verification are in
-  [desktop-shell-design.md](desktop-shell-design.md) and [frontend.md](../frontend.md).
+P31 central MCP management is implemented ahead of Agent deployment at the
+maintainer's request: structured stdio/Streamable HTTP definitions, protected
+env/header values, editing and central enablement. No MCP server is launched or
+contacted, and no Agent config is written. Agent deployment, skills and inference
+checks remain pending. [todo.md](todo.md) is the sole task-status source; current
+UI rules and verification are in [desktop-shell-design.md](desktop-shell-design.md)
+and [frontend.md](../frontend.md).
 
 ## Execution plan
 
@@ -42,8 +45,9 @@ The single task checklist is [todo.md](todo.md). These files expand the same
 phase-1 scope; this overview does not contain a second execution checklist.
 Implementation is authorized. The pnpm migration is recorded as P00, and
 P01 provider evidence is in [providers.md](../integrations/providers.md).
-Provider and agent business implementations remain pending; documented contracts
-do not establish a working connection or runtime compatibility.
+Provider configuration and model discovery are implemented; Agent deployment
+and inference verification remain pending. Documented contracts do not establish
+a working inference connection or runtime compatibility.
 
 ## Implementation order
 
@@ -58,6 +62,10 @@ do not establish a working connection or runtime compatibility.
    cancelled at once), ticked model selections, and manual model entries as a
    supplement. A minimal user-triggered inference check comes later. Separate
    capabilities from request parameters; support provider-specific fields.
+   Central MCP definition management (P31) was brought forward before Agent
+   injection. Its implementation does not unblock P32/P33 until safe Agent writes
+   and rollback exist.
+
 3. **Agent injection.** Implement the first verified agent adapter end to end,
    then the second. Detect installations, preview changes, preserve unrelated
    fields, check concurrent edits, back up, write atomically, and restore.

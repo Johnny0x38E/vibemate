@@ -7,6 +7,7 @@ import { NotificationProvider } from "./components/Notifications";
 import { TitlebarChrome } from "./components/TitlebarChrome";
 import { WindowDragRegion } from "./components/WindowDragRegion";
 import { RelationshipOverview } from "./features/overview/RelationshipOverview";
+import { McpView } from "./features/mcp/McpView";
 import { ProvidersView } from "./features/providers/ProvidersView";
 import { SettingsView } from "./features/settings/SettingsView";
 import styles from "./App.module.css";
@@ -30,6 +31,7 @@ export default function App({ languageSettings }: AppProps): JSX.Element {
     const [page, setPage] = useState<Page>("home");
     const [collapsed, setCollapsed] = useState(false);
     const [providersVisited, setProvidersVisited] = useState(false);
+    const [mcpVisited, setMcpVisited] = useState(false);
     const sidebarId = useId();
 
     const pageLabel =
@@ -52,6 +54,7 @@ export default function App({ languageSettings }: AppProps): JSX.Element {
                 onClick={() => {
                     setPage(destination);
                     if (destination === "providers") setProvidersVisited(true);
+                    if (destination === "mcp") setMcpVisited(true);
                 }}
             >
                 <Icon name={destination} />
@@ -134,7 +137,8 @@ export default function App({ languageSettings }: AppProps): JSX.Element {
                     {page === "home" && <RelationshipOverview />}
                     {page !== "home" &&
                         page !== "settings" &&
-                        page !== "providers" && (
+                        page !== "providers" &&
+                        page !== "mcp" && (
                             <section>
                                 <PageModuleHeader
                                     icon={page}
@@ -148,6 +152,7 @@ export default function App({ languageSettings }: AppProps): JSX.Element {
                         )}
                     {/* Like Settings below: hiding keeps an unsaved form or an
                     unknown save outcome instead of discarding it. */}
+                    {mcpVisited && <McpView hidden={page !== "mcp"} />}
                     {providersVisited && (
                         <ProvidersView hidden={page !== "providers"} />
                     )}

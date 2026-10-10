@@ -155,6 +155,34 @@ const MIGRATIONS: &[Migration] = &[
             listed_count INTEGER NOT NULL CHECK (listed_count >= 0)
         ) STRICT;",
     },
+    Migration {
+        version: 8,
+        // Central definitions contain transport metadata only. Every env/header
+        // value is an OS entry; old entries are queued in the metadata transaction
+        // so failed post-commit cleanup can be retried without exposing values.
+        sql: "CREATE TABLE mcp_definition (
+            id TEXT PRIMARY KEY CHECK(length(id)=32 AND id NOT GLOB '*[^0-9a-f]*'),
+            display_name TEXT NOT NULL CHECK(length(display_name) BETWEEN 1 AND 64),
+            server_name TEXT NOT NULL CHECK(length(server_name) BETWEEN 1 AND 64),
+            namespace TEXT NOT NULL UNIQUE,
+            enabled INTEGER NOT NULL CHECK(enabled IN (0,1)),
+            revision INTEGER NOT NULL CHECK(revision >= 1),
+            connection TEXT NOT NULL CHECK(json_valid(connection)),
+            created_at INTEGER NOT NULL CHECK(created_at >= 0),
+            updated_at INTEGER NOT NULL CHECK(updated_at >= created_at)
+        ) STRICT;
+        CREATE TABLE mcp_secret (
+            definition_id TEXT NOT NULL REFERENCES mcp_definition(id) ON DELETE CASCADE,
+            kind TEXT NOT NULL CHECK(kind IN ('env','header')),
+            name TEXT NOT NULL,
+            credential_ref TEXT NOT NULL UNIQUE,
+            PRIMARY KEY(definition_id,kind,name)
+        ) STRICT, WITHOUT ROWID;
+        CREATE TABLE mcp_cleanup (
+            definition_id TEXT NOT NULL,
+            credential_ref TEXT PRIMARY KEY
+        ) STRICT;",
+    },
 ];
 
 /// Errors from opening or migrating the private database.
@@ -442,6 +470,42 @@ mod tests {
             // Cleanup is best effort so a removal problem cannot hide the test result.
             let _ = fs::remove_dir_all(&self.path);
         }
+    }
+
+    #[test]
+    fn mcp_migration_preserves_provider_models_and_preferences() {
+        let directory = TestDirectory::new("mcp-upgrade");
+        let path = directory.path.join(DATABASE_FILE_NAME);
+        {
+            let old = Storage::open_file(&path, &MIGRATIONS[..7]).expect("v7");
+            old.lock().unwrap().execute_batch("INSERT INTO locale_preference VALUES(1,'zh-CN');
+                INSERT INTO provider_instance VALUES('0123456789abcdef0123456789abcdef','deepseek','Work','https://api.deepseek.com','chat_completions',1,1,1);
+                INSERT INTO provider_model(provider_id,model_id,source,selected,created_at,updated_at) VALUES('0123456789abcdef0123456789abcdef','vendor/model','manual',1,1,1);").unwrap();
+        }
+        let upgraded = Storage::open_in_directory(&directory.path).unwrap();
+        assert_eq!(upgraded.schema_version().unwrap(), latest_schema_version());
+        let connection = upgraded.lock().unwrap();
+        assert_eq!(
+            connection
+                .query_row("SELECT preference FROM locale_preference", [], |r| r
+                    .get::<_, String>(0))
+                .unwrap(),
+            "zh-CN"
+        );
+        assert_eq!(
+            connection
+                .query_row("SELECT model_id FROM provider_model", [], |r| r
+                    .get::<_, String>(0))
+                .unwrap(),
+            "vendor/model"
+        );
+        assert_eq!(
+            connection
+                .query_row("SELECT count(*) FROM mcp_definition", [], |r| r
+                    .get::<_, i64>(0))
+                .unwrap(),
+            0
+        );
     }
 
     #[test]

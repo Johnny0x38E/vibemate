@@ -4,7 +4,7 @@
 
 - **Frontend.** `src/main.tsx` mounts React behind the language startup gate.
   `src/App.tsx` composes the desktop shell: Overview, the Providers page
-  (`src/features/providers/`), planned pages for Agents/Skills/MCP, and Settings
+  (`src/features/providers/`), the MCP page (`src/features/mcp/`), planned pages for Agents/Skills, and Settings
   (`src/features/settings/`). UI code calls Rust only through the typed wrappers
   in `src/lib/desktop.ts` and `src/lib/desktop/`, which validate every response.
 - **Commands.** `src-tauri/src/commands.rs` holds thin Tauri commands for app
@@ -16,7 +16,7 @@
   remains for full-catalog merge and tests. `src-tauri/src/lib.rs` opens storage
   and registers them.
 - **Persistence.** `src-tauri/src/storage.rs` owns the private SQLite database in
-  the app-data folder and its forward-only migrations (currently schema v7).
+  the app-data folder and its forward-only migrations (currently schema v8).
   `settings.rs` and `appearance.rs` store preferences; `providers.rs` validates
   and stores provider instances (stable random IDs, cursor pages, optimistic
   `revision` checks); `provider_secrets.rs` reads key status and replaces keys;
@@ -25,6 +25,14 @@
 - **Credentials.** `src-tauri/src/credentials.rs` provides the OS credential-store
   interface, key validation and the compensation helpers that keep the store and
   SQLite consistent when providers are created and keys are replaced.
+- **Central MCP.** `mcp.rs` validates stdio/Streamable HTTP definitions and stores
+  non-secret metadata, stable IDs and revisions. Every env/header value uses
+  an immutable OS credential reference. Failed known database writes compensate
+  new credentials; uncertain commits retain them and require reconciliation.
+  Transactional cleanup records make obsolete credential deletion retryable.
+  Reads never load values. Saves and enablement changes perform no server process
+  launch, HTTP request or Agent config write. Crash-orphan recovery remains P34.
+  See [central definition boundaries](plans/mcp-central.md).
 - **HTTP and models.** `http_client.rs` performs bounded HTTPS GETs with cancellation
   and system-proxy support; `model_catalog.rs` and `model_fetch.rs` map the three
   phase-1 providers' list endpoints into stored catalog rows; `model_search.rs`

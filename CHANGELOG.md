@@ -8,6 +8,10 @@ GitHub release notes are extracted from the matching version section only.
 
 ### Added
 
+- Added central MCP management with bilingual create/edit forms, stdio and Streamable HTTP definitions, bounded cursor pages and central enable/disable controls. All env/header values use OS credential storage; SQLite schema v8 stores metadata and references only. Revisions reject stale edits, immutable references preserve existing values after failed saves, and obsolete credential cleanup is retryable. Forms clear typed values on submit and navigation; uncertain outcomes require reload. Saving definitions never starts or contacts a server or writes Agent config. Agent deployment, OAuth, old SSE and imports remain deferred.
+
+- MCP verification on Linux: full frontend checks (468 UI/boundary tests, eight release tests, 14 translation-checker tests), Rust fmt/Clippy and 201 passing tests (one real credential-store test ignored), plus locked debug/release no-bundle desktop builds. Isolated real Tauri save/edit/list/restart/read passed and the stdio test command did not execute. Native MCP credential-store acceptance, visual review and other-platform runtime checks remain pending. Forms follow the existing secondary-page Back/header and top-of-card Save pattern.
+
 - Added an expandable manual-model form in the Models tab's selected list, with model ID, optional alias and an explicit "Add and save" action. Rust stores a selected manual row without a provider request; pending checkbox drafts block addition, and uncheck + Save removes manual rows through the existing atomic batch. Field errors retain editable input, duplicate submits are blocked, and unknown save outcomes require an exact-ID check across saved cursor pages before retrying. Successful additions update the selected baseline and count; hidden views ignore late replies. Verified on Linux with pinned pnpm 12.10.1: full frontend checks, 425 UI/boundary tests (15 new manual-form/list tests), 14 translation-checker tests and eight release tests. Real Tauri add/restart/delete, visual review and other-platform runtime verification remain pending.
 
 - Provider edit pages use **API** and **Models** tabs (Settings-style keyboard navigation). API holds URL, protocol, and key; Models holds search, upstream browse, and draft selection. Both panels stay mounted while switching tabs.
@@ -82,5 +86,5 @@ GitHub release notes are extracted from the matching version section only.
 - A tag-triggered release workflow with version-specific changelog notes.
 - Strict frontend rules, type-aware linting, accessibility checks, and validated desktop metadata.
 
-Provider connections, agent injection, skill management, and MCP management
+Inference connections, Agent injection, skill management and MCP deployment
 are not implemented yet.

@@ -6,6 +6,7 @@ pub mod credentials;
 pub mod http_client;
 mod log_access;
 mod logging;
+pub mod mcp;
 pub mod model_catalog;
 pub mod model_fetch;
 pub mod model_search;
@@ -51,6 +52,10 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_app_info,
+            commands::list_mcp_definitions,
+            commands::get_mcp_definition,
+            commands::save_mcp_definition,
+            commands::cleanup_mcp_credentials,
             commands::get_log_location,
             commands::open_log_file,
             commands::open_log_directory,

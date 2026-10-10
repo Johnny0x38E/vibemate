@@ -39,6 +39,7 @@ import {
     getProviderSecretStatus,
     replaceProviderSecret,
 } from "./lib/desktop/providerSecrets";
+import { listMcpDefinitions } from "./lib/desktop/mcp";
 import en from "./locales/en.json";
 
 let translator: i18n;
@@ -108,7 +109,15 @@ vi.mock(import("./lib/desktop/providerSecrets"), async (importOriginal) => ({
     replaceProviderSecret: vi.fn<typeof replaceProviderSecret>(),
 }));
 
+vi.mock(import("./lib/desktop/mcp"), async (importOriginal) => ({
+    ...(await importOriginal()),
+    listMcpDefinitions: vi.fn(),
+}));
+
 beforeEach(async () => {
+    vi.mocked(listMcpDefinitions)
+        .mockReset()
+        .mockResolvedValue({ kind: "preview" });
     // jsdom is a browser, so the Providers page defaults to its preview state.
     vi.mocked(listProviderTemplates)
         .mockReset()
@@ -866,3 +875,35 @@ test.each([
         expectNoKeysOrDiagnostics();
     },
 );
+
+test("MCP mounts only on first visit and hides credential input without losing non-secret drafts", async () => {
+    vi.mocked(listMcpDefinitions).mockResolvedValue({
+        kind: "desktop",
+        page: { items: [], nextCursor: null },
+    });
+    render(<App />);
+    expect(listMcpDefinitions).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "MCP servers" }));
+    await screen.findByText("No MCP definitions saved yet.");
+    fireEvent.click(screen.getByRole("button", { name: "New definition" }));
+    fireEvent.change(screen.getByLabelText("Name"), {
+        target: { value: "Keep this draft" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add field" }));
+    fireEvent.change(screen.getByLabelText("Field name 1"), {
+        target: { value: "TOKEN" },
+    });
+    fireEvent.change(screen.getByLabelText("Value 1"), {
+        target: { value: "synthetic-app-mcp-secret" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Agents" }));
+    await waitFor(() => {
+        expect(screen.getByLabelText<HTMLInputElement>("Value 1").value).toBe(
+            "",
+        );
+    });
+    fireEvent.click(screen.getByRole("button", { name: "MCP servers" }));
+    expect(screen.getByLabelText<HTMLInputElement>("Name").value).toBe(
+        "Keep this draft",
+    );
+});

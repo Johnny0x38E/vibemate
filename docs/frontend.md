@@ -12,7 +12,7 @@ React describes the interface; Rust handles local system and provider operations
   (brand, Overview, four feature destinations, Settings with the icon-only
   collapse toggle), the relationship home, `ProvidersView` (mounted on the first
   visit, then kept mounted while hidden, so an open form survives navigation and
-  returning does not re-read the list), planned pages for Agents/Skills/MCP,
+  returning does not re-read the list), central MCP management, planned pages for Agents/Skills,
   and `SettingsView` (mounted while hidden) for the settings area.
 - `src/features/providers/` contains `ProvidersView` (list and in-page
   navigation), `ProviderPage` (back control and title), `ProviderTabbedView`
@@ -866,3 +866,48 @@ Ink token contrast was measured against canvas, sidebar, surface, hover and
 selected backgrounds: light primary/secondary minima 11.41/4.74, dark minima
 11.51/5.66, and light/dark focus minima 5.30/8.83. These measurements cover the
 named token pairs, not all accessibility behavior.
+
+## Central MCP management
+
+`src/features/mcp/` implements P31. The sidebar opens a metadata list lazily on
+first visit. New/edit pages collect display name, server identifier, transport,
+stdio executable/ordered arguments/optional cwd, or Streamable HTTP URL.
+Environment variables and request headers use named password rows. An empty
+existing value preserves its OS reference; a replacement writes a fresh reference;
+removing a row removes that field. Enter one argument per line, without shell
+quoting. Saving only stores a definition. Enable/disable describes central state,
+never an applied Agent config or connection.
+
+`McpForm` clears typed values on every submit, cancel, transport change and hide.
+Its hidden transition clears during rendering, before a hidden panel can retain
+values through a rapid navigation change. Non-secret drafts stay mounted. Unknown
+write outcomes block another mutation until a successful metadata reload. The
+list supports bounded cursor pages, safe retry, and obsolete credential cleanup.
+Unmount guards ignore late responses; page transitions focus the heading.
+
+`src/lib/desktop/mcp.ts` validates exact metadata shapes and cursor ordering,
+rejects unexpected secret-bearing response fields, discards raw errors, and
+blocks mutations in browser preview. Rust is authoritative for field validation.
+All env/header values use OS credential storage; frontend persistent storage is
+never used. Commands run blocking storage work off the async executor, reuse the
+credential mutation lock and add no capabilities or dependencies.
+
+Behavior coverage includes 21 IPC-boundary cases, 11 form cases, ten manager
+cases and one shell-navigation case, including hidden-value clearing, stale
+replies, reconciliation and browser preview. Visual and real credential-store
+acceptance remain separate from these simulated tests.
+
+The form reuses Providers' secondary-header/back styles and button hierarchy,
+with Back on the left, title on the right and Save at the top of the card. Shared
+`FieldSelect`, 36 px inputs, theme tokens, notifications and list row spacing
+follow the existing pages rather than introducing another control system.
+
+Verified locally on Linux: `check:frontend` with 468 UI/boundary tests, eight
+release tests and 14 translation-checker tests; Rust fmt/Clippy and 201 passing
+Rust tests (one real credential-store test ignored); locked debug and release
+no-bundle desktop builds. An isolated real Tauri runtime saved, edited, listed,
+restarted and re-read a no-secret stdio definition; its test command never ran.
+Real MCP credential-store acceptance and macOS/Windows runtime behavior remain
+pending. Visual checks remain manual. Vite reports the existing single-chunk
+size advisory; it is not a
+verification of layout or accessibility.

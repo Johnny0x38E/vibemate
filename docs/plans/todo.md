@@ -1393,7 +1393,7 @@ D16（维护者批准，2026-10-10 完成）：2026-10-10 20:10（UTC+8）不带
 - [ ] 根据协议声明允许的字段类型、枚举和范围，区分默认、继承与显式覆盖。
 - [ ] 保留可验证的自定义请求头/参数；拒绝危险认证覆盖、未知注入字段和不支持的值。
 - [ ] UI 显示能力信息来源与具体校验原因，不因手动标签就宣称实际支持。
-- [ ] 承接 P12 未做的部分：模型别名编辑、手动能力覆盖，以及 schema v8 的能力/参数字段（如 DeepSeek `effort`、OpenRouter `supported_parameters`）。
+- [ ] 承接 P12 未做的部分：模型别名编辑、手动能力覆盖，以及 后续 schema（当前预留 v9）的能力/参数字段（如 DeepSeek `effort`、OpenRouter `supported_parameters`）。
 
 **Verification:**
 
@@ -1834,17 +1834,17 @@ D16（维护者批准，2026-10-10 完成）：2026-10-10 20:10（UTC+8）不带
 
 **Acceptance criteria:**
 
-- [ ] 支持经过核实的 stdio/HTTP 字段，校验命令参数、URL、env/header 和传输类型。
-- [ ] 敏感字段使用系统凭据引用，普通列表/差异/错误不暴露值；查询有界分页。
-- [ ] 保存、编辑、禁用可重读，预览与导入不启动进程或发送认证请求。
+- [x] 支持经过核实的 stdio/HTTP 字段，校验命令参数、URL、env/header 和传输类型。
+- [x] 敏感字段使用系统凭据引用，普通列表/差异/错误不暴露值；查询有界分页。
+- [x] 保存、编辑、禁用可重读；显示与保存不启动进程或发送认证请求。本轮无导入，导入留待独立任务。
 
 **Verification:**
 
-- [ ] 运行 Rust `mcp_definition` 字段/敏感值测试与 McpForm 行为测试。
-- [ ] 运行 `check:frontend` 与 Rust fmt/Clippy。
-- [ ] Tauri 保存包含测试命令的定义，确认没有进程启动。
+- [x] 运行 Rust `mcp_definition` 字段/敏感值测试与 McpForm 行为测试。
+- [x] 运行 `check:frontend` 与 Rust fmt/Clippy。
+- [x] Tauri 保存包含测试命令的定义，确认没有进程启动。
 
-**Dependencies:** P05,P06,P17。
+**Dependencies:** P05,P06；中央管理不依赖 Agent 发现 P17。
 
 **Files likely touched:**
 
@@ -1855,6 +1855,67 @@ D16（维护者批准，2026-10-10 完成）：2026-10-10 20:10（UTC+8）不带
 - `src/features/mcp/McpForm.test.tsx`
 
 **Estimated scope:** M：5 个建议主文件；如需额外文件先按执行约定拆分。
+
+### P31.0：提前中央 MCP 管理与字段边界
+
+- [x] 维护者授权先做中央 MCP 管理；P32/P33 注入继续保留原安全写入依赖。
+- [x] 核对 Pi/Grok 官方 stdio/HTTP 字段；仅存定义，不启动进程、不发认证请求。env/header 值全部按敏感值处理；本轮不做 OAuth、旧 SSE、动态值命令、导入或 Agent 写入。
+
+**Files:** 本清单、`docs/plans/mcp-central.md`。
+**Verification:** 官方来源与范围核对。
+
+### P31.a：Rust 校验、迁移与安全保存
+
+- [x] 结构化定义、有界分页、稳定 ID、修订冲突、凭据引用与多资源失败补偿；旧凭据清理失败可重试。
+
+**Files:** `src-tauri/src/mcp.rs`、`src-tauri/src/mcp/tests.rs`、`src-tauri/src/storage.rs`、`src-tauri/src/lib.rs`。
+**Verification:** MCP/迁移行为测试、Rust fmt/Clippy/完整测试。
+**Dependencies:** P31.0。
+
+### P31.b：Tauri 与 TS 边界
+
+- [x] 注册只读/保存命令，SQLite/凭据访问使用 blocking pool；严格验证非敏感响应、稳定错误码与浏览器预览。
+
+**Files:** `src-tauri/src/commands.rs`、`src-tauri/src/lib.rs`、`src/lib/desktop/mcp.ts`、`src/lib/desktop/mcp.test.ts`。
+**Verification:** IPC 边界测试、前端检查、Rust 检查。
+**Dependencies:** P31.a。
+
+### P31.c.1：表单与双语资源
+
+- [x] stdio/HTTP 表单、动态 env/header 字段、编辑保留/替换/删除、字段错误、凭据输入清理和未知结果重读。
+
+**Files:** `McpForm.tsx`、`McpForm.test.tsx`、`Mcp.module.css`、两份 locale。
+**Verification:** 表单行为测试、`check:frontend`。
+**Dependencies:** P31.b。
+
+### P31.c.2：列表、启停与 App 接线
+
+- [x] MCP 页面新建/编辑、稳定分页、中央定义状态、错误重试与清理重试；App 页面与隐藏生命周期接线。
+
+**Files:** `McpView.tsx`、`McpView.test.tsx`、`src/App.tsx`、`src/App.test.tsx`；本清单随子任务更新。
+**Verification:** 页面/导航行为测试、`check:frontend`。
+**Dependencies:** P31.c.1。
+
+### P31.c.3：与现有页面统一样式和交互
+
+- [x] 按维护者补充要求，复用 Providers 的二级标题/返回和按钮样式；保存放在卡片顶部，字段高度、列表间距与现有页面一致。
+
+**Files:** `McpForm.tsx`、`McpForm.test.tsx`、`McpView.tsx`、`Mcp.module.css`、两份 locale（双语作为一个资源变更）。
+**Verification:** 完整前端检查；外观保持人工验收。
+**Dependencies:** P31.c.2。
+
+### P31.d：文档、构建与原生验证
+
+- [x] 更新架构/前端/计划和英文 changelog；完整自动检查与桌面构建。
+- [x] 实际 Tauri 保存测试命令定义→重启→重读，确认没有执行服务器；真实凭据库与各平台人工验证单独记录。
+
+**Files:** `docs/architecture.md`、`docs/frontend.md`、`docs/plans/phase-1.md`、`docs/plans/development-plan.md`、`CHANGELOG.md`。
+**Verification:** 完整检查、锁定桌面构建；未执行的真实验收保持待验。
+**Dependencies:** P31.c.2。
+
+**本轮验证结果：** Linux 完整前端检查 468 项 UI/边界测试、8 项 release、14 项 i18n checker；Rust fmt/Clippy 与 201 项测试通过（1 项真实凭据库测试忽略）；锁定 debug/release 桌面构建通过。隔离真实 Tauri 完成 stdio 无凭据定义保存/编辑/列表→重启→重读，测试命令未执行。构建的单包大小提示单独记录，不作为外观验收。
+
+- [ ] MCP 多值真实系统凭据库存取/替换/清理，以及 macOS/Windows 原生和人工外观验收；不以模拟存储测试代替。
 
 ### Task P32: 向 Pi 注入 MCP 配置
 

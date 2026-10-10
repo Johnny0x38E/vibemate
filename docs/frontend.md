@@ -409,3 +409,24 @@ Browser preview opens that same address in a tab with `noopener,noreferrer`.
 Visual acceptance is performed by the maintainer.
 
 The repository opener uses the [official Rust `open_url` API](https://docs.rs/tauri-plugin-opener/2.7.0/tauri_plugin_opener/fn.open_url.html). The GitHub mark comes from [GitHub Octicons](https://github.com/primer/octicons/blob/main/icons/mark-github-16.svg).
+
+The sixth built-in palette, `notion` (Notion style / Notion 风格), is inspired by
+Notion's official public light/dark CSS observed on 2026-10-10:
+[theme stylesheet](https://www.notion.so/_assets/77281-c4b3c46f690b55b2.css),
+linked from its [login page](https://www.notion.so/login). Its primary text,
+canvas, sidebar and border colors reuse those neutral reference values. Hover,
+selection and neutral focus/accent values are adapted to vibemate; light
+secondary text is darkened from `#7d7a75` to `#686560` for contrast. This is an
+inspired palette, not a claim of identical rendering or a Notion integration.
+
+SQLite v4 rebuilds the owned appearance preference table within the existing
+migration transaction to extend its theme CHECK constraint. Saved brightness,
+existing themes, language and unrelated tables are preserved. Tests upgrade all
+five previous choices, save Notion and reopen, reject unknown themes, and verify
+that an invalid v3 row rolls back the migration without losing the original row.
+Visual acceptance remains with the maintainer.
+
+Notion palette token contrast was checked numerically against canvas, sidebar,
+surface, hover and selected backgrounds: light primary/secondary text minima
+11.41/4.74, dark primary/secondary minima 11.51/5.66, and focus minima
+5.30/8.83. These values do not replace visual acceptance.

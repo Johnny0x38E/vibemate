@@ -20,18 +20,21 @@ test("preview never invents a saved choice or invokes a mutation", async () => {
     expect(invoke).not.toHaveBeenCalled();
 });
 
-test("reads and confirms the exact desktop pair", async () => {
-    const preference = { appearance: "dark", theme: "iris" } as const;
-    vi.mocked(invoke).mockResolvedValue(preference);
-    expect(await getAppearancePreference()).toEqual({
-        kind: "desktop",
-        preference,
-    });
-    expect(await saveAppearancePreference(preference)).toEqual(preference);
-    expect(invoke).toHaveBeenLastCalledWith("save_appearance_preference", {
-        preference,
-    });
-});
+test.each(["iris", "notion"] as const)(
+    "reads and confirms the exact desktop pair for %s",
+    async (theme) => {
+        const preference = { appearance: "dark", theme } as const;
+        vi.mocked(invoke).mockResolvedValue(preference);
+        expect(await getAppearancePreference()).toEqual({
+            kind: "desktop",
+            preference,
+        });
+        expect(await saveAppearancePreference(preference)).toEqual(preference);
+        expect(invoke).toHaveBeenLastCalledWith("save_appearance_preference", {
+            preference,
+        });
+    },
+);
 
 for (const response of [
     null,

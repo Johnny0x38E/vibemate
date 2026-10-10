@@ -197,7 +197,7 @@ mod tests {
         connection.execute_batch("PRAGMA user_version = 1; CREATE TABLE sample (value TEXT); INSERT INTO sample VALUES ('kept');").expect("v1 data");
         drop(connection);
         let storage = Storage::open_in_directory(&directory.0).expect("upgrade");
-        assert_eq!(storage.schema_version().expect("version"), 3);
+        assert_eq!(storage.schema_version().expect("version"), 4);
         assert_eq!(
             load_locale_preference(&storage),
             Ok(LocalePreference::System)

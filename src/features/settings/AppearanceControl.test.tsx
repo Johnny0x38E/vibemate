@@ -230,12 +230,12 @@ test("shows all built-in colors together and moves the single selection on click
     await mount();
     await ready();
     const group = screen.getByRole("radiogroup", { name: "Color theme" });
-    expect(group.querySelectorAll('input[type="radio"]')).toHaveLength(5);
+    expect(group.querySelectorAll('input[type="radio"]')).toHaveLength(6);
     expect(screen.getByRole("radio", { name: "Forest" })).toHaveProperty(
         "checked",
         true,
     );
-    for (const name of ["Graphite", "Linen", "Iris", "Ocean"]) {
+    for (const name of ["Graphite", "Linen", "Iris", "Ocean", "Notion style"]) {
         fireEvent.click(screen.getByRole("radio", { name }));
         expect(screen.getByRole("radio", { name })).toHaveProperty(
             "checked",
@@ -244,4 +244,27 @@ test("shows all built-in colors together and moves the single selection on click
         expect(group.querySelectorAll("input:checked")).toHaveLength(1);
     }
     expect(save).not.toHaveBeenCalled();
+});
+
+test("saves Notion with the current brightness and restores it after remount", async () => {
+    read.mockResolvedValue({
+        kind: "desktop",
+        preference: { appearance: "dark", theme: "forest" },
+    });
+    const choice = { appearance: "dark", theme: "notion" } as const;
+    save.mockResolvedValue(choice);
+    const view = await mount();
+    fireEvent.click(await ready("Notion style"));
+    await waitFor(() => {
+        expect(document.documentElement.dataset["theme"]).toBe("notion");
+    });
+    expect(save).toHaveBeenCalledExactlyOnceWith(choice);
+    view.unmount();
+    read.mockResolvedValue({ kind: "desktop", preference: choice });
+    await mount("zh-CN");
+    const selected = await ready("Notion 风格");
+    expect(selected).toHaveProperty("checked", true);
+    expect(document.documentElement.dataset["appearance"]).toBe("dark");
+    expect(document.documentElement.dataset["theme"]).toBe("notion");
+    expect(save).toHaveBeenCalledTimes(1);
 });

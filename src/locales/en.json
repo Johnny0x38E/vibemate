@@ -120,7 +120,8 @@
                 "graphite": "Graphite",
                 "linen": "Linen",
                 "iris": "Iris",
-                "ocean": "Ocean"
+                "ocean": "Ocean",
+                "notion": "Notion style"
             },
             "loading": "Reading appearance preferences…",
             "readFailed": "Saved appearance preferences could not be read. Reload before making changes.",

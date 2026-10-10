@@ -52,6 +52,8 @@ pub enum Theme {
     Iris,
     /// Blue accents on cool neutral surfaces.
     Ocean,
+    /// White and warm-gray surfaces inspired by Notion.
+    Notion,
 }
 
 impl Theme {
@@ -62,6 +64,7 @@ impl Theme {
             Self::Linen => "linen",
             Self::Iris => "iris",
             Self::Ocean => "ocean",
+            Self::Notion => "notion",
         }
     }
     fn parse(value: &str) -> Result<Self, SettingsError> {
@@ -71,6 +74,7 @@ impl Theme {
             "linen" => Ok(Self::Linen),
             "iris" => Ok(Self::Iris),
             "ocean" => Ok(Self::Ocean),
+            "notion" => Ok(Self::Notion),
             _ => Err(SettingsError::InvalidPreference),
         }
     }
@@ -192,6 +196,7 @@ mod tests {
             Theme::Linen,
             Theme::Iris,
             Theme::Ocean,
+            Theme::Notion,
         ] {
             for appearance in [Appearance::System, Appearance::Light, Appearance::Dark] {
                 let choice = AppearancePreference { appearance, theme };
@@ -209,7 +214,7 @@ mod tests {
         connection.execute_batch("PRAGMA user_version = 2; CREATE TABLE locale_preference (id INTEGER PRIMARY KEY, preference TEXT); INSERT INTO locale_preference VALUES (1, 'en'); CREATE TABLE sample (value TEXT); INSERT INTO sample VALUES ('kept');").expect("v2 fixture");
         drop(connection);
         let storage = Storage::open_in_directory(&directory.0).expect("upgrade");
-        assert_eq!(storage.schema_version().expect("version"), 3);
+        assert_eq!(storage.schema_version().expect("version"), 4);
         assert_eq!(
             crate::settings::load_locale_preference(&storage),
             Ok(crate::settings::LocalePreference::English)

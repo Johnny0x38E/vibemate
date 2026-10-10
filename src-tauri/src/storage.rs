@@ -62,6 +62,19 @@ const MIGRATIONS: &[Migration] = &[
             theme TEXT NOT NULL CHECK (theme IN ('forest', 'graphite', 'linen', 'iris', 'ocean'))
         ) STRICT;",
     },
+    Migration {
+        version: 4,
+        // SQLite cannot extend a CHECK constraint in place. Rebuild only this
+        // owned table and copy the saved pair inside the migration transaction.
+        sql: "CREATE TABLE appearance_preference_v4 (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            appearance TEXT NOT NULL CHECK (appearance IN ('system', 'light', 'dark')),
+            theme TEXT NOT NULL CHECK (theme IN ('forest', 'graphite', 'linen', 'iris', 'ocean', 'notion'))
+        ) STRICT;
+        INSERT INTO appearance_preference_v4 SELECT id, appearance, theme FROM appearance_preference;
+        DROP TABLE appearance_preference;
+        ALTER TABLE appearance_preference_v4 RENAME TO appearance_preference;",
+    },
 ];
 
 /// Errors from opening or migrating the private database.
@@ -342,6 +355,97 @@ mod tests {
             // Cleanup is best effort so a removal problem cannot hide the test result.
             let _ = fs::remove_dir_all(&self.path);
         }
+    }
+
+    #[test]
+    fn notion_migration_preserves_existing_preferences_and_supports_restart() {
+        use crate::appearance::{Appearance, AppearancePreference, Theme};
+        for theme in [
+            Theme::Forest,
+            Theme::Graphite,
+            Theme::Linen,
+            Theme::Iris,
+            Theme::Ocean,
+        ] {
+            let directory = TestDirectory::new("notion-upgrade");
+            let path = directory.path.join(DATABASE_FILE_NAME);
+            let old = Storage::open_file(&path, &MIGRATIONS[..3]).expect("v3 database");
+            let previous = AppearancePreference {
+                appearance: Appearance::Dark,
+                theme,
+            };
+            crate::appearance::save_appearance_preference(&old, previous).expect("save old pair");
+            crate::settings::save_locale_preference(
+                &old,
+                crate::settings::LocalePreference::English,
+            )
+            .expect("save language");
+            old.lock()
+                .expect("lock")
+                .execute_batch(
+                    "CREATE TABLE sample (value TEXT); INSERT INTO sample VALUES ('kept');",
+                )
+                .expect("unrelated row");
+            drop(old);
+            let upgraded = Storage::open_in_directory(&directory.path).expect("upgrade");
+            assert_eq!(upgraded.schema_version().expect("schema"), 4);
+            assert_eq!(
+                crate::appearance::load_appearance_preference(&upgraded),
+                Ok(previous)
+            );
+            assert_eq!(
+                crate::settings::load_locale_preference(&upgraded),
+                Ok(crate::settings::LocalePreference::English)
+            );
+            assert_eq!(read_sample_value(&upgraded), "kept");
+            let choice = AppearancePreference {
+                appearance: Appearance::Dark,
+                theme: Theme::Notion,
+            };
+            crate::appearance::save_appearance_preference(&upgraded, choice).expect("save Notion");
+            assert!(
+                upgraded
+                    .lock()
+                    .expect("lock")
+                    .execute("UPDATE appearance_preference SET theme = 'unknown'", [])
+                    .is_err()
+            );
+            drop(upgraded);
+            let reopened = Storage::open_in_directory(&directory.path).expect("restart");
+            assert_eq!(
+                crate::appearance::load_appearance_preference(&reopened),
+                Ok(choice)
+            );
+        }
+    }
+
+    #[test]
+    fn failed_notion_migration_keeps_the_v3_table_and_data() {
+        let directory = TestDirectory::new("notion-failed-upgrade");
+        let path = directory.path.join(DATABASE_FILE_NAME);
+        let old = Storage::open_file(&path, &MIGRATIONS[..3]).expect("v3 database");
+        old.lock().expect("lock").execute_batch("PRAGMA ignore_check_constraints = ON; INSERT INTO appearance_preference VALUES (1, 'dark', 'unknown');").expect("corrupt v3 fixture");
+        drop(old);
+        assert!(matches!(
+            Storage::open_in_directory(&directory.path),
+            Err(StorageError::MigrationFailed { version: 4, .. })
+        ));
+        let raw = Connection::open(&path).expect("original database");
+        assert_eq!(read_schema_version(&raw).expect("schema"), 3);
+        let theme: String = raw
+            .query_row("SELECT theme FROM appearance_preference", [], |row| {
+                row.get(0)
+            })
+            .expect("original row");
+        assert_eq!(theme, "unknown");
+        let temporary_tables: u32 = raw
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_schema WHERE name = 'appearance_preference_v4'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("rolled back table");
+        assert_eq!(temporary_tables, 0);
     }
 
     /// Read the single row written by the test migrations.

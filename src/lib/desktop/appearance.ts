@@ -10,6 +10,7 @@ export const THEME_IDS = [
     "linen",
     "iris",
     "ocean",
+    "notion",
 ] as const;
 /** An installed built-in palette, never an arbitrary CSS value. */
 export type ThemeId = (typeof THEME_IDS)[number];

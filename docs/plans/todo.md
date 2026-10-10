@@ -730,6 +730,20 @@ I05.a.1 校正 `mark.svg` / `app-icon.svg` 与同母版生成的桌面图标集�
 
 **I10.c Files:** `src/locales/en.json`、`src/locales/zh-CN.json`、`assets/licenses/octicons-MIT.txt`、`docs/frontend.md`、`CHANGELOG.md`；本清单同步更新。
 
+### 插队任务 I11：增加 Notion 风格主题
+
+- [x] I11.a：参照 Notion 官方公开浅/深色语义色，新增主题 token、ID 与中英文名称。
+- [x] I11.b：增加 Rust Theme 与 v4 迁移，保留 v3 外观、语言及无关数据；验证新增主题保存和重开读取。
+- [x] I11.c：更新选择/IPC 测试、文档及 CHANGELOG；完整前端/Rust 检查和本地 macOS 构建。
+- [ ] 外观由维护者人工验收，不运行浏览器或截图检查。
+
+**Verification:** 前端 101 项 UI 测试、8 项发布测试、格式/Lint/类型/构建通过；Rust fmt/Clippy、33 项测试通过（既有 OS 密钥库测试忽略）；locked macOS 构建与 unsigned app 打包通过。文字和焦点 token 数值对比度通过；外观及原生重启选择由维护者验收，Windows/Linux 未原生验收。
+
+**I11.a Files:** `src/themes.css`、`src/lib/desktop/appearance.ts`、`src/locales/en.json`、`src/locales/zh-CN.json`。
+**I11.b Files:** `src-tauri/src/appearance.rs`、`src-tauri/src/storage.rs`、`src-tauri/src/settings.rs`。
+**I11.c.1 Files:** `src/lib/desktop/appearance.test.ts`、`src/features/settings/AppearanceControl.test.tsx`。
+**I11.c.2 Files:** `docs/frontend.md`、`CHANGELOG.md`；本清单同步更新。
+
 ### Task P09: 让现有界面支持中英文
 
 **Description:** 把现有 App 的文本与 metadata 状态接入 i18n，并将翻译一致性和切换回归检查纳入完成标准。

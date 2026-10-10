@@ -118,3 +118,28 @@
     --theme-focus-dark: #87bfdc;
     --theme-accent-dark: #87bfdc;
 }
+
+/* Notion-inspired neutrals; secondary text is darkened for readable contrast. */
+:root[data-theme="notion"],
+[data-palette="notion"] {
+    --theme-text-light: #2c2c2b;
+    --theme-background-light: #ffffff;
+    --theme-sidebar-light: #f9f8f7;
+    --theme-surface-light: #ffffff;
+    --theme-hover-light: #f0efed;
+    --theme-selected-light: #e9e8e5;
+    --theme-border-light: #e6e5e3;
+    --theme-summary-light: #686560;
+    --theme-focus-light: #5f5e59;
+    --theme-accent-light: #2c2c2b;
+    --theme-text-dark: #f0efed;
+    --theme-background-dark: #191919;
+    --theme-sidebar-dark: #202020;
+    --theme-surface-dark: #202020;
+    --theme-hover-dark: #2c2c2b;
+    --theme-selected-dark: #30302e;
+    --theme-border-dark: #383836;
+    --theme-summary-dark: #ada9a3;
+    --theme-focus-dark: #d4d3cf;
+    --theme-accent-dark: #d4d3cf;
+}

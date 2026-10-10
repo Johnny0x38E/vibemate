@@ -39,6 +39,8 @@ GitHub release notes are extracted from the matching version section only.
 
 ### Added
 
+- Added a sixth built-in Notion-inspired theme: white and warm-gray light surfaces, charcoal dark surfaces, and neutral accents. The palette circle supports both languages and all brightness modes. Schema v4 preserves existing preferences while allowing the new theme to be saved and restored. Verified with 101 UI tests, eight release-tool tests, frontend checks, Rust fmt/Clippy and 33 passing tests (the existing OS-keychain smoke test remains ignored), numeric token contrast checks, and a locked macOS build with an unsigned local app bundle. Visual acceptance remains with the maintainer.
+
 - Added five built-in color themes (Forest, Graphite, Linen, Iris, Ocean), each with light/dark palettes. Settings General saves appearance and theme together through validated Rust IPC and schema v3 SQLite storage, restoring them after restart. Browser preview can try colors locally without claiming a saved preference; failures and uncertain saves have translated recovery paths.
 - Verified themes with 95 UI tests and eight release-tool tests in frontend checks, 31 passing Rust tests (the existing OS-keychain smoke test remains ignored), fmt/Clippy, a locked macOS desktop build, and real native dark/Iris selection followed by restart using isolated app-data. All ten palettes were inspected at 720×560 and shared text/focus token contrast was measured. Windows/Linux runtime acceptance remains pending.
 

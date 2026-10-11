@@ -1468,6 +1468,13 @@ BR4.e 若实际 MCP/Provider 命令调用点也需要编辑，按功能继续拆
 | [ ] BR5.k | 补浏览缓存/分页/失效/失败的行为回归            | `model_fetch/tests.rs`、`model_fetch/tests/browse.rs`                                       | BR5.j |
 | [ ] BR5.l | 最终检查、隔离原生 IPC 与文档整理              | 按文档/任务记录分批，每批至多五个实际文件                                                   | BR5.k |
 
+BR5.l 按实际文件继续分批：
+
+- [x] **BR5.l.1：本地模块入口与内部 API 注释收尾。** `models.rs`、`models/types.rs`、`models/validation.rs`、`models/repository.rs`，另含本清单。
+- [ ] **BR5.l.2：下载与缓存边界注释收尾。** `model_fetch/download.rs`、`model_fetch/cache.rs`，另含本清单。
+- [ ] **BR5.l.3：架构/README/阶段概览/拆分计划/CHANGELOG 收尾。** 这五份文档为独立批次；任务状态和最终验证记录另提交本清单。
+- [ ] **BR5.l.4：完整自动检查、原生 IPC 验证与最终任务记录。** 不修改前端 UI；真实凭据与其他平台验收仍独立待验。
+
 每批运行 Rust fmt、all-targets Clippy 和完整测试；最终核对既有测试清单及新增测试、SQL/wire 合约，并执行完整前端检查、锁定 Linux debug/release 构建和隔离 IPC。前端样式/交互、schema v8、平台待验项不因重构改变。
 
 - [ ] **BR6：Catalog/Storage/Credentials。** 各厂商解析局部化；迁移注册顺序和已发布 SQL 保持原样；按需要分离 OS store 实现和各业务补偿策略。开始前分别拆解析、迁移、凭据批次。

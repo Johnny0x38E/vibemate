@@ -36,6 +36,7 @@ pub fn decode_cursor(cursor: &str) -> Result<String, ModelError> {
     }
 }
 
+/// Parse a provider identity and map invalid input to the stable model error.
 pub(crate) fn parse_provider_id(value: &str) -> Result<ProviderId, ModelError> {
     ProviderId::parse(value).ok_or(ModelError::InvalidRequest)
 }

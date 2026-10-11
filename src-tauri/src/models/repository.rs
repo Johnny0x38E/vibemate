@@ -151,10 +151,13 @@ pub(super) struct ProviderContext {
     pub(super) protocol: ProviderProtocol,
 }
 
+/// Lock local model storage while preserving startup and poison error handling.
 pub(super) fn lock(storage: &Storage) -> Result<std::sync::MutexGuard<'_, Connection>, ModelError> {
     storage.lock().map_err(|_| ModelError::StorageUnavailable)
 }
 
+/// Read the kind/protocol needed to validate local model rows and selections.
+/// Missing or unsupported provider data returns the existing model error codes.
 pub(super) fn read_provider(
     connection: &Connection,
     provider_id: &ProviderId,
@@ -175,6 +178,7 @@ pub(super) fn read_provider(
     })
 }
 
+/// Read one optional raw row inside the caller's connection or transaction.
 pub(super) fn read_model(
     connection: &Connection,
     provider_id: &ProviderId,
@@ -194,6 +198,7 @@ pub(super) fn read_model(
 }
 
 /// A row exactly as stored, before validation.
+/// Raw SQLite fields, validated before they become a public ProviderModel.
 pub(super) struct StoredModel {
     provider_id: String,
     model_id: String,

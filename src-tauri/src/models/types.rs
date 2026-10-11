@@ -179,6 +179,7 @@ pub enum ModelSource {
 }
 
 impl ModelSource {
+    /// Encode the stored source using its existing SQLite representation.
     pub(super) fn as_str(self) -> &'static str {
         match self {
             Self::Fetched => "fetched",
@@ -186,6 +187,7 @@ impl ModelSource {
         }
     }
 
+    /// Reject source values this build cannot interpret.
     pub(super) fn from_value(value: &str) -> Option<Self> {
         match value {
             "fetched" => Some(Self::Fetched),

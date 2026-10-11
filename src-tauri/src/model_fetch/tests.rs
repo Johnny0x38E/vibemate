@@ -1,5 +1,7 @@
 //! Behavior tests for the parent module, kept separate from runtime code.
 
+mod browse;
+
 use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};

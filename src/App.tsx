@@ -1,4 +1,5 @@
-import { useId, useState, type JSX, type ReactNode } from "react";
+import { useId, useRef, useState, type JSX, type ReactNode } from "react";
+import type { ModuleNavigationHandle } from "./components/moduleNavigation";
 import { useTranslation } from "react-i18next";
 import { BrandLogo } from "./components/BrandLogo";
 import { Icon } from "./components/Icon";
@@ -24,8 +25,9 @@ interface AppProps {
  * Compose the approved desktop shell around a caller-supplied language control.
  * Navigation is window-local; Rust persists appearance. Settings stays mounted while hidden
  * so pending saves, uncertain outcomes, and unsubmitted input survive navigation.
- * Providers mounts on its first visit (so startup reads nothing extra) and then
- * stays mounted for the same reason.
+ * Feature modules mount on first visit and keep cached data while hidden.
+ * Sidebar activation explicitly opens the destination home through its guards,
+ * rather than restoring its previously open editor or detail page.
  */
 export default function App({ languageSettings }: AppProps): JSX.Element {
     const { t } = useTranslation();
@@ -35,6 +37,28 @@ export default function App({ languageSettings }: AppProps): JSX.Element {
     const [mcpVisited, setMcpVisited] = useState(false);
     const [agentsVisited, setAgentsVisited] = useState(false);
     const sidebarId = useId();
+    const providersNavigation = useRef<ModuleNavigationHandle>(null);
+    const mcpNavigation = useRef<ModuleNavigationHandle>(null);
+    const agentsNavigation = useRef<ModuleNavigationHandle>(null);
+    const settingsNavigation = useRef<ModuleNavigationHandle>(null);
+
+    function navigate(destination: Page): void {
+        const target = {
+            home: null,
+            skills: null,
+            providers: providersNavigation.current,
+            mcp: mcpNavigation.current,
+            agents: agentsNavigation.current,
+            settings: settingsNavigation.current,
+        }[destination];
+        // Ask before revealing/resetting a cached module: its own guards may
+        // reject a pending write or let the user cancel discarding model drafts.
+        if (target?.openHome() === false) return;
+        setPage(destination);
+        if (destination === "providers") setProvidersVisited(true);
+        if (destination === "mcp") setMcpVisited(true);
+        if (destination === "agents") setAgentsVisited(true);
+    }
 
     const pageLabel =
         page === "home" ? t("desktop.home") : t(`desktop.nav.${page}`);
@@ -54,10 +78,7 @@ export default function App({ languageSettings }: AppProps): JSX.Element {
                 aria-current={page === destination ? "page" : undefined}
                 title={label}
                 onClick={() => {
-                    setPage(destination);
-                    if (destination === "providers") setProvidersVisited(true);
-                    if (destination === "mcp") setMcpVisited(true);
-                    if (destination === "agents") setAgentsVisited(true);
+                    navigate(destination);
                 }}
             >
                 <Icon name={destination} />
@@ -154,17 +175,31 @@ export default function App({ languageSettings }: AppProps): JSX.Element {
                                 </div>
                             </section>
                         )}
-                    {/* Like Settings below: hiding keeps an unsaved form or an
-                    unknown save outcome instead of discarding it. */}
-                    {agentsVisited && <AgentList hidden={page !== "agents"} />}
-                    {mcpVisited && <McpView hidden={page !== "mcp"} />}
+                    {/* Hide instead of remounting to preserve pending work and caches.
+                    Sidebar re-entry asks the destination to return home safely. */}
+                    {agentsVisited && (
+                        <AgentList
+                            hidden={page !== "agents"}
+                            homeRef={agentsNavigation}
+                        />
+                    )}
+                    {mcpVisited && (
+                        <McpView
+                            hidden={page !== "mcp"}
+                            homeRef={mcpNavigation}
+                        />
+                    )}
                     {providersVisited && (
-                        <ProvidersView hidden={page !== "providers"} />
+                        <ProvidersView
+                            hidden={page !== "providers"}
+                            homeRef={providersNavigation}
+                        />
                     )}
                     {/* Keep the real control alive when leaving Settings. Unmounting here
                     would discard a committed choice or an unknown save outcome. */}
                     <SettingsView
                         languageSettings={languageSettings}
+                        homeRef={settingsNavigation}
                         hidden={page !== "settings"}
                     />
                 </main>

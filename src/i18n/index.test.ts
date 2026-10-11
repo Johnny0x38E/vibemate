@@ -41,6 +41,17 @@ describe("bundled translations", () => {
         expect(instance.t("settings.appearance.modes.light")).toBe("浅色");
     });
 
+    it("resolves MCP argument row labels in both locales", async () => {
+        const enInstance = await createAppI18n("en");
+        expect(enInstance.t("mcp.add_argument")).toBe("Add argument");
+        expect(enInstance.t("mcp.addField")).toBe("Add environment variable");
+        expect(enInstance.t("mcp.addHeader")).toBe("Add header");
+        const zhInstance = await createAppI18n("zh-CN");
+        expect(zhInstance.t("mcp.add_argument")).toBe("添加参数");
+        expect(zhInstance.t("mcp.addField")).toBe("添加环境变量");
+        expect(zhInstance.t("mcp.addHeader")).toBe("添加请求头");
+    });
+
     it("exposes settings tab labels in both locales", async () => {
         const enInstance = await createAppI18n("en");
         expect(enInstance.t("settings.tabs.general")).toBe("General");
@@ -97,12 +108,10 @@ describe("bundled translations", () => {
 
     it("exposes provider models list titles and footer hints in both locales", async () => {
         const enInstance = await createAppI18n("en");
-        expect(enInstance.t("providers.models.filter.selected")).toBe(
-            "Selected",
-        );
+        expect(enInstance.t("providers.models.filter.selected")).toBe("Added");
         expect(enInstance.t("providers.models.filter.all")).toBe("All");
         expect(enInstance.t("providers.models.allSelectedLoaded")).toBe(
-            "All selected models are shown.",
+            "All added models are shown.",
         );
         expect(enInstance.t("providers.models.upstreamAllLoaded")).toBe(
             "All loaded upstream models are shown.",
@@ -111,10 +120,10 @@ describe("bundled translations", () => {
             "You have unsaved model checkbox changes. Leave without saving?",
         );
         const zhInstance = await createAppI18n("zh-CN");
-        expect(zhInstance.t("providers.models.filter.selected")).toBe("已选");
+        expect(zhInstance.t("providers.models.filter.selected")).toBe("已添加");
         expect(zhInstance.t("providers.models.filter.all")).toBe("全部");
         expect(zhInstance.t("providers.models.allSelectedLoaded")).toBe(
-            "已展示全部已选模型",
+            "已展示全部已添加模型",
         );
         expect(zhInstance.t("providers.models.upstreamAllLoaded")).toBe(
             "已展示全部已加载的上游模型",

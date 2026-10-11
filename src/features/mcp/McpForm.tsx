@@ -1,8 +1,18 @@
-import { useEffect, useId, useRef, useState, type JSX } from "react";
+import {
+    useEffect,
+    useId,
+    useRef,
+    useState,
+    type JSX,
+    type ReactNode,
+} from "react";
 import { useTranslation } from "react-i18next";
-import { Icon } from "../../components/Icon";
-import pageStyles from "../providers/ProviderPage.module.css";
 import { FieldSelect } from "../../components/FieldSelect";
+import { ModelCheckbox } from "../../components/ModelCheckbox";
+import { IconButton } from "../../components/IconButton";
+import { ProviderPage } from "../providers/ProviderPage";
+import providerFormStyles from "../providers/ProviderForm.module.css";
+import fieldStyles from "../settings/settingsField.module.css";
 import {
     McpRequestError,
     saveMcpDefinition,
@@ -12,7 +22,9 @@ import {
     type SaveMcpInput,
 } from "../../lib/desktop/mcp";
 import styles from "./Mcp.module.css";
+import { SecondaryPageFooter } from "../../components/SecondaryPageFooter";
 import buttons from "../providers/providerButtons.module.css";
+import { deriveServerName, serverNameForAttempt } from "./deriveServerName";
 
 type FormState =
     | { kind: "idle" | "saving" }
@@ -23,6 +35,13 @@ interface FieldDraft {
     value: string;
     configured: boolean;
 }
+interface ArgDraft {
+    key: number;
+    value: string;
+}
+function argRows(values: string[]): ArgDraft[] {
+    return values.map((value, key) => ({ key, value }));
+}
 /** Editor inputs; caller keys by record/revision to make explicit reloads a new form. */
 export interface McpFormProps {
     record: McpRecord | null;
@@ -30,6 +49,8 @@ export interface McpFormProps {
     onSaved: (record: McpRecord) => void;
     onCancel: () => void;
     onReload: () => void;
+    /** Protect sidebar home navigation during writes or unresolved outcomes. */
+    onNavigationBlockedChange?: (blocked: boolean) => void;
 }
 function fields(names: string[]): FieldDraft[] {
     return names.map((name, key) => ({
@@ -50,11 +71,11 @@ export function McpForm({
     onSaved,
     onCancel,
     onReload,
+    onNavigationBlockedChange,
 }: McpFormProps): JSX.Element {
     const { t } = useTranslation();
     const prefix = useId();
     const [displayName, setDisplayName] = useState(record?.displayName ?? "");
-    const [serverName, setServerName] = useState(record?.serverName ?? "");
     const [enabled, setEnabled] = useState(record?.enabled ?? true);
     const [transport, setTransport] = useState<"stdio" | "http">(
         record?.connection.type ?? "stdio",
@@ -63,10 +84,9 @@ export function McpForm({
     const [command, setCommand] = useState(
         existing?.type === "stdio" ? existing.command : "",
     );
-    const [args, setArgs] = useState(
-        existing?.type === "stdio" ? existing.args.join("\n") : "",
+    const [args, setArgs] = useState<ArgDraft[]>(() =>
+        existing?.type === "stdio" ? argRows(existing.args) : [],
     );
-    const [argsEdited, setArgsEdited] = useState(false);
     const [cwd, setCwd] = useState(
         existing?.type === "stdio" ? (existing.cwd ?? "") : "",
     );
@@ -90,6 +110,13 @@ export function McpForm({
     const errorId = `${prefix}-error`;
     const currentFields = transport === "stdio" ? env : headers;
     const setFields = transport === "stdio" ? setEnv : setHeaders;
+    // Like page Back, sidebar home must not abandon a pending/uncertain save.
+    useEffect(() => {
+        onNavigationBlockedChange?.(locked);
+        return () => {
+            onNavigationBlockedChange?.(false);
+        };
+    }, [locked, onNavigationBlockedChange]);
     useEffect(() => {
         active.current = true;
         return () => {
@@ -125,10 +152,26 @@ export function McpForm({
             "aria-describedby": code === expected ? errorId : undefined,
         };
     }
-    async function submit(): Promise<void> {
-        if (locked || pending.current || hidden) return;
-        pending.current = true;
-        const request: SaveMcpInput = {
+    function displayNameInputA11y(): {
+        "aria-invalid": boolean;
+        "aria-describedby": string | undefined;
+    } {
+        if (code === null) {
+            return { "aria-invalid": false, "aria-describedby": undefined };
+        }
+        if (code === "display_name_invalid") {
+            return fieldError("display_name_invalid");
+        }
+        if (
+            record === null &&
+            (code === "server_name_taken" || code === "server_name_invalid")
+        ) {
+            return { "aria-invalid": true, "aria-describedby": errorId };
+        }
+        return { "aria-invalid": false, "aria-describedby": undefined };
+    }
+    function buildRequest(serverName: string): SaveMcpInput {
+        return {
             id: record?.id ?? null,
             expectedRevision: record?.revision ?? null,
             displayName,
@@ -139,23 +182,45 @@ export function McpForm({
                     ? {
                           type: "stdio",
                           command,
-                          // An untouched textarea must preserve a saved single empty
-                          // argument, which renders like an empty argument list.
-                          args:
-                              !argsEdited && existing?.type === "stdio"
-                                  ? existing.args
-                                  : args === ""
-                                    ? []
-                                    : args.split("\n"),
+                          args: args.map((row) => row.value),
                           cwd: cwd.trim() === "" ? null : cwd,
                           env: secretInputs(env),
                       }
                     : { type: "http", url, headers: secretInputs(headers) },
         };
+    }
+    async function submit(): Promise<void> {
+        if (locked || pending.current || hidden) return;
+        pending.current = true;
         clearValues();
         setState({ kind: "saving" });
+        const creating = record === null;
+        const baseId = creating
+            ? deriveServerName(displayName)
+            : record.serverName;
         try {
-            const saved = await saveMcpDefinition(request);
+            let saved: McpRecord | null = null;
+            for (let attempt = 0; attempt < 32; attempt += 1) {
+                const serverName = creating
+                    ? serverNameForAttempt(baseId, attempt)
+                    : record.serverName;
+                try {
+                    saved = await saveMcpDefinition(buildRequest(serverName));
+                    break;
+                } catch (error: unknown) {
+                    if (
+                        creating &&
+                        error instanceof McpRequestError &&
+                        error.code === "server_name_taken"
+                    ) {
+                        continue;
+                    }
+                    throw error;
+                }
+            }
+            if (saved === null) {
+                throw new McpRequestError("server_name_taken");
+            }
             if (active.current) onSaved(saved);
         } catch (error: unknown) {
             if (!active.current) return;
@@ -196,298 +261,597 @@ export function McpForm({
             ),
         );
     }
-    return (
-        <>
-            <div className={pageStyles["header"]}>
-                <button
-                    className={pageStyles["backButton"]}
-                    type="button"
-                    aria-disabled={busy}
-                    aria-label={t("mcp.backLabel")}
-                    onClick={() => {
-                        if (!busy) {
-                            clearValues();
-                            if (uncertain) onReload();
-                            else onCancel();
-                        }
-                    }}
-                >
-                    <Icon name="back" />
-                    {t("mcp.back")}
-                </button>
-                <h1
-                    className={pageStyles["title"]}
-                    tabIndex={-1}
-                    data-focus="heading"
-                >
-                    {t(record === null ? "mcp.create" : "mcp.edit")}
-                </h1>
-            </div>
-            <form
-                className={styles["form"]}
-                aria-label={t(record === null ? "mcp.create" : "mcp.edit")}
-                aria-busy={busy}
-                onSubmit={(event) => {
-                    event.preventDefault();
-                    void submit();
-                }}
+    function leavePage(): void {
+        clearValues();
+        if (uncertain) onReload();
+        else onCancel();
+    }
+    function uniformRow(
+        label: ReactNode,
+        control: ReactNode,
+        options?: { section?: boolean },
+    ): JSX.Element {
+        return (
+            <div
+                className={[
+                    fieldStyles["row"],
+                    fieldStyles["rowUniform"],
+                    options?.section ? styles["rowSection"] : undefined,
+                ]
+                    .filter((value): value is string => value !== undefined)
+                    .join(" ")}
             >
-                <div className={styles["saveRow"]}>
-                    <button
-                        className={buttons["primary"]}
-                        type="submit"
-                        aria-disabled={locked}
-                    >
-                        {t("mcp.save")}
-                    </button>
-                    {uncertain && (
-                        <button
-                            className={buttons["secondary"]}
-                            type="button"
-                            onClick={() => {
-                                clearValues();
-                                onReload();
-                            }}
-                        >
-                            {t("mcp.reload")}
-                        </button>
-                    )}
-                </div>
-                <p className={styles["hint"]}>{t("mcp.definitionOnly")}</p>
-                <label className={styles["field"]}>
-                    {t("mcp.displayName")}
-                    <input
-                        className={styles["input"]}
-                        value={displayName}
-                        readOnly={locked}
-                        {...fieldError("display_name_invalid")}
-                        onChange={(event) => {
-                            setDisplayName(event.currentTarget.value);
-                        }}
-                    />
-                </label>
-                <label className={styles["field"]}>
-                    {t("mcp.serverName")}
-                    <input
-                        className={styles["input"]}
-                        value={serverName}
-                        readOnly={locked}
-                        {...fieldError(
-                            code === "server_name_taken"
-                                ? "server_name_taken"
-                                : "server_name_invalid",
-                        )}
-                        autoComplete="off"
-                        spellCheck={false}
-                        onChange={(event) => {
-                            setServerName(event.currentTarget.value);
-                        }}
-                    />
-                    <span className={styles["hint"]}>
-                        {t("mcp.serverNameHint")}
-                    </span>
-                </label>
-                <div className={styles["field"]}>
-                    <label htmlFor={`${prefix}-transport`}>
-                        {t("mcp.transport")}
-                    </label>
-                    <FieldSelect
-                        id={`${prefix}-transport`}
-                        value={transport}
-                        blocked={locked}
-                        options={[
-                            { value: "stdio", label: t("mcp.stdio") },
-                            { value: "http", label: t("mcp.http") },
-                        ]}
-                        onChange={(value) => {
-                            if (value === "stdio" || value === "http") {
-                                clearValues();
-                                setTransport(value);
-                            }
-                        }}
-                    />
-                </div>
-                {transport === "stdio" ? (
-                    <>
-                        <label className={styles["field"]}>
-                            {t("mcp.command")}
-                            <input
-                                className={styles["input"]}
-                                value={command}
-                                readOnly={locked}
-                                {...fieldError("command_invalid")}
-                                autoComplete="off"
-                                onChange={(event) => {
-                                    setCommand(event.currentTarget.value);
-                                }}
-                            />
-                            <span className={styles["hint"]}>
-                                {t("mcp.commandHint")}
-                            </span>
-                        </label>
-                        <label className={styles["field"]}>
-                            {t("mcp.args")}
-                            <textarea
-                                className={styles["input"]}
-                                rows={3}
-                                value={args}
-                                readOnly={locked}
-                                {...fieldError("args_invalid")}
-                                onChange={(event) => {
-                                    setArgsEdited(true);
-                                    setArgs(event.currentTarget.value);
-                                }}
-                            />
-                            <span className={styles["hint"]}>
-                                {t("mcp.argsHint")}
-                            </span>
-                        </label>
-                        <label className={styles["field"]}>
-                            {t("mcp.cwd")}
-                            <input
-                                className={styles["input"]}
-                                value={cwd}
-                                readOnly={locked}
-                                {...fieldError("cwd_invalid")}
-                                onChange={(event) => {
-                                    setCwd(event.currentTarget.value);
-                                }}
-                            />
-                        </label>
-                    </>
+                {typeof label === "string" ? (
+                    <span className={fieldStyles["label"]}>{label}</span>
                 ) : (
-                    <label className={styles["field"]}>
-                        {t("mcp.url")}
-                        <input
-                            className={styles["input"]}
-                            value={url}
-                            readOnly={locked}
-                            {...fieldError("url_invalid")}
-                            autoComplete="off"
-                            onChange={(event) => {
-                                setUrl(event.currentTarget.value);
-                            }}
-                        />
-                        <span className={styles["hint"]}>
-                            {t("mcp.urlHint")}
-                        </span>
-                    </label>
+                    label
                 )}
-                <fieldset className={styles["secretGroup"]}>
-                    <legend>
-                        {t(transport === "stdio" ? "mcp.env" : "mcp.headers")}
-                    </legend>
-                    <p className={styles["hint"]}>{t("mcp.protectedValues")}</p>
-                    {currentFields.map((row, index) => (
-                        <div className={styles["secretRow"]} key={row.key}>
-                            <label className={styles["field"]}>
-                                {t("mcp.fieldName", { index: index + 1 })}
-                                <input
-                                    className={styles["input"]}
-                                    value={row.name}
-                                    readOnly={locked}
-                                    {...fieldError("field_name_invalid")}
-                                    spellCheck={false}
-                                    autoComplete="off"
-                                    onChange={(event) => {
-                                        updateField(
-                                            row.key,
-                                            "name",
-                                            event.currentTarget.value,
-                                        );
-                                    }}
-                                />
-                            </label>
-                            <label className={styles["field"]}>
-                                {t("mcp.fieldValue", { index: index + 1 })}
-                                <input
-                                    className={styles["input"]}
-                                    type="password"
-                                    value={row.value}
-                                    readOnly={locked}
-                                    aria-invalid={
-                                        code === "secret_required" ||
-                                        code === "secret_invalid"
-                                    }
-                                    aria-describedby={
-                                        code === "secret_required" ||
-                                        code === "secret_invalid"
-                                            ? errorId
-                                            : undefined
-                                    }
-                                    autoComplete="new-password"
-                                    onChange={(event) => {
-                                        updateField(
-                                            row.key,
-                                            "value",
-                                            event.currentTarget.value,
-                                        );
-                                    }}
-                                />
-                                {row.configured && (
-                                    <span className={styles["hint"]}>
-                                        {t("mcp.keepValue")}
-                                    </span>
-                                )}
-                            </label>
-                            <button
-                                className={buttons["text"]}
-                                type="button"
-                                aria-disabled={locked}
-                                aria-label={t("mcp.removeField", {
-                                    index: index + 1,
-                                })}
-                                onClick={() => {
-                                    if (!locked)
-                                        setFields((rows) =>
-                                            rows.filter(
-                                                (field) =>
-                                                    field.key !== row.key,
-                                            ),
-                                        );
-                                }}
-                            >
-                                {t("mcp.remove")}
-                            </button>
-                        </div>
-                    ))}
-                    <button
-                        className={buttons["secondary"]}
-                        type="button"
-                        aria-disabled={locked || currentFields.length >= 32}
-                        onClick={() => {
-                            if (locked || currentFields.length >= 32) return;
-                            const key = nextKey.current++;
-                            setFields((rows) => [
-                                ...rows,
-                                { key, name: "", value: "", configured: false },
-                            ]);
+                <div className={providerFormStyles["control"]}>{control}</div>
+            </div>
+        );
+    }
+    const pageTitle =
+        record === null
+            ? t("mcp.create")
+            : displayName.trim() === ""
+              ? t("mcp.edit")
+              : displayName;
+    return (
+        <div className={styles["editor"]}>
+            <ProviderPage
+                title={pageTitle}
+                onBack={leavePage}
+                backBlocked={busy}
+                backAriaLabel={t("mcp.backLabel")}
+                footerInContent
+            >
+                <section className={styles["editorGroup"]} data-layout="page">
+                    <form
+                        className={styles["editorForm"]}
+                        aria-label={pageTitle}
+                        aria-busy={busy}
+                        noValidate
+                        onSubmit={(event) => {
+                            event.preventDefault();
+                            void submit();
                         }}
                     >
-                        {t("mcp.addField")}
-                    </button>
-                </fieldset>
-                <label className={styles["enabled"]}>
-                    <input
-                        type="checkbox"
-                        checked={enabled}
-                        disabled={locked}
-                        onChange={(event) => {
-                            setEnabled(event.currentTarget.checked);
-                        }}
-                    />
-                    {t("mcp.enabledDefinition")}
-                </label>
-                {code !== null && (
-                    <p className={styles["error"]} id={errorId} role="alert">
-                        {t(`mcp.errors.${code}`)}
-                    </p>
-                )}
-                {state.kind === "error" && (
-                    <p className={styles["hint"]}>{t("mcp.valuesCleared")}</p>
-                )}
-                {busy && <p role="status">{t("mcp.saving")}</p>}
-            </form>
-        </>
+                        <div className={styles["editorContent"]}>
+                            <div
+                                className={[
+                                    fieldStyles["group"],
+                                    providerFormStyles["fieldCard"],
+                                ].join(" ")}
+                            >
+                                {uniformRow(
+                                    <label
+                                        className={fieldStyles["label"]}
+                                        htmlFor={`${prefix}-display-name`}
+                                    >
+                                        {t("mcp.displayName")}
+                                    </label>,
+                                    <input
+                                        id={`${prefix}-display-name`}
+                                        className={providerFormStyles["input"]}
+                                        value={displayName}
+                                        readOnly={locked}
+                                        autoComplete="off"
+                                        {...displayNameInputA11y()}
+                                        onChange={(event) => {
+                                            setDisplayName(
+                                                event.currentTarget.value,
+                                            );
+                                        }}
+                                    />,
+                                )}
+                                {uniformRow(
+                                    <label
+                                        className={fieldStyles["label"]}
+                                        htmlFor={`${prefix}-transport`}
+                                    >
+                                        {t("mcp.transport")}
+                                    </label>,
+                                    <FieldSelect
+                                        id={`${prefix}-transport`}
+                                        value={transport}
+                                        blocked={locked}
+                                        options={[
+                                            {
+                                                value: "stdio",
+                                                label: t("mcp.stdio"),
+                                            },
+                                            {
+                                                value: "http",
+                                                label: t("mcp.http"),
+                                            },
+                                        ]}
+                                        onChange={(value) => {
+                                            if (
+                                                value === "stdio" ||
+                                                value === "http"
+                                            ) {
+                                                clearValues();
+                                                setTransport(value);
+                                            }
+                                        }}
+                                    />,
+                                )}
+                                {transport === "stdio" ? (
+                                    <>
+                                        {uniformRow(
+                                            <label
+                                                className={fieldStyles["label"]}
+                                                htmlFor={`${prefix}-command`}
+                                            >
+                                                {t("mcp.command")}
+                                            </label>,
+                                            <input
+                                                id={`${prefix}-command`}
+                                                className={
+                                                    providerFormStyles["input"]
+                                                }
+                                                value={command}
+                                                readOnly={locked}
+                                                {...fieldError(
+                                                    "command_invalid",
+                                                )}
+                                                autoComplete="off"
+                                                onChange={(event) => {
+                                                    setCommand(
+                                                        event.currentTarget
+                                                            .value,
+                                                    );
+                                                }}
+                                            />,
+                                        )}
+                                        {uniformRow(
+                                            t("mcp.args"),
+                                            <div
+                                                className={
+                                                    styles["sectionControl"]
+                                                }
+                                            >
+                                                {args.map((row, index) => (
+                                                    <div
+                                                        className={
+                                                            styles["argRow"]
+                                                        }
+                                                        key={row.key}
+                                                    >
+                                                        <label
+                                                            className={
+                                                                fieldStyles[
+                                                                    "label"
+                                                                ]
+                                                            }
+                                                            htmlFor={`${prefix}-arg-${String(row.key)}`}
+                                                        >
+                                                            {t(
+                                                                "mcp.arg_value",
+                                                                {
+                                                                    index:
+                                                                        index +
+                                                                        1,
+                                                                },
+                                                            )}
+                                                        </label>
+                                                        <input
+                                                            id={`${prefix}-arg-${String(row.key)}`}
+                                                            className={
+                                                                providerFormStyles[
+                                                                    "input"
+                                                                ]
+                                                            }
+                                                            value={row.value}
+                                                            readOnly={locked}
+                                                            {...fieldError(
+                                                                "args_invalid",
+                                                            )}
+                                                            autoComplete="off"
+                                                            onChange={(
+                                                                event,
+                                                            ) => {
+                                                                const value =
+                                                                    event
+                                                                        .currentTarget
+                                                                        .value;
+                                                                setArgs(
+                                                                    (rows) =>
+                                                                        rows.map(
+                                                                            (
+                                                                                item,
+                                                                            ) =>
+                                                                                item.key ===
+                                                                                row.key
+                                                                                    ? {
+                                                                                          ...item,
+                                                                                          value,
+                                                                                      }
+                                                                                    : item,
+                                                                        ),
+                                                                );
+                                                            }}
+                                                        />
+                                                        <IconButton
+                                                            icon="trash"
+                                                            destructive
+                                                            blocked={locked}
+                                                            label={t(
+                                                                "mcp.remove_argument",
+                                                                {
+                                                                    index:
+                                                                        index +
+                                                                        1,
+                                                                },
+                                                            )}
+                                                            onClick={() => {
+                                                                if (!locked) {
+                                                                    setArgs(
+                                                                        (
+                                                                            rows,
+                                                                        ) =>
+                                                                            rows.filter(
+                                                                                (
+                                                                                    item,
+                                                                                ) =>
+                                                                                    item.key !==
+                                                                                    row.key,
+                                                                            ),
+                                                                    );
+                                                                }
+                                                            }}
+                                                        />
+                                                    </div>
+                                                ))}
+                                                <div
+                                                    className={
+                                                        styles["sectionAddArg"]
+                                                    }
+                                                >
+                                                    <IconButton
+                                                        icon="plus"
+                                                        label={t(
+                                                            "mcp.add_argument",
+                                                        )}
+                                                        blocked={
+                                                            locked ||
+                                                            args.length >= 64
+                                                        }
+                                                        onClick={() => {
+                                                            if (
+                                                                locked ||
+                                                                args.length >=
+                                                                    64
+                                                            )
+                                                                return;
+                                                            const key =
+                                                                nextKey.current++;
+                                                            setArgs((rows) => [
+                                                                ...rows,
+                                                                {
+                                                                    key,
+                                                                    value: "",
+                                                                },
+                                                            ]);
+                                                        }}
+                                                    />
+                                                </div>
+                                            </div>,
+                                            { section: true },
+                                        )}
+                                        {uniformRow(
+                                            <label
+                                                className={fieldStyles["label"]}
+                                                htmlFor={`${prefix}-cwd`}
+                                            >
+                                                {t("mcp.cwd")}
+                                            </label>,
+                                            <input
+                                                id={`${prefix}-cwd`}
+                                                className={
+                                                    providerFormStyles["input"]
+                                                }
+                                                value={cwd}
+                                                readOnly={locked}
+                                                {...fieldError("cwd_invalid")}
+                                                autoComplete="off"
+                                                onChange={(event) => {
+                                                    setCwd(
+                                                        event.currentTarget
+                                                            .value,
+                                                    );
+                                                }}
+                                            />,
+                                        )}
+                                    </>
+                                ) : (
+                                    uniformRow(
+                                        <label
+                                            className={fieldStyles["label"]}
+                                            htmlFor={`${prefix}-url`}
+                                        >
+                                            {t("mcp.url")}
+                                        </label>,
+                                        <>
+                                            <input
+                                                id={`${prefix}-url`}
+                                                className={
+                                                    providerFormStyles["input"]
+                                                }
+                                                value={url}
+                                                readOnly={locked}
+                                                {...fieldError("url_invalid")}
+                                                autoComplete="off"
+                                                onChange={(event) => {
+                                                    setUrl(
+                                                        event.currentTarget
+                                                            .value,
+                                                    );
+                                                }}
+                                            />
+                                            <p
+                                                className={
+                                                    providerFormStyles["hint"]
+                                                }
+                                            >
+                                                {t("mcp.urlHint")}
+                                            </p>
+                                        </>,
+                                    )
+                                )}
+                                {uniformRow(
+                                    t(
+                                        transport === "stdio"
+                                            ? "mcp.env"
+                                            : "mcp.headers",
+                                    ),
+                                    <div className={styles["sectionControl"]}>
+                                        {currentFields.map((row, index) => (
+                                            <div
+                                                className={styles["secretRow"]}
+                                                key={row.key}
+                                            >
+                                                <label
+                                                    className={
+                                                        fieldStyles["label"]
+                                                    }
+                                                    htmlFor={`${prefix}-secret-name-${String(row.key)}`}
+                                                >
+                                                    {t("mcp.fieldName", {
+                                                        index: index + 1,
+                                                    })}
+                                                </label>
+                                                <label
+                                                    className={
+                                                        fieldStyles["label"]
+                                                    }
+                                                    htmlFor={`${prefix}-secret-value-${String(row.key)}`}
+                                                >
+                                                    {t("mcp.fieldValue", {
+                                                        index: index + 1,
+                                                    })}
+                                                </label>
+                                                <span
+                                                    className={
+                                                        styles[
+                                                            "secretRemoveSlot"
+                                                        ]
+                                                    }
+                                                    aria-hidden="true"
+                                                />
+                                                <input
+                                                    id={`${prefix}-secret-name-${String(row.key)}`}
+                                                    className={
+                                                        providerFormStyles[
+                                                            "input"
+                                                        ]
+                                                    }
+                                                    value={row.name}
+                                                    readOnly={locked}
+                                                    {...fieldError(
+                                                        "field_name_invalid",
+                                                    )}
+                                                    spellCheck={false}
+                                                    autoComplete="off"
+                                                    onChange={(event) => {
+                                                        updateField(
+                                                            row.key,
+                                                            "name",
+                                                            event.currentTarget
+                                                                .value,
+                                                        );
+                                                    }}
+                                                />
+                                                <input
+                                                    id={`${prefix}-secret-value-${String(row.key)}`}
+                                                    className={
+                                                        providerFormStyles[
+                                                            "input"
+                                                        ]
+                                                    }
+                                                    type="password"
+                                                    value={row.value}
+                                                    readOnly={locked}
+                                                    aria-invalid={
+                                                        code ===
+                                                            "secret_required" ||
+                                                        code ===
+                                                            "secret_invalid"
+                                                    }
+                                                    aria-describedby={
+                                                        code ===
+                                                            "secret_required" ||
+                                                        code ===
+                                                            "secret_invalid"
+                                                            ? errorId
+                                                            : undefined
+                                                    }
+                                                    autoComplete="new-password"
+                                                    onChange={(event) => {
+                                                        updateField(
+                                                            row.key,
+                                                            "value",
+                                                            event.currentTarget
+                                                                .value,
+                                                        );
+                                                    }}
+                                                />
+                                                <IconButton
+                                                    icon="trash"
+                                                    destructive
+                                                    blocked={locked}
+                                                    label={t(
+                                                        "mcp.removeField",
+                                                        {
+                                                            index: index + 1,
+                                                        },
+                                                    )}
+                                                    onClick={() => {
+                                                        if (!locked)
+                                                            setFields((rows) =>
+                                                                rows.filter(
+                                                                    (field) =>
+                                                                        field.key !==
+                                                                        row.key,
+                                                                ),
+                                                            );
+                                                    }}
+                                                />
+                                                {row.configured && (
+                                                    <p
+                                                        className={[
+                                                            providerFormStyles[
+                                                                "hint"
+                                                            ],
+                                                            styles[
+                                                                "secretKeepHint"
+                                                            ],
+                                                        ].join(" ")}
+                                                    >
+                                                        {t("mcp.keepValue")}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        ))}
+                                        <div
+                                            className={
+                                                styles["sectionAddSecret"]
+                                            }
+                                        >
+                                            <IconButton
+                                                icon="plus"
+                                                label={t(
+                                                    transport === "stdio"
+                                                        ? "mcp.addField"
+                                                        : "mcp.addHeader",
+                                                )}
+                                                blocked={
+                                                    locked ||
+                                                    currentFields.length >= 32
+                                                }
+                                                onClick={() => {
+                                                    if (
+                                                        locked ||
+                                                        currentFields.length >=
+                                                            32
+                                                    )
+                                                        return;
+                                                    const key =
+                                                        nextKey.current++;
+                                                    setFields((rows) => [
+                                                        ...rows,
+                                                        {
+                                                            key,
+                                                            name: "",
+                                                            value: "",
+                                                            configured: false,
+                                                        },
+                                                    ]);
+                                                }}
+                                            />
+                                        </div>
+                                    </div>,
+                                    { section: true },
+                                )}
+                                {uniformRow(
+                                    t("mcp.enabledDefinition"),
+                                    <div className={styles["enabledControl"]}>
+                                        <ModelCheckbox
+                                            checked={enabled}
+                                            disabled={locked}
+                                            ariaLabel={t(
+                                                "mcp.enabledDefinition",
+                                            )}
+                                            onCheckedChange={setEnabled}
+                                        />
+                                    </div>,
+                                )}
+                            </div>
+                        </div>
+                        <SecondaryPageFooter
+                            onBack={leavePage}
+                            backBlocked={busy}
+                            backAriaLabel={t("mcp.backLabel")}
+                            feedback={
+                                <div className={styles["editorFeedback"]}>
+                                    {code !== null && (
+                                        <p
+                                            className={
+                                                providerFormStyles["error"]
+                                            }
+                                            id={errorId}
+                                            role="alert"
+                                        >
+                                            {t(`mcp.errors.${code}`)}
+                                        </p>
+                                    )}
+                                    {state.kind === "error" && (
+                                        <p
+                                            className={
+                                                providerFormStyles["hint"]
+                                            }
+                                        >
+                                            {t("mcp.valuesCleared")}
+                                        </p>
+                                    )}
+                                    {busy && (
+                                        <p
+                                            className={
+                                                providerFormStyles["message"]
+                                            }
+                                            role="status"
+                                        >
+                                            {t("mcp.saving")}
+                                        </p>
+                                    )}
+                                </div>
+                            }
+                        >
+                            <div className={styles["editorActions"]}>
+                                {uncertain && (
+                                    <button
+                                        className={buttons["secondary"]}
+                                        type="button"
+                                        onClick={() => {
+                                            clearValues();
+                                            onReload();
+                                        }}
+                                    >
+                                        {t("mcp.reload")}
+                                    </button>
+                                )}
+                                <button
+                                    className={buttons["primary"]}
+                                    type="submit"
+                                    aria-disabled={locked}
+                                >
+                                    {busy ? t("mcp.saving") : t("mcp.save")}
+                                </button>
+                            </div>
+                        </SecondaryPageFooter>
+                    </form>
+                </section>
+            </ProviderPage>
+        </div>
     );
 }

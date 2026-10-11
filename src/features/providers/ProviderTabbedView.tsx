@@ -9,6 +9,7 @@ import { ProviderForm, type ProviderFormMode } from "./ProviderForm";
 import { ProviderModels, type SelectedModelCount } from "./ProviderModels";
 import { ProviderModelsCreateGate } from "./ProviderModelsCreateGate";
 import styles from "./ProviderEditView.module.css";
+import { SecondaryPageFooter } from "../../components/SecondaryPageFooter";
 
 type ProviderTab = "api" | "models";
 
@@ -17,6 +18,8 @@ export type { SelectedModelCount };
 /** Inputs for {@link ProviderTabbedView}. */
 export interface ProviderTabbedViewProps {
     mode: ProviderFormMode;
+    onBack?: (() => void) | undefined;
+    backBlocked?: boolean;
     templates: readonly ProviderTemplate[];
     onSaved: (record: ProviderRecord) => void;
     onRecordLoaded: (record: ProviderRecord) => void;
@@ -48,6 +51,8 @@ function formatModelsTabLabel(
  */
 export function ProviderTabbedView({
     mode,
+    onBack,
+    backBlocked = false,
     templates,
     onSaved,
     onRecordLoaded,
@@ -158,7 +163,9 @@ export function ProviderTabbedView({
                     mode={mode}
                     layout="tabPanel"
                     formId={formId}
-                    primaryActionPlacement="external"
+                    primaryActionPlacement="footer"
+                    onBack={onBack}
+                    backBlocked={backBlocked}
                     {...(onCreateKindChange !== undefined
                         ? { onCreateKindChange }
                         : {})}
@@ -182,6 +189,8 @@ export function ProviderTabbedView({
                 {mode.kind === "edit" ? (
                     <ProviderModels
                         providerId={mode.record.id}
+                        onBack={onBack}
+                        backBlocked={backBlocked}
                         layout="tabPanel"
                         hidden={modelsPanelHidden}
                         onBusyChange={onModelsBusyChange}
@@ -192,7 +201,13 @@ export function ProviderTabbedView({
                         onSelectedCountChange={setSelectedCount}
                     />
                 ) : (
-                    <ProviderModelsCreateGate hidden={modelsPanelHidden} />
+                    <>
+                        <ProviderModelsCreateGate hidden={modelsPanelHidden} />
+                        <SecondaryPageFooter
+                            onBack={onBack}
+                            backBlocked={backBlocked}
+                        />
+                    </>
                 )}
             </div>
         </div>

@@ -640,7 +640,7 @@ test.each([
         planned: "功能尚未实现",
     },
 ] as const)(
-    "in $locale the Providers page shows saved configurations and keeps a draft across navigation",
+    "in $locale the Providers sidebar returns to its list without remounting the module",
     async ({ locale, providers, agents, add, name, key, edit, planned }) => {
         translator = await createAppI18n(locale);
         useDesktopProviders();
@@ -664,17 +664,17 @@ test.each([
         fireEvent.click(screen.getByRole("button", { name: agents }));
         expect(
             await screen.findByRole("button", {
-                name: locale === "en" ? "Refresh discovery" : "刷新发现",
+                name: locale === "en" ? "Discover" : "发现",
             }),
         ).toBeDefined();
         expect(screen.queryByRole("textbox", { name })).toBeNull();
 
         fireEvent.click(screen.getByRole("button", { name: providers }));
-        expect(screen.getByRole("textbox", { name })).toBe(draft);
-        expect(draft).toHaveProperty("value", "Draft name");
-        // The draft stays, but a typed key is cleared while the page is hidden.
-        expect(screen.getByLabelText(key)).toHaveProperty("value", "");
-        // Returning does not remount the page or read the list again.
+        expect(screen.queryByRole("textbox", { name })).toBeNull();
+        expect(screen.getByRole("button", { name: edit })).toBeDefined();
+        // Returning to the list does not remount the module or re-read it.
+        fireEvent.click(screen.getByRole("button", { name: providers }));
+        expect(screen.getByRole("button", { name: edit })).toBeDefined();
         expect(listProviders).toHaveBeenCalledTimes(reads);
         expect(createProvider).not.toHaveBeenCalled();
         expectNoKeysOrDiagnostics();
@@ -899,7 +899,54 @@ test.each([
     },
 );
 
-test("MCP mounts only on first visit and hides credential input without losing non-secret drafts", async () => {
+test.each([
+    {
+        locale: "en" as const,
+        settings: "Settings",
+        about: "About",
+        general: "General",
+        overview: "Overview",
+    },
+    {
+        locale: "zh-CN" as const,
+        settings: "设置",
+        about: "关于",
+        general: "常规",
+        overview: "概览",
+    },
+])(
+    "Settings sidebar returns to General without unmounting preference input ($locale)",
+    async (labels) => {
+        translator = await createAppI18n(labels.locale);
+        render(<App />);
+        fireEvent.click(screen.getByRole("button", { name: labels.settings }));
+        const input = screen.getByRole("textbox", {
+            name: "Unsubmitted note",
+        });
+        fireEvent.change(input, { target: { value: "Retained setting" } });
+        fireEvent.click(screen.getByRole("tab", { name: labels.about }));
+        fireEvent.click(screen.getByRole("button", { name: labels.overview }));
+        fireEvent.click(screen.getByRole("button", { name: labels.settings }));
+        expect(
+            screen
+                .getByRole("tab", { name: labels.general })
+                .getAttribute("aria-selected"),
+        ).toBe("true");
+        expect(screen.getByRole("textbox", { name: "Unsubmitted note" })).toBe(
+            input,
+        );
+        expect(input).toHaveProperty("value", "Retained setting");
+        fireEvent.click(screen.getByRole("tab", { name: labels.about }));
+        fireEvent.click(screen.getByRole("button", { name: labels.settings }));
+        expect(
+            screen
+                .getByRole("tab", { name: labels.general })
+                .getAttribute("aria-selected"),
+        ).toBe("true");
+    },
+);
+
+test("MCP mounts on first visit and sidebar activation returns to its list", async () => {
     vi.mocked(listMcpDefinitions).mockResolvedValue({
         kind: "desktop",
         page: { items: [], nextCursor: null },
@@ -909,10 +956,12 @@ test("MCP mounts only on first visit and hides credential input without losing n
     fireEvent.click(screen.getByRole("button", { name: "MCP servers" }));
     await screen.findByText("No MCP definitions saved yet.");
     fireEvent.click(screen.getByRole("button", { name: "New definition" }));
-    fireEvent.change(screen.getByLabelText("Name"), {
+    fireEvent.change(screen.getByLabelText(/^Name$/), {
         target: { value: "Keep this draft" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Add field" }));
+    fireEvent.click(
+        screen.getByRole("button", { name: "Add environment variable" }),
+    );
     fireEvent.change(screen.getByLabelText("Field name 1"), {
         target: { value: "TOKEN" },
     });
@@ -926,23 +975,72 @@ test("MCP mounts only on first visit and hides credential input without losing n
         );
     });
     fireEvent.click(screen.getByRole("button", { name: "MCP servers" }));
-    expect(screen.getByLabelText<HTMLInputElement>("Name").value).toBe(
-        "Keep this draft",
-    );
+    await screen.findByText("No MCP definitions saved yet.");
+    expect(screen.queryByLabelText(/^Name$/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "New definition" }));
+    fireEvent.click(screen.getByRole("button", { name: "MCP servers" }));
+    await screen.findByText("No MCP definitions saved yet.");
+    expect(screen.queryByLabelText(/^Name$/)).toBeNull();
 });
 
 test("Agent discovery starts on first visit and preserves paths across navigation", async () => {
+    vi.mocked(discoverAgents).mockResolvedValue({
+        kind: "desktop",
+        items: [
+            {
+                id: "pi",
+                state: "found",
+                source: "path",
+                entryPath: "/usr/bin/pi",
+                resolvedPath: "/usr/bin/pi",
+                version: "1.1.0",
+                versionEvidence: "packageMetadata",
+                capabilityEvidence: "documented",
+                configDirectory: "/home/test/.pi/agent",
+                directorySource: "default",
+                files: [
+                    { name: "settings.json", state: "missing" },
+                    { name: "models.json", state: "missing" },
+                    { name: "mcp.json", state: "missing" },
+                ],
+            },
+            {
+                id: "grokBuild",
+                state: "notFound",
+                source: "none",
+                entryPath: null,
+                resolvedPath: null,
+                version: null,
+                versionEvidence: "none",
+                capabilityEvidence: "unverified",
+                configDirectory: "/home/test/.grok",
+                directorySource: "default",
+                files: [
+                    { name: "config.toml", state: "missing" },
+                    { name: "managed_config.toml", state: "missing" },
+                    { name: "requirements.toml", state: "missing" },
+                ],
+            },
+        ],
+    });
     render(<App />);
     expect(discoverAgents).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Agents" }));
-    await screen.findByText("Local Agent discovery requires the desktop app.");
+    fireEvent.click(
+        await screen.findByRole("button", { name: "Open Pi details" }),
+    );
     const input = screen.getByRole("textbox", { name: "Pi entry path" });
     fireEvent.change(input, { target: { value: "/home/test/manual-pi" } });
     const calls = vi.mocked(discoverAgents).mock.calls.length;
     fireEvent.click(screen.getByRole("button", { name: "Overview" }));
     expect(screen.queryByRole("textbox", { name: "Pi entry path" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Agents" }));
-    expect(screen.getByRole("textbox", { name: "Pi entry path" })).toBe(input);
-    expect(input).toHaveProperty("value", "/home/test/manual-pi");
+    expect(screen.queryByRole("textbox", { name: "Pi entry path" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Open Pi details" }));
+    expect(
+        screen.getByRole("textbox", { name: "Pi entry path" }),
+    ).toHaveProperty("value", "/home/test/manual-pi");
+    fireEvent.click(screen.getByRole("button", { name: "Agents" }));
+    expect(screen.queryByRole("textbox", { name: "Pi entry path" })).toBeNull();
     expect(discoverAgents).toHaveBeenCalledTimes(calls);
 });

@@ -1,5 +1,5 @@
 .pageHeader {
-    margin-bottom: var(--space-md);
+    margin-bottom: var(--page-content-gap);
 }
 
 .heading {

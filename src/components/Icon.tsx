@@ -14,8 +14,12 @@ export type IconName =
     | "dark"
     | "back"
     | "close"
+    | "trash"
+    | "refresh"
     | "plus"
     | "edit"
+    | "enable"
+    | "disable"
     | "eyeOff"
     | "logFile"
     | "folder"
@@ -105,6 +109,16 @@ export function Icon({ name }: { name: IconName }): JSX.Element {
         case "close":
             content = <path d="M6 6l12 12M18 6 6 18" />;
             break;
+        case "refresh":
+            content = <path d="M20 11a8 8 0 1 0-2.3 6.7M20 4v7h-7" />;
+            break;
+        case "trash":
+            content = (
+                <>
+                    <path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7" />
+                </>
+            );
+            break;
         case "plus":
             content = <path d="M12 5v14M5 12h14" />;
             break;
@@ -117,6 +131,22 @@ export function Icon({ name }: { name: IconName }): JSX.Element {
             break;
         case "edit":
             content = <path d="M4 20h4L19 9l-4-4L4 16Zm9-13 4 4" />;
+            break;
+        case "enable":
+            content = (
+                <>
+                    <path d="M12 2v10" />
+                    <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
+                </>
+            );
+            break;
+        case "disable":
+            content = (
+                <>
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M8 12h8" />
+                </>
+            );
             break;
         case "logFile":
             content = (

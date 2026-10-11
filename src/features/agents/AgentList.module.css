@@ -2,53 +2,213 @@
     width: 100%;
     min-width: 0;
 }
+
+.view > p:first-of-type {
+    margin-top: var(--page-content-gap);
+}
+
+.view[data-secondary-page] {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+}
+
 .notice,
-.hint,
-.report {
+.hint {
     color: var(--color-summary);
     font-size: 0.75rem;
     line-height: 1.6;
     overflow-wrap: anywhere;
 }
+
 .notice {
-    margin-block: var(--space-md);
+    margin-block: var(--page-content-gap);
 }
+
 .hint {
     margin: 0;
 }
-.list {
+
+.cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: var(--space-md);
     padding: 0;
-    margin: var(--space-lg) 0;
+    margin: var(--page-content-gap) 0 var(--space-lg);
+    list-style: none;
+}
+
+.card {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    width: 100%;
+    min-width: 0;
+    padding: var(--space-md);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-card);
-    list-style: none;
-    overflow: hidden;
-}
-.item {
-    display: grid;
-    gap: var(--space-md);
-    padding: var(--space-md);
     background: var(--color-surface);
-    border-bottom: 1px solid var(--color-border);
+    color: var(--color-text);
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+}
+
+.card:hover {
+    background: var(--color-hover);
+}
+
+.card:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+}
+
+.cardText {
+    display: grid;
+    gap: 4px;
+    flex: 1 1 auto;
     min-width: 0;
 }
-.item:last-child {
-    border-bottom: 0;
-}
-.name {
-    margin: 0;
+
+.cardName {
     font-size: 0.875rem;
     font-weight: 600;
 }
-.field {
-    display: grid;
-    gap: 6px;
-    min-width: 0;
-    font-size: 0.8125rem;
+
+.cardVersion {
+    color: var(--color-summary);
+    font-size: 0.75rem;
+    line-height: 1.35;
 }
+
+.detailGroup {
+    display: grid;
+    gap: 10px;
+    margin-top: 0;
+}
+
+.detailPanel {
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    background: var(--color-surface);
+}
+
+.detailPanel > .facts {
+    padding: var(--space-sm) var(--space-md);
+}
+
+.facts {
+    display: flex;
+    flex-direction: column;
+}
+
+.factRow {
+    display: flex;
+    /* Match model-list rows while keeping editable form sizing independent. */
+    min-height: 44px;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-lg);
+    padding: 8px 0;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.factRow:last-child {
+    border-bottom: 0;
+}
+
+.factLabel {
+    flex-shrink: 0;
+    margin: 0;
+    color: var(--color-summary);
+    font-size: 0.8125rem;
+    font-weight: 400;
+}
+
+.factValue {
+    flex: 0 1 min(65%, 28rem);
+    margin: 0;
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    text-align: end;
+    overflow-wrap: anywhere;
+}
+
+/* Match the smaller badges displayed inside model-list rows. */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    max-width: 100%;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--color-chip-info-bg);
+    color: var(--color-chip-info-fg);
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+    white-space: nowrap;
+    cursor: help;
+}
+
+.badge:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+}
+
+.badgePositioner {
+    z-index: var(--layer-popover);
+}
+
+.badgePositioner[data-anchor-hidden] {
+    visibility: hidden;
+}
+
+.badgeHint {
+    max-width: min(24rem, var(--available-width));
+    padding: 6px var(--space-sm);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-size: 0.75rem;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.pathForm {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 26rem);
+    align-items: center;
+    gap: var(--space-sm) var(--space-lg);
+    margin-top: 0;
+    padding: var(--space-sm) var(--space-md);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    background: var(--color-surface);
+}
+
+.pathLabel {
+    font-size: 0.8125rem;
+    color: var(--color-summary);
+}
+
+.pathControls {
+    display: flex;
+    min-height: var(--form-row-min-height);
+    min-width: 0;
+    align-items: center;
+    gap: var(--space-sm);
+    /* IconButton owns its square size; do not override it with text-button rules. */
+}
+
 .input {
     box-sizing: border-box;
-    width: 100%;
+    flex: 1 1 0;
     min-width: 0;
     height: 36px;
     padding: 0 10px;
@@ -58,24 +218,17 @@
     color: var(--color-text);
     font: inherit;
 }
+
 .input:focus-visible {
+    /* Match model search: focus stays within the input border. */
     outline: 2px solid var(--color-focus);
-    outline-offset: 2px;
+    outline-offset: -2px;
 }
+
 .input:read-only {
     color: var(--color-summary);
 }
-.report {
-    display: grid;
-    gap: 6px;
-}
-.report p {
-    margin: 0;
-}
-.files {
-    margin: 0;
-    padding-inline-start: var(--space-lg);
-}
+
 .error {
     color: var(--color-text);
     border-inline-start: 2px solid var(--color-text);

@@ -6,13 +6,29 @@ React describes the interface; Rust handles local system and provider operations
 
 ## Current code and planned layout
 
+Sidebar activation always requests the destination module home, including clicks
+on the currently active module. Providers, MCP and Agents open their lists;
+Settings opens General without remounting preference controls. Modules expose only
+`openHome(): boolean` through `ModuleNavigationHandle`; React’s `useImperativeHandle`
+connects that synchronous navigation request to each module’s current guards.
+A ref here is a handle to an action, not a DOM element. When the active Providers page has model drafts, cancelling its confirmation
+returns `false`; a busy module also rejects home navigation, so App does not
+switch destinations. Provider API writes, MCP pending/uncertain outcomes and
+Agent scans retain their guards. Model busy/dirty reporting applies to visible
+model panels; hiding them cancels fetches and invalidates reads rather than
+providing a global leave-page guard. Leaving for another module still hides the old module;
+returning requests its home instead of resuming an editor. Unsubmitted Provider API
+and MCP forms are discarded on successful home navigation, matching their Back
+behavior; Agent manual paths and Settings controls remain in memory. Late MCP edit
+reads are invalidated when returning home.
+
 - `src/main.tsx` locates the HTML root and mounts React in StrictMode, with
   `LocaleStartup` withholding the App until its language preference is ready.
 - `src/App.tsx` composes the desktop shell: the collapsible 200/88 px sidebar
   (brand, Overview, four feature destinations, Settings with the icon-only
   collapse toggle), the relationship home, `ProvidersView` (mounted on the first
-  visit, then kept mounted while hidden, so an open form survives navigation and
-  returning does not re-read the list), central MCP management, read-only Agent discovery, a planned Skills page,
+  visit, then kept mounted while hidden to retain caches and pending work),
+  central MCP management, read-only Agent discovery, a planned Skills page,
   and `SettingsView` (mounted while hidden) for the settings area.
 - `src/features/providers/` contains `ProvidersView` (list and in-page
   navigation), `ProviderPage` (back control and title), `ProviderTabbedView`
@@ -28,6 +44,15 @@ React describes the interface; Rust handles local system and provider operations
   trigger, chevron from `settingsField.field`, Base UI Select interaction and
   a portaled list). Settings and provider forms use it instead of a native
   `<select>`; CSS Modules and existing theme tokens still own its appearance.
+- `src/components/IconButton.tsx` provides 36 px auxiliary form actions with
+  an accessible name and a Base UI tooltip on hover or keyboard focus. Tooltips
+  are portaled to avoid card clipping and support Escape dismissal. Blocked
+  actions remain focusable but do not invoke callbacks. MCP argument and
+  env/header removal use a trash icon plus danger styling; row addition uses a
+  plus icon with contextual labels. Agent path rediscovery uses a refresh icon
+  with native form submission, and log file/folder actions use the same component.
+  Main save, navigation and recovery actions keep visible text. The stored-key eye icon is
+  a read-only status indicator, not a reveal button.
 - `src/features/settings/settingsField.module.css` shares the grouped-card row
   layout (label left, control right) for language and appearance.
 - Sidebar width is fixed at 200/88 px (`--sidebar-width`, `data-collapsed`); only
@@ -41,10 +66,14 @@ React describes the interface; Rust handles local system and provider operations
   a mask from the selected reference without a font dependency. `src/components/Icon.tsx` holds UI icons.
 - `src/components/PageModuleHeader.tsx` is the shared module title row (Providers
   list layout): 20 px sidebar `Icon`, 1 rem semibold `h1`, optional trailing
-  actions or meta on the end, a 36 px minimum row height so titles align
-  vertically even without a trailing button, and 2 px top margin for clearance
-  under the Windows/Linux title strip. Overview, Providers list, Agents, planned Skills, MCP, and Settings all use it; icons are decorative. Provider
-  create/edit headers use the same 2 px offset in `ProviderPage.module.css`.
+  actions or meta on the end. Module chrome uses one shared strip: **36 px**
+  minimum row height, **2 px** top margin under the window title strip, **no**
+  bottom margin on the header (the first body block adds `--page-content-gap`,
+  16 px, instead).
+  Overview, Providers list, Agents, planned Skills, MCP, and Settings use
+  `PageModuleHeader`; Provider/MCP create/edit and Agent detail use the same
+  metrics in `ProviderPage.module.css` (left-aligned title). Secondary-page
+  navigation and Save actions live in `SecondaryPageFooter` at the bottom.
 - `src/components/Notifications.tsx` is the app-level notification host, mounted
   once in `App`. Features call `useNotify()` with an already translated
   `message` and optional `tone` (`success` | `error`); a plain string defaults
@@ -613,38 +642,53 @@ providers." (「服务商名称和标志的商标归各自所有者，仅用于�
 above are used on that basis only.
 
 Create and edit use `ProviderPage` and `ProviderTabbedView`. The secondary header
-is one row: a surface back control (border, 18px arrow plus "Back" / 「返回」,
-`min-height` 36 px, 2 px top margin) on the left and the page title (official
-brand icon and name) aligned on the right. Keys `providers.back` and
-`providers.backLabel` supply the visible label and `aria-label` (WCAG 2.5.3).
-Create updates the title when the provider field changes.
+has a left-aligned title (20 px brand/agent icon plus name via `titleBrand`),
+matching the **36 px** `PageModuleHeader` row and 2 px top margin. Agent detail
+and MCP editors reuse this shell. `SecondaryPageFooter` keeps **Back** on the
+left and **Save**, where applicable, on the right, outside scrolling content.
+It uses the page background and a thin divider without a floating card or
+shadow. A fixed 16 px gap outside the scrollable content separates it from the
+footer divider, so moving rows never overlap that line. Content scroll wrappers
+add no horizontal inset, so form/detail cards
+share their title and tab edges, matching Settings cards. Control widths remain
+specific to their fields. Its action row shares the sidebar’s 44 px row height and 12 px bottom
+inset, centering the 36 px Back/Save controls on the Settings button’s horizontal
+centerline. This applies to expanded/collapsed sidebars and narrow windows. Keys `providers.back` and destination-specific accessible labels remain
+unchanged. Create updates the title when the provider field changes.
 
 Tab layout (Settings-style tabs: **API** / 「API 配置」 and **Models** with
-optional selected count). Panels stay mounted while
-switching tabs. Create shows a Models gate until the instance is saved. API fields
-live in a grouped card below a right-aligned **Save** on the tab toolbar; the
-provider row follows (select when creating, read-only brand when editing), then display
-name, base URL, protocol and API key. Recovery actions ("Save again", "Refresh
-list", "Reload latest settings") stay at the bottom of the form when needed.
+optional selected count). The tab strip starts **`--page-content-gap`** (16 px)
+below the title. The first content block is also 16 px below the tab strip;
+MCP and Agent details use the same gap directly below their title. Panels
+stay mounted while switching tabs. Create shows a Models gate until the instance
+is saved. API fields scroll in a grouped card: provider (select when creating,
+read-only brand when editing), display name, base URL, protocol and API key.
+Save, form-level feedback and recovery actions ("Save again", "Refresh list",
+"Reload latest settings") live in the fixed footer.
 There is no form Cancel; **Back** leaves the page. One Save submits settings and
 an optional replacement key together.
 
 The Models tab follows [models-tab-ux.md](plans/models-tab-ux.md) (P12.c.5). In
-brief: the default **Selected** view lists only persisted checked models (full
-load, scroll inside the tab panel). A fixed list title (**Selected** / **All**)
+brief: the default **Added** / 「已添加」 view lists persisted models (full
+load, scroll inside the tab panel). A fixed list title (**Added** / **All**)
 sits above the scroll region. The toolbar has a narrow search field on the left;
-**Fetch models** (secondary) and **Save** (primary, 36 px) on the right in the
-selected view; upstream adds **Cancel** (while downloading) and **Back to
-selected** before **Save**. **Fetch models** opens **upstream** browse with
+**Fetch models** (secondary) on the right in the added view; upstream adds
+**Cancel** (while downloading) and **View added models** / 「查看已添加」. **Save** (primary, 36 px)
+is in the bottom footer beside page-level **Back**. The model list retains its
+independent scroll and fixed list title. **Fetch models** opens **upstream** browse with
 lazy-loaded result pages via `browse_upstream_models_page` (optional fuzzy
 `query`; session catalog in Rust). Checkboxes are draft until **Save**. Uncheck
-on the selected list and **Save** removes rows from SQLite (`save_provider_model_selections`).
+on the added list and **Save** removes rows from SQLite (`save_provider_model_selections`).
 Search applies to whichever view is active. One list footer line covers upstream
 scroll, loading-more, and end states. Dirty drafts block leaving with an unsaved
-prompt (API tab switch and **Back** on the provider page).
+prompt (API tab switch, **Back**, or re-clicking the active Providers menu).
+Internal `selected` fields and translation keys remain unchanged: “added” names
+saved list membership, while checkbox actions still use selection terminology.
 
-The selected list now has an expandable **Add a model manually** form
-(`ManualModelForm`): model ID and optional alias, followed by **Add and save**.
+Both added and upstream lists offer **Add a model manually** as their first row.
+A native `<details>` disclosure uses a plain left-side plus/minus icon, not a
+checkbox. Expanded model ID, optional alias and **Add and save** stay inline;
+labels remain accessible without visible headings or explanatory text.
 This explicitly saves and selects one manual row through the existing Rust
 command; it does not stage an upstream checkbox draft. Pending checkbox drafts
 block creation until saved or discarded. The manual row is removed by unchecking
@@ -652,10 +696,10 @@ it and using the normal selection **Save**. Route/capability metadata stays
 unverified; an alias is only a display label.
 
 Rust field errors are associated with the ID or alias input. Successful creation
-clears the form and extends the selected baseline, row list and tab count without
+clears the form and extends the saved baseline, row list and tab count without
 a provider network request. Pending manual writes block fetching, checkbox saves
 and the detail-page Back action. Hiding the view unmounts the form; late replies are
-ignored, and the existing selected-list read reconciles persisted state on return.
+ignored, and the existing saved-list read reconciles persisted state on return.
 An unknown write acknowledgment blocks a second submission until **Check saved
 models** reads cursor pages for the exact ID. Similar IDs never confirm a write;
 a failed read leaves the check retryable. Cursor reads also support valid IDs
@@ -672,13 +716,15 @@ the row shows the values Rust stored, and the list is re-read. The save is
 confirmed by an app-level notification (`Saved name.` / 「已保存 name。」,
 see `Notifications`) that survives the jump back to the list.
 
-- Hierarchy: each view has exactly one primary button ("New configuration",
-  "Save" or "Fetch models" on the Models toolbar): solid `--color-accent` with
+- Hierarchy: each view has one main primary action ("New configuration" on a
+  list or "Save" in a secondary-page footer): solid `--color-accent` with
   `--color-background` text. Recovery actions and "Load more" are secondary
-  (`--color-border` outline); row "Edit" is a text button. "New configuration"
+  (`--color-border` outline). Destructive row actions (for example MCP "Remove")
+  use `dangerSecondary` (`--color-danger-border`, `--color-danger-fg`, hover
+  `--color-danger-bg`). Row "Edit" is a text button. "New configuration"
   (`plus`) and row "Edit" (`edit`) carry a leading 18px `Icon`; create/edit Back
-  shows the back arrow and short label on the left of the secondary header (title
-  on the right). Save and
+  shows the back arrow and short label on the left of the fixed bottom footer.
+  Titles align left at the top. Save and
   recovery actions stay text-only. Blocked buttons
   use `aria-disabled` styling (muted `--color-summary`, or half opacity for the
   primary). Labels and values use `--color-text` at 0.8125rem and normal weight;
@@ -869,17 +915,26 @@ named token pairs, not all accessibility behavior.
 ## Central MCP management
 
 `src/features/mcp/` implements P31. The sidebar opens a metadata list lazily on
-first visit. New/edit pages collect display name, server identifier, transport,
-stdio executable/ordered arguments/optional cwd, or Streamable HTTP URL.
-Environment variables and request headers use named password rows. An empty
-existing value preserves its OS reference; a replacement writes a fresh reference;
-removing a row removes that field. Enter one argument per line, without shell
-quoting. Saving only stores a definition. Enable/disable describes central state,
+first visit. New/edit pages collect display name (the server identifier is
+derived on first save and never displayed in either form; edits preserve it),
+transport, stdio executable/ordered argument rows/
+optional cwd, or Streamable HTTP URL. Environment variables and request headers
+use named password rows. An empty existing value preserves its OS reference; a
+replacement writes a fresh reference; removing a row removes that field. Each
+argument row is one literal value without shell quoting. Saving only stores a
+definition. Enable/disable describes central state,
 never an applied Agent config or connection.
+
+MCP list rows currently show “Not registered” / 「未注册」. Agent registration
+is not implemented, and discovering an Agent or enabling a central definition
+does not establish a registration. When actual registration relationships are
+available, this subline should show one name badge per registered Agent instead
+of the empty-state text; it must not infer registrations from local discovery.
 
 `McpForm` clears typed values on every submit, cancel, transport change and hide.
 Its hidden transition clears during rendering, before a hidden panel can retain
-values through a rapid navigation change. Non-secret drafts stay mounted. Unknown
+values through a rapid navigation change. Non-secret drafts stay mounted while hidden, but successful sidebar home navigation
+closes the editor. Unknown
 write outcomes block another mutation until a successful metadata reload. The
 list supports bounded cursor pages, safe retry, and obsolete credential cleanup.
 Unmount guards ignore late responses; page transitions focus the heading.
@@ -896,10 +951,20 @@ cases and one shell-navigation case, including hidden-value clearing, stale
 replies, reconciliation and browser preview. Visual and real credential-store
 acceptance remain separate from these simulated tests.
 
-The form reuses Providers' secondary-header/back styles and button hierarchy,
-with Back on the left, title on the right and Save at the top of the card. Shared
-`FieldSelect`, 36 px inputs, theme tokens, notifications and list row spacing
-follow the existing pages rather than introducing another control system.
+MCP new and edit reuse the left-aligned `ProviderPage` title, `settingsField`
+rows, `ProviderForm` control widths and shared `FieldSelect`. Fields scroll
+between the title and `SecondaryPageFooter`, which places Back on the left and
+Save on the right. Save feedback and reload actions remain visible; pending
+saves change the button label without replacing the button or losing focus.
+The main-column scroll override applies only to visible secondary pages
+(Provider create/edit, MCP create/edit and Agent details). Lists, Settings,
+Overview and Skills retain their previous scrolling behavior.
+
+The shared layout and sidebar-home changes passed `check:frontend` with 539
+UI/boundary tests, eight release tests and 14 translation-checker tests, plus
+formatting, zero-warning lint, translation consistency, both TypeScript configs
+and the production frontend build. Browser/native visual verification is left
+to the maintainer. Earlier native verification notes describe earlier revisions.
 
 Verified locally on Linux: `check:frontend` with 468 UI/boundary tests, eight
 release tests and 14 translation-checker tests; Rust fmt/Clippy and 201 passing
@@ -908,28 +973,42 @@ no-bundle desktop builds. An isolated real Tauri runtime saved, edited, listed,
 restarted and re-read a no-secret stdio definition; its test command never ran.
 Real MCP credential-store acceptance and macOS/Windows runtime behavior remain
 pending. Visual checks remain manual. Vite reports the existing single-chunk
-size advisory; it is not a
-verification of layout or accessibility.
+size advisory; neither it nor passing checks establishes layout or accessibility acceptance.
 
 ## Read-only Agent discovery
 
 `AgentList` mounts on the first Agents visit, then remains mounted while hidden.
 It calls the typed `discoverAgents` boundary once on mount and on explicit
-Refresh / Enter submission. Pi and Grok Build manual entry paths stay in the
-current window; navigation and locale changes preserve them without another
-filesystem scan. Fields become read-only during a scan, the Refresh button
-retains focus with `aria-disabled`, and an immediate pending guard rejects
-repeat submission. Generation and mount checks discard stale replies during
-StrictMode cleanup and after unmount.
+Refresh or “Apply path and refresh” in a detail view. Found entries appear as
+cards (official mark, name, version); opening a card shows paths, config file
+presence, and optional manual entry path override. The detail view has three
+cards: discovery/status/version, configuration path/file observations, and manual
+entry path. Cards have 8 px vertical / 16 px horizontal padding and 10 px gaps.
+Read-only rows use a 44 px minimum height and 8 px vertical padding, matching
+model rows; the editable path row retains the 64 px form baseline. Status and
+version use model-row badges. Portaled hover/keyboard hints keep discovery and
+version provenance available, including unverified filename-derived versions.
+The configuration and manual-path cards have accessible section/form names
+without visible headings. Pi and Grok Build paths stay
+in the current window; navigation and locale changes preserve them without
+another filesystem scan. Fields become read-only during a scan, actions use
+`aria-disabled`, and an immediate pending guard rejects repeat submission.
+Generation and mount checks discard stale replies during StrictMode cleanup and
+after unmount.
 
-The cards reuse `PageModuleHeader`, the existing button classes and theme tokens.
-Both locales distinguish a regular entry file, absent/unavailable paths,
-package-metadata claims and unverified filename hints. Documented capabilities
-are separate from installation authenticity and deployment support. Configuration
-paths report presence only; priority text is a documented rule, not a computed
-effective configuration. Browser preview displays a desktop-required notice and
-never invents local installation results. Rust owns all filesystem observations,
-and `src/lib/desktop/agents.ts` checks exact response fields and evidence consistency.
+Agent marks live in `assets/agents/` (`pi-light.svg` / `pi-dark.svg` from
+https://pi.dev/favicon.svg; `grok-build-light.svg` / `grok-build-dark.svg` as
+the Grok symbol from the Feb 2025 wordmark on https://grok.com, paths taken from
+https://commons.wikimedia.org/wiki/File:Grok-feb-2025-logo.svg)
+and render through `AgentIcon`, matching the provider logo rules. The UI reuses
+`PageModuleHeader`, provider button classes, and theme tokens. Both locales
+distinguish a regular entry file, absent/unavailable paths, package-metadata
+claims and unverified filename hints. Documented capabilities are separate from
+installation authenticity and deployment support. Configuration paths report
+presence only; priority text is a documented rule, not a computed effective
+configuration. Browser preview displays a desktop-required notice and never
+invents local installation results. Rust owns all filesystem observations, and
+`src/lib/desktop/agents.ts` checks exact response fields and evidence consistency.
 
 See [agent-discovery.md](plans/agent-discovery.md) for limits and sources. Isolated
 Linux Tauri IPC and the actual Agent page have been exercised with synthetic

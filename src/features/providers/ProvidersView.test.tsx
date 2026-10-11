@@ -6,7 +6,8 @@ import {
     screen,
     within,
 } from "@testing-library/react";
-import { StrictMode } from "react";
+import { StrictMode, createRef, type Ref } from "react";
+import type { ModuleNavigationHandle } from "../../components/moduleNavigation";
 import { I18nextProvider } from "react-i18next";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
@@ -148,13 +149,19 @@ beforeEach(() => {
 
 let setViewHidden: (hidden: boolean) => void = () => undefined;
 
-async function mount(locale: "en" | "zh-CN" = "en") {
+async function mount(
+    locale: "en" | "zh-CN" = "en",
+    homeRef?: Ref<ModuleNavigationHandle>,
+) {
     const instance = await createAppI18n(locale);
     const tree = (hidden: boolean) => (
         <StrictMode>
             <I18nextProvider i18n={instance}>
                 <NotificationProvider>
-                    <ProvidersView hidden={hidden} />
+                    <ProvidersView
+                        hidden={hidden}
+                        {...(homeRef === undefined ? {} : { homeRef })}
+                    />
                 </NotificationProvider>
             </I18nextProvider>
         </StrictMode>
@@ -246,7 +253,7 @@ test("shows a loading state, then saved rows distinguished by id, never as conne
     expect(screen.getAllByText("Work")).toHaveLength(2);
     expect(screen.getByText("OpenRouter")).toBeDefined();
     expect(screen.getAllByText("Chat Completions")).toHaveLength(2);
-    expect(screen.getAllByText("0 selected models")).toHaveLength(2);
+    expect(screen.getAllByText("0 added models")).toHaveLength(2);
     expect(editButton("b")).toBeDefined();
     expect(document.body.textContent).not.toMatch(/\bconnected\b|available/i);
 
@@ -536,6 +543,86 @@ test("an unknown create outcome re-reads the list before a retry is offered", as
     expect(document.activeElement).toBe(
         screen.getByRole("button", { name: "新建配置" }),
     );
+});
+
+test("sidebar home refuses a pending provider save and retains the form", async () => {
+    const pending = deferred<ProviderRecord>();
+    const homeRef = createRef<ModuleNavigationHandle>();
+    list.mockResolvedValue(page([row("a")]));
+    update.mockReturnValue(pending.promise);
+    await mount("en", homeRef);
+    await clickEdit("a");
+    await click("Save");
+    act(() => {
+        expect(homeRef.current?.openHome()).toBe(false);
+    });
+    expect(screen.getByRole("form", { name: "API" })).toBeDefined();
+    await act(async () => {
+        pending.resolve(row("a", { revision: 2 }));
+        await pending.promise;
+    });
+    expect(editButton("a")).toBeDefined();
+});
+
+test("sidebar home respects cancelling unsaved model checkbox drafts", async () => {
+    const homeRef = createRef<ModuleNavigationHandle>();
+    const record = row("a");
+    list.mockResolvedValue(page([record]));
+    listModels.mockResolvedValue({
+        kind: "desktop",
+        page: {
+            items: [
+                {
+                    providerId: record.id,
+                    modelId: "test-model",
+                    source: "fetched",
+                    selected: true,
+                    alias: null,
+                    upstreamName: null,
+                    contextWindow: null,
+                    maxOutputTokens: null,
+                    inputModalities: null,
+                    outputModalities: null,
+                    supportedEndpoints: null,
+                    routeSupport: "not_applicable",
+                    upstreamState: "listed",
+                    lastSeenAtMs: 1,
+                    missingSinceMs: null,
+                    createdAtMs: 1,
+                    updatedAtMs: 1,
+                },
+            ],
+            nextCursor: null,
+            totalMatches: 1,
+        },
+    });
+    await mount("en", homeRef);
+    await clickEdit("a");
+    fireEvent.click(screen.getByRole("tab", { name: /Models/ }));
+    fireEvent.click(
+        await screen.findByRole("checkbox", { name: "Deselect test-model" }),
+    );
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    try {
+        act(() => {
+            expect(homeRef.current?.openHome()).toBe(false);
+        });
+        expect(confirm).toHaveBeenCalledWith(
+            "You have unsaved model checkbox changes. Leave without saving?",
+        );
+        expect(
+            screen
+                .getByRole("checkbox", { name: "Select test-model" })
+                .getAttribute("aria-checked"),
+        ).toBe("false");
+        confirm.mockReturnValue(true);
+        act(() => {
+            expect(homeRef.current?.openHome()).toBe(true);
+        });
+        expect(editButton("a")).toBeDefined();
+    } finally {
+        confirm.mockRestore();
+    }
 });
 
 test("going back is blocked while a save is pending", async () => {

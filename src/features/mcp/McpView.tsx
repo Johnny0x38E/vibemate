@@ -1,5 +1,15 @@
-import { useCallback, useEffect, useRef, useState, type JSX } from "react";
+import {
+    useCallback,
+    useEffect,
+    useImperativeHandle,
+    useRef,
+    useState,
+    type Ref,
+    type JSX,
+} from "react";
+import type { ModuleNavigationHandle } from "../../components/moduleNavigation";
 import { useTranslation } from "react-i18next";
+import { Icon } from "../../components/Icon";
 import { PageModuleHeader } from "../../components/PageModuleHeader";
 import { useNotify } from "../../components/Notifications";
 import {
@@ -35,6 +45,7 @@ type ActionState =
 /** The sidebar page stays mounted while hidden; password fields clear on hide. */
 export interface McpViewProps {
     hidden?: boolean;
+    homeRef?: Ref<ModuleNavigationHandle>;
 }
 function errorCode(error: unknown): McpErrorCode {
     return error instanceof McpRequestError ? error.code : "operation_failed";
@@ -74,12 +85,16 @@ function preservedRequest(record: McpRecord): SaveMcpInput {
     };
 }
 /** Central list/edit/enablement management; it exposes no deployment or execution action. */
-export function McpView({ hidden = false }: McpViewProps): JSX.Element {
+export function McpView({
+    hidden = false,
+    homeRef,
+}: McpViewProps): JSX.Element {
     const { t } = useTranslation();
     const notify = useNotify();
     const [list, setList] = useState<ListState>({ kind: "loading" });
     const [page, setPage] = useState<PageState>({ kind: "list" });
     const [action, setAction] = useState<ActionState>({ kind: "idle" });
+    const [formBlocked, setFormBlocked] = useState(false);
     const active = useRef(true);
     const readGeneration = useRef(0);
     const pageGeneration = useRef(0);
@@ -90,6 +105,13 @@ export function McpView({ hidden = false }: McpViewProps): JSX.Element {
         action.kind === "running" ||
         (action.kind === "error" && action.uncertain) ||
         (list.kind === "ready" && list.more === "loading");
+    useImperativeHandle(homeRef, () => ({
+        openHome() {
+            if (blocked || formBlocked || mutationPending.current) return false;
+            if (page.kind !== "list") returnToList();
+            return true;
+        },
+    }));
     useEffect(() => {
         active.current = true;
         return () => {
@@ -250,7 +272,12 @@ export function McpView({ hidden = false }: McpViewProps): JSX.Element {
         void reload();
     }
     return (
-        <section ref={root} className={styles["view"]} hidden={hidden}>
+        <section
+            ref={root}
+            className={styles["view"]}
+            hidden={hidden}
+            data-mcp-editor={page.kind === "form" ? true : undefined}
+        >
             {page.kind !== "form" && (
                 <PageModuleHeader
                     icon="mcp"
@@ -282,6 +309,7 @@ export function McpView({ hidden = false }: McpViewProps): JSX.Element {
                     record={page.record}
                     hidden={hidden}
                     onSaved={saved}
+                    onNavigationBlockedChange={setFormBlocked}
                     onCancel={returnToList}
                     onReload={() => {
                         const id = page.record?.id;
@@ -293,13 +321,6 @@ export function McpView({ hidden = false }: McpViewProps): JSX.Element {
                 <p role="status">{t("mcp.loading")}</p>
             ) : (
                 <>
-                    <p
-                        className={[styles["hint"], styles["notice"]]
-                            .filter(Boolean)
-                            .join(" ")}
-                    >
-                        {t("mcp.definitionOnly")}
-                    </p>
                     {list.kind === "loading" && (
                         <p role="status">{t("mcp.loading")}</p>
                     )}
@@ -366,22 +387,14 @@ export function McpView({ hidden = false }: McpViewProps): JSX.Element {
                                                 <h2 className={styles["name"]}>
                                                     {record.displayName}
                                                 </h2>
-                                                <p className={styles["hint"]}>
-                                                    {record.serverName} ·{" "}
+                                                <p
+                                                    className={
+                                                        styles["subline"]
+                                                    }
+                                                >
                                                     {t(
-                                                        record.connection
-                                                            .type === "stdio"
-                                                            ? "mcp.stdio"
-                                                            : "mcp.http",
+                                                        "mcp.list.registeredAgents",
                                                     )}
-                                                </p>
-                                                <p className={styles["hint"]}>
-                                                    {t(
-                                                        record.enabled
-                                                            ? "mcp.enabled"
-                                                            : "mcp.disabled",
-                                                    )}{" "}
-                                                    · {t("mcp.notDeployed")}
                                                 </p>
                                                 {record.cleanupPending && (
                                                     <p
@@ -395,67 +408,99 @@ export function McpView({ hidden = false }: McpViewProps): JSX.Element {
                                                     </p>
                                                 )}
                                             </div>
-                                            <div className={styles["actions"]}>
-                                                <button
-                                                    className={buttons["text"]}
-                                                    type="button"
-                                                    aria-disabled={blocked}
-                                                    aria-label={t(
-                                                        "mcp.editLabel",
-                                                        {
-                                                            name: record.displayName,
-                                                        },
-                                                    )}
-                                                    onClick={() => {
-                                                        void open(record.id);
-                                                    }}
-                                                >
-                                                    {t("mcp.edit")}
-                                                </button>
-                                                <button
-                                                    className={
-                                                        buttons["secondary"]
-                                                    }
-                                                    type="button"
-                                                    aria-disabled={blocked}
-                                                    aria-label={t(
-                                                        record.enabled
-                                                            ? "mcp.toggleDisable"
-                                                            : "mcp.toggleEnable",
-                                                        {
-                                                            name: record.displayName,
-                                                        },
-                                                    )}
-                                                    onClick={() => {
-                                                        void mutate(
-                                                            record,
-                                                            false,
-                                                        );
-                                                    }}
-                                                >
+                                            <div className={styles["trailing"]}>
+                                                <span className={styles["tag"]}>
                                                     {t(
-                                                        record.enabled
-                                                            ? "mcp.disable"
-                                                            : "mcp.enable",
+                                                        record.connection
+                                                            .type === "stdio"
+                                                            ? "mcp.stdio"
+                                                            : "mcp.http",
                                                     )}
-                                                </button>
-                                                {record.cleanupPending && (
+                                                </span>
+                                                <div
+                                                    className={
+                                                        styles["actions"]
+                                                    }
+                                                >
                                                     <button
-                                                        className={
-                                                            buttons["secondary"]
-                                                        }
+                                                        className={[
+                                                            buttons["text"],
+                                                            buttons["withIcon"],
+                                                        ].join(" ")}
                                                         type="button"
                                                         aria-disabled={blocked}
+                                                        aria-label={t(
+                                                            "mcp.editLabel",
+                                                            {
+                                                                name: record.displayName,
+                                                            },
+                                                        )}
                                                         onClick={() => {
-                                                            void mutate(
-                                                                record,
-                                                                true,
+                                                            void open(
+                                                                record.id,
                                                             );
                                                         }}
                                                     >
-                                                        {t("mcp.cleanup")}
+                                                        <Icon name="edit" />
+                                                        {t("mcp.list.edit")}
                                                     </button>
-                                                )}
+                                                    <button
+                                                        className={[
+                                                            buttons["text"],
+                                                            buttons["withIcon"],
+                                                        ].join(" ")}
+                                                        type="button"
+                                                        aria-disabled={blocked}
+                                                        aria-label={t(
+                                                            record.enabled
+                                                                ? "mcp.toggleDisable"
+                                                                : "mcp.toggleEnable",
+                                                            {
+                                                                name: record.displayName,
+                                                            },
+                                                        )}
+                                                        onClick={() => {
+                                                            void mutate(
+                                                                record,
+                                                                false,
+                                                            );
+                                                        }}
+                                                    >
+                                                        <Icon
+                                                            name={
+                                                                record.enabled
+                                                                    ? "disable"
+                                                                    : "enable"
+                                                            }
+                                                        />
+                                                        {t(
+                                                            record.enabled
+                                                                ? "mcp.disable"
+                                                                : "mcp.enable",
+                                                        )}
+                                                    </button>
+                                                    {record.cleanupPending && (
+                                                        <button
+                                                            className={
+                                                                buttons[
+                                                                    "secondary"
+                                                                ]
+                                                            }
+                                                            type="button"
+                                                            aria-disabled={
+                                                                blocked
+                                                            }
+                                                            onClick={() => {
+                                                                void mutate(
+                                                                    record,
+                                                                    true,
+                                                                );
+                                                            }}
+                                                        >
+                                                            {t("mcp.cleanup")}
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </div>
                                         </li>
                                     ))}

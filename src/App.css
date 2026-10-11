@@ -21,11 +21,16 @@
     --color-success-bg: #daf0e4;
     --color-danger-fg: #b42318;
     --color-danger-bg: #fce8e6;
+    --color-danger-border: #f1b4ad;
     --space-sm: 8px;
     --space-md: 16px;
     --space-lg: 24px;
     --space-xl: 32px;
     --space-page: 48px;
+    /* One title/tab-to-content gap across module and secondary pages. */
+    --page-content-gap: 16px;
+    /* Baseline for label/value and label/control rows; wrapped content can grow. */
+    --form-row-min-height: 64px;
     --radius-control: 6px;
     --radius-card: 8px;
     /* Portaled controls must paint above the application content. */
@@ -58,6 +63,7 @@
         --color-success-bg: #1a3328;
         --color-danger-fg: #f08979;
         --color-danger-bg: #3d1f1f;
+        --color-danger-border: #8a4a42;
     }
 }
 :root[data-appearance="dark"] {
@@ -80,9 +86,15 @@
     --color-success-bg: #1a3328;
     --color-danger-fg: #f08979;
     --color-danger-bg: #3d1f1f;
+    --color-danger-border: #8a4a42;
 }
 * {
     box-sizing: border-box;
+}
+/* Feature views set `display` on mounted sections; that overrides the UA
+   `[hidden]` rule, so kept-alive pages would stack in the content column. */
+[hidden] {
+    display: none !important;
 }
 body {
     margin: 0;

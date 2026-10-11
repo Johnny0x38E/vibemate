@@ -25,6 +25,7 @@ import fieldStyles from "../settings/settingsField.module.css";
 import { ProviderIcon } from "./ProviderIcon";
 import buttons from "./providerButtons.module.css";
 import styles from "./ProviderForm.module.css";
+import { SecondaryPageFooter } from "../../components/SecondaryPageFooter";
 
 /**
  * Create a new instance (the provider is chosen in the form's first field), or
@@ -61,9 +62,12 @@ export interface ProviderFormProps {
     layout?: "page" | "tabPanel";
     /** Stable id for the `<form>` when callers associate external controls with it. */
     formId?: string;
+    /** Secondary-page navigation shares the fixed footer with Save. */
+    onBack?: (() => void) | undefined;
+    backBlocked?: boolean;
     /**
-     * Primary Save placement: tab toolbar above the card (`external` on API tab),
-     * first card row on a full page (`external` + `page`), or form footer (`footer`, default).
+     * Secondary pages use the fixed footer. The external placement is retained
+     * for standalone callers that explicitly request an in-card or toolbar action.
      */
     primaryActionPlacement?: "footer" | "external";
     /** Create mode only: sync the page title with the provider field. */
@@ -176,6 +180,8 @@ export function ProviderForm({
     hidden = false,
     layout = "page",
     formId,
+    onBack,
+    backBlocked = false,
     primaryActionPlacement = "footer",
     onCreateKindChange,
 }: ProviderFormProps): JSX.Element {
@@ -590,45 +596,27 @@ export function ProviderForm({
                 noValidate
                 onSubmit={handleSubmit}
             >
-                {topError && (
-                    <div className={styles["feedback"]}>
-                        <p className={styles["error"]} role="alert">
-                            {t(`providers.errors.${topError}`)}
-                        </p>
-                    </div>
-                )}
-                {saveInTabToolbar && (
-                    <div className={styles["tabToolbar"]}>
-                        <button
-                            className={[
-                                buttons["primary"],
-                                styles["tabToolbarButton"],
-                            ].join(" ")}
-                            type="submit"
-                            ref={submitRef}
-                            aria-disabled={saveBlocked}
-                        >
-                            {t("providers.form.save")}
-                        </button>
-                    </div>
-                )}
                 <div
-                    className={[
-                        fieldStyles["group"],
-                        layout === "tabPanel" ? styles["fieldCard"] : undefined,
-                    ]
-                        .filter((value): value is string => value !== undefined)
-                        .join(" ")}
+                    className={
+                        layout === "tabPanel"
+                            ? styles["formContent"]
+                            : undefined
+                    }
                 >
-                    {saveInCardRow && (
-                        <div
-                            className={[
-                                fieldStyles["row"],
-                                styles["saveRow"],
-                            ].join(" ")}
-                        >
+                    {topError && (
+                        <div className={styles["feedback"]}>
+                            <p className={styles["error"]} role="alert">
+                                {t(`providers.errors.${topError}`)}
+                            </p>
+                        </div>
+                    )}
+                    {saveInTabToolbar && (
+                        <div className={styles["tabToolbar"]}>
                             <button
-                                className={buttons["primary"]}
+                                className={[
+                                    buttons["primary"],
+                                    styles["tabToolbarButton"],
+                                ].join(" ")}
                                 type="submit"
                                 ref={submitRef}
                                 aria-disabled={saveBlocked}
@@ -637,34 +625,96 @@ export function ProviderForm({
                             </button>
                         </div>
                     )}
-                    {/* The provider is part of the instance identity: chosen when
-                        creating, then fixed, so an edit shows it read-only. */}
-                    {editing ? (
-                        <div
-                            className={[
-                                fieldStyles["row"],
-                                fieldStyles["rowUniform"],
-                            ].join(" ")}
-                        >
-                            <span className={fieldStyles["label"]}>
-                                {t("providers.fields.kind")}
-                            </span>
-                            <span
+                    <div
+                        className={[
+                            fieldStyles["group"],
+                            layout === "tabPanel"
+                                ? styles["fieldCard"]
+                                : undefined,
+                        ]
+                            .filter(
+                                (value): value is string => value !== undefined,
+                            )
+                            .join(" ")}
+                    >
+                        {saveInCardRow && (
+                            <div
                                 className={[
-                                    styles["value"],
-                                    styles["valueWithIcon"],
-                                ]
-                                    .filter(
-                                        (value): value is string =>
-                                            value !== undefined,
-                                    )
-                                    .join(" ")}
+                                    fieldStyles["row"],
+                                    styles["saveRow"],
+                                ].join(" ")}
                             >
-                                <ProviderIcon kind={editing.kind} />
-                                {template?.brandName ?? editing.kind}
-                            </span>
-                        </div>
-                    ) : (
+                                <button
+                                    className={buttons["primary"]}
+                                    type="submit"
+                                    ref={submitRef}
+                                    aria-disabled={saveBlocked}
+                                >
+                                    {t("providers.form.save")}
+                                </button>
+                            </div>
+                        )}
+                        {/* The provider is part of the instance identity: chosen when
+                        creating, then fixed, so an edit shows it read-only. */}
+                        {editing ? (
+                            <div
+                                className={[
+                                    fieldStyles["row"],
+                                    fieldStyles["rowUniform"],
+                                ].join(" ")}
+                            >
+                                <span className={fieldStyles["label"]}>
+                                    {t("providers.fields.kind")}
+                                </span>
+                                <span
+                                    className={[
+                                        styles["value"],
+                                        styles["valueWithIcon"],
+                                    ]
+                                        .filter(
+                                            (value): value is string =>
+                                                value !== undefined,
+                                        )
+                                        .join(" ")}
+                                >
+                                    <ProviderIcon kind={editing.kind} />
+                                    {template?.brandName ?? editing.kind}
+                                </span>
+                            </div>
+                        ) : (
+                            <div
+                                className={[
+                                    fieldStyles["row"],
+                                    fieldStyles["rowUniform"],
+                                ].join(" ")}
+                            >
+                                <label
+                                    className={fieldStyles["label"]}
+                                    htmlFor={`${id}-kind`}
+                                >
+                                    {t("providers.fields.kind")}
+                                </label>
+                                <div className={styles["control"]}>
+                                    {createKind !== undefined && (
+                                        <FieldSelect
+                                            id={`${id}-kind`}
+                                            value={createKind}
+                                            blocked={saveBlocked}
+                                            options={templates.map((entry) => ({
+                                                value: entry.kind,
+                                                label: entry.brandName,
+                                                leading: (
+                                                    <ProviderIcon
+                                                        kind={entry.kind}
+                                                    />
+                                                ),
+                                            }))}
+                                            onChange={changeKind}
+                                        />
+                                    )}
+                                </div>
+                            </div>
+                        )}
                         <div
                             className={[
                                 fieldStyles["row"],
@@ -673,280 +723,273 @@ export function ProviderForm({
                         >
                             <label
                                 className={fieldStyles["label"]}
-                                htmlFor={`${id}-kind`}
+                                htmlFor={`${id}-displayName`}
                             >
-                                {t("providers.fields.kind")}
+                                {t("providers.fields.displayName")}
                             </label>
                             <div className={styles["control"]}>
-                                {createKind !== undefined && (
-                                    <FieldSelect
-                                        id={`${id}-kind`}
-                                        value={createKind}
-                                        blocked={saveBlocked}
-                                        options={templates.map((entry) => ({
-                                            value: entry.kind,
-                                            label: entry.brandName,
-                                            leading: (
-                                                <ProviderIcon
-                                                    kind={entry.kind}
-                                                />
-                                            ),
-                                        }))}
-                                        onChange={changeKind}
-                                    />
-                                )}
+                                <input
+                                    className={styles["input"]}
+                                    id={`${id}-displayName`}
+                                    type="text"
+                                    autoComplete="off"
+                                    value={fields.displayName}
+                                    readOnly={saveBlocked}
+                                    aria-invalid={fieldError === "displayName"}
+                                    aria-describedby={describedBy(
+                                        "displayName",
+                                    )}
+                                    onChange={(event) => {
+                                        update(
+                                            "displayName",
+                                            event.currentTarget.value,
+                                        );
+                                    }}
+                                />
+                                {errorText("displayName")}
                             </div>
                         </div>
-                    )}
-                    <div
-                        className={[
-                            fieldStyles["row"],
-                            fieldStyles["rowUniform"],
-                        ].join(" ")}
-                    >
-                        <label
-                            className={fieldStyles["label"]}
-                            htmlFor={`${id}-displayName`}
+                        <div
+                            className={[
+                                fieldStyles["row"],
+                                fieldStyles["rowUniform"],
+                            ].join(" ")}
                         >
-                            {t("providers.fields.displayName")}
-                        </label>
-                        <div className={styles["control"]}>
-                            <input
-                                className={styles["input"]}
-                                id={`${id}-displayName`}
-                                type="text"
-                                autoComplete="off"
-                                value={fields.displayName}
-                                readOnly={saveBlocked}
-                                aria-invalid={fieldError === "displayName"}
-                                aria-describedby={describedBy("displayName")}
-                                onChange={(event) => {
-                                    update(
-                                        "displayName",
-                                        event.currentTarget.value,
-                                    );
-                                }}
-                            />
-                            {errorText("displayName")}
+                            <label
+                                className={fieldStyles["label"]}
+                                htmlFor={`${id}-baseUrl`}
+                            >
+                                {t("providers.fields.baseUrl")}
+                            </label>
+                            <div className={styles["control"]}>
+                                <input
+                                    className={styles["input"]}
+                                    id={`${id}-baseUrl`}
+                                    type="url"
+                                    inputMode="url"
+                                    autoComplete="off"
+                                    spellCheck={false}
+                                    value={fields.baseUrl}
+                                    readOnly={saveBlocked}
+                                    aria-invalid={fieldError === "baseUrl"}
+                                    aria-describedby={describedBy("baseUrl")}
+                                    onChange={(event) => {
+                                        update(
+                                            "baseUrl",
+                                            event.currentTarget.value,
+                                        );
+                                    }}
+                                />
+                                {errorText("baseUrl")}
+                            </div>
                         </div>
-                    </div>
-                    <div
-                        className={[
-                            fieldStyles["row"],
-                            fieldStyles["rowUniform"],
-                        ].join(" ")}
-                    >
-                        <label
-                            className={fieldStyles["label"]}
-                            htmlFor={`${id}-baseUrl`}
+                        <div
+                            className={[
+                                fieldStyles["row"],
+                                fieldStyles["rowUniform"],
+                            ].join(" ")}
                         >
-                            {t("providers.fields.baseUrl")}
-                        </label>
-                        <div className={styles["control"]}>
-                            <input
-                                className={styles["input"]}
-                                id={`${id}-baseUrl`}
-                                type="url"
-                                inputMode="url"
-                                autoComplete="off"
-                                spellCheck={false}
-                                value={fields.baseUrl}
-                                readOnly={saveBlocked}
-                                aria-invalid={fieldError === "baseUrl"}
-                                aria-describedby={describedBy("baseUrl")}
-                                onChange={(event) => {
-                                    update(
-                                        "baseUrl",
-                                        event.currentTarget.value,
-                                    );
-                                }}
-                            />
-                            {errorText("baseUrl")}
+                            <label
+                                className={fieldStyles["label"]}
+                                htmlFor={`${id}-protocol`}
+                            >
+                                {t("providers.fields.protocol")}
+                            </label>
+                            <div className={styles["control"]}>
+                                <FieldSelect
+                                    id={`${id}-protocol`}
+                                    value={fields.protocol}
+                                    blocked={saveBlocked}
+                                    aria-invalid={fieldError === "protocol"}
+                                    aria-describedby={describedBy("protocol")}
+                                    options={protocols.map((protocol) => ({
+                                        value: protocol,
+                                        label: t(
+                                            `providers.protocols.${protocol}`,
+                                        ),
+                                    }))}
+                                    onChange={(next) => {
+                                        if (saveBlocked) return;
+                                        update("protocol", next);
+                                    }}
+                                />
+                                {errorText("protocol")}
+                            </div>
                         </div>
-                    </div>
-                    <div
-                        className={[
-                            fieldStyles["row"],
-                            fieldStyles["rowUniform"],
-                        ].join(" ")}
-                    >
-                        <label
-                            className={fieldStyles["label"]}
-                            htmlFor={`${id}-protocol`}
-                        >
-                            {t("providers.fields.protocol")}
-                        </label>
-                        <div className={styles["control"]}>
-                            <FieldSelect
-                                id={`${id}-protocol`}
-                                value={fields.protocol}
-                                blocked={saveBlocked}
-                                aria-invalid={fieldError === "protocol"}
-                                aria-describedby={describedBy("protocol")}
-                                options={protocols.map((protocol) => ({
-                                    value: protocol,
-                                    label: t(`providers.protocols.${protocol}`),
-                                }))}
-                                onChange={(next) => {
-                                    if (saveBlocked) return;
-                                    update("protocol", next);
-                                }}
-                            />
-                            {errorText("protocol")}
-                        </div>
-                    </div>
-                    {/* The fixed placeholder and eye-off mark only indicate a
+                        {/* The fixed placeholder and eye-off mark only indicate a
                         configured entry; neither is an input value or a reveal control. */}
-                    <div
-                        className={[
-                            fieldStyles["row"],
-                            fieldStyles["rowUniform"],
-                        ].join(" ")}
-                    >
-                        <label
-                            className={fieldStyles["label"]}
-                            htmlFor={`${id}-secret`}
+                        <div
+                            className={[
+                                fieldStyles["row"],
+                                fieldStyles["rowUniform"],
+                            ].join(" ")}
                         >
-                            {t("providers.fields.secret")}
-                        </label>
-                        <div className={styles["secretControl"]}>
-                            <input
-                                className={styles["input"]}
-                                id={`${id}-secret`}
-                                ref={secretInput}
-                                type="password"
-                                // "off" is ignored for passwords; this keeps
-                                // saved passwords from being filled in.
-                                autoComplete="new-password"
-                                autoCapitalize="none"
-                                autoCorrect="off"
-                                spellCheck={false}
-                                required={!configured}
-                                placeholder={
-                                    showStoredIndicator ? "••••••••" : undefined
-                                }
-                                value={secret}
-                                // Editable after an unknown outcome, so the
-                                // key can be typed again for a retry.
-                                readOnly={busy}
-                                aria-invalid={fieldError === "secret"}
-                                aria-describedby={describedBy(
-                                    "secret",
-                                    showStoredIndicator
-                                        ? secretStatusId
-                                        : undefined,
-                                )}
-                                onChange={(event) => {
-                                    updateSecret(event.currentTarget.value);
-                                }}
-                            />
-                            {showStoredIndicator && (
-                                <span
-                                    className={styles["keyIndicator"]}
-                                    title={t(
-                                        "providers.fields.secretConfigured",
+                            <label
+                                className={fieldStyles["label"]}
+                                htmlFor={`${id}-secret`}
+                            >
+                                {t("providers.fields.secret")}
+                            </label>
+                            <div className={styles["secretControl"]}>
+                                <input
+                                    className={styles["input"]}
+                                    id={`${id}-secret`}
+                                    ref={secretInput}
+                                    type="password"
+                                    // "off" is ignored for passwords; this keeps
+                                    // saved passwords from being filled in.
+                                    autoComplete="new-password"
+                                    autoCapitalize="none"
+                                    autoCorrect="off"
+                                    spellCheck={false}
+                                    required={!configured}
+                                    placeholder={
+                                        showStoredIndicator
+                                            ? "••••••••"
+                                            : undefined
+                                    }
+                                    value={secret}
+                                    // Editable after an unknown outcome, so the
+                                    // key can be typed again for a retry.
+                                    readOnly={busy}
+                                    aria-invalid={fieldError === "secret"}
+                                    aria-describedby={describedBy(
+                                        "secret",
+                                        showStoredIndicator
+                                            ? secretStatusId
+                                            : undefined,
                                     )}
-                                >
-                                    <Icon name="eyeOff" />
+                                    onChange={(event) => {
+                                        updateSecret(event.currentTarget.value);
+                                    }}
+                                />
+                                {showStoredIndicator && (
                                     <span
-                                        className={styles["visuallyHidden"]}
-                                        id={secretStatusId}
-                                    >
-                                        {t("providers.fields.secretConfigured")}
-                                    </span>
-                                </span>
-                            )}
-                            {keyStatus.kind === "loading" && (
-                                <p className={styles["message"]} role="status">
-                                    {t("providers.fields.secretLoading")}
-                                </p>
-                            )}
-                            {keyStatus.kind === "error" && (
-                                <>
-                                    <p className={styles["error"]} role="alert">
-                                        {t(
-                                            `providers.errors.${keyStatus.code}`,
+                                        className={styles["keyIndicator"]}
+                                        title={t(
+                                            "providers.fields.secretConfigured",
                                         )}
-                                    </p>
-                                    <button
-                                        type="button"
-                                        className={buttons["secondary"]}
-                                        onClick={() => {
-                                            // The retry button disappears; keep focus in the key field.
-                                            secretInput.current?.focus();
-                                            setKeyStatus({ kind: "loading" });
-                                            setKeyAttempt(
-                                                (attempt) => attempt + 1,
-                                            );
-                                        }}
                                     >
-                                        {t("providers.fields.secretRetry")}
-                                    </button>
-                                </>
-                            )}
-                            {keyStatus.kind === "preview" && (
-                                <p className={styles["message"]}>
-                                    {t("providers.errors.desktop_required")}
-                                </p>
-                            )}
-                            {errorText("secret")}
+                                        <Icon name="eyeOff" />
+                                        <span
+                                            className={styles["visuallyHidden"]}
+                                            id={secretStatusId}
+                                        >
+                                            {t(
+                                                "providers.fields.secretConfigured",
+                                            )}
+                                        </span>
+                                    </span>
+                                )}
+                                {keyStatus.kind === "loading" && (
+                                    <p
+                                        className={styles["message"]}
+                                        role="status"
+                                    >
+                                        {t("providers.fields.secretLoading")}
+                                    </p>
+                                )}
+                                {keyStatus.kind === "error" && (
+                                    <>
+                                        <p
+                                            className={styles["error"]}
+                                            role="alert"
+                                        >
+                                            {t(
+                                                `providers.errors.${keyStatus.code}`,
+                                            )}
+                                        </p>
+                                        <button
+                                            type="button"
+                                            className={buttons["secondary"]}
+                                            onClick={() => {
+                                                // The retry button disappears; keep focus in the key field.
+                                                secretInput.current?.focus();
+                                                setKeyStatus({
+                                                    kind: "loading",
+                                                });
+                                                setKeyAttempt(
+                                                    (attempt) => attempt + 1,
+                                                );
+                                            }}
+                                        >
+                                            {t("providers.fields.secretRetry")}
+                                        </button>
+                                    </>
+                                )}
+                                {keyStatus.kind === "preview" && (
+                                    <p className={styles["message"]}>
+                                        {t("providers.errors.desktop_required")}
+                                    </p>
+                                )}
+                                {errorText("secret")}
+                            </div>
                         </div>
                     </div>
                 </div>
-                <div className={styles["feedback"]}>{formMessage()}</div>
-                <div className={styles["actions"]}>
-                    {primaryActionPlacement === "footer" && (
-                        // The one primary action. Never `disabled`: focus stays here
-                        // while saving, and save() checks the state itself.
-                        <button
-                            className={buttons["primary"]}
-                            type="submit"
-                            ref={submitRef}
-                            aria-disabled={saveBlocked}
-                        >
-                            {t("providers.form.save")}
-                        </button>
-                    )}
-                    {status.kind === "unknown" && status.refreshed && (
-                        <button
-                            className={buttons["secondary"]}
-                            type="button"
-                            onClick={() => {
-                                // This button disappears; keep focus inside the form.
-                                submitRef.current?.focus();
-                                // An explicit second action after the list was re-read.
-                                void save(true);
-                            }}
-                        >
-                            {t("providers.form.saveAgain")}
-                        </button>
-                    )}
-                    {status.kind === "unknown" && !status.refreshed && (
-                        <button
-                            className={buttons["secondary"]}
-                            type="button"
-                            onClick={() => {
-                                submitRef.current?.focus();
-                                void refreshAgain();
-                            }}
-                        >
-                            {t("providers.form.refreshList")}
-                        </button>
-                    )}
-                    {(status.kind === "conflict" ||
-                        status.kind === "reloadFailed") && (
-                        <button
-                            className={buttons["secondary"]}
-                            type="button"
-                            onClick={() => {
-                                submitRef.current?.focus();
-                                void reloadLatest();
-                            }}
-                        >
-                            {t("providers.form.reloadLatest")}
-                        </button>
-                    )}
-                </div>
+                <SecondaryPageFooter
+                    onBack={onBack}
+                    backBlocked={busy || backBlocked}
+                    feedback={
+                        <div className={styles["footerFeedback"]}>
+                            {formMessage()}
+                        </div>
+                    }
+                >
+                    <div className={styles["footerActions"]}>
+                        {status.kind === "unknown" && status.refreshed && (
+                            <button
+                                className={buttons["secondary"]}
+                                type="button"
+                                onClick={() => {
+                                    // This button disappears; keep focus inside the form.
+                                    submitRef.current?.focus();
+                                    // An explicit second action after the list was re-read.
+                                    void save(true);
+                                }}
+                            >
+                                {t("providers.form.saveAgain")}
+                            </button>
+                        )}
+                        {status.kind === "unknown" && !status.refreshed && (
+                            <button
+                                className={buttons["secondary"]}
+                                type="button"
+                                onClick={() => {
+                                    submitRef.current?.focus();
+                                    void refreshAgain();
+                                }}
+                            >
+                                {t("providers.form.refreshList")}
+                            </button>
+                        )}
+                        {(status.kind === "conflict" ||
+                            status.kind === "reloadFailed") && (
+                            <button
+                                className={buttons["secondary"]}
+                                type="button"
+                                onClick={() => {
+                                    submitRef.current?.focus();
+                                    void reloadLatest();
+                                }}
+                            >
+                                {t("providers.form.reloadLatest")}
+                            </button>
+                        )}
+                        {primaryActionPlacement === "footer" && (
+                            // The one primary action. Never `disabled`: focus stays here
+                            // while saving, and save() checks the state itself.
+                            <button
+                                className={buttons["primary"]}
+                                type="submit"
+                                ref={submitRef}
+                                aria-disabled={saveBlocked}
+                            >
+                                {t("providers.form.save")}
+                            </button>
+                        )}
+                    </div>
+                </SecondaryPageFooter>
             </form>
         </section>
     );

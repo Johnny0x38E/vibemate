@@ -1,4 +1,14 @@
-import { useEffect, useRef, useState, type JSX } from "react";
+import {
+    useEffect,
+    useImperativeHandle,
+    useRef,
+    useState,
+    type Ref,
+    type JSX,
+    type ReactNode,
+} from "react";
+import type { ModuleNavigationHandle } from "../../components/moduleNavigation";
+import { Tooltip } from "@base-ui/react/tooltip";
 import { useTranslation } from "react-i18next";
 import { PageModuleHeader } from "../../components/PageModuleHeader";
 import {
@@ -10,39 +20,62 @@ import {
     type DiscoveryResult,
 } from "../../lib/desktop/agents";
 import buttons from "../providers/providerButtons.module.css";
+import pageStyles from "../providers/ProviderPage.module.css";
+import { AgentIcon } from "./AgentIcon";
+import { IconButton } from "../../components/IconButton";
+import { AgentPage } from "./AgentPage";
 import styles from "./AgentList.module.css";
 
 type State =
     | { kind: "loading" }
     | DiscoveryResult
     | { kind: "error"; code: DiscoveryErrorCode };
+
+type AgentsPage = { kind: "list" } | { kind: "detail"; id: AgentId };
+
 function failure(error: unknown): DiscoveryErrorCode {
     return error instanceof DiscoveryRequestError
         ? error.code
         : "operation_failed";
 }
 
+function versionLabel(row: AgentObservation, unknownLabel: string): string {
+    return row.version ?? unknownLabel;
+}
+
 /**
- * Read-only entry discovery with window-local manual paths. Hidden navigation
- * preserves input/report, and performs no new scan. Generation checks discard
- * replies after unmount or StrictMode effect cleanup; no Agent is launched.
+ * Read-only discovery: auto-scan on first mount, card list for found entries,
+ * and a detail view for paths and config file presence. Hidden navigation keeps
+ * the last report and manual paths without rescanning.
  */
 export function AgentList({
     hidden = false,
+    homeRef,
 }: {
     hidden?: boolean;
+    homeRef?: Ref<ModuleNavigationHandle>;
 }): JSX.Element {
     const { t } = useTranslation();
     const [state, setState] = useState<State>({ kind: "loading" });
+    /** Last successful desktop report; kept across refresh errors and loading. */
+    const [snapshot, setSnapshot] = useState<AgentObservation[]>([]);
+    const [page, setPage] = useState<AgentsPage>({ kind: "list" });
     const [piPath, setPiPath] = useState("");
     const [grokPath, setGrokPath] = useState("");
     const generation = useRef(0);
     const pending = useRef(false);
     const mounted = useRef(false);
+    const focusCard = useRef<AgentId | null>(null);
+    useImperativeHandle(homeRef, () => ({
+        openHome() {
+            if (pending.current) return false;
+            focusCard.current = null;
+            setPage({ kind: "list" });
+            return true;
+        },
+    }));
 
     useEffect(() => {
-        // Scan only on first mount. Typing paths or changing locale must not
-        // perform filesystem work; Refresh/Enter explicitly submits new input.
         const current = ++generation.current;
         mounted.current = true;
         pending.current = true;
@@ -50,6 +83,7 @@ export function AgentList({
             (result) => {
                 if (mounted.current && current === generation.current) {
                     pending.current = false;
+                    if (result.kind === "desktop") setSnapshot(result.items);
                     setState(result);
                 }
             },
@@ -66,6 +100,17 @@ export function AgentList({
         };
     }, []);
 
+    useEffect(() => {
+        if (hidden || page.kind !== "list" || focusCard.current === null)
+            return;
+        const id = focusCard.current;
+        focusCard.current = null;
+        const target = document.querySelector<HTMLElement>(
+            `[data-agent-card="${id}"]`,
+        );
+        target?.focus();
+    }, [hidden, page]);
+
     async function refresh(): Promise<void> {
         if (pending.current || state.kind === "preview") return;
         pending.current = true;
@@ -76,8 +121,10 @@ export function AgentList({
                 piPath: piPath.trim() || null,
                 grokPath: grokPath.trim() || null,
             });
-            if (mounted.current && current === generation.current)
+            if (mounted.current && current === generation.current) {
+                if (result.kind === "desktop") setSnapshot(result.items);
                 setState(result);
+            }
         } catch (error: unknown) {
             if (mounted.current && current === generation.current)
                 setState({ kind: "error", code: failure(error) });
@@ -86,129 +133,327 @@ export function AgentList({
                 pending.current = false;
         }
     }
+
     const blocked = state.kind === "loading" || state.kind === "preview";
-    function report(row: AgentObservation): JSX.Element {
+
+    function items(): AgentObservation[] {
+        return state.kind === "desktop" ? state.items : snapshot;
+    }
+
+    function observation(id: AgentId): AgentObservation | undefined {
+        return items().find((item) => item.id === id);
+    }
+
+    function foundRows(): AgentObservation[] {
+        return items().filter((row) => row.state === "found");
+    }
+
+    function openDetail(id: AgentId): void {
+        if (blocked) return;
+        setPage({ kind: "detail", id });
+    }
+
+    function returnToList(from: AgentId): void {
+        focusCard.current = from;
+        setPage({ kind: "list" });
+    }
+
+    function configFileLabel(name: string): string {
+        switch (name) {
+            case "settings.json":
+                return t("agents.files.items.settings.json");
+            case "models.json":
+                return t("agents.files.items.models.json");
+            case "mcp.json":
+                return t("agents.files.items.mcp.json");
+            case "config.toml":
+                return t("agents.files.items.config.toml");
+            case "managed_config.toml":
+                return t("agents.files.items.managed_config.toml");
+            case "requirements.toml":
+                return t("agents.files.items.requirements.toml");
+            default:
+                return name;
+        }
+    }
+
+    function factRow(label: string, value: ReactNode): JSX.Element {
         return (
-            <div className={styles["report"]}>
-                <p>
-                    {t(`agents.states.${row.state}`)} ·{" "}
-                    {t(`agents.sources.${row.source}`)}
-                </p>
-                {row.entryPath !== null && (
-                    <p>{t("agents.entry", { path: row.entryPath })}</p>
-                )}
-                {row.resolvedPath !== null &&
-                    row.resolvedPath !== row.entryPath && (
-                        <p>{t("agents.target", { path: row.resolvedPath })}</p>
-                    )}
-                <p>
-                    {t("agents.version", {
-                        version: row.version ?? t("agents.unknown"),
-                    })}{" "}
-                    · {t(`agents.evidence.${row.versionEvidence}`)}
-                </p>
-                <p>{t(`agents.capabilities.${row.capabilityEvidence}`)}</p>
-                <p>
-                    {t("agents.directory", {
-                        path: row.configDirectory ?? t("agents.unknown"),
-                    })}{" "}
-                    · {t(`agents.directories.${row.directorySource}`)}
-                </p>
-                <ul className={styles["files"]}>
-                    {row.files.map((file) => (
-                        <li key={file.name}>
-                            {file.name} · {t(`agents.files.${file.state}`)}
-                        </li>
-                    ))}
-                </ul>
+            <div className={styles["factRow"]}>
+                <span className={styles["factLabel"]}>{label}</span>
+                <span className={styles["factValue"]}>{value}</span>
             </div>
         );
     }
-    return (
-        <section className={styles["view"]} hidden={hidden}>
-            <form
-                onSubmit={(event) => {
-                    event.preventDefault();
+
+    function factBadge(value: string, hint: string): JSX.Element {
+        // Evidence remains available without turning a version hint into a
+        // verified installation claim. Focusable text also exposes it to keyboard users.
+        return (
+            <Tooltip.Provider delay={300}>
+                <Tooltip.Root>
+                    <Tooltip.Trigger
+                        render={<span tabIndex={0} />}
+                        className={styles["badge"]}
+                    >
+                        {value}
+                    </Tooltip.Trigger>
+                    <Tooltip.Portal>
+                        <Tooltip.Positioner
+                            className={styles["badgePositioner"]}
+                            sideOffset={6}
+                        >
+                            <Tooltip.Popup className={styles["badgeHint"]}>
+                                {hint}
+                            </Tooltip.Popup>
+                        </Tooltip.Positioner>
+                    </Tooltip.Portal>
+                </Tooltip.Root>
+            </Tooltip.Provider>
+        );
+    }
+
+    function report(row: AgentObservation): JSX.Element {
+        return (
+            <div className={styles["facts"]}>
+                {factRow(
+                    t("agents.detail.labels.status"),
+                    factBadge(
+                        t(`agents.states.${row.state}`),
+                        t(`agents.sources.${row.source}`),
+                    ),
+                )}
+                {row.entryPath !== null &&
+                    factRow(t("agents.detail.labels.entry"), row.entryPath)}
+                {row.resolvedPath !== null &&
+                    row.resolvedPath !== row.entryPath &&
+                    factRow(t("agents.detail.labels.target"), row.resolvedPath)}
+                {factRow(
+                    t("agents.detail.labels.version"),
+                    factBadge(
+                        row.version ?? t("agents.unknown"),
+                        t(`agents.evidence.${row.versionEvidence}`),
+                    ),
+                )}
+            </div>
+        );
+    }
+
+    function configFiles(row: AgentObservation): JSX.Element {
+        return (
+            <div className={styles["facts"]}>
+                {factRow(
+                    t("agents.detail.labels.configDirectory"),
+                    `${row.configDirectory ?? t("agents.unknown")} · ${t(`agents.directories.${row.directorySource}`)}`,
+                )}
+                {row.files.map((file) =>
+                    factRow(
+                        configFileLabel(file.name),
+                        t(`agents.files.${file.state}`),
+                    ),
+                )}
+            </div>
+        );
+    }
+
+    function refreshButton(): JSX.Element {
+        return (
+            <button
+                type="button"
+                className={buttons["primary"]}
+                aria-disabled={blocked}
+                onClick={() => {
                     void refresh();
                 }}
             >
+                {t("agents.refresh")}
+            </button>
+        );
+    }
+
+    function statusLine(): JSX.Element | null {
+        if (state.kind === "loading") {
+            return (
+                <p className={styles["hint"]} role="status">
+                    {t("agents.loading")}
+                </p>
+            );
+        }
+        if (state.kind === "preview") {
+            return (
+                <p className={styles["hint"]} role="status">
+                    {t("agents.preview")}
+                </p>
+            );
+        }
+        return null;
+    }
+
+    function listView(): JSX.Element {
+        const rows = foundRows();
+        return (
+            <>
                 <PageModuleHeader
                     icon="agents"
                     title={t("desktop.nav.agents")}
-                    trailing={
-                        <button
-                            type="submit"
-                            className={buttons["primary"]}
-                            aria-disabled={blocked}
-                        >
-                            {t("agents.refresh")}
-                        </button>
-                    }
+                    trailing={refreshButton()}
                 />
-                <p className={styles["notice"]}>{t("agents.readOnly")}</p>
-                {/* Keep the live region mounted so completion is announced after
-                a refresh, without moving keyboard focus away from the action. */}
-                <p className={styles["hint"]} role="status">
-                    {state.kind === "loading"
-                        ? t("agents.loading")
-                        : state.kind === "preview"
-                          ? t("agents.preview")
-                          : state.kind === "desktop"
-                            ? t("agents.complete")
-                            : ""}
-                </p>
+                {statusLine()}
                 {state.kind === "error" && (
                     <p className={styles["error"]} role="alert">
                         {t(`agents.errors.${state.code}`)}
                     </p>
                 )}
-                <ul
-                    className={styles["list"]}
-                    aria-label={t("desktop.nav.agents")}
-                >
-                    {(["pi", "grokBuild"] as const).map((id: AgentId) => {
-                        const row =
-                            state.kind === "desktop"
-                                ? state.items.find((item) => item.id === id)
-                                : undefined;
-                        return (
-                            <li className={styles["item"]} key={id}>
-                                <h2 className={styles["name"]}>
-                                    {t(`agents.names.${id}`)}
-                                </h2>
-                                <label className={styles["field"]}>
-                                    <span>
-                                        {t("agents.pathLabel", {
-                                            name: t(`agents.names.${id}`),
-                                        })}
+                {state.kind !== "loading" &&
+                    state.kind !== "preview" &&
+                    rows.length === 0 && (
+                        <p className={styles["notice"]} role="status">
+                            {t("agents.list.empty")}
+                        </p>
+                    )}
+                {rows.length > 0 && (
+                    <ul
+                        className={styles["cards"]}
+                        aria-label={t("agents.list.label")}
+                    >
+                        {rows.map((row) => (
+                            <li key={row.id}>
+                                <button
+                                    type="button"
+                                    className={styles["card"]}
+                                    data-agent-card={row.id}
+                                    aria-disabled={blocked}
+                                    aria-label={t("agents.list.openDetail", {
+                                        name: t(`agents.names.${row.id}`),
+                                    })}
+                                    onClick={() => {
+                                        openDetail(row.id);
+                                    }}
+                                >
+                                    <AgentIcon id={row.id} size="row" />
+                                    <span className={styles["cardText"]}>
+                                        <span className={styles["cardName"]}>
+                                            {t(`agents.names.${row.id}`)}
+                                        </span>
+                                        <span className={styles["cardVersion"]}>
+                                            {versionLabel(
+                                                row,
+                                                t("agents.unknown"),
+                                            )}
+                                        </span>
                                     </span>
-                                    <input
-                                        className={styles["input"]}
-                                        value={id === "pi" ? piPath : grokPath}
-                                        readOnly={blocked}
-                                        spellCheck={false}
-                                        autoComplete="off"
-                                        placeholder={t(
-                                            "agents.pathPlaceholder",
-                                        )}
-                                        onChange={(event) => {
-                                            if (id === "pi")
-                                                setPiPath(event.target.value);
-                                            else
-                                                setGrokPath(event.target.value);
-                                        }}
-                                    />
-                                </label>
-                                {row !== undefined && report(row)}
-                                <p className={styles["hint"]}>
-                                    {t(`agents.precedence.${id}`)}
-                                </p>
+                                </button>
                             </li>
-                        );
-                    })}
-                </ul>
-            </form>
-            <p className={styles["hint"]}>{t("agents.scope")}</p>
+                        ))}
+                    </ul>
+                )}
+            </>
+        );
+    }
+
+    function detailView(id: AgentId): JSX.Element {
+        const row = observation(id);
+        const pathValue = id === "pi" ? piPath : grokPath;
+        const setPath = id === "pi" ? setPiPath : setGrokPath;
+        const name = t(`agents.names.${id}`);
+
+        return (
+            <AgentPage
+                key={id}
+                title={
+                    <span className={pageStyles["titleBrand"]}>
+                        <AgentIcon id={id} />
+                        <span className={pageStyles["titleBrandText"]}>
+                            {name}
+                        </span>
+                    </span>
+                }
+                onBack={() => {
+                    returnToList(id);
+                }}
+                backBlocked={blocked}
+            >
+                {statusLine()}
+                {state.kind === "error" && (
+                    <p className={styles["error"]} role="alert">
+                        {t(`agents.errors.${state.code}`)}
+                    </p>
+                )}
+                {row === undefined || row.state !== "found"
+                    ? state.kind !== "error" && (
+                          <p className={styles["error"]} role="alert">
+                              {t("agents.detail.notFound")}
+                          </p>
+                      )
+                    : null}
+                <section className={styles["detailGroup"]} data-layout="page">
+                    {row !== undefined && row.state === "found" && (
+                        <>
+                            <section
+                                className={styles["detailPanel"]}
+                                aria-label={t("agents.detail.reportLabel", {
+                                    name,
+                                })}
+                            >
+                                {report(row)}
+                            </section>
+                            <section
+                                className={styles["detailPanel"]}
+                                aria-label={t(
+                                    "agents.detail.configFilesHeading",
+                                )}
+                            >
+                                {configFiles(row)}
+                            </section>
+                        </>
+                    )}
+                    <form
+                        className={styles["pathForm"]}
+                        aria-label={t("agents.detail.manualPathTitle")}
+                        onSubmit={(event) => {
+                            event.preventDefault();
+                            void refresh();
+                        }}
+                    >
+                        <label
+                            className={styles["pathLabel"]}
+                            htmlFor={`agent-entry-path-${id}`}
+                        >
+                            {t("agents.pathLabel", { name })}
+                        </label>
+                        <div className={styles["pathControls"]}>
+                            <input
+                                id={`agent-entry-path-${id}`}
+                                className={styles["input"]}
+                                value={pathValue}
+                                readOnly={blocked}
+                                spellCheck={false}
+                                autoComplete="off"
+                                placeholder={t("agents.pathPlaceholder")}
+                                onChange={(event) => {
+                                    setPath(event.currentTarget.value);
+                                }}
+                            />
+                            <IconButton
+                                type="submit"
+                                icon="refresh"
+                                label={t("agents.detail.applyPath")}
+                                blocked={blocked}
+                            />
+                        </div>
+                    </form>
+                </section>
+            </AgentPage>
+        );
+    }
+
+    return (
+        <section
+            className={styles["view"]}
+            hidden={hidden}
+            data-secondary-page={page.kind !== "list" ? true : undefined}
+        >
+            {page.kind === "list" ? listView() : detailView(page.id)}
         </section>
     );
 }

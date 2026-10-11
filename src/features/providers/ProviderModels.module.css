@@ -36,6 +36,7 @@
 }
 
 .toolbarRow {
+    flex-shrink: 0;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -128,35 +129,6 @@
     cursor: not-allowed;
 }
 
-.filter {
-    display: flex;
-    gap: 4px;
-    flex-shrink: 0;
-}
-
-.filterButton {
-    height: 36px;
-    min-height: 36px;
-    padding: 0 12px;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-control);
-    background: var(--color-surface);
-    color: var(--color-text);
-    font: inherit;
-    font-size: 0.8125rem;
-    cursor: pointer;
-}
-
-.filterButton[aria-pressed="true"] {
-    border-color: var(--color-text);
-    font-weight: 600;
-}
-
-.filterButton:focus-visible {
-    outline: 2px solid var(--color-focus);
-    outline-offset: 1px;
-}
-
 .summary,
 .message,
 .empty {
@@ -176,6 +148,70 @@
     font-weight: 600;
     line-height: 1.6;
     overflow-wrap: anywhere;
+}
+
+.manualRow {
+    border-bottom: 1px solid var(--color-border);
+}
+
+.manualRow > summary {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    min-height: 44px;
+    padding: 8px var(--space-md);
+    list-style: none;
+    color: var(--color-text);
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    cursor: pointer;
+}
+
+.manualRow > summary::-webkit-details-marker {
+    display: none;
+}
+
+/* Align with model rows without resembling an indeterminate checkbox. */
+.manualToggleIcon {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    color: var(--color-summary);
+}
+
+.manualToggleIcon svg {
+    width: 12px;
+    height: 12px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+}
+
+.manualRow > summary:hover .manualToggleIcon {
+    color: var(--color-text);
+}
+
+.manualRow[open] .manualPlusStroke {
+    display: none;
+}
+
+.manualRow > summary:focus-visible {
+    /* Keep focus visible inside the clipped model card. */
+    outline: 2px solid var(--color-focus);
+    outline-offset: -3px;
+}
+
+.manualContent {
+    min-width: 0;
+    padding: 0 var(--space-md) var(--space-md);
+}
+
+.manualDraft {
+    margin-bottom: var(--space-sm);
 }
 
 .list {
@@ -259,23 +295,6 @@
     font-weight: 400;
 }
 
-.selectedJump {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--space-sm);
-    margin-bottom: var(--space-md);
-    padding: 8px var(--space-sm);
-    border-radius: var(--radius-control);
-    background: var(--color-hover);
-}
-
-.selectedJumpText {
-    color: var(--color-text);
-    font-size: 0.8125rem;
-    font-weight: 600;
-}
-
 .badges {
     display: flex;
     flex-wrap: wrap;
@@ -293,14 +312,6 @@
     font-weight: 500;
     line-height: 1.4;
     white-space: nowrap;
-}
-
-.rowError {
-    margin: 0;
-    color: var(--color-text);
-    font-size: 0.75rem;
-    font-weight: 600;
-    overflow-wrap: anywhere;
 }
 
 .listFooter {

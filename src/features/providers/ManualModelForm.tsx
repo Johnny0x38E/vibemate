@@ -9,6 +9,7 @@ import {
 } from "../../lib/desktop/models";
 import styles from "./ProviderForm.module.css";
 import buttons from "./providerButtons.module.css";
+import manualStyles from "./ManualModelForm.module.css";
 
 type SaveState =
     | { kind: "idle" | "saving" | "checking" | "uncertain" }
@@ -145,31 +146,30 @@ export function ManualModelForm({
 
     return (
         <form
-            aria-labelledby={`${id}-title`}
+            className={manualStyles["form"]}
+            aria-label={t("providers.models.manual.title")}
             aria-busy={busy}
             onSubmit={(event) => {
                 event.preventDefault();
                 void submit();
             }}
         >
-            <h3 className={styles["groupTitle"]} id={`${id}-title`}>
-                {t("providers.models.manual.title")}
-            </h3>
-            <p className={styles["hint"]} id={`${id}-hint`}>
-                {t("providers.models.manual.hint")}
-            </p>
-            <div className={styles["control"]}>
-                <label htmlFor={`${id}-model`}>
+            <div className={manualStyles["fields"]}>
+                <label
+                    className={styles["visuallyHidden"]}
+                    htmlFor={`${id}-model`}
+                >
                     {t("providers.models.manual.modelId")}
                 </label>
                 <input
                     className={styles["input"]}
                     id={`${id}-model`}
+                    placeholder={t("providers.models.manual.modelId")}
                     value={modelId}
                     readOnly={locked}
                     aria-disabled={locked}
                     aria-invalid={idError}
-                    aria-describedby={idError ? `${id}-error` : `${id}-hint`}
+                    aria-describedby={idError ? `${id}-error` : undefined}
                     autoComplete="off"
                     spellCheck={false}
                     onChange={(event) => {
@@ -177,12 +177,16 @@ export function ManualModelForm({
                         setState({ kind: "idle" });
                     }}
                 />
-                <label htmlFor={`${id}-alias`}>
+                <label
+                    className={styles["visuallyHidden"]}
+                    htmlFor={`${id}-alias`}
+                >
                     {t("providers.models.manual.alias")}
                 </label>
                 <input
                     className={styles["input"]}
                     id={`${id}-alias`}
+                    placeholder={t("providers.models.manual.alias")}
                     value={alias}
                     readOnly={locked}
                     aria-disabled={locked}
@@ -195,7 +199,11 @@ export function ManualModelForm({
                     }}
                 />
             </div>
-            <div className={styles["feedback"]}>
+            <div
+                className={[styles["feedback"], manualStyles["feedback"]]
+                    .filter(Boolean)
+                    .join(" ")}
+            >
                 {fieldError !== null && (
                     <p
                         id={`${id}-error`}
@@ -216,7 +224,11 @@ export function ManualModelForm({
                     </p>
                 )}
             </div>
-            <div className={styles["actions"]}>
+            <div
+                className={[styles["actions"], manualStyles["actions"]]
+                    .filter(Boolean)
+                    .join(" ")}
+            >
                 <button
                     className={buttons["secondary"]}
                     type="submit"

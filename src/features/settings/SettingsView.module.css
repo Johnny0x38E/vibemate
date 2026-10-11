@@ -6,7 +6,7 @@
 .tabs {
     display: flex;
     gap: var(--space-lg);
-    margin-top: var(--space-md);
+    margin-top: var(--page-content-gap);
     border-bottom: 1px solid var(--color-border);
 }
 

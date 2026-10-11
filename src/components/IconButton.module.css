@@ -1,0 +1,62 @@
+.button {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    color: var(--color-text);
+    background: transparent;
+    cursor: pointer;
+}
+
+.button svg {
+    width: 16px;
+    height: 16px;
+}
+
+.button:hover:not([aria-disabled="true"]) {
+    background: var(--color-hover);
+}
+
+.button[data-destructive] {
+    color: var(--color-danger-fg);
+    border-color: var(--color-danger-border);
+}
+
+.button[data-destructive]:hover:not([aria-disabled="true"]) {
+    background: var(--color-danger-bg);
+}
+
+.button:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+}
+
+.button[aria-disabled="true"] {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.positioner {
+    z-index: var(--layer-popover);
+}
+
+.positioner[data-anchor-hidden] {
+    visibility: hidden;
+}
+
+.tooltip {
+    max-width: min(20rem, var(--available-width));
+    padding: 6px var(--space-sm);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    color: var(--color-text);
+    background: var(--color-surface);
+    font-size: 0.75rem;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}

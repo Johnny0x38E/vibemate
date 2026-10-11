@@ -18,8 +18,36 @@
 }
 
 .group[data-layout="tabPanel"] form {
+    display: flex;
+    flex-direction: column;
     flex: 1;
     min-height: 0;
+    overflow: hidden;
+}
+
+.formContent {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    /* Cards share the title/tab edges; field rows already protect focus rings. */
+    padding: 0 0 4px;
+}
+
+.footerFeedback {
+    display: grid;
+    gap: var(--space-sm);
+}
+
+.footerFeedback:empty {
+    display: none;
+}
+
+.footerActions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: var(--space-sm);
 }
 
 /* settingsField `.group` adds margin-top; tab panels already pad below the tabs. */
@@ -89,8 +117,7 @@
     border: 0;
 }
 
-.value,
-.secondaryValue {
+.value {
     min-width: 0;
     text-align: end;
     overflow-wrap: anywhere;
@@ -114,12 +141,6 @@
     min-height: 36px;
 }
 
-.secondaryValue {
-    color: var(--color-summary);
-    font-size: 0.75rem;
-    font-variant-numeric: tabular-nums;
-}
-
 .input {
     width: 100%;
     height: 36px;
@@ -134,8 +155,9 @@
 }
 
 .input:focus-visible {
+    /* Match model search: focus stays within the input border. */
     outline: 2px solid var(--color-focus);
-    outline-offset: 2px;
+    outline-offset: -2px;
 }
 
 /* Blocked controls stay focusable (readOnly/aria-disabled), see ProviderForm. */

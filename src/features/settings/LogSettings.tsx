@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type JSX } from "react";
 import { useTranslation } from "react-i18next";
-import { Icon } from "../../components/Icon";
+import { IconButton } from "../../components/IconButton";
 import {
     getLogLocation,
     LogRequestError,
@@ -105,30 +105,22 @@ export function LogSettings(): JSX.Element {
                                 {state.location.filePath}
                             </code>
                             <span className={styles["pathActions"]}>
-                                <button
-                                    type="button"
-                                    className={styles["iconButton"]}
-                                    aria-disabled={!canOpen}
-                                    aria-label={t("settings.logs.view")}
+                                <IconButton
+                                    icon="logFile"
+                                    label={t("settings.logs.view")}
+                                    blocked={!canOpen}
                                     onClick={() => {
                                         void open("file");
                                     }}
-                                >
-                                    <Icon name="logFile" />
-                                </button>
-                                <button
-                                    type="button"
-                                    className={styles["iconButton"]}
-                                    aria-disabled={!canOpen}
-                                    aria-label={t(
-                                        "settings.logs.openDirectory",
-                                    )}
+                                />
+                                <IconButton
+                                    icon="folder"
+                                    label={t("settings.logs.openDirectory")}
+                                    blocked={!canOpen}
                                     onClick={() => {
                                         void open("directory");
                                     }}
-                                >
-                                    <Icon name="folder" />
-                                </button>
+                                />
                             </span>
                         </div>
                     </div>

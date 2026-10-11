@@ -1,11 +1,14 @@
 import {
     useRef,
+    useImperativeHandle,
+    type Ref,
     useState,
     type JSX,
     type KeyboardEvent,
     type ReactNode,
 } from "react";
 import { useTranslation } from "react-i18next";
+import type { ModuleNavigationHandle } from "../../components/moduleNavigation";
 import { PageModuleHeader } from "../../components/PageModuleHeader";
 import { AboutPanel } from "./AboutPanel";
 import { LogSettings } from "./LogSettings";
@@ -16,6 +19,7 @@ type SettingsTab = "general" | "about";
 interface SettingsViewProps {
     languageSettings: ReactNode;
     hidden?: boolean;
+    homeRef?: Ref<ModuleNavigationHandle>;
 }
 
 /**
@@ -25,12 +29,19 @@ interface SettingsViewProps {
 export function SettingsView({
     languageSettings,
     hidden = false,
+    homeRef,
 }: SettingsViewProps): JSX.Element {
     const { t } = useTranslation();
     const [tab, setTab] = useState<SettingsTab>("general");
     const [aboutVisited, setAboutVisited] = useState(false);
     const generalTab = useRef<HTMLButtonElement>(null);
     const aboutTab = useRef<HTMLButtonElement>(null);
+    useImperativeHandle(homeRef, () => ({
+        openHome() {
+            setTab("general");
+            return true;
+        },
+    }));
 
     function selectTab(next: SettingsTab): void {
         setTab(next);

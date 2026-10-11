@@ -1,5 +1,7 @@
 .shell {
     --sidebar-width: 200px;
+    --sidebar-bottom-inset: 12px;
+    --sidebar-action-height: 44px;
     /* One row height for the traffic lights and both drag areas. */
     --titlebar-height: 44px;
     display: grid;
@@ -16,7 +18,7 @@
     display: flex;
     flex-direction: column;
     min-height: 0;
-    padding: 0 12px 12px;
+    padding: 0 12px var(--sidebar-bottom-inset);
     border-right: 1px solid var(--color-border);
     background: var(--color-sidebar);
 }
@@ -60,7 +62,7 @@
     align-items: center;
     gap: 12px;
     width: 100%;
-    min-height: 44px;
+    min-height: var(--sidebar-action-height);
     padding: 0 12px;
     border: 1px solid transparent;
     border-radius: var(--radius-control);
@@ -130,9 +132,15 @@
     padding: var(--space-sm) var(--space-lg) var(--space-lg);
     overflow: auto;
 }
+/* Secondary pages own a bounded content region and fixed bottom actions. */
+.content:has(> :is([data-mcp-editor], [data-secondary-page]):not([hidden])) {
+    /* Match the sidebar bottom row, including at the narrow-window breakpoint. */
+    padding-bottom: var(--sidebar-bottom-inset);
+    overflow: hidden;
+}
 .planned {
     max-width: 680px;
-    margin-top: var(--space-lg);
+    margin-top: var(--page-content-gap);
     padding: var(--space-lg);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-card);

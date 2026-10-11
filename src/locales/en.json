@@ -136,7 +136,7 @@
         "backLabel": "Back to provider list",
         "list": {
             "label": "Saved provider configurations",
-            "selectedModels": "{{count}} selected models",
+            "selectedModels": "{{count}} added models",
             "edit": "Edit",
             "editLabel": "Edit {{name}}"
         },
@@ -159,17 +159,17 @@
             "loading": "Reading saved models…",
             "upstreamLoading": "Loading models from the provider…",
             "empty": "No models are saved for this configuration yet.",
-            "emptyNeedFetch": "No models selected yet. Use Fetch models to browse the provider list and save your choices.",
+            "emptyNeedFetch": "No models added yet. Use Fetch models to browse the provider list and save your choices.",
             "emptyNeedKey": "Add an API key above, then use Fetch models.",
-            "emptyFiltered": "No selected models match this search.",
+            "emptyFiltered": "No added models match this search.",
             "emptyUpstream": "No models match this search in the loaded upstream pages.",
             "save": "Save",
             "saving": "Saving…",
             "saveNotice": "Model selection saved.",
             "unsavedLeave": "You have unsaved model checkbox changes. Leave without saving?",
-            "backToSelected": "Switch to selected",
+            "backToSelected": "View added models",
             "upstreamListLabel": "Upstream models for this provider",
-            "allSelectedLoaded": "All selected models are shown.",
+            "allSelectedLoaded": "All added models are shown.",
             "upstreamScrollForMore": "Scroll to load more upstream models.",
             "upstreamAllLoaded": "All loaded upstream models are shown.",
             "searchSummaryUpstream": "Showing {{shown}} matching models",
@@ -177,7 +177,7 @@
             "retry": "Try again",
             "preview": "The browser preview cannot read saved models. Open this page in the vibemate desktop app.",
             "searchPlaceholder": "Search",
-            "searchSummary": "{{total}} matches among selected models, showing the first {{shown}}",
+            "searchSummary": "{{total}} matches among added models, showing the first {{shown}}",
             "fetchNotice": {
                 "complete": "{{listed}} models updated",
                 "incomplete": {
@@ -194,15 +194,15 @@
             "deselectModel": "Deselect {{modelId}}",
             "manualSource": "Added manually",
             "createPending": "Complete the API configuration first.",
-            "selectedSummary": "{{count}} selected",
-            "selectedSummaryMany": "{{count}}+ selected",
-            "showSelectedOnly": "Show selected only",
+            "selectedSummary": "{{count}} added",
+            "selectedSummaryMany": "{{count}}+ added",
+            "showSelectedOnly": "Show added only",
             "filter": {
                 "ariaLabel": "Model list filter",
                 "all": "All",
-                "selected": "Selected",
-                "selectedCount": "Selected ({{count}})",
-                "selectedMany": "Selected ({{count}}+)"
+                "selected": "Added",
+                "selectedCount": "Added ({{count}})",
+                "selectedMany": "Added ({{count}}+)"
             },
             "badges": {
                 "upstreamMissing": "Unavailable upstream · since {{date}}",
@@ -248,7 +248,6 @@
                 "title": "Add a model manually",
                 "modelId": "Model ID",
                 "alias": "Alias (optional)",
-                "hint": "Add and save selects this model immediately. Its capabilities are unverified. To remove it, uncheck it in the selected list and click Save.",
                 "add": "Add and save",
                 "check": "Check saved models",
                 "uncertain": "The save result is unknown. Check saved models before adding again. If the check fails, try checking again.",
@@ -320,30 +319,29 @@
         "new": "New definition",
         "displayName": "Name",
         "serverName": "Server identifier",
-        "serverNameHint": "1–64 letters, digits, underscores or hyphens. Hyphens and underscores share a namespace.",
         "transport": "Transport",
         "stdio": "stdio",
         "http": "Streamable HTTP",
         "command": "Executable",
-        "commandHint": "One program or executable path. Arguments go in the field below. Saving does not run it.",
         "args": "Arguments",
-        "argsHint": "One argument per line, without shell quoting. Empty lines inside the text are empty arguments. Use environment fields for sensitive values.",
+        "arg_value": "Argument {{index}}",
+        "add_argument": "Add argument",
+        "remove_argument": "Remove argument {{index}}",
         "cwd": "Working directory (optional)",
         "url": "Server URL",
         "urlHint": "HTTPS or loopback HTTP. Put authentication in headers; credentials, query parameters and fragments are not accepted.",
         "env": "Environment variables",
         "headers": "HTTP headers",
-        "protectedValues": "Values are stored in the system credential store and never shown again. Names are saved locally. Values must be nonempty literal text; command substitution and variable interpolation are not supported.",
         "fieldName": "Field name {{index}}",
         "fieldValue": "Value {{index}}",
         "keepValue": "Configured. Leave blank to keep the saved value; enter a value to replace it.",
         "removeField": "Remove field {{index}}",
         "remove": "Remove",
-        "addField": "Add field",
-        "enabledDefinition": "Enable this central definition",
+        "addField": "Add environment variable",
+        "addHeader": "Add header",
+        "enabledDefinition": "Enable",
         "enabled": "Definition enabled",
         "disabled": "Definition disabled",
-        "definitionOnly": "Central definitions only. No MCP server is started or contacted, and nothing is deployed to an agent.",
         "save": "Save",
         "saving": "Saving definition…",
         "back": "Back",
@@ -355,6 +353,10 @@
         "empty": "No MCP definitions saved yet.",
         "retry": "Try again",
         "loadMore": "Load more",
+        "list": {
+            "edit": "Edit",
+            "registeredAgents": "Not registered"
+        },
         "editLabel": "Edit “{{name}}”",
         "toggleEnable": "Enable “{{name}}” definition",
         "toggleDisable": "Disable “{{name}}” definition",
@@ -393,11 +395,33 @@
         }
     },
     "agents": {
+        "back": "Back",
+        "backLabel": "Back to discovered agents",
         "names": {
             "pi": "Pi",
             "grokBuild": "Grok Build"
         },
-        "refresh": "Refresh discovery",
+        "list": {
+            "label": "Discovered agents",
+            "empty": "No Agent entries were found on this machine. Select Refresh after installing one or updating PATH, or open an agent’s detail view to specify a manual entry path.",
+            "openDetail": "Open {{name}} details",
+            "versionShort": "{{version}}"
+        },
+        "detail": {
+            "notFound": "This Agent entry is no longer reported as found. Return to the list or select Discover.",
+            "reportLabel": "Discovery report for {{name}}",
+            "configFilesHeading": "Configuration files",
+            "manualPathTitle": "Manual entry path",
+            "applyPath": "Rediscover",
+            "labels": {
+                "status": "Status",
+                "entry": "Entry",
+                "target": "Resolved target",
+                "version": "Version",
+                "configDirectory": "Config directory"
+            }
+        },
+        "refresh": "Discover",
         "readOnly": "Read-only discovery: entries are never executed and Agent configuration contents are never read or changed. A found file does not prove a working installation.",
         "loading": "Discovering Agent entries…",
         "preview": "Local Agent discovery requires the desktop app.",
@@ -409,9 +433,9 @@
         "version": "Version: {{version}}",
         "directory": "User configuration directory: {{path}}",
         "states": {
-            "found": "Entry found",
-            "notFound": "Entry not found",
-            "unavailable": "Entry cannot be inspected"
+            "found": "Found",
+            "notFound": "Not found",
+            "unavailable": "Cannot inspect"
         },
         "sources": {
             "manual": "Manual path",
@@ -436,7 +460,15 @@
         "files": {
             "present": "File exists; contents not read",
             "missing": "Not found",
-            "unavailable": "Cannot inspect"
+            "unavailable": "Cannot inspect",
+            "items": {
+                "settings.json": "User settings (settings.json)",
+                "models.json": "Models (models.json)",
+                "mcp.json": "MCP definitions (mcp.json)",
+                "config.toml": "User config (config.toml)",
+                "managed_config.toml": "Managed config (managed_config.toml)",
+                "requirements.toml": "Requirements (requirements.toml)"
+            }
         },
         "precedence": {
             "pi": "Documented precedence: trusted project settings / MCP can override user settings. Models are user-level; CLI, SDK, extensions and existing sessions may change effective behavior.",
@@ -444,11 +476,11 @@
         },
         "scope": "This report uses the desktop process environment and up to 64 PATH entries. Inputs remain in this window. Effective project, policy and session configuration has not been determined.",
         "errors": {
-            "invalid_path": "Enter an absolute entry path without control characters, or clear it to use automatic discovery, then refresh.",
-            "location_unavailable": "The platform home directory could not be located. Check the desktop environment and refresh.",
-            "operation_failed": "Discovery failed. Refresh to retry.",
-            "invalid_response": "The desktop returned an invalid discovery report. Refresh to retry."
+            "invalid_path": "Enter an absolute entry path without control characters, or clear it to use automatic discovery, then select Discover.",
+            "location_unavailable": "The platform home directory could not be located. Check the desktop environment and select Discover.",
+            "operation_failed": "Discovery failed. Select Discover to retry.",
+            "invalid_response": "The desktop returned an invalid discovery report. Select Discover to retry."
         },
-        "complete": "Discovery complete. Entry observations are shown below."
+        "complete": "Discovery complete. Open a card to review installation paths and configuration files."
     }
 }

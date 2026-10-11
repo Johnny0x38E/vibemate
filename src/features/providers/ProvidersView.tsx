@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useRef, useState, type JSX } from "react";
+import {
+    useCallback,
+    useEffect,
+    useImperativeHandle,
+    useRef,
+    useState,
+    type Ref,
+    type JSX,
+} from "react";
+import type { ModuleNavigationHandle } from "../../components/moduleNavigation";
 import { useTranslation } from "react-i18next";
 import { Icon } from "../../components/Icon";
 import { PageModuleHeader } from "../../components/PageModuleHeader";
@@ -106,8 +115,10 @@ function mergeRows(
  */
 export function ProvidersView({
     hidden = false,
+    homeRef,
 }: {
     hidden?: boolean;
+    homeRef?: Ref<ModuleNavigationHandle>;
 }): JSX.Element {
     const { t } = useTranslation();
     const notify = useNotify();
@@ -301,6 +312,16 @@ export function ProvidersView({
         });
     }
 
+    // Recreate the narrow handle each render so busy/dirty checks never use
+    // stale state. The sidebar does not remount modules to reset navigation.
+    useImperativeHandle(homeRef, () => ({
+        openHome() {
+            if (formBusy || modelsBusy) return false;
+            if (page.kind === "list") return true;
+            return backToList();
+        },
+    }));
+
     // Stable so the form's busy effect does not re-run on every render.
     const reportFormBusy = useCallback((busy: boolean) => {
         setFormBusy(busy);
@@ -344,12 +365,12 @@ export function ProvidersView({
     }
 
     /** Back to the list, focusing the control that started this flow. */
-    function backToList(): void {
+    function backToList(): boolean {
         if (
             modelsDirty &&
             !window.confirm(t("providers.models.unsavedLeave"))
         ) {
-            return;
+            return false;
         }
         setModelsDirty(false);
         const editingId = page.kind === "edit" ? page.record.id : undefined;
@@ -361,6 +382,7 @@ export function ProvidersView({
         if (editingId !== undefined) {
             void refreshRecordFromStorage(editingId);
         }
+        return true;
     }
 
     function handleSaved(record: ProviderRecord): void {
@@ -418,8 +440,11 @@ export function ProvidersView({
                         }
                         onBack={backToList}
                         backBlocked={formBusy || modelsBusy}
+                        footerInContent
                     >
                         <ProviderTabbedView
+                            onBack={backToList}
+                            backBlocked={formBusy || modelsBusy}
                             mode={page}
                             templates={availableTemplates}
                             onCreateKindChange={reportCreateKind}
@@ -639,7 +664,12 @@ export function ProvidersView({
     }
 
     return (
-        <section className={styles["view"]} hidden={hidden} ref={section}>
+        <section
+            className={styles["view"]}
+            hidden={hidden}
+            data-secondary-page={page.kind !== "list" ? true : undefined}
+            ref={section}
+        >
             {page.kind === "list" ? listPage() : secondaryPage()}
         </section>
     );

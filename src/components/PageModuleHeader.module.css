@@ -8,10 +8,13 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-md);
-    /* Match the Providers list row height when a 36 px primary action sits on the end. */
+    /*
+     * Same 36 px row as secondary-page titles. The first body block owns
+     * `--page-content-gap`; the header adds no extra bottom padding.
+     */
     min-height: 36px;
-    /* Extra clearance below the title strip on Windows/Linux (custom window controls). */
     margin-top: 2px;
+    margin-bottom: 0;
 }
 
 .title {

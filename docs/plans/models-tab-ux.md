@@ -1,125 +1,132 @@
 # Models tab UX (P12 revision)
 
-Authoritative interaction spec for the provider **Models** tab. It supersedes
-the c.1 behavior that merged the full upstream catalog into SQLite, exposed an
-**All / Selected** filter, and saved each checkbox immediately.
+Current interaction spec for the provider **Models** tab. It supersedes the c.1
+behavior that merged the full upstream catalog into SQLite, exposed an
+**All / Selected** filter, and saved each checkbox immediately. Shared page
+layout follows [secondary-page-layout.md](secondary-page-layout.md); sidebar
+activation follows [sidebar-module-home.md](sidebar-module-home.md).
 
-## Persistence rule
+## Persistence and terminology
 
-- **Only checked models are persisted** in `provider_model` (plus manual rows
-  when P12.c.3 ships).
-- **Uncheck + Save** on the selected list **removes** the row from local storage
-  (not merely `selected = 0` on a full catalog snapshot).
-- **Upstream browse** does not write to SQLite until the user clicks **Save** on
-  that view. Lazy loading applies **only** while browsing upstream during
-  **Fetch models**; the selected list loads all persisted rows at once.
+- Only checked models are persisted in `provider_model`, including manual rows.
+- **Uncheck + Save** on the added list removes the row from local storage, not
+  merely `selected = 0` on a full catalog snapshot.
+- Upstream browsing does not persist the fetched catalog. **Save** persists
+  checkbox choices; **Add and save** separately persists a manual model.
+- Lazy loading applies only to upstream browse. The added list loads all
+  persisted rows, using cursor pages internally.
+
+**Added** / 「已添加」 names saved membership. Checkbox actions and unsaved drafts
+still use selection terminology. Internal `selected` fields, command parameters
+and translation keys remain unchanged.
 
 ## Two views
 
-| View         | Enter                               | List source                                                                                              | Scroll / load                        | Save                                                                    |
-| ------------ | ----------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------ | ----------------------------------------------------------------------- |
-| **Selected** | Default when opening the Models tab | `list_provider_models` with `filter: "selected"`, no query; load all rows (internal Rust page size only) | Single scroll region in the tab      | Applies draft check changes: removals delete rows; no add-without-fetch |
-| **Upstream** | User clicks **Fetch models**        | `browse_upstream_models_page` (provider `GET …/models` via existing catalog adapters)                    | Scroll triggers the next result page | Persists checked models, then returns to **Selected**                   |
+| View         | Enter                       | List source                                                                                 | Scroll / load                            | Save                                             |
+| ------------ | --------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------- | ------------------------------------------------ |
+| **Added**    | Default when opening Models | `list_provider_models` with `filter: "selected"`; all persisted rows, optional search query | Independent list scroll; full local load | Applies draft deselections by deleting rows      |
+| **Upstream** | **Fetch models**            | `browse_upstream_models_page` through provider catalog adapters                             | Scroll triggers the next result page     | Persists checked models and returns to **Added** |
 
-List header (fixed above the scroll region): **Selected** / 「已选」 in the
-selected view, **All** / 「全部」 in upstream browse (labels
-`providers.models.filter.selected` / `filter.all`).
+The fixed list header is **Added** / 「已添加」 or **All** / 「全部」, using the
+existing `providers.models.filter.selected` and `filter.all` keys. Manual
+addition is the first row below the header in both views.
 
-### Toolbar
+### Toolbar and footer
 
-- **Search** (narrow field, left): debounced; applies to the active view.
-- **Selected view:** **Fetch models** (secondary), **Save** (primary, right).
-- **Upstream view:** **Cancel** while a browse download runs (secondary),
-  **Back to selected** / 「切换到已选」 (secondary), **Save** (primary).
+- **Search** is a narrow field on the left and applies to the active view.
+- The added view offers **Fetch models** beside search.
+- Upstream offers **Cancel** while downloading and **View added models** /
+  「查看已添加」.
+- The primary checkbox **Save** is in the fixed bottom footer, opposite the
+  page-level **Back** action. It is not in the search toolbar.
 
-There is no **All / Selected** filter toggle on the toolbar.
+There is no **All / Selected** toolbar filter toggle. The toolbar and list header
+remain fixed while the model list scrolls independently.
 
-## Draft checkboxes and Save
+## Draft checkboxes
 
-- Checkbox changes update **draft state** only until **Save**.
-- **Selected view:** Save submits deselections (and any other allowed edits) in
-  one batch to Rust (`save_provider_model_selections`).
-- **Upstream view:** Save submits new/changed selections in one batch, then
-  switches to **Selected** and reloads the persisted list.
-
-## Upstream list and existing selections
-
-When upstream browse shows a model ID that is already persisted as selected, the
-checkbox must appear **checked** automatically so behavior matches the selected
-list. Draft edits remain unsaved until **Save**.
+Checkbox changes update draft state only until **Save**. In the added view,
+Save submits deselections in one atomic batch to `save_provider_model_selections`.
+In upstream, Save submits new/changed selections, then reloads the added list.
+An upstream model that is already persisted starts checked. Unchecking a manual
+model and saving deletes it through the same batch command.
 
 ## Search
 
-Search always targets the **active view**:
+Search targets the active view:
 
-- **Selected:** fuzzy search over persisted selected rows (`list_provider_models`
-    - `query`); summary shows total matches when Rust returns `totalMatches`.
-- **Upstream:** fuzzy search over model ID and upstream name via
-  `browse_upstream_models_page` + `query` (same rules as the selected list).
-  Rust keeps one in-memory catalog per browse session in `ModelFetchRegistry`
-  (OpenRouter grows page by page; single-page vendors load once). UI `offset`
-  values always refer to result rows or ranked search rows, not raw API offsets.
+- **Added:** fuzzy search over persisted rows through `list_provider_models`
+  with `query`; the summary uses `totalMatches` when Rust supplies it.
+- **Upstream:** fuzzy search over model ID and upstream name through
+  `browse_upstream_models_page` with `query`.
 
-Debounced search, `searchSummary` / `searchSummaryUpstream`, and the 200-character
-limit match the selected-list rules.
+Rust keeps one in-memory catalog per browse session in `ModelFetchRegistry`.
+OpenRouter grows page by page; single-page vendors load once. UI offsets refer
+to result rows or ranked search rows, never raw API offsets. Debouncing and the
+200-character query limit apply to both views.
 
-## List footer (upstream)
+## Upstream list footer
 
-One centered status line under the list (not a second banner while loading):
+One centered status line covers result pagination:
 
-- More result pages and idle → scroll hint.
-- More result pages and download in progress → loading-more hint.
-- No more pages → all loaded hint.
+- More pages and idle: scroll hint.
+- More pages and downloading: loading-more hint.
+- No more pages: all-loaded hint.
 
-Initial upstream load uses the in-list loading message only while the first page
-has no rows yet.
+Initial upstream loading uses the in-list message while there are no rows.
+Appending pages does not add a banner above the list.
 
-## Unsaved changes
+## Unsaved changes and navigation
 
-If the user has **dirty** draft checkboxes and tries to leave the Models tab,
-switch to the API tab, go **Back** to the provider list, or hide the provider
-page, show a blocking **unsaved changes** prompt (bilingual). **Back** on the
-provider page remains coordinated with `formBusy` / `modelsBusy`; dirty drafts
-add a separate guard.
+Dirty checkboxes require a bilingual discard confirmation when switching to API,
+using page **Back**, re-clicking the active Providers sidebar menu, or changing
+between added and upstream views. Busy form/model operations separately block
+page Back and home navigation.
 
-Fetching upstream may still show **Cancel** for an in-flight download; cancelling
-does not apply draft checks.
-
-## Flow summary
-
-1. Open Models tab → **Selected** list, full load, empty state guides user to
-   **Fetch models** when nothing is persisted.
-2. **Fetch models** → **Upstream** browse, lazy pages, checkboxes (pre-check
-   persisted IDs) → **Save** → persist → **Selected** list.
-3. On **Selected**, uncheck → **Save** → rows removed. To add again, repeat
-   step 2.
-
-## Rust surface (implemented)
-
-- `browse_upstream_models_page` — lazy browse + optional `query`; session cache
-  in `ModelFetchRegistry`; does not merge into SQLite.
-- `save_provider_model_selections` — atomic save/removal from upstream or
-  selected drafts.
-- `fetch_provider_models` — full merge path remains for tests and legacy callers;
-  the Models tab hot path uses browse + save only.
+Sidebar navigation to another module hides Providers; it is not a global
+leave-page confirmation. Hidden model views invalidate pending reads and cancel
+upstream fetching. Returning through the sidebar requests the Providers list,
+not the previous editor. See [sidebar-module-home.md](sidebar-module-home.md).
+Cancelling a fetch never applies draft checkbox changes.
 
 ## Manual models (P12.c.3)
 
-The selected list includes an expandable **Add a model manually** form with
-model ID and optional alias. **Add and save** immediately persists a selected
-manual row through `add_manual_provider_model`; the label distinguishes this
-from the draft checkbox **Save**. Addition is blocked while checkbox drafts or
-other model operations are pending. Manual rows retain unverified capability
-metadata. To delete a manual row, uncheck it and click the normal **Save**;
-`save_provider_model_selections` removes it with the rest of that atomic batch.
+Both views include a native `<details>` disclosure named **Add a model manually**.
+Its left-side plus/minus icon is plain, without a checkbox-like box or selected
+fill. Expanded model ID, optional alias and **Add and save** stay inline.
+Accessible labels remain; visible field headings and explanatory prose do not.
+Errors and recovery feedback appear below the inputs.
 
-An unknown addition result must be checked against saved cursor pages before
-another submission. This uses exact ID comparison, including IDs longer than the
-search limit. A failed check remains retryable. Automated coverage is implemented;
-real Tauri add/restart/delete and visual review remain pending in [todo.md](todo.md).
+**Add and save** immediately persists and selects one manual row through
+`add_manual_provider_model`, independently of checkbox Save. Addition is blocked
+while checkbox drafts or other model operations are pending. Capability metadata
+remains unverified; an alias is only a display label. Successful creation clears
+the inputs and updates the saved baseline, list and count without a provider
+network request.
+
+An unknown result blocks another submission until **Check saved models** reads
+saved cursor pages and compares the exact ID, including IDs longer than the
+search limit. Similar IDs do not confirm a save. A failed check remains retryable.
+Pending manual writes block fetching, checkbox saves and page Back. Hiding the
+model view unmounts the form; late replies are ignored and subsequent saved-list
+reads reconcile persisted state.
+
+Automated tests cover both locales, upstream manual addition and returning to the
+added list, field errors, draft blocking, exact-ID recovery, deletion and late
+replies. Real Tauri add/restart/delete and visual review remain pending in
+[todo.md](todo.md); DOM tests do not establish native persistence.
+
+## Rust surface
+
+- `browse_upstream_models_page`: lazy browse and optional query; session cache
+  in `ModelFetchRegistry`; no catalog merge into SQLite.
+- `save_provider_model_selections`: atomic checkbox save/removal.
+- `add_manual_provider_model`: immediate manual-row save.
+- `fetch_provider_models`: full merge path retained for tests and legacy callers;
+  the Models tab uses browse and save instead.
 
 ## Related docs
 
-- [frontend.md](../frontend.md) — Providers shell and tab layout
-- [todo.md](todo.md) — P12 task checklist
-- [architecture.md](../architecture.md) — persistence and command overview
+- [frontend.md](../frontend.md): Providers shell, controls and checks.
+- [todo.md](todo.md): P12 task checklist and native acceptance.
+- [architecture.md](../architecture.md): persistence and command overview.

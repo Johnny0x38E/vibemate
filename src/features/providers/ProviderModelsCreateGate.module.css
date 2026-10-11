@@ -1,5 +1,6 @@
 .gate {
-    margin-top: var(--space-md);
+    /* The tab panel already supplies the shared content gap. */
+    margin-top: 0;
 }
 
 .message {

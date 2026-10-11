@@ -36,40 +36,7 @@
 .pathActions {
     display: inline-flex;
     flex-shrink: 0;
-    gap: 2px;
-}
-
-.iconButton {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    border: 0;
-    border-radius: var(--radius-control);
-    color: var(--color-text);
-    background: transparent;
-    cursor: pointer;
-}
-
-.iconButton svg {
-    width: 16px;
-    height: 16px;
-}
-
-.iconButton:hover:not([aria-disabled="true"]) {
-    background: var(--color-hover);
-}
-
-.iconButton:focus-visible {
-    outline: 2px solid var(--color-focus);
-    outline-offset: 2px;
-}
-
-.iconButton[aria-disabled="true"] {
-    color: var(--color-summary);
-    cursor: not-allowed;
+    gap: var(--space-sm);
 }
 
 @media (max-width: 520px) {

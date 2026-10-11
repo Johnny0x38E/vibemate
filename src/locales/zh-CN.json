@@ -136,7 +136,7 @@
         "backLabel": "返回服务商列表",
         "list": {
             "label": "已保存的服务商配置",
-            "selectedModels": "已选模型 {{count}}",
+            "selectedModels": "已添加模型 {{count}}",
             "edit": "编辑",
             "editLabel": "编辑 {{name}}"
         },
@@ -159,17 +159,17 @@
             "loading": "正在读取已保存的模型…",
             "upstreamLoading": "正在从服务商加载模型…",
             "empty": "这项配置下还没有保存任何模型。",
-            "emptyNeedFetch": "还没有已选模型。请获取模型，浏览服务商列表并保存勾选结果。",
+            "emptyNeedFetch": "还没有已添加模型。请获取模型，浏览服务商列表并保存勾选结果。",
             "emptyNeedKey": "请先在上方填写 API 密钥，再获取模型。",
-            "emptyFiltered": "没有符合搜索条件的已选模型。",
+            "emptyFiltered": "没有符合搜索条件的已添加模型。",
             "emptyUpstream": "已加载的上游页面中没有符合搜索条件的模型。",
             "save": "保存",
             "saving": "正在保存…",
             "saveNotice": "模型勾选已保存。",
             "unsavedLeave": "模型勾选尚未保存，确定要离开吗？",
-            "backToSelected": "切换到已选",
+            "backToSelected": "查看已添加",
             "upstreamListLabel": "此服务商的上游模型",
-            "allSelectedLoaded": "已展示全部已选模型",
+            "allSelectedLoaded": "已展示全部已添加模型",
             "upstreamScrollForMore": "向下滚动以加载更多上游模型",
             "upstreamAllLoaded": "已展示全部已加载的上游模型",
             "searchSummaryUpstream": "显示 {{shown}} 个匹配的模型",
@@ -177,7 +177,7 @@
             "retry": "重试",
             "preview": "浏览器预览无法读取已保存的模型。请在 vibemate 桌面应用中打开此页面。",
             "searchPlaceholder": "查找",
-            "searchSummary": "已选模型中共 {{total}} 个匹配，显示前 {{shown}} 个",
+            "searchSummary": "已添加模型中共 {{total}} 个匹配，显示前 {{shown}} 个",
             "fetchNotice": {
                 "complete": "已更新 {{listed}} 个模型",
                 "incomplete": {
@@ -194,15 +194,15 @@
             "deselectModel": "取消勾选 {{modelId}}",
             "manualSource": "手动添加",
             "createPending": "请先完成 API 配置",
-            "selectedSummary": "已选 {{count}} 个",
-            "selectedSummaryMany": "已选 {{count}}+ 个",
-            "showSelectedOnly": "只看已选",
+            "selectedSummary": "已添加 {{count}} 个",
+            "selectedSummaryMany": "已添加 {{count}}+ 个",
+            "showSelectedOnly": "只看已添加",
             "filter": {
                 "ariaLabel": "模型列表筛选",
                 "all": "全部",
-                "selected": "已选",
-                "selectedCount": "已选（{{count}}）",
-                "selectedMany": "已选（{{count}}+）"
+                "selected": "已添加",
+                "selectedCount": "已添加（{{count}}）",
+                "selectedMany": "已添加（{{count}}+）"
             },
             "badges": {
                 "upstreamMissing": "上游已不可用 · 自 {{date}}",
@@ -248,7 +248,6 @@
                 "title": "手动添加模型",
                 "modelId": "模型 ID",
                 "alias": "别名（可选）",
-                "hint": "“添加并保存”会立即保存并勾选此模型，其能力尚未验证。删除时，在已选列表中取消勾选并点击“保存”。",
                 "add": "添加并保存",
                 "check": "检查已保存模型",
                 "uncertain": "保存结果未知。再次添加前，请先检查已保存模型；检查失败时可再次检查。",
@@ -320,30 +319,29 @@
         "new": "新建定义",
         "displayName": "名称",
         "serverName": "服务器标识",
-        "serverNameHint": "1–64 个字母、数字、下划线或连字符；连字符与下划线视为同一命名空间。",
         "transport": "传输方式",
         "stdio": "stdio",
         "http": "Streamable HTTP",
         "command": "可执行程序",
-        "commandHint": "填写一个程序名或可执行文件路径，参数填写在下方。保存不会执行程序。",
         "args": "参数",
-        "argsHint": "每行一个参数，无需 shell 引号；文本中的空白行表示空参数。敏感值请填写在环境变量中。",
-        "cwd": "工作目录（可选）",
+        "arg_value": "参数 {{index}}",
+        "add_argument": "添加参数",
+        "remove_argument": "删除参数 {{index}}",
+        "cwd": "工作路径（可选）",
         "url": "服务器 URL",
         "urlHint": "支持 HTTPS 或本机回环 HTTP；认证请使用请求头，不接受 URL 中的凭据、查询参数或片段。",
         "env": "环境变量",
         "headers": "HTTP 请求头",
-        "protectedValues": "值存入系统凭据库，保存后不会再次显示；字段名保存在本地。值须为非空字面文本，暂不支持命令求值或变量插值。",
         "fieldName": "字段名 {{index}}",
         "fieldValue": "值 {{index}}",
         "keepValue": "已配置；留空保留原值，填写新值则替换。",
         "removeField": "删除字段 {{index}}",
         "remove": "删除",
-        "addField": "添加字段",
-        "enabledDefinition": "启用此中央定义",
+        "addField": "添加环境变量",
+        "addHeader": "添加请求头",
+        "enabledDefinition": "启用",
         "enabled": "定义已启用",
         "disabled": "定义已停用",
-        "definitionOnly": "这里只管理中央定义，不启动或连接 MCP 服务器，也不会向 Agent 部署配置。",
         "save": "保存",
         "saving": "正在保存定义…",
         "back": "返回",
@@ -355,6 +353,10 @@
         "empty": "尚未保存 MCP 定义。",
         "retry": "重试",
         "loadMore": "加载更多",
+        "list": {
+            "edit": "编辑",
+            "registeredAgents": "未注册"
+        },
         "editLabel": "编辑“{{name}}”",
         "toggleEnable": "启用“{{name}}”定义",
         "toggleDisable": "停用“{{name}}”定义",
@@ -375,7 +377,7 @@
             "server_name_taken": "此服务器标识与其他定义冲突。",
             "command_invalid": "请输入不含控制字符的程序名或路径，最多 2048 个字符。",
             "args_invalid": "最多 64 个参数，每个不超过 2048 个字符且不含控制字符。",
-            "cwd_invalid": "工作目录最多 2048 个字符且不得含控制字符。",
+            "cwd_invalid": "工作路径最多 2048 个字符且不得含控制字符。",
             "url_invalid": "请使用 HTTPS 或本机回环 HTTP；URL 不得包含凭据、查询参数或片段。",
             "field_name_invalid": "请使用有效且不重复的环境变量或请求头名称；请求头不区分大小写，不能设置由传输协议管理的保留请求头。",
             "secret_required": "请为新增或改名的字段填写值。",
@@ -393,11 +395,33 @@
         }
     },
     "agents": {
+        "back": "返回",
+        "backLabel": "返回已发现的 Agent 列表",
         "names": {
             "pi": "Pi",
             "grokBuild": "Grok Build"
         },
-        "refresh": "刷新发现",
+        "list": {
+            "label": "已发现的 Agent",
+            "empty": "本机未发现 Agent 入口。安装 Agent 或更新 PATH 后请点击「发现」；也可在详情中填写手动入口路径。",
+            "openDetail": "打开 {{name}} 详情",
+            "versionShort": "{{version}}"
+        },
+        "detail": {
+            "notFound": "此 Agent 入口已不再报告为已发现。请返回列表或点击「发现」。",
+            "reportLabel": "{{name}} 发现报告",
+            "configFilesHeading": "配置文件",
+            "manualPathTitle": "手动指定入口",
+            "applyPath": "重新发现",
+            "labels": {
+                "status": "状态",
+                "entry": "入口",
+                "target": "解析目标",
+                "version": "版本",
+                "configDirectory": "配置路径"
+            }
+        },
+        "refresh": "发现",
         "readOnly": "只读发现：不执行入口文件，不读取或修改 Agent 配置内容。发现文件不代表安装可正常运行。",
         "loading": "正在发现 Agent 入口…",
         "preview": "本机 Agent 发现需要使用桌面应用。",
@@ -407,11 +431,11 @@
         "entry": "入口：{{path}}",
         "target": "解析目标：{{path}}",
         "version": "版本：{{version}}",
-        "directory": "用户配置目录：{{path}}",
+        "directory": "用户配置路径：{{path}}",
         "states": {
-            "found": "已发现入口",
-            "notFound": "未发现入口",
-            "unavailable": "无法检查入口"
+            "found": "已发现",
+            "notFound": "未发现",
+            "unavailable": "无法检查"
         },
         "sources": {
             "manual": "手动路径",
@@ -429,14 +453,22 @@
             "unverified": "当前版本的配置能力未核实，不据此判定支持或不兼容。"
         },
         "directories": {
-            "default": "默认目录",
+            "default": "默认路径",
             "environment": "桌面环境变量覆盖",
-            "unavailable": "目录覆盖值无效或无法确定"
+            "unavailable": "路径覆盖值无效或无法确定"
         },
         "files": {
             "present": "文件存在，未读取内容",
             "missing": "未发现",
-            "unavailable": "无法检查"
+            "unavailable": "无法检查",
+            "items": {
+                "settings.json": "用户设置 (settings.json)",
+                "models.json": "模型 (models.json)",
+                "mcp.json": "MCP 定义 (mcp.json)",
+                "config.toml": "用户配置 (config.toml)",
+                "managed_config.toml": "托管配置 (managed_config.toml)",
+                "requirements.toml": "依赖要求 (requirements.toml)"
+            }
         },
         "precedence": {
             "pi": "文档优先级：受信任项目的设置 / MCP 可覆盖用户设置。模型配置在用户级；CLI、SDK、扩展和已有会话可能改变实际生效行为。",
@@ -444,11 +476,11 @@
         },
         "scope": "报告使用桌面进程环境及 PATH 的前 64 项。输入仅保留在当前窗口，尚未判定项目、策略与会话的有效配置。",
         "errors": {
-            "invalid_path": "请填写不含控制字符的绝对入口路径，或清空以自动发现，然后刷新。",
-            "location_unavailable": "无法定位系统用户目录，请检查桌面环境后刷新。",
-            "operation_failed": "发现失败，请刷新重试。",
-            "invalid_response": "桌面返回的发现报告无效，请刷新重试。"
+            "invalid_path": "请填写不含控制字符的绝对入口路径，或清空以自动发现，然后点击「发现」或「重新发现」。",
+            "location_unavailable": "无法定位系统用户路径，请检查桌面环境后点击「发现」。",
+            "operation_failed": "发现失败，请点击「发现」或「重新发现」重试。",
+            "invalid_response": "桌面返回的发现报告无效，请点击「发现」或「重新发现」重试。"
         },
-        "complete": "发现完成，入口检查结果见下方。"
+        "complete": "发现完成。点击卡片可查看安装路径与配置文件。"
     }
 }

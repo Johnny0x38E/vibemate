@@ -27,6 +27,7 @@ import formStyles from "./ProviderForm.module.css";
 import { ModelCheckbox } from "../../components/ModelCheckbox";
 import buttons from "./providerButtons.module.css";
 import styles from "./ProviderModels.module.css";
+import { SecondaryPageFooter } from "../../components/SecondaryPageFooter";
 
 /** Search results cap; fuzzy search returns at most this many rows per query. */
 export const MODEL_PAGE_SIZE = 50;
@@ -77,6 +78,8 @@ type SaveState =
 /** Inputs for {@link ProviderModels}. */
 export interface ProviderModelsProps {
     providerId: string;
+    onBack?: (() => void) | undefined;
+    backBlocked?: boolean;
     hidden?: boolean;
     layout?: "section" | "tabPanel";
     onBusyChange?: (busy: boolean) => void;
@@ -209,6 +212,8 @@ function resolveEndOfListMessage(
  */
 export function ProviderModels({
     providerId,
+    onBack,
+    backBlocked = false,
     hidden = false,
     layout = "section",
     onBusyChange,
@@ -696,21 +701,45 @@ export function ProviderModels({
 
     const listBody = (
         <>
-            {!hidden && viewMode === "selected" && list.kind === "ready" && (
-                <details className={formStyles["group"]}>
-                    <summary>{t("providers.models.manual.title")}</summary>
-                    {dirty && (
-                        <p className={formStyles["hint"]} role="status">
-                            {t("providers.models.manual.draft")}
-                        </p>
-                    )}
-                    <ManualModelForm
-                        key={providerId}
-                        providerId={providerId}
-                        blocked={sectionBusy || dirty}
-                        onSaved={manualSaved}
-                        onBusyChange={setManualBusy}
-                    />
+            {!hidden && list.kind === "ready" && (
+                <details className={styles["manualRow"]}>
+                    <summary>
+                        <span
+                            className={styles["manualToggleIcon"]}
+                            aria-hidden="true"
+                        >
+                            <svg viewBox="0 0 24 24">
+                                <path d="M5 12h14" />
+                                <path
+                                    className={styles["manualPlusStroke"]}
+                                    d="M12 5v14"
+                                />
+                            </svg>
+                        </span>
+                        {t("providers.models.manual.title")}
+                    </summary>
+                    <div className={styles["manualContent"]}>
+                        {dirty && (
+                            <p
+                                className={[
+                                    formStyles["hint"],
+                                    styles["manualDraft"],
+                                ]
+                                    .filter(Boolean)
+                                    .join(" ")}
+                                role="status"
+                            >
+                                {t("providers.models.manual.draft")}
+                            </p>
+                        )}
+                        <ManualModelForm
+                            key={providerId}
+                            providerId={providerId}
+                            blocked={sectionBusy || dirty}
+                            onSaved={manualSaved}
+                            onBusyChange={setManualBusy}
+                        />
+                    </div>
                 </details>
             )}
             {viewMode === "selected" &&
@@ -1017,6 +1046,22 @@ export function ProviderModels({
     const sectionLabel =
         layout === "section" ? "provider-models-heading" : undefined;
 
+    const saveButton = (
+        <button
+            type="button"
+            className={[buttons["primary"], styles["toolbarButton"]].join(" ")}
+            aria-disabled={!dirty || sectionBusy}
+            onClick={() => {
+                if (!dirty || sectionBusy) return;
+                void runSave();
+            }}
+        >
+            {saveState.kind === "running"
+                ? t("providers.models.saving")
+                : t("providers.models.save")}
+        </button>
+    );
+
     return (
         <section
             className={styles["section"]}
@@ -1145,22 +1190,7 @@ export function ProviderModels({
                             </button>
                         </>
                     )}
-                    <button
-                        type="button"
-                        className={[
-                            buttons["primary"],
-                            styles["toolbarButton"],
-                        ].join(" ")}
-                        aria-disabled={!dirty || sectionBusy}
-                        onClick={() => {
-                            if (!dirty || sectionBusy) return;
-                            void runSave();
-                        }}
-                    >
-                        {saveState.kind === "running"
-                            ? t("providers.models.saving")
-                            : t("providers.models.save")}
-                    </button>
+                    {layout !== "tabPanel" && saveButton}
                 </div>
             </div>
 
@@ -1196,6 +1226,14 @@ export function ProviderModels({
                 </>
             ) : (
                 listBody
+            )}
+            {layout === "tabPanel" && (
+                <SecondaryPageFooter
+                    onBack={onBack}
+                    backBlocked={sectionBusy || backBlocked}
+                >
+                    {saveButton}
+                </SecondaryPageFooter>
             )}
         </section>
     );

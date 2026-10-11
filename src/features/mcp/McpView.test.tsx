@@ -6,7 +6,8 @@ import {
     screen,
     waitFor,
 } from "@testing-library/react";
-import { StrictMode } from "react";
+import { StrictMode, createRef, type Ref } from "react";
+import type { ModuleNavigationHandle } from "../../components/moduleNavigation";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { createAppI18n } from "../../i18n";
@@ -50,12 +51,15 @@ const row: McpRecord = {
 function page(items: McpRecord[], nextCursor: string | null = null) {
     return { kind: "desktop" as const, page: { items, nextCursor } };
 }
-async function setup() {
-    const i18n = await createAppI18n("en");
+async function setup(
+    locale: "en" | "zh-CN" = "en",
+    homeRef?: Ref<ModuleNavigationHandle>,
+) {
+    const i18n = await createAppI18n(locale);
     return render(
         <StrictMode>
             <I18nextProvider i18n={i18n}>
-                <McpView />
+                <McpView {...(homeRef === undefined ? {} : { homeRef })} />
             </I18nextProvider>
         </StrictMode>,
     );
@@ -70,13 +74,87 @@ afterEach(() => {
     cleanup();
 });
 
-test("shows central enabled state without claiming connection or deployment", async () => {
-    await setup();
-    await screen.findByText("Tools");
-    expect(screen.getByText(/Definition enabled · Not deployed/)).toBeDefined();
-    expect(save).not.toHaveBeenCalled();
-    expect(clean).not.toHaveBeenCalled();
-    expect(get).not.toHaveBeenCalled();
+test.each([
+    {
+        locale: "en" as const,
+        label: "Not registered",
+        disable: "Disable “Tools” definition",
+        enable: "Enable “Tools” definition",
+    },
+    {
+        locale: "zh-CN" as const,
+        label: "未注册",
+        disable: "停用“Tools”定义",
+        enable: "启用“Tools”定义",
+    },
+])(
+    "central enablement does not imply Agent registration in $locale",
+    async ({ locale, label, disable, enable }) => {
+        await setup(locale);
+        await screen.findByText("Tools");
+        expect(screen.getByText(label)).toBeDefined();
+        expect(screen.queryByText("mcp.list.registeredAgents")).toBeNull();
+        expect(save).not.toHaveBeenCalled();
+        fireEvent.click(screen.getByRole("button", { name: disable }));
+        await screen.findByRole("button", { name: enable });
+        expect(screen.getByText(label)).toBeDefined();
+        expect(clean).not.toHaveBeenCalled();
+        expect(get).not.toHaveBeenCalled();
+    },
+);
+
+test("sidebar home cannot abandon pending or uncertain MCP writes", async () => {
+    const homeRef = createRef<ModuleNavigationHandle>();
+    let reject: (reason: Error) => void = () => {};
+    save.mockReturnValue(
+        new Promise((_, fail) => {
+            reject = fail;
+        }),
+    );
+    await setup("en", homeRef);
+    fireEvent.click(
+        await screen.findByRole("button", { name: "Edit “Tools”" }),
+    );
+    await screen.findByLabelText(/^Name$/);
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    act(() => {
+        expect(homeRef.current?.openHome()).toBe(false);
+    });
+    expect(screen.getByLabelText(/^Name$/)).toBeDefined();
+    await act(async () => {
+        reject(new McpRequestError("outcome_unknown"));
+        await Promise.resolve();
+    });
+    await screen.findByRole("alert");
+    act(() => {
+        expect(homeRef.current?.openHome()).toBe(false);
+    });
+    expect(screen.getByLabelText(/^Name$/)).toBeDefined();
+});
+
+test("a late MCP edit read cannot reopen an editor after sidebar home", async () => {
+    const homeRef = createRef<ModuleNavigationHandle>();
+    let resolve: (record: McpRecord) => void = () => {};
+    get.mockReturnValue(
+        new Promise((done) => {
+            resolve = done;
+        }),
+    );
+    await setup("en", homeRef);
+    fireEvent.click(
+        await screen.findByRole("button", { name: "Edit “Tools”" }),
+    );
+    act(() => {
+        expect(homeRef.current?.openHome()).toBe(true);
+    });
+    await act(async () => {
+        resolve(row);
+        await Promise.resolve();
+    });
+    expect(screen.queryByLabelText(/^Name$/)).toBeNull();
+    expect(
+        await screen.findByRole("button", { name: "Edit “Tools”" }),
+    ).toBeDefined();
 });
 
 test("preview blocks creation without displaying fake definitions", async () => {
@@ -102,11 +180,8 @@ test("new definition saves and returns to a re-read list", async () => {
     await setup();
     await screen.findByText("No MCP definitions saved yet.");
     fireEvent.click(screen.getByRole("button", { name: "New definition" }));
-    fireEvent.change(screen.getByLabelText("Name"), {
+    fireEvent.change(screen.getByLabelText(/^Name$/), {
         target: { value: "Tools" },
-    });
-    fireEvent.change(screen.getByLabelText(/^Server identifier/), {
-        target: { value: "tools" },
     });
     fireEvent.change(screen.getByLabelText(/^Executable/), {
         target: { value: "not-a-real-server" },
@@ -125,7 +200,9 @@ test("enablement changes preserve credential names without reading their values"
             name: "Disable “Tools” definition",
         }),
     );
-    await screen.findByText(/Definition disabled/);
+    await screen.findByRole("button", {
+        name: "Enable “Tools” definition",
+    });
     expect(save).toHaveBeenCalledWith({
         id: row.id,
         expectedRevision: 1,
@@ -165,7 +242,7 @@ test("unknown toggle result blocks every mutation until a successful list reload
         expect(screen.queryByRole("alert")).toBeNull();
     });
     fireEvent.click(screen.getByRole("button", { name: "Edit “Tools”" }));
-    await screen.findByRole("form", { name: "Edit MCP definition" });
+    await screen.findByRole("form", { name: "Tools" });
 });
 
 test("failed edit reconciliation replaces stale editable rows with read error", async () => {

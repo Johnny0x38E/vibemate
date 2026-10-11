@@ -1,6 +1,6 @@
 .group {
     width: 100%;
-    margin-top: var(--space-lg);
+    margin-top: var(--page-content-gap);
     overflow: hidden;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-card);
@@ -16,9 +16,10 @@
     border-bottom: 1px solid var(--color-border);
 }
 
-/* 36 px control plus vertical padding; skip on tall rows such as theme circles. */
+/* A common baseline avoids shorter text/badge rows; tall content can grow. */
 .rowUniform {
-    min-height: 64px;
+    min-height: var(--form-row-min-height);
+    padding-block: 12px;
     box-sizing: border-box;
 }
 

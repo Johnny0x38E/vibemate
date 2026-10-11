@@ -12,28 +12,48 @@ GitHub release notes are extracted from the matching version section only.
 
 - Added central MCP management with bilingual create/edit forms, stdio and Streamable HTTP definitions, bounded cursor pages and central enable/disable controls. All env/header values use OS credential storage; SQLite schema v8 stores metadata and references only. Revisions reject stale edits, immutable references preserve existing values after failed saves, and obsolete credential cleanup is retryable. Forms clear typed values on submit and navigation; uncertain outcomes require reload. Saving definitions never starts or contacts a server or writes Agent config. Agent deployment, OAuth, old SSE and imports remain deferred.
 
-- MCP verification on Linux: full frontend checks (468 UI/boundary tests, eight release tests, 14 translation-checker tests), Rust fmt/Clippy and 201 passing tests (one real credential-store test ignored), plus locked debug/release no-bundle desktop builds. Isolated real Tauri save/edit/list/restart/read passed and the stdio test command did not execute. Native MCP credential-store acceptance, visual review and other-platform runtime checks remain pending. Forms follow the existing secondary-page Back/header and top-of-card Save pattern.
+- MCP verification on Linux: full frontend checks (468 UI/boundary tests, eight release tests, 14 translation-checker tests), Rust fmt/Clippy and 201 passing tests (one real credential-store test ignored), plus locked debug/release no-bundle desktop builds. Isolated real Tauri save/edit/list/restart/read passed and the stdio test command did not execute. Native MCP credential-store acceptance, visual review and other-platform runtime checks remain pending. Current forms use the shared fixed bottom Back/Save footer.
 
-- Added an expandable manual-model form in the Models tab's selected list, with model ID, optional alias and an explicit "Add and save" action. Rust stores a selected manual row without a provider request; pending checkbox drafts block addition, and uncheck + Save removes manual rows through the existing atomic batch. Field errors retain editable input, duplicate submits are blocked, and unknown save outcomes require an exact-ID check across saved cursor pages before retrying. Successful additions update the selected baseline and count; hidden views ignore late replies. Verified on Linux with pinned pnpm 12.10.1: full frontend checks, 425 UI/boundary tests (15 new manual-form/list tests), 14 translation-checker tests and eight release tests. Real Tauri add/restart/delete, visual review and other-platform runtime verification remain pending.
+- Added an expandable manual-model form in the Models tab’s added and upstream lists, with model ID, optional alias and an explicit "Add and save" action. Rust stores a selected manual row without a provider request; pending checkbox drafts block addition, and uncheck + Save removes manual rows through the existing atomic batch. Field errors retain editable input, duplicate submits are blocked, and unknown save outcomes require an exact-ID check across saved cursor pages before retrying. Successful additions update the selected baseline and count; hidden views ignore late replies. Verified on Linux with pinned pnpm 12.10.1: full frontend checks, 425 UI/boundary tests (15 new manual-form/list tests), 14 translation-checker tests and eight release tests. Real Tauri add/restart/delete, visual review and other-platform runtime verification remain pending.
 
 - Provider edit pages use **API** and **Models** tabs (Settings-style keyboard navigation). API holds URL, protocol, and key; Models holds search, upstream browse, and draft selection. Both panels stay mounted while switching tabs.
-- Provider **Models** tab (P12.c.5): default **Selected** list (only persisted choices), **Save** for draft checkboxes, and **Fetch models** for lazy upstream browse without merging the full catalog until Save. Uncheck + Save removes rows from local storage.
+- Provider **Models** tab (P12.c.5): default **Added** list (only persisted choices), **Save** for draft checkboxes, and **Fetch models** for lazy upstream browse without merging the full catalog until Save. Uncheck + Save removes rows from local storage.
 - Rust commands `browse_upstream_models_page` and `save_provider_model_selections`, plus typed frontend wrappers in `models.ts`, with strict response validation and browser-preview guards.
 
-### Fixed
-
-- Kept the TLS-failure test server open while draining client handshake bytes, preventing an early socket close from surfacing as a connection failure on Windows before rustls rejects the response. Production error classification and the strict TLS assertion are unchanged; regression tests cover wrapped TLS causes, transport errors and refused HTTPS connections.
-
 ### Changed
+
+- Standardized Chinese UI directory wording to “路径”, including Agent configuration/default/user paths and the MCP working-path field. Domain fields and filesystem behavior are unchanged.
+
+- Split Agent configuration directory and file observations into their own detail card. Removed visible configuration-file/manual-path headings while retaining accessible section/form names, and set the gaps between all three detail cards to 10 px.
+
+- Set Agent detail/manual-path card padding to 8 px vertically and 16 px horizontally, matching detail-row vertical spacing and other lists’ horizontal inset, with no extra nested inset on configuration-file rows.
+
+- Standardized editable form rows to a shared 64 px minimum height with vertically centered labels, including Agent manual paths, Provider API, MCP and settings rows. Agent read-only detail rows match model-list rows with a 44 px minimum height and 8 px vertical padding. Wrapped values and expanded controls can grow without clipping.
+
+- Simplified Agent detail status and version values into model-row-style capsule badges (“Found” / “已发现” and the version number). Moved discovery source and version evidence to hover/keyboard hints, keeping filename-derived versions explicitly unverified without the long inline description.
+
+- Extended auxiliary icon buttons and hover/keyboard hints to MCP argument/env/header addition, Agent path rediscovery and log file/folder opens. Addition labels identify the row type; rediscovery retains form submission and blocked-action protection.
+
+- Replaced MCP argument and env/header row removal text with compact trash-icon buttons, localized accessible names and hover/keyboard tooltips. Kept save, navigation and recovery labels visible; blocked removals remain focusable without changing data.
+
+- Unified text-input focus with the model search field’s 2 px inset outline across Provider API, manual model, MCP and Agent path inputs. Focus color/width and non-input controls are unchanged.
+
+- Standardized saved-model list wording as “added” / “已添加”, including counts, filters, search and empty/end messages. The upstream return action is now “View added models” / “查看已添加”, and upstream lists also offer first-row manual addition, covered by bilingual save-and-return tests. Checkbox actions and unsaved drafts retain selection wording.
+
+- Aligned fixed footer button centers with sidebar Settings by sharing its row height and bottom inset. Standardized title/tab-to-content spacing to one 16 px token across module and secondary pages, removing additional scroll-wrapper top padding.
+
+- Unified Provider create/edit, MCP create/edit and Agent detail pages with left-aligned titles and fixed bottom navigation: Back on the left and Save, where applicable, on the right. Reduced the title-to-content gap. Provider Models keeps its search/fetch toolbar and independent list scroll; selection Save moves to the footer. Lists and other modules keep their previous scrolling behavior. Frontend checks passed with 539 UI/boundary tests; browser/native visual verification is deferred to the maintainer at their request.
+
+- Reworked the Agent module into a card list (official mark, name, version) with a detail view for paths and configuration-file presence, bilingual copy and shorter action labels (**Refresh**, **Details**, **Back to list**). Manual entry paths and rescan live on the detail view.
 
 - Completed BR5 Models/Fetch modularization: kept the original public APIs while separating saved-model types/cursors/query conversion/edit transactions and fetch registration/cancellation, revision-aware browse caching, downloads, snapshot/status SQL, merge transactions and orchestration. Fetch no longer borrows `models::lock`. Existing SQL, IPC names/order, payloads/errors, schema v8, scheduling, lock scope, credential release, selected/manual retention and cancellation rules remain unchanged; frontend styles and interactions are untouched. Added five public-API HTTP-fixture regressions for browse reuse/search/pagination, raw API versus result offsets, revision/base-URL invalidation, failed-page retry and cancellation. All 202 existing test cases remain; Rust has 206 passing tests and one ignored OS-store test. Rust fmt/all-targets Clippy, full frontend checks and locked debug/release Linux desktop builds passed. Isolated native IPC verified model save/select/batch-delete, invalid cursor/missing-key error handling, registration release and persistence after restart. Real OS credential-store and other-platform acceptance remain separate.
 
 - Completed backend modularity BR1–BR4: extracted eight modules' inline tests; grouped native commands by feature; separated Provider templates/types/validation/SQL/save orchestration and MCP types/validation/SQL/credential cleanup; shared only text checks, random-ID format and clock reads. MCP now owns its identity type. Modules use `feature.rs` plus a matching directory. All 29 command names/order, wire data, errors, schema v8, credential references, locks and compensation rules remain compatible; frontend behavior and capabilities are unchanged. The original Rust inventory still has 201 passing tests and one ignored real OS-store test. Rust fmt/Clippy, full frontend checks (468 UI/boundary, eight release and 14 translation-checker tests), and locked debug/release Linux desktop builds passed. Isolated Tauri IPC verified preferences, seeded no-key provider editing, manual-model selection/deletion/restart, missing-key fetch/cancellation and MCP save/edit/restart without executing its command. Real credential-store and other-platform acceptance remain pending. Updated architecture, implementation status and future integration boundaries.
 
 - Reworked the Providers list into two-line rows (brand icon, protocol and selected-model pills, then display name) without base URL; returning from edit refreshes that row from storage.
-- Provider create and edit share tabbed API / Models pages: brand title on the right of the secondary header, Save on the first card row, Back-only exit (form Cancel removed), and a surface back control with arrow plus "Back" / 「返回」. Save and fetch outcomes use toned notifications with icons.
-- Moved model **Fetch models** beside the search field (36 px toolbar row). Secondary provider pages use tighter tab/content spacing and 2 px top margin under the title strip (Windows/Linux window controls).
-- Provider **Models** tab scrolls inside the tab panel; upstream pages load on demand while browsing; end-of-list hints reflect selected vs upstream browse state (English and Simplified Chinese).
+- Provider create and edit share tabbed API / Models pages with a left-aligned brand title and fixed bottom Back/Save footer. Form Cancel is removed; Back is the navigation exit. Save and fetch outcomes use toned notifications with icons.
+- Moved model **Fetch models** beside the search field (36 px toolbar row). Secondary provider pages use a shared 16 px title/tab-to-content gap.
+- Provider **Models** tab scrolls inside the tab panel; upstream pages load on demand while browsing; end-of-list hints reflect added vs upstream browse state (English and Simplified Chinese).
 - Upstream model search uses `browse_upstream_models_page` with a fuzzy `query` over the same session cache as the full browse list (ranked result pages for every vendor). Append loads show a footer status instead of a top loading banner that shifted the list.
 - Maintainer verified the P12.c.5 Models tab flow (selected → upstream browse → save → deselect on selected) for Command Code, DeepSeek, and OpenRouter in Tauri on macOS (2026-10-11). Manual model add (P12.c.3) remains open.
 - Main module pages share `PageModuleHeader` (sidebar nav icon, 1 rem title, 36 px minimum row height, optional trailing slot). Overview uses the nav label ("Overview" / 「概览」).
@@ -94,3 +114,25 @@ GitHub release notes are extracted from the matching version section only.
 
 Inference connections, Agent injection, skill management and MCP deployment
 are not implemented yet.
+
+### Fixed
+
+- Sidebar module clicks now open each module home rather than its previous editor/detail page, including re-clicking the current module. Providers/MCP/Agents return to lists and Settings to General without remounting cached modules. Preserved model-draft cancellation, pending-write protection, MCP uncertain-outcome protection, Agent paths and Settings controls; late MCP edit reads cannot reopen the editor after returning home.
+
+- Fixed the Agent rediscovery icon button being narrowed by an old text-button width override. Restored a left-label/right-control layout for the manual entry path, with the input and square rediscovery button kept together.
+
+- Replaced the manual-model disclosure triangle with a plain plus/minus icon aligned with model rows. The icon has no checkbox-like box or selected-state fill, avoiding confusion with partial selection while retaining native disclosure keyboard behavior.
+
+- Moved manual model addition into a dedicated first row in the added and upstream lists, with a left-aligned disclosure and inline model ID / optional alias inputs and save action. Removed visible labels and the explanatory paragraph while retaining accessible labels, draft blocking and recovery feedback.
+
+- Added a fixed 16 px gap between scrolling secondary-page content and the bottom action-bar divider, without moving the footer buttons.
+
+- Removed the extra horizontal inset from Provider API, MCP and Agent detail scroll content so their card edges match Settings and align with titles/tabs. Input and dropdown widths are unchanged.
+
+- Removed the internal MCP server identifier from the edit form; neither create nor edit displays it. Creation still generates it automatically, and edits preserve the saved identifier when the display name changes.
+
+- MCP list rows now show “Not registered” / 「未注册」 instead of a future-registration placeholder. Central enablement does not imply Agent registration; bilingual behavior tests cover this distinction.
+
+- Fixed Agent pages staying visible under other modules when CSS module layouts overrode the HTML `hidden` attribute.
+
+- Kept the TLS-failure test server open while draining client handshake bytes, preventing an early socket close from surfacing as a connection failure on Windows before rustls rejects the response. Production error classification and the strict TLS assertion are unchanged; regression tests cover wrapped TLS causes, transport errors and refused HTTPS connections.

@@ -1,6 +1,5 @@
 import { Select } from "@base-ui/react/select";
 import { useState, type JSX, type ReactNode } from "react";
-import fieldStyles from "../features/settings/settingsField.module.css";
 import styles from "./FieldSelect.module.css";
 
 /** One row in a {@link FieldSelect} list. */
@@ -54,7 +53,7 @@ export function FieldSelect({
     if (locked && open) setOpen(false);
 
     return (
-        <div className={fieldStyles["field"]} data-field-select="">
+        <div className={styles["field"]} data-field-select="">
             <Select.Root<string>
                 value={value}
                 items={options}

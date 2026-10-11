@@ -7,12 +7,12 @@ import {
     type ReactNode,
 } from "react";
 import { useTranslation } from "react-i18next";
+import { EditFormRow } from "../../components/EditFormRow";
 import { FieldSelect } from "../../components/FieldSelect";
 import { ModelCheckbox } from "../../components/ModelCheckbox";
 import { IconButton } from "../../components/IconButton";
+import editForm from "../../components/editForm.module.css";
 import { ProviderPage } from "../providers/ProviderPage";
-import providerFormStyles from "../providers/ProviderForm.module.css";
-import fieldStyles from "../settings/settingsField.module.css";
 import {
     McpRequestError,
     saveMcpDefinition,
@@ -272,22 +272,14 @@ export function McpForm({
         options?: { section?: boolean },
     ): JSX.Element {
         return (
-            <div
-                className={[
-                    fieldStyles["row"],
-                    fieldStyles["rowUniform"],
-                    options?.section ? styles["rowSection"] : undefined,
-                ]
-                    .filter((value): value is string => value !== undefined)
-                    .join(" ")}
+            <EditFormRow
+                label={label}
+                {...(options?.section
+                    ? { className: styles["rowSection"] }
+                    : {})}
             >
-                {typeof label === "string" ? (
-                    <span className={fieldStyles["label"]}>{label}</span>
-                ) : (
-                    label
-                )}
-                <div className={providerFormStyles["control"]}>{control}</div>
-            </div>
+                {control}
+            </EditFormRow>
         );
     }
     const pageTitle =
@@ -319,20 +311,20 @@ export function McpForm({
                         <div className={styles["editorContent"]}>
                             <div
                                 className={[
-                                    fieldStyles["group"],
-                                    providerFormStyles["fieldCard"],
+                                    editForm["group"],
+                                    editForm["groupFlush"],
                                 ].join(" ")}
                             >
                                 {uniformRow(
                                     <label
-                                        className={fieldStyles["label"]}
+                                        className={editForm["label"]}
                                         htmlFor={`${prefix}-display-name`}
                                     >
                                         {t("mcp.displayName")}
                                     </label>,
                                     <input
                                         id={`${prefix}-display-name`}
-                                        className={providerFormStyles["input"]}
+                                        className={editForm["input"]}
                                         value={displayName}
                                         readOnly={locked}
                                         autoComplete="off"
@@ -346,7 +338,7 @@ export function McpForm({
                                 )}
                                 {uniformRow(
                                     <label
-                                        className={fieldStyles["label"]}
+                                        className={editForm["label"]}
                                         htmlFor={`${prefix}-transport`}
                                     >
                                         {t("mcp.transport")}
@@ -380,16 +372,14 @@ export function McpForm({
                                     <>
                                         {uniformRow(
                                             <label
-                                                className={fieldStyles["label"]}
+                                                className={editForm["label"]}
                                                 htmlFor={`${prefix}-command`}
                                             >
                                                 {t("mcp.command")}
                                             </label>,
                                             <input
                                                 id={`${prefix}-command`}
-                                                className={
-                                                    providerFormStyles["input"]
-                                                }
+                                                className={editForm["input"]}
                                                 value={command}
                                                 readOnly={locked}
                                                 {...fieldError(
@@ -420,7 +410,7 @@ export function McpForm({
                                                     >
                                                         <label
                                                             className={
-                                                                fieldStyles[
+                                                                editForm[
                                                                     "label"
                                                                 ]
                                                             }
@@ -438,7 +428,7 @@ export function McpForm({
                                                         <input
                                                             id={`${prefix}-arg-${String(row.key)}`}
                                                             className={
-                                                                providerFormStyles[
+                                                                editForm[
                                                                     "input"
                                                                 ]
                                                             }
@@ -541,16 +531,14 @@ export function McpForm({
                                         )}
                                         {uniformRow(
                                             <label
-                                                className={fieldStyles["label"]}
+                                                className={editForm["label"]}
                                                 htmlFor={`${prefix}-cwd`}
                                             >
                                                 {t("mcp.cwd")}
                                             </label>,
                                             <input
                                                 id={`${prefix}-cwd`}
-                                                className={
-                                                    providerFormStyles["input"]
-                                                }
+                                                className={editForm["input"]}
                                                 value={cwd}
                                                 readOnly={locked}
                                                 {...fieldError("cwd_invalid")}
@@ -567,7 +555,7 @@ export function McpForm({
                                 ) : (
                                     uniformRow(
                                         <label
-                                            className={fieldStyles["label"]}
+                                            className={editForm["label"]}
                                             htmlFor={`${prefix}-url`}
                                         >
                                             {t("mcp.url")}
@@ -575,9 +563,7 @@ export function McpForm({
                                         <>
                                             <input
                                                 id={`${prefix}-url`}
-                                                className={
-                                                    providerFormStyles["input"]
-                                                }
+                                                className={editForm["input"]}
                                                 value={url}
                                                 readOnly={locked}
                                                 {...fieldError("url_invalid")}
@@ -589,11 +575,7 @@ export function McpForm({
                                                     );
                                                 }}
                                             />
-                                            <p
-                                                className={
-                                                    providerFormStyles["hint"]
-                                                }
-                                            >
+                                            <p className={editForm["hint"]}>
                                                 {t("mcp.urlHint")}
                                             </p>
                                         </>,
@@ -613,7 +595,7 @@ export function McpForm({
                                             >
                                                 <label
                                                     className={
-                                                        fieldStyles["label"]
+                                                        editForm["label"]
                                                     }
                                                     htmlFor={`${prefix}-secret-name-${String(row.key)}`}
                                                 >
@@ -623,7 +605,7 @@ export function McpForm({
                                                 </label>
                                                 <label
                                                     className={
-                                                        fieldStyles["label"]
+                                                        editForm["label"]
                                                     }
                                                     htmlFor={`${prefix}-secret-value-${String(row.key)}`}
                                                 >
@@ -642,9 +624,7 @@ export function McpForm({
                                                 <input
                                                     id={`${prefix}-secret-name-${String(row.key)}`}
                                                     className={
-                                                        providerFormStyles[
-                                                            "input"
-                                                        ]
+                                                        editForm["input"]
                                                     }
                                                     value={row.name}
                                                     readOnly={locked}
@@ -665,9 +645,7 @@ export function McpForm({
                                                 <input
                                                     id={`${prefix}-secret-value-${String(row.key)}`}
                                                     className={
-                                                        providerFormStyles[
-                                                            "input"
-                                                        ]
+                                                        editForm["input"]
                                                     }
                                                     type="password"
                                                     value={row.value}
@@ -720,9 +698,7 @@ export function McpForm({
                                                 {row.configured && (
                                                     <p
                                                         className={[
-                                                            providerFormStyles[
-                                                                "hint"
-                                                            ],
+                                                            editForm["hint"],
                                                             styles[
                                                                 "secretKeepHint"
                                                             ],
@@ -796,9 +772,7 @@ export function McpForm({
                                 <div className={styles["editorFeedback"]}>
                                     {code !== null && (
                                         <p
-                                            className={
-                                                providerFormStyles["error"]
-                                            }
+                                            className={editForm["error"]}
                                             id={errorId}
                                             role="alert"
                                         >
@@ -806,19 +780,13 @@ export function McpForm({
                                         </p>
                                     )}
                                     {state.kind === "error" && (
-                                        <p
-                                            className={
-                                                providerFormStyles["hint"]
-                                            }
-                                        >
+                                        <p className={editForm["hint"]}>
                                             {t("mcp.valuesCleared")}
                                         </p>
                                     )}
                                     {busy && (
                                         <p
-                                            className={
-                                                providerFormStyles["message"]
-                                            }
+                                            className={editForm["message"]}
                                             role="status"
                                         >
                                             {t("mcp.saving")}

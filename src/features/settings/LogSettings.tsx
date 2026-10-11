@@ -9,7 +9,7 @@ import {
     type LogErrorCode,
     type LogLocation,
 } from "../../lib/desktop/logs";
-import fieldStyles from "./settingsField.module.css";
+import editForm from "../../components/editForm.module.css";
 import styles from "./LogSettings.module.css";
 
 type LocationState =
@@ -90,14 +90,14 @@ export function LogSettings(): JSX.Element {
                 {t("settings.logs.title")}
             </h2>
             {state.kind === "ready" && (
-                <div className={fieldStyles["group"]}>
+                <div className={editForm["group"]}>
                     <div
                         className={[
-                            fieldStyles["row"],
-                            fieldStyles["rowUniform"],
+                            editForm["row"],
+                            editForm["rowUniform"],
                         ].join(" ")}
                     >
-                        <span className={fieldStyles["label"]}>
+                        <span className={editForm["label"]}>
                             {t("settings.logs.filePath")}
                         </span>
                         <div className={styles["pathCell"]}>

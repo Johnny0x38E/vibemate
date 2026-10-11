@@ -5,11 +5,13 @@ import {
     useState,
     type Ref,
     type JSX,
-    type ReactNode,
 } from "react";
 import type { ModuleNavigationHandle } from "../../components/moduleNavigation";
 import { Tooltip } from "@base-ui/react/tooltip";
 import { useTranslation } from "react-i18next";
+import { DetailFact, DetailPanel } from "../../components/DetailForm";
+import editForm from "../../components/editForm.module.css";
+import detailForm from "../../components/detailForm.module.css";
 import { PageModuleHeader } from "../../components/PageModuleHeader";
 import {
     discoverAgents,
@@ -177,15 +179,6 @@ export function AgentList({
         }
     }
 
-    function factRow(label: string, value: ReactNode): JSX.Element {
-        return (
-            <div className={styles["factRow"]}>
-                <span className={styles["factLabel"]}>{label}</span>
-                <span className={styles["factValue"]}>{value}</span>
-            </div>
-        );
-    }
-
     function factBadge(value: string, hint: string): JSX.Element {
         // Evidence remains available without turning a version hint into a
         // verified installation claim. Focusable text also exposes it to keyboard users.
@@ -215,44 +208,53 @@ export function AgentList({
 
     function report(row: AgentObservation): JSX.Element {
         return (
-            <div className={styles["facts"]}>
-                {factRow(
-                    t("agents.detail.labels.status"),
-                    factBadge(
+            <>
+                <DetailFact
+                    label={t("agents.detail.labels.status")}
+                    value={factBadge(
                         t(`agents.states.${row.state}`),
                         t(`agents.sources.${row.source}`),
-                    ),
+                    )}
+                />
+                {row.entryPath !== null && (
+                    <DetailFact
+                        label={t("agents.detail.labels.entry")}
+                        value={row.entryPath}
+                    />
                 )}
-                {row.entryPath !== null &&
-                    factRow(t("agents.detail.labels.entry"), row.entryPath)}
                 {row.resolvedPath !== null &&
-                    row.resolvedPath !== row.entryPath &&
-                    factRow(t("agents.detail.labels.target"), row.resolvedPath)}
-                {factRow(
-                    t("agents.detail.labels.version"),
-                    factBadge(
+                    row.resolvedPath !== row.entryPath && (
+                        <DetailFact
+                            label={t("agents.detail.labels.target")}
+                            value={row.resolvedPath}
+                        />
+                    )}
+                <DetailFact
+                    label={t("agents.detail.labels.version")}
+                    value={factBadge(
                         row.version ?? t("agents.unknown"),
                         t(`agents.evidence.${row.versionEvidence}`),
-                    ),
-                )}
-            </div>
+                    )}
+                />
+            </>
         );
     }
 
     function configFiles(row: AgentObservation): JSX.Element {
         return (
-            <div className={styles["facts"]}>
-                {factRow(
-                    t("agents.detail.labels.configDirectory"),
-                    `${row.configDirectory ?? t("agents.unknown")} · ${t(`agents.directories.${row.directorySource}`)}`,
-                )}
-                {row.files.map((file) =>
-                    factRow(
-                        configFileLabel(file.name),
-                        t(`agents.files.${file.state}`),
-                    ),
-                )}
-            </div>
+            <>
+                <DetailFact
+                    label={t("agents.detail.labels.configDirectory")}
+                    value={`${row.configDirectory ?? t("agents.unknown")} · ${t(`agents.directories.${row.directorySource}`)}`}
+                />
+                {row.files.map((file) => (
+                    <DetailFact
+                        key={file.name}
+                        label={configFileLabel(file.name)}
+                        value={t(`agents.files.${file.state}`)}
+                    />
+                ))}
+            </>
         );
     }
 
@@ -389,26 +391,25 @@ export function AgentList({
                 <section className={styles["detailGroup"]} data-layout="page">
                     {row !== undefined && row.state === "found" && (
                         <>
-                            <section
-                                className={styles["detailPanel"]}
-                                aria-label={t("agents.detail.reportLabel", {
+                            <DetailPanel
+                                label={t("agents.detail.reportLabel", {
                                     name,
                                 })}
                             >
                                 {report(row)}
-                            </section>
-                            <section
-                                className={styles["detailPanel"]}
-                                aria-label={t(
-                                    "agents.detail.configFilesHeading",
-                                )}
+                            </DetailPanel>
+                            <DetailPanel
+                                label={t("agents.detail.configFilesHeading")}
                             >
                                 {configFiles(row)}
-                            </section>
+                            </DetailPanel>
                         </>
                     )}
                     <form
-                        className={styles["pathForm"]}
+                        className={[
+                            detailForm["card"],
+                            styles["pathForm"],
+                        ].join(" ")}
                         aria-label={t("agents.detail.manualPathTitle")}
                         onSubmit={(event) => {
                             event.preventDefault();
@@ -416,7 +417,7 @@ export function AgentList({
                         }}
                     >
                         <label
-                            className={styles["pathLabel"]}
+                            className={detailForm["label"]}
                             htmlFor={`agent-entry-path-${id}`}
                         >
                             {t("agents.pathLabel", { name })}
@@ -424,7 +425,10 @@ export function AgentList({
                         <div className={styles["pathControls"]}>
                             <input
                                 id={`agent-entry-path-${id}`}
-                                className={styles["input"]}
+                                className={[
+                                    editForm["input"],
+                                    styles["pathInput"],
+                                ].join(" ")}
                                 value={pathValue}
                                 readOnly={blocked}
                                 spellCheck={false}

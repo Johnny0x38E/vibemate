@@ -1,6 +1,6 @@
 # vibemate 第一阶段执行清单
 
-状态：P00–P09 与基础外观 I02–I14 已完成。P10/P11 的真实凭据验收仍有待验项；P12 模型页和手动添加、P31 中央 MCP 管理的代码/自动检查已完成。BR1–BR5 已完成测试、命令、Provider/MCP、Models/Fetch 与共享校验拆分，隔离 Linux 原生 IPC 已验证无密钥 fixture 的模型/MCP 保存与重启；真实服务商 UI、凭据库及其他平台验收按各任务继续待验。Agent 部署等后续业务尚未开始。当前设计见 [desktop-shell-design.md](desktop-shell-design.md)，实现与验证记录见 [frontend.md](../frontend.md) 和 [backend-modularity.md](backend-modularity.md)。
+状态：P00–P09 与基础外观 I02–I14 已完成。P10/P11 的真实凭据验收仍有待验项；P12 模型页和手动添加、P31 中央 MCP 管理的代码/自动检查已完成。BR1–BR5 已完成测试、命令、Provider/MCP、Models/Fetch 与共享校验拆分，隔离 Linux 原生 IPC 已验证无密钥 fixture 的模型/MCP 保存与重启；真实服务商 UI、凭据库及其他平台验收按各任务继续待验。P17 Agent 只读发现已完成代码与自动/隔离 Linux 原生验证；真实 Pi/Grok 安装、其他平台与外观验收仍待维护者验证。Agent 部署等后续业务尚未开始。当前设计见 [desktop-shell-design.md](desktop-shell-design.md)，实现与验证记录见 [frontend.md](../frontend.md) 和 [backend-modularity.md](backend-modularity.md)。
 这里是唯一任务状态来源，不能在其他文件维护第二份勾选清单。
 
 ## 执行约定
@@ -1500,15 +1500,17 @@ OS credential service name/引用、并发和补偿行为不变；运行 Rust fm
 
 **Acceptance criteria:**
 
-- [ ] 根据已核实的来源/路径/版本发现 Pi 和 Grok Build，未安装时允许选择已确认的路径。
-- [ ] 显示版本、能力和配置优先级；发现不运行不可信二进制或输出敏感配置。
-- [ ] 未知版本和 unsupported 明确区分，不修改任何 Agent 文件。
+- [x] 根据已核实的来源/路径/版本发现 Pi 和 Grok Build，未安装时允许选择已确认的路径。
+- [x] 显示版本、能力和配置优先级；发现不运行不可信二进制或输出敏感配置。
+- [x] 未知版本和 unsupported 明确区分，不修改任何 Agent 文件。
 
 **Verification:**
 
-- [ ] 运行 Rust `agent_discovery` 临时目录/平台样本测试及 AgentList 测试。
-- [ ] 运行 `check:frontend` 与 Rust fmt/Clippy。
+- [x] 运行 Rust `agent_discovery` 临时目录/平台样本测试及 AgentList 测试。
+- [x] 运行 `check:frontend` 与 Rust fmt/Clippy。
 - [ ] 在可用本机安装中只读核对发现结果。
+
+真实 Pi/Grok 安装当前不可用；隔离 Linux 原生 IPC/页面和合成文件无执行/无改写检查通过。macOS/Windows 和外观由维护者另行验收，不以 fixture 代替真实安装。
 
 **Dependencies:** P02,P03,P10。
 
@@ -1565,11 +1567,19 @@ OS credential service name/引用、并发和补偿行为不变；运行 Rust fm
 
 ### P17.f：整理与完成记录
 
-- [ ] 更新只读发现文档/接入证据与英文 changelog，记录真实安装/跨平台验证限制；整理提交并 push。
+- [x] 更新只读发现文档/接入证据与英文 changelog，记录真实安装/跨平台验证限制；整理提交并 push。
 
 **Files:** `docs/plans/agent-discovery.md`、`docs/frontend.md`、`docs/plans/phase-1.md`、`CHANGELOG.md`、本清单。
 **Dependencies:** P17.e。
 **Verification:** 完整检查、原生只读 IPC 与差异审查。
+
+### P17.g：同步入门与模块说明
+
+- [ ] README 和架构模块表加入已实现的只读发现，移除 Agent 页仍是 planned 的描述。
+
+**Files:** `README.md`、`docs/architecture.md`、本清单。
+**Dependencies:** P17.f。
+**Verification:** 格式与文档差异核对。
 
 ### Task P18: 预览 Pi 模型配置
 

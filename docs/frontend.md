@@ -12,7 +12,7 @@ React describes the interface; Rust handles local system and provider operations
   (brand, Overview, four feature destinations, Settings with the icon-only
   collapse toggle), the relationship home, `ProvidersView` (mounted on the first
   visit, then kept mounted while hidden, so an open form survives navigation and
-  returning does not re-read the list), central MCP management, planned pages for Agents/Skills,
+  returning does not re-read the list), central MCP management, read-only Agent discovery, a planned Skills page,
   and `SettingsView` (mounted while hidden) for the settings area.
 - `src/features/providers/` contains `ProvidersView` (list and in-page
   navigation), `ProviderPage` (back control and title), `ProviderTabbedView`
@@ -43,8 +43,7 @@ React describes the interface; Rust handles local system and provider operations
   list layout): 20 px sidebar `Icon`, 1 rem semibold `h1`, optional trailing
   actions or meta on the end, a 36 px minimum row height so titles align
   vertically even without a trailing button, and 2 px top margin for clearance
-  under the Windows/Linux title strip. Overview, Providers list, planned
-  Agents/Skills/MCP, and Settings all use it; icons are decorative. Provider
+  under the Windows/Linux title strip. Overview, Providers list, Agents, planned Skills, MCP, and Settings all use it; icons are decorative. Provider
   create/edit headers use the same 2 px offset in `ProviderPage.module.css`.
 - `src/components/Notifications.tsx` is the app-level notification host, mounted
   once in `App`. Features call `useNotify()` with an already translated
@@ -911,3 +910,29 @@ Real MCP credential-store acceptance and macOS/Windows runtime behavior remain
 pending. Visual checks remain manual. Vite reports the existing single-chunk
 size advisory; it is not a
 verification of layout or accessibility.
+
+## Read-only Agent discovery
+
+`AgentList` mounts on the first Agents visit, then remains mounted while hidden.
+It calls the typed `discoverAgents` boundary once on mount and on explicit
+Refresh / Enter submission. Pi and Grok Build manual entry paths stay in the
+current window; navigation and locale changes preserve them without another
+filesystem scan. Fields become read-only during a scan, the Refresh button
+retains focus with `aria-disabled`, and an immediate pending guard rejects
+repeat submission. Generation and mount checks discard stale replies during
+StrictMode cleanup and after unmount.
+
+The cards reuse `PageModuleHeader`, the existing button classes and theme tokens.
+Both locales distinguish a regular entry file, absent/unavailable paths,
+package-metadata claims and unverified filename hints. Documented capabilities
+are separate from installation authenticity and deployment support. Configuration
+paths report presence only; priority text is a documented rule, not a computed
+effective configuration. Browser preview displays a desktop-required notice and
+never invents local installation results. Rust owns all filesystem observations,
+and `src/lib/desktop/agents.ts` checks exact response fields and evidence consistency.
+
+See [agent-discovery.md](plans/agent-discovery.md) for limits and sources. Isolated
+Linux Tauri IPC and the actual Agent page have been exercised with synthetic
+entries and unopened malformed config fixtures, without process execution or
+content changes. This does not prove genuine Pi/Grok installations, macOS or
+Windows behavior. Visual acceptance remains with the maintainer.

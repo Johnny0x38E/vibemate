@@ -35,7 +35,16 @@ P31 central MCP management is implemented ahead of Agent deployment at the
 maintainer's request: structured stdio/Streamable HTTP definitions, protected
 env/header values, editing and central enablement. No MCP server is launched or
 contacted, and no Agent config is written. Agent deployment, skills and inference
-checks remain pending. [todo.md](todo.md) is the sole task-status source; current
+checks remain pending.
+
+P17 adds read-only Pi/Grok entry discovery and window-local manual paths. Rust
+never executes an entry or reads Agent configuration contents. Pi package
+metadata and Grok filename hints have separate provenance; unknown versions
+remain unverified. The bilingual Agent page reports user config locations,
+file presence and documented precedence without claiming effective settings.
+See [agent-discovery.md](agent-discovery.md). Linux fixture-based IPC and the
+actual page passed; genuine installations and macOS/Windows acceptance remain
+pending. [todo.md](todo.md) is the sole task-status source; current
 UI rules and verification are in [desktop-shell-design.md](desktop-shell-design.md)
 and [frontend.md](../frontend.md).
 

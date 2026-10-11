@@ -7,6 +7,7 @@ import { NotificationProvider } from "./components/Notifications";
 import { TitlebarChrome } from "./components/TitlebarChrome";
 import { WindowDragRegion } from "./components/WindowDragRegion";
 import { RelationshipOverview } from "./features/overview/RelationshipOverview";
+import { AgentList } from "./features/agents/AgentList";
 import { McpView } from "./features/mcp/McpView";
 import { ProvidersView } from "./features/providers/ProvidersView";
 import { SettingsView } from "./features/settings/SettingsView";
@@ -32,6 +33,7 @@ export default function App({ languageSettings }: AppProps): JSX.Element {
     const [collapsed, setCollapsed] = useState(false);
     const [providersVisited, setProvidersVisited] = useState(false);
     const [mcpVisited, setMcpVisited] = useState(false);
+    const [agentsVisited, setAgentsVisited] = useState(false);
     const sidebarId = useId();
 
     const pageLabel =
@@ -55,6 +57,7 @@ export default function App({ languageSettings }: AppProps): JSX.Element {
                     setPage(destination);
                     if (destination === "providers") setProvidersVisited(true);
                     if (destination === "mcp") setMcpVisited(true);
+                    if (destination === "agents") setAgentsVisited(true);
                 }}
             >
                 <Icon name={destination} />
@@ -138,7 +141,8 @@ export default function App({ languageSettings }: AppProps): JSX.Element {
                     {page !== "home" &&
                         page !== "settings" &&
                         page !== "providers" &&
-                        page !== "mcp" && (
+                        page !== "mcp" &&
+                        page !== "agents" && (
                             <section>
                                 <PageModuleHeader
                                     icon={page}
@@ -152,6 +156,7 @@ export default function App({ languageSettings }: AppProps): JSX.Element {
                         )}
                     {/* Like Settings below: hiding keeps an unsaved form or an
                     unknown save outcome instead of discarding it. */}
+                    {agentsVisited && <AgentList hidden={page !== "agents"} />}
                     {mcpVisited && <McpView hidden={page !== "mcp"} />}
                     {providersVisited && (
                         <ProvidersView hidden={page !== "providers"} />

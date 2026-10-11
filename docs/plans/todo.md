@@ -1557,7 +1557,7 @@ OS credential service name/引用、并发和补偿行为不变；运行 Rust fm
 
 ### P17.e：导航与交互回归
 
-- [ ] 首页不自动扫描，首次访问挂载；导航保留输入和报告。覆盖错误重试、重复点击、异步清理和两种语言。
+- [x] 首页不自动扫描，首次访问挂载；导航保留输入和报告。覆盖错误重试、重复点击、异步清理和两种语言。
 
 **Files:** `src/App.tsx`、`App.test.tsx`、`src/features/agents/AgentList.test.tsx`、本清单。
 **Dependencies:** P17.d。

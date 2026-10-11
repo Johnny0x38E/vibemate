@@ -40,7 +40,13 @@ import {
     replaceProviderSecret,
 } from "./lib/desktop/providerSecrets";
 import { listMcpDefinitions } from "./lib/desktop/mcp";
+import { discoverAgents } from "./lib/desktop/agents";
 import en from "./locales/en.json";
+
+vi.mock(import("./lib/desktop/agents"), async (original) => ({
+    ...(await original()),
+    discoverAgents: vi.fn(),
+}));
 
 let translator: i18n;
 function render(element: ReactNode) {
@@ -115,6 +121,9 @@ vi.mock(import("./lib/desktop/mcp"), async (importOriginal) => ({
 }));
 
 beforeEach(async () => {
+    vi.mocked(discoverAgents)
+        .mockReset()
+        .mockResolvedValue({ kind: "preview" });
     vi.mocked(listMcpDefinitions)
         .mockReset()
         .mockResolvedValue({ kind: "preview" });
@@ -243,7 +252,9 @@ test("keeps the same settings input and colors while navigating elsewhere", asyn
     );
     fireEvent.click(screen.getByRole("radio", { name: "Iris" }));
     fireEvent.click(screen.getByRole("button", { name: "Agents" }));
-    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(
+        screen.queryByRole("textbox", { name: "Unsubmitted note" }),
+    ).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     expect(screen.getByRole("textbox")).toBe(input);
     expect(input).toHaveProperty("value", "Still editing");
@@ -417,7 +428,15 @@ function renderedTextAndNames(): string {
             (name) => element.getAttribute(name) ?? "",
         ),
     );
-    return [document.body.textContent, ...attributes].join("\n");
+    // Keep separate text nodes separate: adjacent paragraphs such as
+    // "coding agents." and "Version" are not an unresolved agents.Version key.
+    const walker = document.createTreeWalker(
+        document.body,
+        NodeFilter.SHOW_TEXT,
+    );
+    const text: string[] = [];
+    while (walker.nextNode()) text.push(walker.currentNode.textContent ?? "");
+    return [...text, ...attributes].join("\n");
 }
 
 // Unresolved keys start with a top-level resource group, e.g. `settings.about.failed`.
@@ -643,7 +662,11 @@ test.each([
             target: { value: "sk-synthetic-app-5555" },
         });
         fireEvent.click(screen.getByRole("button", { name: agents }));
-        expect(screen.getByText(planned)).toBeDefined();
+        expect(
+            await screen.findByRole("button", {
+                name: locale === "en" ? "Refresh discovery" : "刷新发现",
+            }),
+        ).toBeDefined();
         expect(screen.queryByRole("textbox", { name })).toBeNull();
 
         fireEvent.click(screen.getByRole("button", { name: providers }));
@@ -906,4 +929,20 @@ test("MCP mounts only on first visit and hides credential input without losing n
     expect(screen.getByLabelText<HTMLInputElement>("Name").value).toBe(
         "Keep this draft",
     );
+});
+
+test("Agent discovery starts on first visit and preserves paths across navigation", async () => {
+    render(<App />);
+    expect(discoverAgents).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Agents" }));
+    await screen.findByText("Local Agent discovery requires the desktop app.");
+    const input = screen.getByRole("textbox", { name: "Pi entry path" });
+    fireEvent.change(input, { target: { value: "/home/test/manual-pi" } });
+    const calls = vi.mocked(discoverAgents).mock.calls.length;
+    fireEvent.click(screen.getByRole("button", { name: "Overview" }));
+    expect(screen.queryByRole("textbox", { name: "Pi entry path" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Agents" }));
+    expect(screen.getByRole("textbox", { name: "Pi entry path" })).toBe(input);
+    expect(input).toHaveProperty("value", "/home/test/manual-pi");
+    expect(discoverAgents).toHaveBeenCalledTimes(calls);
 });

@@ -1575,7 +1575,7 @@ OS credential service name/引用、并发和补偿行为不变；运行 Rust fm
 
 ### P17.g：同步入门与模块说明
 
-- [ ] README 和架构模块表加入已实现的只读发现，移除 Agent 页仍是 planned 的描述。
+- [x] README 和架构模块表加入已实现的只读发现，移除 Agent 页仍是 planned 的描述。
 
 **Files:** `README.md`、`docs/architecture.md`、本清单。
 **Dependencies:** P17.f。

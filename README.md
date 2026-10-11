@@ -7,7 +7,10 @@ Built with Rust, Tauri 2, React, and TypeScript. Licensed under MIT.
 
 The desktop app supports provider configuration with OS-stored API keys, model
 fetching and selection, manual model entries, and central stdio/HTTP MCP
-definitions. It also includes bilingual preferences, themes and local logging.
+definitions, plus read-only Pi/Grok Build entry discovery with manual paths.
+Discovery does not execute Agents or read their configuration contents; versions
+and documented capabilities retain explicit evidence and uncertainty. It also
+includes bilingual preferences, themes and local logging.
 Agent deployment, skill management, MCP execution/deployment and inference
 verification remain planned. Saving an MCP definition never starts its server.
 

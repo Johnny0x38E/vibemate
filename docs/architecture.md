@@ -4,11 +4,11 @@
 
 - **Frontend.** `src/main.tsx` mounts React behind the language startup gate.
   `src/App.tsx` composes the desktop shell: Overview, the Providers page
-  (`src/features/providers/`), the MCP page (`src/features/mcp/`), planned pages for Agents/Skills, and Settings
+  (`src/features/providers/`), the MCP page (`src/features/mcp/`), the read-only Agents page (`src/features/agents/`), a planned Skills page, and Settings
   (`src/features/settings/`). UI code calls Rust only through the typed wrappers
   in `src/lib/desktop.ts` and `src/lib/desktop/`, which validate every response.
 - **Commands.** `src-tauri/src/commands.rs` declares feature-specific command
-  modules under `commands/` (app, preferences, providers, models and mcp).
+  modules under `commands/` (app, preferences, providers, models, mcp and agents).
   `commands/state.rs` holds managed-state lookups and the existing credential lock.
   These thin Tauri commands handle app metadata, the repository link, language and appearance preferences, provider
   instances, provider API keys, and provider model fetch/list/selection (user-triggered
@@ -41,6 +41,18 @@
   Reads never load values. Saves and enablement changes perform no server process
   launch, HTTP request or Agent config write. Crash-orphan recovery remains P34.
   See [central definition boundaries](plans/mcp-central.md).
+- **Agent discovery.** `agents.rs` owns typed observations and environment/input
+  contracts; `agents/discovery.rs` performs bounded filesystem discovery independent
+  of Tauri. `commands/agents.rs` runs it on the blocking pool with the platform home
+  and desktop environment. No SQLite or credential state is needed. The only
+  content read is bounded Pi package metadata whose package name and bin target
+  match the resolved entry; Agent configs and executables remain unopened for
+  content. Grok filename version hints remain unverified. Presence, version
+  provenance, documented capabilities and user configuration roots are separate
+  observations; project/CLI/policy/session precedence is documented without
+  claiming effective settings. Manual paths are window-local. No process launch,
+  config write, network request or new capability permission is involved. See
+  [read-only discovery](plans/agent-discovery.md) for sources and verified limits.
 - **Shared helpers.** `shared.rs` holds domain-neutral text checks, random-ID format
   checks and Unix milliseconds. Provider and MCP keep their own identity types and
   map failures into their existing errors. MCP has no Provider dependency.

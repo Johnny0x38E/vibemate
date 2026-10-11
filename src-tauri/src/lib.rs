@@ -1,5 +1,6 @@
 //! Desktop startup and command registration for vibemate.
 
+pub mod agents;
 pub mod appearance;
 mod commands;
 pub mod credentials;

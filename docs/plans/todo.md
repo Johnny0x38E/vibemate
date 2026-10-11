@@ -1524,11 +1524,11 @@ OS credential service name/引用、并发和补偿行为不变；运行 Rust fm
 
 ### P17.a：只读发现领域与样本测试
 
-- [ ] Pi/Grok 分别处理 PATH 与已核实用户入口，支持绝对路径手动指定；不执行发现的文件。
-- [ ] 有界读取 Pi 安装包 metadata；Grok 文件名只能作为版本线索，不能当作已核实发行身份。
-- [ ] 返回配置目录来源、文件存在状态、文档能力与优先级；未知版本/不可读/未发现明确区分，不读取配置内容。
+- [x] Pi/Grok 分别处理 PATH 与已核实用户入口，支持绝对路径手动指定；不执行发现的文件。
+- [x] 有界读取 Pi 安装包 metadata；Grok 文件名只能作为版本线索，不能当作已核实发行身份。
+- [x] 返回配置目录来源、文件存在状态、文档能力与优先级；未知版本/不可读/未发现明确区分，不读取配置内容。
 
-**Files:** `src-tauri/src/agents.rs`、`agents/discovery.rs`、`agents/tests.rs`、本清单。
+**Files:** `src-tauri/src/agents.rs`、`agents/discovery.rs`、`agents/tests.rs`、`src-tauri/src/lib.rs`（声明模块）、本清单。
 **Verification:** Rust 临时目录、symlink、错误/有界读取与无执行测试；fmt/Clippy。
 
 ### P17.b：原生 IPC 接线

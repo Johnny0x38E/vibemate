@@ -1,0 +1,281 @@
+//! Bounded filesystem observations for Pi and Grok. File contents are read only
+//! for Pi package metadata tied to the resolved entry; configs remain unopened.
+
+use super::*;
+use std::{fs, io::Read, path::Path};
+
+const METADATA_LIMIT: u64 = 64 * 1024;
+const PATH_LIMIT: usize = 64;
+
+fn display_path(path: &Path) -> Option<String> {
+    let value = path.to_str()?;
+    (path.is_absolute() && value.len() <= 4096 && !value.chars().any(char::is_control))
+        .then(|| value.to_owned())
+}
+
+fn manual_path(value: Option<&str>) -> Result<Option<PathBuf>, DiscoveryError> {
+    value
+        .map(|value| {
+            let path = PathBuf::from(value);
+            display_path(&path)
+                .map(|_| path)
+                .ok_or(DiscoveryError::InvalidPath)
+        })
+        .transpose()
+}
+
+fn config_directory(
+    home: &Path,
+    override_path: Option<&OsString>,
+    default: &str,
+) -> (Option<PathBuf>, DirectorySource) {
+    match override_path {
+        Some(value) => {
+            let path = PathBuf::from(value);
+            if display_path(&path).is_some() {
+                (Some(path), DirectorySource::Environment)
+            } else {
+                (None, DirectorySource::Unavailable)
+            }
+        }
+        None => {
+            let path = home.join(default);
+            if display_path(&path).is_some() {
+                (Some(path), DirectorySource::Default)
+            } else {
+                (None, DirectorySource::Unavailable)
+            }
+        }
+    }
+}
+
+fn file_state(path: &Path) -> FileState {
+    match fs::metadata(path) {
+        Ok(metadata) if metadata.is_file() => FileState::Present,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => FileState::Missing,
+        _ => FileState::Unavailable,
+    }
+}
+
+fn entry_names(id: AgentId) -> &'static [&'static str] {
+    match (id, cfg!(windows)) {
+        (AgentId::Pi, true) => &["pi.exe", "pi.cmd", "pi.bat", "pi"],
+        (AgentId::GrokBuild, true) => &["grok.exe", "grok.cmd", "grok.bat", "grok"],
+        (AgentId::Pi, false) => &["pi"],
+        (AgentId::GrokBuild, false) => &["grok"],
+    }
+}
+
+fn has_entry(path: &Path) -> bool {
+    // symlink_metadata retains broken links as unavailable observations. Do not
+    // skip a shadowing entry and imply a later PATH candidate will be launched.
+    !matches!(fs::symlink_metadata(path), Err(error) if error.kind() == std::io::ErrorKind::NotFound)
+}
+
+fn candidate(
+    id: AgentId,
+    manual: Option<PathBuf>,
+    environment: &DiscoveryEnvironment,
+    directory: Option<&Path>,
+) -> (Option<PathBuf>, EntrySource) {
+    if let Some(path) = manual {
+        return (Some(path), EntrySource::Manual);
+    }
+    if let Some(value) = &environment.path {
+        for directory in std::env::split_paths(value).take(PATH_LIMIT) {
+            if display_path(&directory).is_none() {
+                continue;
+            }
+            for name in entry_names(id) {
+                let path = directory.join(name);
+                if has_entry(&path) {
+                    return (Some(path), EntrySource::Path);
+                }
+            }
+        }
+    }
+    let name = if id == AgentId::Pi { "pi" } else { "grok" };
+    let mut known = vec![environment.home.join(".local/bin").join(name)];
+    if id == AgentId::Pi
+        && let Some(directory) = directory
+    {
+        known.push(directory.join("bin/pi"));
+    }
+    for path in known {
+        if has_entry(&path) {
+            return (Some(path), EntrySource::UserEntry);
+        }
+    }
+    (None, EntrySource::None)
+}
+
+fn safe_version(value: &str) -> bool {
+    if value.len() > 64 || !value.is_ascii() {
+        return false;
+    }
+    let (core, suffix) = value.split_once('-').unwrap_or((value, ""));
+    let parts: Vec<_> = core.split('.').collect();
+    parts.len() == 3
+        && parts.iter().all(|part| {
+            !part.is_empty() && part.len() <= 10 && part.bytes().all(|byte| byte.is_ascii_digit())
+        })
+        && suffix
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'.' || byte == b'-')
+        && (!value.contains('-') || !suffix.is_empty())
+}
+
+fn pi_version(entry: &Path) -> Option<String> {
+    for directory in entry.parent()?.ancestors().take(8) {
+        let manifest = directory.join("package.json");
+        // Do not read directories, devices, FIFOs or symlinked metadata. The
+        // byte cap is enforced while reading as well as before it.
+        let metadata = fs::symlink_metadata(&manifest).ok();
+        if !metadata.is_some_and(|m| m.is_file() && m.len() <= METADATA_LIMIT) {
+            continue;
+        }
+        let file = fs::File::open(&manifest).ok()?;
+        let mut bytes = Vec::new();
+        file.take(METADATA_LIMIT + 1).read_to_end(&mut bytes).ok()?;
+        if bytes.len() as u64 > METADATA_LIMIT {
+            return None;
+        }
+        let Ok(value) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+            continue;
+        };
+        if value["name"].as_str() != Some("@earendil-works/pi-coding-agent") {
+            continue;
+        }
+        let bin = value["bin"]["pi"].as_str()?;
+        let bin = Path::new(bin);
+        if bin.is_absolute()
+            || bin
+                .components()
+                .any(|c| c == std::path::Component::ParentDir)
+        {
+            return None;
+        }
+        if fs::canonicalize(directory.join(bin)).ok().as_deref() != Some(entry) {
+            continue;
+        }
+        let version = value["version"].as_str()?;
+        return safe_version(version).then(|| version.to_owned());
+    }
+    None
+}
+
+fn grok_version(entry: &Path) -> Option<String> {
+    let name = entry.file_name()?.to_str()?.strip_prefix("grok-")?;
+    for suffix in [
+        "-macos-aarch64",
+        "-macos-x86_64",
+        "-linux-aarch64",
+        "-linux-x86_64",
+    ] {
+        if let Some(version) = name.strip_suffix(suffix) {
+            return safe_version(version).then(|| version.to_owned());
+        }
+    }
+    None
+}
+
+fn observe(
+    id: AgentId,
+    manual: Option<PathBuf>,
+    environment: &DiscoveryEnvironment,
+) -> AgentObservation {
+    let (directory, directory_source) = match id {
+        AgentId::Pi => config_directory(
+            &environment.home,
+            environment.pi_directory.as_ref(),
+            ".pi/agent",
+        ),
+        AgentId::GrokBuild => config_directory(
+            &environment.home,
+            environment.grok_directory.as_ref(),
+            ".grok",
+        ),
+    };
+    let names: &[&str] = match id {
+        AgentId::Pi => &["settings.json", "models.json", "mcp.json"],
+        AgentId::GrokBuild => &["config.toml", "managed_config.toml", "requirements.toml"],
+    };
+    let files = names
+        .iter()
+        .map(|&name| ConfigurationFile {
+            name,
+            state: directory
+                .as_ref()
+                .map_or(FileState::Unavailable, |root| file_state(&root.join(name))),
+        })
+        .collect();
+    let (entry, source) = candidate(id, manual, environment, directory.as_deref());
+    let mut observation = AgentObservation {
+        id,
+        state: EntryState::NotFound,
+        source,
+        entry_path: entry.as_deref().and_then(display_path),
+        resolved_path: None,
+        version: None,
+        version_evidence: VersionEvidence::None,
+        capability_evidence: CapabilityEvidence::Unverified,
+        config_directory: directory.as_deref().and_then(display_path),
+        directory_source,
+        files,
+    };
+    if let Some(entry) = entry {
+        match fs::metadata(&entry) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                // Distinguish an explicit absent path from a broken symlink.
+                if has_entry(&entry) {
+                    observation.state = EntryState::Unavailable;
+                }
+            }
+            Ok(metadata) if metadata.is_file() => {
+                if let Ok(resolved) = fs::canonicalize(&entry)
+                    && let Some(path) = display_path(&resolved)
+                    && observation.entry_path.is_some()
+                {
+                    observation.state = EntryState::Found;
+                    observation.resolved_path = Some(path);
+                    observation.version = match id {
+                        AgentId::Pi => pi_version(&resolved),
+                        AgentId::GrokBuild => grok_version(&resolved),
+                    };
+                    if observation.version.is_some() {
+                        observation.version_evidence = if id == AgentId::Pi {
+                            VersionEvidence::PackageMetadata
+                        } else {
+                            VersionEvidence::Filename
+                        };
+                    }
+                    if id == AgentId::Pi && observation.version.as_deref() == Some("1.1.0") {
+                        observation.capability_evidence = CapabilityEvidence::Documented;
+                    }
+                } else {
+                    observation.state = EntryState::Unavailable;
+                }
+            }
+            _ => observation.state = EntryState::Unavailable,
+        }
+    }
+    observation
+}
+
+/// Observe Pi and Grok entries in stable order using a supplied environment.
+/// Only regular Pi package metadata is read; Agent configs and executables are
+/// never opened for content or run. Invalid manual paths reject before any scan.
+pub fn discover_agents(
+    environment: &DiscoveryEnvironment,
+    input: &DiscoveryInput,
+) -> Result<Vec<AgentObservation>, DiscoveryError> {
+    if display_path(&environment.home).is_none() {
+        return Err(DiscoveryError::LocationUnavailable);
+    }
+    let pi = manual_path(input.pi_path.as_deref())?;
+    let grok = manual_path(input.grok_path.as_deref())?;
+    Ok(vec![
+        observe(AgentId::Pi, pi, environment),
+        observe(AgentId::GrokBuild, grok, environment),
+    ])
+}

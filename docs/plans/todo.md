@@ -1,6 +1,6 @@
 # vibemate 第一阶段执行清单
 
-状态：P00–P09 与基础外观 I02–I14 已完成。P10/P11 的真实凭据验收仍有待验项；P12 模型页和手动添加、P31 中央 MCP 管理的代码/自动检查已完成。BR1/BR2 已完成测试与命令入口拆分，隔离 Linux 原生 IPC 已验证无密钥 fixture 的模型/MCP 保存与重启；真实服务商 UI、凭据库及其他平台验收按各任务继续待验。Agent 部署等后续业务尚未开始。当前设计见 [desktop-shell-design.md](desktop-shell-design.md)，实现与验证记录见 [frontend.md](../frontend.md) 和 [backend-modularity.md](backend-modularity.md)。
+状态：P00–P09 与基础外观 I02–I14 已完成。P10/P11 的真实凭据验收仍有待验项；P12 模型页和手动添加、P31 中央 MCP 管理的代码/自动检查已完成。BR1–BR4 已完成测试、命令、Provider/MCP 与共享校验拆分，隔离 Linux 原生 IPC 已验证无密钥 fixture 的模型/MCP 保存与重启；真实服务商 UI、凭据库及其他平台验收按各任务继续待验。Agent 部署等后续业务尚未开始。当前设计见 [desktop-shell-design.md](desktop-shell-design.md)，实现与验证记录见 [frontend.md](../frontend.md) 和 [backend-modularity.md](backend-modularity.md)。
 这里是唯一任务状态来源，不能在其他文件维护第二份勾选清单。
 
 ## 执行约定
@@ -1451,7 +1451,25 @@ BR4.e 若实际 MCP/Provider 命令调用点也需要编辑，按功能继续拆
 
 后续较大批次的细项在开始时按同样约定继续拆，不一次迁移全部相关文件：
 
-- [ ] **BR5：Models/Fetch。** 分出本地类型/错误、查询与选择 SQL，明确合并接口；拆获取注册/取消、快照、下载、缓存浏览与合并编排。保持现有 ModelError IPC 码，消除获取层对私有 `models::lock` 的借用。开始前按上述职责拆 BR5.a 等批次。
+- [ ] **BR5：Models/Fetch。** 保留公开业务入口、ModelError IPC 码、数据/协议/调度与前端交互。按以下小批实施，合并事务仍负责重新校验快照；Fetch 独立持有自己的存储访问边界，不再借用 `models::lock`。
+
+| 待办      | 本批职责                                       | 实际文件范围（另含本清单）                                                                  | 依赖  |
+| --------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------- | ----- |
+| [x] BR5.a | Models DTO/来源/错误提取，保持原导出           | `models.rs`、`models/types.rs`、`models/tests.rs`                                           | BR4   |
+| [ ] BR5.b | 游标和 Provider ID 校验提取                    | `models.rs`、`models/validation.rs`                                                         | BR5.a |
+| [ ] BR5.c | 本地列表/搜索、行转换与共享事务读取提取        | `models.rs`、`models/repository.rs`、`models/tests.rs`                                      | BR5.b |
+| [ ] BR5.d | 模型选择/手动增删/批量保存事务提取             | `models.rs`、`models/selection.rs`、`models/repository.rs`、`models/tests.rs`               | BR5.c |
+| [ ] BR5.e | Fetch 请求/快照/响应类型提取，密钥仍为内部字段 | `model_fetch.rs`、`model_fetch/types.rs`、`model_fetch/tests.rs`                            | BR5.d |
+| [ ] BR5.f | 获取注册/取消/Drop 与浏览缓存存储分离          | `model_fetch.rs`、`model_fetch/registry.rs`、`model_fetch/cache.rs`、`model_fetch/tests.rs` | BR5.e |
+| [ ] BR5.g | HTTP 客户端、完整/单页下载与截止时间提取       | `model_fetch.rs`、`model_fetch/download.rs`、`model_fetch/tests.rs`                         | BR5.f |
+| [ ] BR5.h | 浏览分页、模糊搜索和增量缓存编排提取           | `model_fetch.rs`、`model_fetch/browse.rs`、`model_fetch/tests.rs`                           | BR5.g |
+| [ ] BR5.i | 快照和获取状态 SQL 提取，数据库锁不跨凭据访问  | `model_fetch.rs`、`model_fetch/repository.rs`、`models.rs`                                  | BR5.h |
+| [ ] BR5.j | 修订校验/目录合并事务和获取服务编排分離        | `model_fetch.rs`、`model_fetch/merge.rs`、`model_fetch/service.rs`                          | BR5.i |
+| [ ] BR5.k | 补浏览缓存/分页/失效/失败的行为回归            | `model_fetch/tests.rs`、`model_fetch/tests/browse.rs`                                       | BR5.j |
+| [ ] BR5.l | 最终检查、隔离原生 IPC 与文档整理              | 按文档/任务记录分批，每批至多五个实际文件                                                   | BR5.k |
+
+每批运行 Rust fmt、all-targets Clippy 和完整测试；最终核对既有测试清单及新增测试、SQL/wire 合约，并执行完整前端检查、锁定 Linux debug/release 构建和隔离 IPC。前端样式/交互、schema v8、平台待验项不因重构改变。
+
 - [ ] **BR6：Catalog/Storage/Credentials。** 各厂商解析局部化；迁移注册顺序和已发布 SQL 保持原样；按需要分离 OS store 实现和各业务补偿策略。开始前分别拆解析、迁移、凭据批次。
 - [ ] **BR7：外部服务适配。** GitHub 客户端/账号支持备份目标操作；Vercel 用途待确定。以真实复用需求提取 HTTP transport，保留服务专用权限/限流/错误语义。开始实施前按认证与客户端等职责拆细项。
 - [ ] **BR8：配置备份恢复设计。** 明确版本化非敏感快照、GitHub 目标/路径、远端修订冲突、本机身份/凭据重新关联与恢复差异；先显式备份恢复，自动同步另行规划。实施前拆导出、本地恢复、GitHub 存储和 UI 的具体小任务。

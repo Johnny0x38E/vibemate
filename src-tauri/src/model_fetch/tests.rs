@@ -20,6 +20,7 @@ use crate::models::{
     set_models_selected,
 };
 use std::time::Duration;
+use tokio::sync::oneshot;
 
 const PROVIDER: &str = "0123456789abcdef0123456789abcdef";
 /// A made-up key that is easy to search for in files and messages.

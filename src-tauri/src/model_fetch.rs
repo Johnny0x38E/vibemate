@@ -38,87 +38,30 @@
 //! The API key exists only in the `Secret` passed to the HTTP client. Errors are
 //! payload-free codes, and nothing here logs, stores or returns the key.
 
-use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
+mod types;
+pub use types::{
+    BrowseUpstreamModelsRequest, LastModelFetch, ModelFetchStatus, ModelFetchSummary,
+    PreparedFetch, ProviderSnapshot, UPSTREAM_BROWSE_PAGE_SIZE, UpstreamBrowseModel,
+    UpstreamBrowsePage,
+};
 
-use rusqlite::{OptionalExtension, TransactionBehavior, params};
-use serde::{Deserialize, Serialize};
-use tokio::sync::oneshot;
-
-use crate::credentials::{CredentialStore, Secret};
+use crate::credentials::CredentialStore;
 use crate::http_client::{
     HttpClient, HttpSettings, OPERATION_DEADLINE, run_cancellable, with_deadline,
 };
 use crate::model_catalog::{
-    Catalog, CatalogCollector, CatalogModel, IncompleteReason, OpenRouterPager, PageStep,
-    RouteSupport, models_url, openrouter_page_url, openrouter_page_url_with_limit, parse_page,
-    route_support,
+    Catalog, CatalogCollector, CatalogModel, OpenRouterPager, PageStep, models_url,
+    openrouter_page_url, openrouter_page_url_with_limit, parse_page, route_support,
 };
 use crate::model_search::{MatchScore, SearchQuery, sort_ranked};
-
-/// Upstream browse returns this many models per lazy-load page (UI + OpenRouter `limit`).
-pub const UPSTREAM_BROWSE_PAGE_SIZE: usize = 50;
-
 use crate::models::{ModelError, lock, parse_provider_id};
 use crate::providers::{ProviderId, ProviderKind, ProviderProtocol};
 use crate::storage::Storage;
-
-/// The provider settings a fetch was started with.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProviderSnapshot {
-    pub provider_id: ProviderId,
-    pub kind: ProviderKind,
-    pub protocol: ProviderProtocol,
-    pub base_url: String,
-    pub revision: i64,
-}
-
-/// A snapshot plus the key read for it. `Secret`'s `Debug` output is redacted.
-#[derive(Debug)]
-pub struct PreparedFetch {
-    pub snapshot: ProviderSnapshot,
-    key: Secret,
-}
-
-/// What one fetch changed, returned to the frontend.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ModelFetchSummary {
-    /// Whether the fetch saw the whole list (only then are models marked or pruned).
-    pub complete: bool,
-    pub incomplete_reason: Option<IncompleteReason>,
-    /// Unique valid models in the vendor's response.
-    pub listed: usize,
-    /// Listed models that had no row and were inserted, not selected.
-    pub added: usize,
-    /// Listed models whose existing row was refreshed.
-    pub updated: usize,
-    /// Rows newly marked as missing upstream.
-    pub marked_missing: usize,
-    /// Unselected fetched rows deleted because the vendor no longer lists them.
-    pub pruned: usize,
-    /// Entries skipped because their ID was invalid or repeated.
-    pub skipped_invalid: usize,
-    pub fetched_at_ms: i64,
-}
-
-/// The last saved fetch of a provider.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LastModelFetch {
-    pub fetched_at_ms: i64,
-    pub complete: bool,
-    pub listed_count: i64,
-}
-
-/// Whether a fetch is running and how the last saved one went.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ModelFetchStatus {
-    pub running: bool,
-    pub last_fetch: Option<LastModelFetch>,
-}
+use rusqlite::{OptionalExtension, TransactionBehavior, params};
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+use tokio::sync::oneshot;
 
 /// The HTTP client and overall deadline used for fetches.
 #[derive(Debug, Clone)]
@@ -350,41 +293,6 @@ pub async fn download_catalog(
 ) -> Result<Catalog, ModelError> {
     let work = with_deadline(fetcher.deadline, download(&fetcher.client, prepared));
     run_cancellable(work, cancel).await
-}
-
-/// One upstream model for browse-only UI (no SQLite write).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UpstreamBrowseModel {
-    pub model_id: String,
-    pub upstream_name: Option<String>,
-    pub context_window: Option<i64>,
-    pub max_output_tokens: Option<i64>,
-    pub input_modalities: Option<Vec<String>>,
-    pub output_modalities: Option<Vec<String>>,
-    pub supported_endpoints: Option<Vec<String>>,
-    pub route_support: RouteSupport,
-}
-
-/// One lazy upstream page for the Models tab browse view (P12.c.5).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UpstreamBrowsePage {
-    pub items: Vec<UpstreamBrowseModel>,
-    pub next_offset: Option<usize>,
-    pub more_pages: bool,
-}
-
-/// Request the next upstream browse page without merging into SQLite.
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct BrowseUpstreamModelsRequest {
-    pub provider_id: String,
-    /// Index into the full browse list, or into ranked search matches when `query`
-    /// is set. Omit or `0` for the first page of results.
-    pub offset: Option<usize>,
-    /// Fuzzy search over model ID and upstream name (same rules as the selected list).
-    pub query: Option<String>,
 }
 
 fn catalog_search_score(model: &CatalogModel, query: &SearchQuery) -> Option<MatchScore> {

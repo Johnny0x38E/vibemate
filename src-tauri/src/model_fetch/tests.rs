@@ -12,6 +12,7 @@ use crate::credentials::CredentialError;
 use crate::credentials::fake::FakeStore;
 use crate::http_client::HttpError;
 use crate::http_client::test_server::{MockServer, Reply, response};
+use crate::model_catalog::IncompleteReason;
 use crate::model_catalog::RouteSupport;
 use crate::models::{
     AddManualModelRequest, ListProviderModelsRequest, ModelSource, ProviderModel,

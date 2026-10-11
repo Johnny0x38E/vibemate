@@ -287,7 +287,6 @@
             "reloaded": "已加载最新保存的配置，请检查后再保存。",
             "unknownRefreshedSecret": "列表已刷新。请先确认这项配置是否已出现在列表中；只有在没有出现时才再次保存。API 密钥栏已被清空，再次保存前请重新输入密钥。"
         },
-
         "errors": {
             "storage_unavailable": "本地配置存储不可用，请重启 vibemate。",
             "read_failed": "无法读取服务商配置，请重试。",
@@ -391,6 +390,64 @@
             "operation_failed": "操作未完成，结果可能未知，请先重新读取再重试。",
             "desktop_required": "请使用 vibemate 桌面应用保存定义。",
             "invalid_response": "应用返回了无法识别的响应，请重新读取以确认结果。"
+        }
+    },
+    "agents": {
+        "names": {
+            "pi": "Pi",
+            "grokBuild": "Grok Build"
+        },
+        "refresh": "刷新发现",
+        "readOnly": "只读发现：不执行入口文件，不读取或修改 Agent 配置内容。发现文件不代表安装可正常运行。",
+        "loading": "正在发现 Agent 入口…",
+        "preview": "本机 Agent 发现需要使用桌面应用。",
+        "unknown": "未核实",
+        "pathLabel": "{{name}} 入口路径",
+        "pathPlaceholder": "填写绝对入口路径；留空则自动发现",
+        "entry": "入口：{{path}}",
+        "target": "解析目标：{{path}}",
+        "version": "版本：{{version}}",
+        "directory": "用户配置目录：{{path}}",
+        "states": {
+            "found": "已发现入口",
+            "notFound": "未发现入口",
+            "unavailable": "无法检查入口"
+        },
+        "sources": {
+            "manual": "手动路径",
+            "path": "桌面进程 PATH",
+            "userEntry": "已知用户入口",
+            "none": "无入口来源"
+        },
+        "evidence": {
+            "packageMetadata": "安装包 metadata 声明，真实性未核实",
+            "filename": "仅文件名线索，版本未核实",
+            "none": "无版本证据"
+        },
+        "capabilities": {
+            "documented": "Pi 1.1.0 文档记载自定义模型、Skill 和 stdio / HTTP MCP；尚未实现部署。",
+            "unverified": "当前版本的配置能力未核实，不据此判定支持或不兼容。"
+        },
+        "directories": {
+            "default": "默认目录",
+            "environment": "桌面环境变量覆盖",
+            "unavailable": "目录覆盖值无效或无法确定"
+        },
+        "files": {
+            "present": "文件存在，未读取内容",
+            "missing": "未发现",
+            "unavailable": "无法检查"
+        },
+        "precedence": {
+            "pi": "文档优先级：受信任项目的设置 / MCP 可覆盖用户设置。模型配置在用户级；CLI、SDK、扩展和已有会话可能改变实际生效行为。",
+            "grokBuild": "文档优先级：系统 managed → 用户 managed → 用户 config → 用户 requirements → 系统 requirements。受信任项目的 MCP / plugins / permission、CLI 或会话也可能影响实际行为。"
+        },
+        "scope": "报告使用桌面进程环境及 PATH 的前 64 项。输入仅保留在当前窗口，尚未判定项目、策略与会话的有效配置。",
+        "errors": {
+            "invalid_path": "请填写不含控制字符的绝对入口路径，或清空以自动发现，然后刷新。",
+            "location_unavailable": "无法定位系统用户目录，请检查桌面环境后刷新。",
+            "operation_failed": "发现失败，请刷新重试。",
+            "invalid_response": "桌面返回的发现报告无效，请刷新重试。"
         }
     }
 }

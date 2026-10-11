@@ -1549,7 +1549,7 @@ OS credential service name/引用、并发和补偿行为不变；运行 Rust fm
 
 ### P17.d：双语 Agent 页面
 
-- [ ] 沿用标题/按钮/卡片 token；加入刷新、绝对路径输入、状态/版本证据、能力与覆盖说明；保留输入并防止旧结果覆盖新查询。
+- [x] 沿用标题/按钮/卡片 token；加入刷新、绝对路径输入、状态/版本证据、能力与覆盖说明；保留输入并防止旧结果覆盖新查询。
 
 **Files:** `src/features/agents/AgentList.tsx`、`AgentList.module.css`、两份 locale、本清单。
 **Dependencies:** P17.c。

@@ -287,7 +287,6 @@
             "reloaded": "The latest saved settings were loaded. Review them before saving.",
             "unknownRefreshedSecret": "The list was refreshed. Check whether this configuration already appears in it, and save again only if it does not. The API key field was cleared, so enter the key again before saving."
         },
-
         "errors": {
             "storage_unavailable": "Local configuration storage is unavailable. Restart vibemate.",
             "read_failed": "Provider settings could not be read. Try again.",
@@ -391,6 +390,64 @@
             "operation_failed": "The operation could not finish; its result may be unknown. Reload before retrying.",
             "desktop_required": "Use the vibemate desktop app to save definitions.",
             "invalid_response": "The app returned an unrecognized response. Reload to check the result."
+        }
+    },
+    "agents": {
+        "names": {
+            "pi": "Pi",
+            "grokBuild": "Grok Build"
+        },
+        "refresh": "Refresh discovery",
+        "readOnly": "Read-only discovery: entries are never executed and Agent configuration contents are never read or changed. A found file does not prove a working installation.",
+        "loading": "Discovering Agent entries…",
+        "preview": "Local Agent discovery requires the desktop app.",
+        "unknown": "Unverified",
+        "pathLabel": "{{name}} entry path",
+        "pathPlaceholder": "Absolute entry path; leave empty for automatic discovery",
+        "entry": "Entry: {{path}}",
+        "target": "Resolved target: {{path}}",
+        "version": "Version: {{version}}",
+        "directory": "User configuration directory: {{path}}",
+        "states": {
+            "found": "Entry found",
+            "notFound": "Entry not found",
+            "unavailable": "Entry cannot be inspected"
+        },
+        "sources": {
+            "manual": "Manual path",
+            "path": "Desktop PATH",
+            "userEntry": "Known user entry",
+            "none": "No entry source"
+        },
+        "evidence": {
+            "packageMetadata": "Package metadata claim; authenticity unverified",
+            "filename": "Filename hint only; version unverified",
+            "none": "No version evidence"
+        },
+        "capabilities": {
+            "documented": "Pi 1.1.0 documentation records custom models, skills and stdio / HTTP MCP; deployment is not implemented.",
+            "unverified": "Version-specific configuration capabilities are unverified; no support or incompatibility is inferred."
+        },
+        "directories": {
+            "default": "Default directory",
+            "environment": "Desktop environment override",
+            "unavailable": "Directory override is invalid or unavailable"
+        },
+        "files": {
+            "present": "File exists; contents not read",
+            "missing": "Not found",
+            "unavailable": "Cannot inspect"
+        },
+        "precedence": {
+            "pi": "Documented precedence: trusted project settings / MCP can override user settings. Models are user-level; CLI, SDK, extensions and existing sessions may change effective behavior.",
+            "grokBuild": "Documented precedence: system managed → user managed → user config → user requirements → system requirements. Trusted project MCP / plugins / permissions and CLI or sessions may change effective behavior."
+        },
+        "scope": "This report uses the desktop process environment and up to 64 PATH entries. Inputs remain in this window. Effective project, policy and session configuration has not been determined.",
+        "errors": {
+            "invalid_path": "Enter an absolute entry path without control characters, or clear it to use automatic discovery, then refresh.",
+            "location_unavailable": "The platform home directory could not be located. Check the desktop environment and refresh.",
+            "operation_failed": "Discovery failed. Refresh to retry.",
+            "invalid_response": "The desktop returned an invalid discovery report. Refresh to retry."
         }
     }
 }

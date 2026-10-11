@@ -1464,7 +1464,7 @@ BR4.e 若实际 MCP/Provider 命令调用点也需要编辑，按功能继续拆
 | [x] BR5.g | HTTP 客户端、完整/单页下载与截止时间提取       | `model_fetch.rs`、`model_fetch/download.rs`、`model_fetch/tests.rs`                         | BR5.f |
 | [x] BR5.h | 浏览分页、模糊搜索和增量缓存编排提取           | `model_fetch.rs`、`model_fetch/browse.rs`、`model_fetch/tests.rs`                           | BR5.g |
 | [x] BR5.i | 快照和获取状态 SQL 提取，数据库锁不跨凭据访问  | `model_fetch.rs`、`model_fetch/repository.rs`、`models.rs`、`models/repository.rs`          | BR5.h |
-| [ ] BR5.j | 修订校验/目录合并事务和获取服务编排分离        | `model_fetch.rs`、`model_fetch/merge.rs`、`model_fetch/service.rs`、`model_fetch/tests.rs`  | BR5.i |
+| [x] BR5.j | 修订校验/目录合并事务和获取服务编排分离        | `model_fetch.rs`、`model_fetch/merge.rs`、`model_fetch/service.rs`、`model_fetch/tests.rs`  | BR5.i |
 | [ ] BR5.k | 补浏览缓存/分页/失效/失败的行为回归            | `model_fetch/tests.rs`、`model_fetch/tests/browse.rs`                                       | BR5.j |
 | [ ] BR5.l | 最终检查、隔离原生 IPC 与文档整理              | 按文档/任务记录分批，每批至多五个实际文件                                                   | BR5.k |
 

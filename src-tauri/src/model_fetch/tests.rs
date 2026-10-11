@@ -14,11 +14,15 @@ use crate::http_client::HttpError;
 use crate::http_client::test_server::{MockServer, Reply, response};
 use crate::model_catalog::IncompleteReason;
 use crate::model_catalog::RouteSupport;
+use crate::models::ModelError;
 use crate::models::{
     AddManualModelRequest, ListProviderModelsRequest, ModelSource, ProviderModel,
     SetModelsSelectedRequest, UpstreamState, add_manual_model, list_provider_models,
     set_models_selected,
 };
+use crate::providers::ProviderId;
+use crate::storage::Storage;
+use rusqlite::params;
 use std::time::Duration;
 use tokio::sync::oneshot;
 

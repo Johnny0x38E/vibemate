@@ -1522,6 +1522,55 @@ OS credential service name/引用、并发和补偿行为不变；运行 Rust fm
 
 **Estimated scope:** M：5 个建议主文件；如需额外文件先按执行约定拆分。
 
+### P17.a：只读发现领域与样本测试
+
+- [ ] Pi/Grok 分别处理 PATH 与已核实用户入口，支持绝对路径手动指定；不执行发现的文件。
+- [ ] 有界读取 Pi 安装包 metadata；Grok 文件名只能作为版本线索，不能当作已核实发行身份。
+- [ ] 返回配置目录来源、文件存在状态、文档能力与优先级；未知版本/不可读/未发现明确区分，不读取配置内容。
+
+**Files:** `src-tauri/src/agents.rs`、`agents/discovery.rs`、`agents/tests.rs`、本清单。
+**Verification:** Rust 临时目录、symlink、错误/有界读取与无执行测试；fmt/Clippy。
+
+### P17.b：原生 IPC 接线
+
+- [ ] 阻塞文件读取使用 blocking pool；只返回领域 DTO 与安全错误码，无新插件或能力权限。
+
+**Files:** `src-tauri/src/commands/agents.rs`、`commands.rs`、`lib.rs`、本清单。
+**Dependencies:** P17.a。
+**Verification:** Rust 全量检查及原生只读 IPC。
+
+### P17.c：TS 运行时边界
+
+- [ ] 严格验证发现响应与错误；浏览器预览不伪造本机安装，拒绝异常路径/版本/枚举/关联状态。
+
+**Files:** `src/lib/desktop/agents.ts`、`agents.test.ts`、本清单。
+**Dependencies:** P17.b。
+**Verification:** IPC 请求/响应及 preview 行为测试。
+
+### P17.d：双语 Agent 页面
+
+- [ ] 沿用标题/按钮/卡片 token；加入刷新、绝对路径输入、状态/版本证据、能力与覆盖说明；保留输入并防止旧结果覆盖新查询。
+
+**Files:** `src/features/agents/AgentList.tsx`、`AgentList.module.css`、两份 locale、本清单。
+**Dependencies:** P17.c。
+**Verification:** 双语完整性、类型/Lint 与行为测试。
+
+### P17.e：导航与交互回归
+
+- [ ] 首页不自动扫描，首次访问挂载；导航保留输入和报告。覆盖错误重试、重复点击、异步清理和两种语言。
+
+**Files:** `src/App.tsx`、`App.test.tsx`、`src/features/agents/AgentList.test.tsx`、本清单。
+**Dependencies:** P17.d。
+**Verification:** `check:frontend`、Rust 完整检查、Linux no-bundle 构建。
+
+### P17.f：整理与完成记录
+
+- [ ] 更新只读发现文档/接入证据与英文 changelog，记录真实安装/跨平台验证限制；整理提交并 push。
+
+**Files:** `docs/plans/agent-discovery.md`、`docs/frontend.md`、`docs/plans/phase-1.md`、`CHANGELOG.md`、本清单。
+**Dependencies:** P17.e。
+**Verification:** 完整检查、原生只读 IPC 与差异审查。
+
 ### Task P18: 预览 Pi 模型配置
 
 **Description:** 将选择的 Provider/Model 编译为 Pi 配置计划，展示脱敏差异，不写文件。

@@ -1456,7 +1456,7 @@ BR4.e 若实际 MCP/Provider 命令调用点也需要编辑，按功能继续拆
 | 待办      | 本批职责                                       | 实际文件范围（另含本清单）                                                                  | 依赖  |
 | --------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------- | ----- |
 | [x] BR5.a | Models DTO/来源/错误提取，保持原导出           | `models.rs`、`models/types.rs`、`models/tests.rs`                                           | BR4   |
-| [ ] BR5.b | 游标和 Provider ID 校验提取                    | `models.rs`、`models/validation.rs`                                                         | BR5.a |
+| [x] BR5.b | 游标和 Provider ID 校验提取                    | `models.rs`、`models/validation.rs`、`models/tests.rs`                                      | BR5.a |
 | [ ] BR5.c | 本地列表/搜索、行转换与共享事务读取提取        | `models.rs`、`models/repository.rs`、`models/tests.rs`                                      | BR5.b |
 | [ ] BR5.d | 模型选择/手动增删/批量保存事务提取             | `models.rs`、`models/selection.rs`、`models/repository.rs`、`models/tests.rs`               | BR5.c |
 | [ ] BR5.e | Fetch 请求/快照/响应类型提取，密钥仍为内部字段 | `model_fetch.rs`、`model_fetch/types.rs`、`model_fetch/tests.rs`                            | BR5.d |

@@ -14,43 +14,14 @@ pub use types::{
     ProviderModelPage, SaveProviderModelEntry, SaveProviderModelSelectionsRequest,
     SetModelsSelectedRequest, UpstreamState,
 };
-
-/// Longest cursor: a 256-character model ID is at most 1024 UTF-8 bytes.
-const MAX_CURSOR_LEN: usize = 2048;
+mod validation;
+pub(crate) use validation::parse_provider_id;
+pub use validation::{decode_cursor, encode_cursor};
 
 /// The columns read for a `ProviderModel`, in `StoredModel::read` order.
 const MODEL_COLUMNS: &str = "provider_id, model_id, source, selected, alias, upstream_name, \
      context_window, max_output_tokens, input_modalities, output_modalities, \
      supported_endpoints, created_at, updated_at, last_seen_at, missing_since";
-
-/// Encode a model ID as a cursor: lowercase hex of its UTF-8 bytes.
-pub fn encode_cursor(model_id: &str) -> String {
-    model_id.bytes().map(|byte| format!("{byte:02x}")).collect()
-}
-
-/// Decode a cursor made by `encode_cursor`. Anything else is `InvalidRequest`.
-pub fn decode_cursor(cursor: &str) -> Result<String, ModelError> {
-    let well_formed = !cursor.is_empty()
-        && cursor.len() <= MAX_CURSOR_LEN
-        && cursor.len().is_multiple_of(2)
-        && cursor
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte));
-    if !well_formed {
-        return Err(ModelError::InvalidRequest);
-    }
-    let bytes = (0..cursor.len())
-        .step_by(2)
-        .map(|index| u8::from_str_radix(&cursor[index..index + 2], 16))
-        .collect::<Result<Vec<u8>, _>>()
-        .map_err(|_| ModelError::InvalidRequest)?;
-    let model_id = String::from_utf8(bytes).map_err(|_| ModelError::InvalidRequest)?;
-    if is_valid_model_id(&model_id) {
-        Ok(model_id)
-    } else {
-        Err(ModelError::InvalidRequest)
-    }
-}
 
 /// List a provider's models, optionally only selected ones, either ordered by
 /// model ID (no query) or ranked by a fuzzy query (see `crate::model_search`).
@@ -480,10 +451,6 @@ fn json_column(items: &Option<Vec<String>>) -> Result<Option<String>, ModelError
 struct ProviderContext {
     kind: ProviderKind,
     protocol: ProviderProtocol,
-}
-
-pub(crate) fn parse_provider_id(value: &str) -> Result<ProviderId, ModelError> {
-    ProviderId::parse(value).ok_or(ModelError::InvalidRequest)
 }
 
 pub(crate) fn lock(storage: &Storage) -> Result<std::sync::MutexGuard<'_, Connection>, ModelError> {

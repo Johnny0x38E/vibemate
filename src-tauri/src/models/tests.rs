@@ -4,6 +4,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+use super::validation::MAX_CURSOR_LEN;
 use super::*;
 
 /// A unique temporary app-data folder, removed when the test ends.

@@ -1,0 +1,286 @@
+//! Local model queries, ranked searches, and validated SQLite row conversion.
+//! Internal transaction readers are shared only with local edit operations.
+
+use super::types::*;
+use super::validation::{decode_cursor, encode_cursor, parse_provider_id};
+use crate::model_catalog::{is_valid_model_id, route_support};
+use crate::model_search::{SearchQuery, sort_ranked};
+use crate::providers::{ProviderId, ProviderKind, ProviderProtocol};
+use crate::storage::Storage;
+use rusqlite::{Connection, OptionalExtension, params};
+
+/// The columns read for a `ProviderModel`, in `StoredModel::read` order.
+const MODEL_COLUMNS: &str = "provider_id, model_id, source, selected, alias, upstream_name, \
+     context_window, max_output_tokens, input_modalities, output_modalities, \
+     supported_endpoints, created_at, updated_at, last_seen_at, missing_since";
+
+/// List a provider's models, optionally only selected ones, either ordered by
+/// model ID (no query) or ranked by a fuzzy query (see `crate::model_search`).
+///
+/// # Errors
+/// `InvalidRequest` for a bad provider ID, limit, filter, or cursor, a query over
+/// `MAX_QUERY_CHARS` characters, or a query together with a cursor; `NotFound`
+/// when the provider does not exist; storage and stored-data errors otherwise.
+pub fn list_provider_models(
+    storage: &Storage,
+    request: &ListProviderModelsRequest,
+) -> Result<ProviderModelPage, ModelError> {
+    let provider_id = parse_provider_id(&request.provider_id)?;
+    if request.limit == 0 || request.limit > MAX_MODEL_PAGE_SIZE {
+        return Err(ModelError::InvalidRequest);
+    }
+    let only_selected = match request.filter.as_str() {
+        "all" => false,
+        "selected" => true,
+        _ => return Err(ModelError::InvalidRequest),
+    };
+    let query = match request.query.as_deref() {
+        Some(raw) => SearchQuery::parse(raw).map_err(|_| ModelError::InvalidRequest)?,
+        None => None,
+    };
+    if let Some(query) = query {
+        if request.after.is_some() {
+            return Err(ModelError::InvalidRequest);
+        }
+        return search_provider_models(storage, &provider_id, only_selected, &query, request.limit);
+    }
+    let after = request.after.as_deref().map(decode_cursor).transpose()?;
+
+    let connection = lock(storage)?;
+    let provider = read_provider(&connection, &provider_id)?;
+    // SQLite compares TEXT byte by byte (BINARY collation), the same order as
+    // Rust's `str`, so the cursor comparison matches `ORDER BY model_id`.
+    let mut statement = connection
+        .prepare(&format!(
+            "SELECT {MODEL_COLUMNS} FROM provider_model
+             WHERE provider_id = ?1
+               AND (?2 IS NULL OR model_id > ?2)
+               AND (?3 = 0 OR selected = 1)
+             ORDER BY model_id
+             LIMIT ?4"
+        ))
+        .map_err(|_| ModelError::ReadFailed)?;
+    let rows = statement
+        .query_map(
+            params![
+                provider_id.as_str(),
+                after,
+                only_selected,
+                i64::from(request.limit) + 1
+            ],
+            StoredModel::read,
+        )
+        .map_err(|_| ModelError::ReadFailed)?;
+    let mut items = Vec::new();
+    for row in rows {
+        let stored = row.map_err(|_| ModelError::ReadFailed)?;
+        items.push(stored.into_model(provider)?);
+    }
+    let page_size = usize::try_from(request.limit).map_err(|_| ModelError::InvalidRequest)?;
+    let next_cursor = if items.len() > page_size {
+        items.truncate(page_size);
+        items.last().map(|model| encode_cursor(&model.model_id))
+    } else {
+        None
+    };
+    Ok(ProviderModelPage {
+        items,
+        next_cursor,
+        total_matches: None,
+    })
+}
+
+/// Rank every model of the provider (after the selection filter) in memory and
+/// return the best `limit`. SQLite only filters; it never sees the query.
+fn search_provider_models(
+    storage: &Storage,
+    provider_id: &ProviderId,
+    only_selected: bool,
+    query: &SearchQuery,
+    limit: u32,
+) -> Result<ProviderModelPage, ModelError> {
+    let connection = lock(storage)?;
+    let provider = read_provider(&connection, provider_id)?;
+    let mut statement = connection
+        .prepare(&format!(
+            "SELECT {MODEL_COLUMNS} FROM provider_model
+             WHERE provider_id = ?1 AND (?2 = 0 OR selected = 1)"
+        ))
+        .map_err(|_| ModelError::ReadFailed)?;
+    let rows = statement
+        .query_map(
+            params![provider_id.as_str(), only_selected],
+            StoredModel::read,
+        )
+        .map_err(|_| ModelError::ReadFailed)?;
+    let mut scored = Vec::new();
+    for row in rows {
+        let model = row
+            .map_err(|_| ModelError::ReadFailed)?
+            .into_model(provider)?;
+        let fields = [
+            Some(model.model_id.as_str()),
+            model.upstream_name.as_deref(),
+            model.alias.as_deref(),
+        ];
+        if let Some(score) = query.score(fields.into_iter().flatten()) {
+            scored.push((score, model));
+        }
+    }
+    drop(statement);
+    drop(connection);
+    sort_ranked(&mut scored, |model| model.model_id.as_str());
+    let total_matches = scored.len();
+    let limit = usize::try_from(limit).map_err(|_| ModelError::InvalidRequest)?;
+    let items = scored
+        .into_iter()
+        .take(limit)
+        .map(|(_, model)| model)
+        .collect();
+    Ok(ProviderModelPage {
+        items,
+        next_cursor: None,
+        total_matches: Some(total_matches),
+    })
+}
+
+/// The provider fields that decide how its models are shown.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct ProviderContext {
+    pub(super) kind: ProviderKind,
+    pub(super) protocol: ProviderProtocol,
+}
+
+pub(crate) fn lock(storage: &Storage) -> Result<std::sync::MutexGuard<'_, Connection>, ModelError> {
+    storage.lock().map_err(|_| ModelError::StorageUnavailable)
+}
+
+pub(super) fn read_provider(
+    connection: &Connection,
+    provider_id: &ProviderId,
+) -> Result<ProviderContext, ModelError> {
+    let row: Option<(String, String)> = connection
+        .query_row(
+            "SELECT kind, protocol FROM provider_instance WHERE id = ?1",
+            [provider_id.as_str()],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()
+        .map_err(|_| ModelError::ReadFailed)?;
+    let (kind, protocol) = row.ok_or(ModelError::NotFound)?;
+    Ok(ProviderContext {
+        kind: ProviderKind::from_value(&kind).ok_or(ModelError::InvalidStoredProvider)?,
+        protocol: ProviderProtocol::from_value(&protocol)
+            .ok_or(ModelError::InvalidStoredProvider)?,
+    })
+}
+
+pub(super) fn read_model(
+    connection: &Connection,
+    provider_id: &ProviderId,
+    model_id: &str,
+) -> Result<Option<StoredModel>, ModelError> {
+    connection
+        .query_row(
+            &format!(
+                "SELECT {MODEL_COLUMNS} FROM provider_model
+                 WHERE provider_id = ?1 AND model_id = ?2"
+            ),
+            params![provider_id.as_str(), model_id],
+            StoredModel::read,
+        )
+        .optional()
+        .map_err(|_| ModelError::ReadFailed)
+}
+
+/// A row exactly as stored, before validation.
+pub(super) struct StoredModel {
+    provider_id: String,
+    model_id: String,
+    pub(super) source: String,
+    selected: i64,
+    alias: Option<String>,
+    upstream_name: Option<String>,
+    context_window: Option<i64>,
+    max_output_tokens: Option<i64>,
+    input_modalities: Option<String>,
+    output_modalities: Option<String>,
+    supported_endpoints: Option<String>,
+    created_at: i64,
+    updated_at: i64,
+    last_seen_at: Option<i64>,
+    missing_since: Option<i64>,
+}
+
+impl StoredModel {
+    fn read(row: &rusqlite::Row<'_>) -> rusqlite::Result<Self> {
+        Ok(Self {
+            provider_id: row.get(0)?,
+            model_id: row.get(1)?,
+            source: row.get(2)?,
+            selected: row.get(3)?,
+            alias: row.get(4)?,
+            upstream_name: row.get(5)?,
+            context_window: row.get(6)?,
+            max_output_tokens: row.get(7)?,
+            input_modalities: row.get(8)?,
+            output_modalities: row.get(9)?,
+            supported_endpoints: row.get(10)?,
+            created_at: row.get(11)?,
+            updated_at: row.get(12)?,
+            last_seen_at: row.get(13)?,
+            missing_since: row.get(14)?,
+        })
+    }
+
+    /// Validate the row and add the values derived from the provider.
+    pub(super) fn into_model(self, provider: ProviderContext) -> Result<ProviderModel, ModelError> {
+        let invalid = ModelError::InvalidStoredModel;
+        let source = ModelSource::from_value(&self.source).ok_or(invalid)?;
+        let selected = match self.selected {
+            0 => false,
+            1 => true,
+            _ => return Err(invalid),
+        };
+        if !is_valid_model_id(&self.model_id) {
+            return Err(invalid);
+        }
+        let supported_endpoints = json_list(self.supported_endpoints)?;
+        let route_support = route_support(
+            provider.kind,
+            provider.protocol,
+            supported_endpoints.as_deref(),
+        );
+        let upstream_state = match (self.last_seen_at, self.missing_since) {
+            (None, _) => UpstreamState::NeverListed,
+            (Some(_), None) => UpstreamState::Listed,
+            (Some(_), Some(_)) => UpstreamState::Missing,
+        };
+        Ok(ProviderModel {
+            provider_id: self.provider_id,
+            model_id: self.model_id,
+            source,
+            selected,
+            alias: self.alias,
+            upstream_name: self.upstream_name,
+            context_window: self.context_window,
+            max_output_tokens: self.max_output_tokens,
+            input_modalities: json_list(self.input_modalities)?,
+            output_modalities: json_list(self.output_modalities)?,
+            supported_endpoints,
+            route_support,
+            upstream_state,
+            last_seen_at_ms: self.last_seen_at,
+            missing_since_ms: self.missing_since,
+            created_at_ms: self.created_at,
+            updated_at_ms: self.updated_at,
+        })
+    }
+}
+
+/// Read a JSON string array column.
+fn json_list(value: Option<String>) -> Result<Option<Vec<String>>, ModelError> {
+    value
+        .map(|text| serde_json::from_str(&text).map_err(|_| ModelError::InvalidStoredModel))
+        .transpose()
+}

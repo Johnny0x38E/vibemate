@@ -33,8 +33,9 @@ reads are invalidated when returning home.
 - `src/features/providers/` contains `ProvidersView` (list and in-page
   navigation), `ProviderPage` (back control and title), `ProviderTabbedView`
   (API / Models tabs), `ProviderForm` (API fields in a settings-style card),
-  `ProviderModels` and `ProviderModelsCreateGate`, `ProviderIcon`, and
-  `providerButtons.module.css`; see [Provider configurations](#provider-configurations).
+  `ProviderModels` and `ProviderModelsCreateGate`, and `ProviderIcon`; see
+  [Provider configurations](#provider-configurations). Text buttons live in
+  `src/components/actionButtons.module.css` and are also used by MCP and Agents.
 - `src/features/settings/SettingsView.tsx` uses `PageModuleHeader`, General/About
   tabs, and panels. General hosts `LanguageSelector` (with `footer={<AppearanceControl />}`)
   and a separate `LogSettings` section (group heading plus its own card), both
@@ -62,7 +63,12 @@ reads are invalidated when returning home.
   column. `src/components/detailForm.module.css` is the read-only detail card:
   44 px fact rows, muted labels, and end-aligned values. Agent discovery and
   configuration cards use `DetailPanel` / `DetailFact`. The Agent path card
-  reuses the detail surface and the edit input together.
+  reuses the detail surface and the edit input together. Model search uses that
+  same input with a surface fill. Provider and model errors use the same error
+  rule. Settings and Provider tabs share `underlineTabs.module.css`. Provider
+  and MCP index rows share `surfaceList.module.css` and `infoChip.module.css`.
+  About keeps its 56 px definition list. Model checkbox rows keep their own
+  44 px list layout.
 - Sidebar width is fixed at 200/88 px (`--sidebar-width`, `data-collapsed`); only
   the collapse button changes layout.
 - `src/components/WindowDragRegion.tsx` and `TitlebarChrome.tsx` (with

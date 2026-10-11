@@ -9,7 +9,7 @@ import {
 } from "../../lib/desktop/models";
 import editForm from "../../components/editForm.module.css";
 import styles from "./ProviderForm.module.css";
-import buttons from "./providerButtons.module.css";
+import buttons from "../../components/actionButtons.module.css";
 import manualStyles from "./ManualModelForm.module.css";
 
 type SaveState =

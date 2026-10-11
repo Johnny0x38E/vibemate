@@ -23,9 +23,9 @@ import {
 } from "../../lib/desktop/models";
 import { getProviderSecretStatus } from "../../lib/desktop/providerSecrets";
 import { ManualModelForm } from "./ManualModelForm";
-import formStyles from "./ProviderForm.module.css";
 import { ModelCheckbox } from "../../components/ModelCheckbox";
-import buttons from "./providerButtons.module.css";
+import buttons from "../../components/actionButtons.module.css";
+import editForm from "../../components/editForm.module.css";
 import styles from "./ProviderModels.module.css";
 import { SecondaryPageFooter } from "../../components/SecondaryPageFooter";
 
@@ -722,7 +722,7 @@ export function ProviderModels({
                         {dirty && (
                             <p
                                 className={[
-                                    formStyles["hint"],
+                                    editForm["hint"],
                                     styles["manualDraft"],
                                 ]
                                     .filter(Boolean)
@@ -758,7 +758,12 @@ export function ProviderModels({
 
             {viewMode === "selected" && list.kind === "error" && (
                 <>
-                    <p className={styles["error"]} role="alert">
+                    <p
+                        className={[editForm["error"], styles["error"]].join(
+                            " ",
+                        )}
+                        role="alert"
+                    >
                         {t(`providers.models.errors.${list.code}`)}
                     </p>
                     <button
@@ -781,7 +786,12 @@ export function ProviderModels({
 
             {viewMode === "upstream" && upstream.kind === "error" && (
                 <>
-                    <p className={styles["error"]} role="alert">
+                    <p
+                        className={[editForm["error"], styles["error"]].join(
+                            " ",
+                        )}
+                        role="alert"
+                    >
                         {t(`providers.models.errors.${upstream.code}`)}
                     </p>
                     <button
@@ -1079,7 +1089,10 @@ export function ProviderModels({
             )}
 
             {saveState.kind === "error" && (
-                <p className={styles["error"]} role="alert">
+                <p
+                    className={[editForm["error"], styles["error"]].join(" ")}
+                    role="alert"
+                >
                     {t(`providers.models.errors.${saveState.code}`)}
                 </p>
             )}
@@ -1093,7 +1106,10 @@ export function ProviderModels({
             <div className={styles["toolbarRow"]}>
                 <div className={styles["searchField"]}>
                     <input
-                        className={styles["searchInput"]}
+                        className={[
+                            editForm["input"],
+                            styles["searchInput"],
+                        ].join(" ")}
                         id="provider-models-search"
                         type="search"
                         value={searchInput}

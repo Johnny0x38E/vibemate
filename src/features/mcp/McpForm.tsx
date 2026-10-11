@@ -23,7 +23,7 @@ import {
 } from "../../lib/desktop/mcp";
 import styles from "./Mcp.module.css";
 import { SecondaryPageFooter } from "../../components/SecondaryPageFooter";
-import buttons from "../providers/providerButtons.module.css";
+import buttons from "../../components/actionButtons.module.css";
 import { deriveServerName, serverNameForAttempt } from "./deriveServerName";
 
 type FormState =

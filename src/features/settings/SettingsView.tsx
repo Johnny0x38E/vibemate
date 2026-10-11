@@ -10,6 +10,7 @@ import {
 import { useTranslation } from "react-i18next";
 import type { ModuleNavigationHandle } from "../../components/moduleNavigation";
 import { PageModuleHeader } from "../../components/PageModuleHeader";
+import tabs from "../../components/underlineTabs.module.css";
 import { AboutPanel } from "./AboutPanel";
 import { LogSettings } from "./LogSettings";
 import styles from "./SettingsView.module.css";
@@ -78,13 +79,13 @@ export function SettingsView({
                 title={t("desktop.nav.settings")}
             />
             <div
-                className={styles["tabs"]}
+                className={[tabs["tabs"], styles["tabs"]].join(" ")}
                 role="tablist"
                 aria-label={t("settings.tabs.ariaLabel")}
             >
                 <button
                     type="button"
-                    className={styles["tab"]}
+                    className={tabs["tab"]}
                     role="tab"
                     onKeyDown={handleTabKey}
                     aria-selected={tab === "general"}
@@ -100,7 +101,7 @@ export function SettingsView({
                 </button>
                 <button
                     type="button"
-                    className={styles["tab"]}
+                    className={tabs["tab"]}
                     role="tab"
                     onKeyDown={handleTabKey}
                     aria-selected={tab === "about"}

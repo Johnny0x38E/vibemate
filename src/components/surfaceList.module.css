@@ -1,0 +1,34 @@
+/*
+ * Bordered card list for the Providers and MCP indexes.
+ * Each feature keeps its own outer margin and any extra narrow-window layout.
+ */
+
+.list {
+    width: 100%;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    background: var(--color-surface);
+    list-style: none;
+}
+
+.item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-lg);
+    padding: 12px var(--space-md);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.item:last-child {
+    border-bottom: 0;
+}
+
+@media (max-width: 520px) {
+    .item {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}

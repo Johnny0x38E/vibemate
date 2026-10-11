@@ -21,7 +21,7 @@ import {
     type DiscoveryErrorCode,
     type DiscoveryResult,
 } from "../../lib/desktop/agents";
-import buttons from "../providers/providerButtons.module.css";
+import buttons from "../../components/actionButtons.module.css";
 import pageStyles from "../providers/ProviderPage.module.css";
 import { AgentIcon } from "./AgentIcon";
 import { IconButton } from "../../components/IconButton";

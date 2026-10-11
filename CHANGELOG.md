@@ -24,6 +24,8 @@ GitHub release notes are extracted from the matching version section only.
 
 - Shared the two form styles. Create/edit pages use `editForm` (64 px rows, text inputs, hints, and field errors) for Provider API, MCP, manual models, and the Agent path field. Settings preference rows use that same card. Read-only Agent detail cards use `detailForm` (44 px fact rows). Field dropdown chrome now lives with `FieldSelect`.
 
+- Shared the remaining repeated chrome: underline tabs, Provider/MCP list cards and capsules, model search (the edit input with a surface fill), and the text-button hierarchy now in `actionButtons.module.css`. Provider and model errors use the edit-form error rule. About and model checkbox rows keep their own layouts.
+
 - Standardized Chinese UI directory wording to “路径”, including Agent configuration/default/user paths and the MCP working-path field. Domain fields and filesystem behavior are unchanged.
 
 - Split Agent configuration directory and file observations into their own detail card. Removed visible configuration-file/manual-path headings while retaining accessible section/form names, and set the gaps between all three detail cards to 10 px.

@@ -24,7 +24,7 @@ import { FieldSelect } from "../../components/FieldSelect";
 import { Icon } from "../../components/Icon";
 import editForm from "../../components/editForm.module.css";
 import { ProviderIcon } from "./ProviderIcon";
-import buttons from "./providerButtons.module.css";
+import buttons from "../../components/actionButtons.module.css";
 import styles from "./ProviderForm.module.css";
 import { SecondaryPageFooter } from "../../components/SecondaryPageFooter";
 

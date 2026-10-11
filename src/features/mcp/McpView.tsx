@@ -23,8 +23,10 @@ import {
     type SaveMcpInput,
 } from "../../lib/desktop/mcp";
 import { McpForm } from "./McpForm";
+import buttons from "../../components/actionButtons.module.css";
+import chip from "../../components/infoChip.module.css";
+import surfaceList from "../../components/surfaceList.module.css";
 import styles from "./Mcp.module.css";
-import buttons from "../providers/providerButtons.module.css";
 
 type ListState =
     | { kind: "loading" | "preview" }
@@ -375,12 +377,15 @@ export function McpView({
                                 <p role="status">{t("mcp.empty")}</p>
                             ) : (
                                 <ul
-                                    className={styles["list"]}
+                                    className={[
+                                        surfaceList["list"],
+                                        styles["list"],
+                                    ].join(" ")}
                                     aria-label={t("mcp.title")}
                                 >
                                     {list.items.map((record) => (
                                         <li
-                                            className={styles["item"]}
+                                            className={surfaceList["item"]}
                                             key={record.id}
                                         >
                                             <div className={styles["details"]}>
@@ -409,7 +414,7 @@ export function McpView({
                                                 )}
                                             </div>
                                             <div className={styles["trailing"]}>
-                                                <span className={styles["tag"]}>
+                                                <span className={chip["chip"]}>
                                                     {t(
                                                         record.connection
                                                             .type === "stdio"

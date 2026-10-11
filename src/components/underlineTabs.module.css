@@ -1,0 +1,48 @@
+/*
+ * Underline tabs shared by Settings and the Provider API / Models pages.
+ * A feature adds its own offset: Settings leaves a gap under the title, and
+ * the Provider editor pins the strip to the top of its column.
+ */
+
+.tabs {
+    display: flex;
+    gap: var(--space-lg);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.tab {
+    position: relative;
+    margin: 0;
+    padding: 10px 2px 12px;
+    border: 0;
+    color: var(--color-summary);
+    background: none;
+    font: inherit;
+    font-size: 0.8125rem;
+    cursor: pointer;
+}
+
+.tab:hover {
+    color: var(--color-text);
+}
+
+.tab[aria-selected="true"] {
+    color: var(--color-text);
+    font-weight: 600;
+}
+
+.tab[aria-selected="true"]::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    bottom: -1px;
+    left: 0;
+    height: 2px;
+    border-radius: 2px 2px 0 0;
+    background: var(--color-accent);
+}
+
+.tab:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+}

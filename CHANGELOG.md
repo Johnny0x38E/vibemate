@@ -22,6 +22,8 @@ GitHub release notes are extracted from the matching version section only.
 
 ### Changed
 
+- Reorganized Rust modules without changing provider, model, or MCP behavior. Model IPC errors now live in `model_error`, and model-ID and route checks live in `model_identity`, so saved-model storage and vendor parsing no longer own each other's rules. Provider key status and replacement are part of the provider module. The model-list HTTP client is `model_http`. The desktop fetch command still composes the snapshot, download, and merge itself; tests keep an equivalent helper. Command names, error codes, SQL, lock order, credentials, and schema are unchanged.
+
 - Standardized Chinese UI directory wording to “路径”, including Agent configuration/default/user paths and the MCP working-path field. Domain fields and filesystem behavior are unchanged.
 
 - Split Agent configuration directory and file observations into their own detail card. Removed visible configuration-file/manual-path headings while retaining accessible section/form names, and set the gaps between all three detail cards to 10 px.

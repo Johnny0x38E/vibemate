@@ -3,7 +3,7 @@
 
 use super::registry::ModelFetchRegistry;
 use super::types::{LastModelFetch, ModelFetchStatus, ProviderSnapshot};
-use crate::models::{ModelError, parse_provider_id};
+use crate::model_error::{ModelError, parse_provider_id};
 use crate::providers::{ProviderId, ProviderKind, ProviderProtocol};
 use crate::storage::Storage;
 use rusqlite::OptionalExtension;

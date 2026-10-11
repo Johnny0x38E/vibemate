@@ -272,7 +272,7 @@ mod tests {
                 "hyper",
                 "rustls",
                 "webview",
-                "vibemate::http_client",
+                "vibemate::model_http",
                 "",
             ] {
                 let metadata = Metadata::builder().target(target).level(level).build();

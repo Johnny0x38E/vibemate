@@ -380,3 +380,83 @@ fn parse_cursor(cursor: &str) -> Result<(i64, ProviderId), ProviderError> {
     let id = ProviderId::parse(id).ok_or(ProviderError::InvalidRequest)?;
     Ok((created_at, id))
 }
+
+/// Read the key status, or `None` when no provider has this ID.
+///
+/// The LEFT JOIN keeps a provider without a reference row, which becomes `Missing`.
+pub(super) fn read_status(
+    connection: &Connection,
+    id: &ProviderId,
+) -> Result<Option<ProviderSecretStatus>, ProviderError> {
+    let updated_at: Option<Option<i64>> = connection
+        .query_row(
+            "SELECT credential.updated_at
+             FROM provider_instance AS provider
+             LEFT JOIN provider_credential AS credential
+                 ON credential.provider_id = provider.id
+             WHERE provider.id = ?1",
+            [id.as_str()],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|_| ProviderError::ReadFailed)?;
+    Ok(updated_at.map(|updated_at| ProviderSecretStatus {
+        provider_id: id.clone(),
+        state: if updated_at.is_some() {
+            ProviderSecretState::Set
+        } else {
+            ProviderSecretState::Missing
+        },
+        updated_at_ms: updated_at,
+    }))
+}
+
+/// Insert or update the reference row for `id` in one transaction.
+///
+/// The provider is checked again inside the transaction: it could have been
+/// removed while the credential store was busy. Only `provider_credential`
+/// changes, so the provider's `revision` and `updated_at` stay as they were.
+///
+/// Failures before `COMMIT` are `NotCommitted`; a failed `COMMIT` is `Uncertain`.
+pub(crate) fn save_reference(
+    storage: &Storage,
+    id: &ProviderId,
+    reference: &str,
+    now_ms: i64,
+) -> Result<ProviderSecretStatus, CommitFailure<ProviderError>> {
+    let not_committed = CommitFailure::NotCommitted;
+    let mut connection = storage
+        .lock()
+        .map_err(|_| not_committed(ProviderError::StorageUnavailable))?;
+    // Dropping a transaction without `commit` rolls it back.
+    let transaction = connection
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|_| not_committed(ProviderError::WriteFailed))?;
+    let exists = transaction
+        .query_row(
+            "SELECT 1 FROM provider_instance WHERE id = ?1",
+            [id.as_str()],
+            |_| Ok(()),
+        )
+        .optional()
+        .map_err(|_| not_committed(ProviderError::ReadFailed))?;
+    if exists.is_none() {
+        return Err(not_committed(ProviderError::NotFound));
+    }
+    transaction
+        .execute(
+            "INSERT INTO provider_credential (provider_id, credential_ref, updated_at)
+             VALUES (?1, ?2, ?3)
+             ON CONFLICT (provider_id) DO UPDATE SET updated_at = excluded.updated_at",
+            params![id.as_str(), reference, now_ms],
+        )
+        .map_err(|_| not_committed(ProviderError::WriteFailed))?;
+    transaction
+        .commit()
+        .map_err(|_| CommitFailure::Uncertain(ProviderError::WriteFailed))?;
+    Ok(ProviderSecretStatus {
+        provider_id: id.clone(),
+        state: ProviderSecretState::Set,
+        updated_at_ms: Some(now_ms),
+    })
+}

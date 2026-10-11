@@ -18,9 +18,9 @@
 //!    `model_fetch_stale`; deleted is `not_found`), then apply the merge rules and
 //!    record the fetch summary. Once merging starts, cancelling has no effect.
 //!
-//! Steps 2 and 4 are blocking; the Tauri command (P12.b.1) runs them with
-//! `spawn_blocking`. `fetch_provider_models` runs all steps in order for callers
-//! that may block, such as tests.
+//! Steps 2 and 4 are blocking; the Tauri command runs them with `spawn_blocking`
+//! and holds the credential lock around the snapshot. Tests repeat the same step
+//! order in a helper that may block.
 //!
 //! Merge rules (a complete fetch saw the whole, non-empty list without hitting a cap):
 //! - A listed model that has no row is inserted as `fetched` and **not selected**.
@@ -52,7 +52,7 @@ pub use download::{ModelFetcher, download_catalog};
 pub use merge::merge_catalog;
 pub use registry::{FetchRegistration, ModelFetchRegistry};
 pub use repository::fetch_status;
-pub use service::{fetch_provider_models, prepare_fetch};
+pub use service::prepare_fetch;
 pub use types::{
     BrowseUpstreamModelsRequest, LastModelFetch, ModelFetchStatus, ModelFetchSummary,
     PreparedFetch, ProviderSnapshot, UPSTREAM_BROWSE_PAGE_SIZE, UpstreamBrowseModel,

@@ -22,9 +22,10 @@
   `settings.rs` and `appearance.rs` store preferences; `providers.rs` preserves
   the public domain entrypoints while `providers/` separates types, templates,
   validation, repository SQL and credential save orchestration. It stores provider instances (stable random IDs, cursor pages, optimistic
-  `revision` checks); `provider_secrets.rs` reads key status and replaces keys;
-  `models.rs` retains the public saved-model API. `models/types.rs` holds records
-  and errors; `validation.rs` holds bounded cursors/ID checks; `repository.rs` owns
+  `revision` checks). Key status and replacement use the same provider types,
+  SQL, and credential orchestration. `models.rs` retains the public saved-model API.
+  `model_error.rs` holds the shared model IPC errors. `models/types.rs` holds records;
+  `validation.rs` holds bounded cursors; `repository.rs` owns
   local lists, fuzzy search and row conversion; `selection.rs` owns manual edits
   and atomic selection/save transactions.
   SQLite stores only a `provider-<id>` reference per key, never the key itself.
@@ -57,14 +58,17 @@
   checks and Unix milliseconds. Provider and MCP keep their own identity types and
   map failures into their existing errors. MCP has no Provider dependency.
   The original public Provider validation and clock entrypoints remain available.
-- **HTTP and models.** `http_client.rs` performs bounded HTTPS GETs with cancellation
-  and system-proxy support. `model_catalog.rs` parses phase-1 vendor metadata;
+- **HTTP and models.** `model_http.rs` performs the model-list HTTPS GET: Bearer
+  authentication, bounded bodies, cancellation, and system-proxy support.
+  `model_identity.rs` holds model-ID grammar and protocol route checks.
+  `model_catalog.rs` parses phase-1 vendor responses;
   `model_search.rs` ranks fuzzy matches. `model_fetch.rs` preserves the public
   discovery API while `model_fetch/` separates request/result types, registration
   and cancellation (`registry.rs`), revision/URL-aware sessions (`cache.rs`),
   HTTP downloads/deadlines (`download.rs`), browse-only paging/ranking (`browse.rs`),
   snapshot/status SQL (`repository.rs`), snapshot-checked catalog transactions
-  (`merge.rs`) and credential/download/merge orchestration (`service.rs`).
+  (`merge.rs`) and the credential snapshot step (`service.rs`). The desktop command
+  composes download and merge; tests repeat that order in a helper.
   Fetch storage no longer borrows the local model repository's lock. Credentials
   are loaded after the snapshot lock is released and dropped before merge; the
   registration survives the merge. Browsing never writes model rows. Cancellation,

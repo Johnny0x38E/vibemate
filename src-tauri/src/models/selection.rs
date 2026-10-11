@@ -2,8 +2,8 @@
 
 use super::repository::{lock, read_model, read_provider};
 use super::types::*;
-use super::validation::parse_provider_id;
-use crate::model_catalog::{RouteSupport, is_valid_model_id, route_support};
+use super::{ModelError, parse_provider_id};
+use crate::model_identity::{RouteSupport, is_valid_model_id, route_support};
 use crate::providers::validate_display_name;
 use crate::storage::Storage;
 use rusqlite::{TransactionBehavior, params};

@@ -368,3 +368,38 @@ pub struct ProviderPage {
     /// Pass this as `after` to read the next page; `None` means this is the last page.
     pub next_cursor: Option<String>,
 }
+
+/// Whether a provider has a key, as recorded in SQLite.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProviderSecretState {
+    /// A reference row exists, so a key was saved in the OS credential store.
+    Set,
+    /// No reference row: only possible for rows saved before keys existed, or
+    /// after an unknown create outcome. Replacing the key sets it.
+    Missing,
+}
+
+/// Key status returned to the frontend. It never contains the key.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderSecretStatus {
+    /// The provider this status belongs to.
+    pub provider_id: ProviderId,
+    /// Set or missing.
+    pub state: ProviderSecretState,
+    /// When the key was last saved, in Unix epoch milliseconds; `None` when missing.
+    pub updated_at_ms: Option<i64>,
+}
+
+/// A new key for an existing provider.
+///
+/// `Secret` prints as `<redacted>`, so the derived `Debug` never shows the key.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ReplaceProviderSecretRequest {
+    /// The provider whose key is replaced, identified by ID only.
+    pub provider_id: String,
+    /// The new key; validated with `credentials::validate_secret`.
+    pub secret: Secret,
+}

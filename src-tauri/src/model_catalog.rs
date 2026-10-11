@@ -1,7 +1,7 @@
 //! Parse vendors' model-list responses into one common shape (P12).
 //!
 //! Every function here is pure: it takes response bytes (from
-//! `crate::http_client`) and returns plain data. Nothing here sends a request,
+//! `crate::model_http`) and returns plain data. Nothing here sends a request,
 //! touches the database, or sees the API key, so parsing behaves the same whether
 //! or not a key was sent.
 //!
@@ -29,10 +29,9 @@ use serde::Serialize;
 use serde_json::{Map, Value};
 use url::Url;
 
-use crate::providers::{ProviderKind, ProviderProtocol, is_hidden_format_character};
-
-/// Longest accepted model ID, in Unicode characters.
-pub const MAX_MODEL_ID_CHARS: usize = 256;
+use crate::model_identity::{is_valid_model_id, normalize_endpoint};
+use crate::providers::ProviderKind;
+use crate::shared::is_hidden_format_character;
 
 /// Longest kept display name, in Unicode characters; longer names are dropped.
 pub const MAX_UPSTREAM_NAME_CHARS: usize = 256;
@@ -117,32 +116,6 @@ pub struct CatalogPage {
     pub total_count: Option<u64>,
 }
 
-/// Whether a model can be used with the instance's protocol.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum RouteSupport {
-    /// The model lists the route of the instance's protocol.
-    Supported,
-    /// The model lists routes, but not the one the instance uses.
-    Unsupported,
-    /// The model does not say which routes serve it.
-    Unknown,
-    /// The vendor does not publish routes per model (DeepSeek, OpenRouter).
-    NotApplicable,
-}
-
-impl RouteSupport {
-    /// The value used on the wire.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Supported => "supported",
-            Self::Unsupported => "unsupported",
-            Self::Unknown => "unknown",
-            Self::NotApplicable => "not_applicable",
-        }
-    }
-}
-
 /// Why a fetch did not see the vendor's whole list.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -154,63 +127,6 @@ pub enum IncompleteReason {
     /// The list was empty, which is treated as suspicious rather than as
     /// "every model was removed".
     EmptyList,
-}
-
-/// Check a model ID from a vendor or from the user.
-///
-/// The ID must already be trimmed, be 1 to 256 characters, and contain no
-/// whitespace, control characters, or invisible format characters. Everything
-/// else is allowed, including `/` (`mistral/mistral-large-4`), `.` and `:`.
-pub fn is_valid_model_id(model_id: &str) -> bool {
-    !model_id.is_empty()
-        && model_id.chars().count() <= MAX_MODEL_ID_CHARS
-        && !model_id
-            .chars()
-            .any(|c| c.is_whitespace() || c.is_control() || is_hidden_format_character(c))
-}
-
-/// Remove an optional `/v1` prefix from a Command Code route.
-///
-/// The documentation writes routes as `/v1/chat/completions`, while the live
-/// list returns `/chat/completions`; both normalize to the second form.
-pub fn normalize_endpoint(endpoint: &str) -> &str {
-    match endpoint.strip_prefix("/v1") {
-        Some(rest) if rest.starts_with('/') => rest,
-        _ => endpoint,
-    }
-}
-
-/// The normalized route that serves a protocol.
-pub fn protocol_endpoint(protocol: ProviderProtocol) -> &'static str {
-    match protocol {
-        ProviderProtocol::ChatCompletions => "/chat/completions",
-        ProviderProtocol::Responses => "/responses",
-        ProviderProtocol::AnthropicMessages => "/messages",
-    }
-}
-
-/// Decide whether a fetched model can be selected for an instance.
-///
-/// `supported_endpoints` must be the normalized list from `CatalogModel`.
-pub fn route_support(
-    kind: ProviderKind,
-    protocol: ProviderProtocol,
-    supported_endpoints: Option<&[String]>,
-) -> RouteSupport {
-    if kind != ProviderKind::CommandCode {
-        return RouteSupport::NotApplicable;
-    }
-    match supported_endpoints {
-        None => RouteSupport::Unknown,
-        Some(endpoints) => {
-            let wanted = protocol_endpoint(protocol);
-            if endpoints.iter().any(|endpoint| endpoint == wanted) {
-                RouteSupport::Supported
-            } else {
-                RouteSupport::Unsupported
-            }
-        }
-    }
 }
 
 /// The model-list URL: the stored base URL plus `/models`.

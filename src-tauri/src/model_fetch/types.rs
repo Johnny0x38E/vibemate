@@ -1,7 +1,8 @@
 //! Non-secret fetch/browse requests and results, plus the internal prepared credential.
 
 use crate::credentials::Secret;
-use crate::model_catalog::{IncompleteReason, RouteSupport};
+use crate::model_catalog::IncompleteReason;
+use crate::model_identity::RouteSupport;
 use crate::providers::{ProviderId, ProviderKind, ProviderProtocol};
 use serde::{Deserialize, Serialize};
 

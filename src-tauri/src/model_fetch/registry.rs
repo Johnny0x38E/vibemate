@@ -2,7 +2,7 @@
 //! A registration survives through merging; cancellation cannot interrupt a DB commit.
 
 use super::cache::CachedVendorBrowseList;
-use crate::models::ModelError;
+use crate::model_error::ModelError;
 use crate::providers::ProviderId;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};

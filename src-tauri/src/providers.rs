@@ -10,14 +10,17 @@ mod validation;
 #[cfg(test)]
 use crate::storage::Storage;
 pub use repository::{get_provider, list_providers};
-pub use service::{create_provider, update_provider, update_provider_with_secret};
+pub use service::{
+    create_provider, get_secret_status, replace_provider_secret, update_provider,
+    update_provider_with_secret,
+};
 pub use templates::provider_templates;
 pub use types::{
     CreateProviderRequest, ListProvidersRequest, MAX_BASE_URL_LEN, MAX_DISPLAY_NAME_CHARS,
     MAX_PAGE_SIZE, ProviderError, ProviderId, ProviderKind, ProviderPage, ProviderProtocol,
-    ProviderRecord, ProviderSettings, ProviderTemplate, UpdateProviderRequest,
+    ProviderRecord, ProviderSecretState, ProviderSecretStatus, ProviderSettings, ProviderTemplate,
+    ReplaceProviderSecretRequest, UpdateProviderRequest,
 };
-pub(crate) use validation::is_hidden_format_character;
 pub use validation::{normalize_base_url, parse_kind, validate_display_name, validate_settings};
 
 /// Read the system clock as Unix epoch milliseconds for `created_at`/`updated_at`.
@@ -31,7 +34,7 @@ pub fn current_unix_millis() -> Result<i64, ProviderError> {
     crate::shared::current_unix_millis().map_err(|_| ProviderError::OperationFailed)
 }
 
-/// Test support shared with `provider_secrets`.
+/// Test support for credential reference commits.
 ///
 /// Make `COMMIT` fail after a reference row is inserted or updated, while every
 /// statement before it succeeds.

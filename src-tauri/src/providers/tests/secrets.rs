@@ -1,9 +1,14 @@
-//! Behavior tests for the parent module, kept separate from runtime code.
+//! Behavior tests for provider key status and replacement.
 
-use super::*;
-use crate::credentials::CredentialError;
+use super::super::repository::save_reference;
 use crate::credentials::fake::FakeStore;
-use crate::providers::{CreateProviderRequest, ProviderRecord, create_provider, get_provider};
+use crate::credentials::{CommitFailure, CredentialError, Secret};
+use crate::providers::{
+    CreateProviderRequest, ProviderError, ProviderId, ProviderRecord, ProviderSecretState,
+    ProviderSecretStatus, ReplaceProviderSecretRequest, create_provider,
+    fail_commits_after_reference_writes, get_provider, get_secret_status, replace_provider_secret,
+};
+use crate::storage::Storage;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
@@ -292,7 +297,7 @@ fn provider_secrets_failed_commit_keeps_the_new_key() {
     let store = FakeStore::default();
     let created = create_with_key(&storage, &store);
     let legacy = insert_legacy_provider(&storage);
-    crate::providers::fail_commits_after_reference_writes(&storage);
+    fail_commits_after_reference_writes(&storage);
 
     // Replacing an existing key hits the UPDATE trigger, setting a missing
     // key hits the INSERT trigger; COMMIT fails in both cases.

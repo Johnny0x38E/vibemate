@@ -6,7 +6,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use super::validation::MAX_CURSOR_LEN;
 use super::*;
+use crate::model_catalog::RouteSupport;
 use crate::storage::Storage;
+use rusqlite::params;
 
 /// A unique temporary app-data folder, removed when the test ends.
 struct TestDirectory(PathBuf);

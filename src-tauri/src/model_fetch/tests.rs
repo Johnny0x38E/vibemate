@@ -19,6 +19,7 @@ use crate::models::{
     SetModelsSelectedRequest, UpstreamState, add_manual_model, list_provider_models,
     set_models_selected,
 };
+use std::time::Duration;
 
 const PROVIDER: &str = "0123456789abcdef0123456789abcdef";
 /// A made-up key that is easy to search for in files and messages.

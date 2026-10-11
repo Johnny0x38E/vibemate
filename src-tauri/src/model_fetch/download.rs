@@ -2,14 +2,14 @@
 //! Credentials remain borrowed from PreparedFetch and never enter stored metadata.
 
 use super::types::PreparedFetch;
-use crate::http_client::{
-    HttpClient, HttpSettings, OPERATION_DEADLINE, run_cancellable, with_deadline,
-};
 use crate::model_catalog::{
     Catalog, CatalogCollector, OpenRouterPager, PageStep, models_url, openrouter_page_url,
     openrouter_page_url_with_limit, parse_page,
 };
-use crate::models::ModelError;
+use crate::model_error::ModelError;
+use crate::model_http::{
+    HttpClient, HttpSettings, OPERATION_DEADLINE, run_cancellable, with_deadline,
+};
 use crate::providers::ProviderKind;
 use std::time::Duration;
 use tokio::sync::oneshot;

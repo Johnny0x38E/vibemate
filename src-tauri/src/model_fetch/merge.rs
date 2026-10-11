@@ -4,7 +4,7 @@
 use super::repository::lock;
 use super::types::{ModelFetchSummary, ProviderSnapshot};
 use crate::model_catalog::Catalog;
-use crate::models::ModelError;
+use crate::model_error::ModelError;
 use crate::storage::Storage;
 use rusqlite::{OptionalExtension, TransactionBehavior, params};
 use std::collections::{HashMap, HashSet};

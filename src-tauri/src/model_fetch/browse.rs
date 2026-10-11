@@ -5,10 +5,11 @@ use super::cache::CachedVendorBrowseList;
 use super::download::{ModelFetcher, download_single_page};
 use super::registry::ModelFetchRegistry;
 use super::types::*;
-use crate::http_client::{run_cancellable, with_deadline};
-use crate::model_catalog::{CatalogModel, route_support};
+use crate::model_catalog::CatalogModel;
+use crate::model_error::ModelError;
+use crate::model_http::{run_cancellable, with_deadline};
+use crate::model_identity::route_support;
 use crate::model_search::{MatchScore, SearchQuery, sort_ranked};
-use crate::models::ModelError;
 use crate::providers::ProviderKind;
 use tokio::sync::oneshot;
 

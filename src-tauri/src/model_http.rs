@@ -1,9 +1,9 @@
-//! The HTTP client used for user-triggered provider requests, such as fetching a
-//! vendor's model list (P12).
+//! Bounded HTTPS GET client for a vendor model list.
 //!
-//! This module only moves bytes. It knows nothing about vendors, models, or the
-//! database, and it has no Tauri dependency, so tests can run it against a small
-//! local server (see `test_server` at the bottom of this file).
+//! The only production caller is model-list download. Each request sends
+//! `Authorization: Bearer <key>` and maps HTTP 401/403 to authentication failure
+//! and HTTP 402 to insufficient balance. It has no Tauri dependency, so tests can
+//! run it against a small local server (see `test_server` in this file).
 //!
 //! Safety rules this module enforces:
 //!

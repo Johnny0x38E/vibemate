@@ -1,8 +1,7 @@
-//! Validate provider IDs and encode/decode bounded model-list cursors.
+//! Encode and decode bounded model-list cursors.
 
 use super::ModelError;
-use crate::model_catalog::is_valid_model_id;
-use crate::providers::ProviderId;
+use crate::model_identity::is_valid_model_id;
 
 /// Longest cursor: a 256-character model ID is at most 1024 UTF-8 bytes.
 pub(super) const MAX_CURSOR_LEN: usize = 2048;
@@ -34,9 +33,4 @@ pub fn decode_cursor(cursor: &str) -> Result<String, ModelError> {
     } else {
         Err(ModelError::InvalidRequest)
     }
-}
-
-/// Parse a provider identity and map invalid input to the stable model error.
-pub(crate) fn parse_provider_id(value: &str) -> Result<ProviderId, ModelError> {
-    ProviderId::parse(value).ok_or(ModelError::InvalidRequest)
 }

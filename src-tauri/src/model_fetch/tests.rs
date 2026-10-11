@@ -12,11 +12,11 @@ use serde_json::json;
 use super::*;
 use crate::credentials::CredentialError;
 use crate::credentials::fake::FakeStore;
-use crate::http_client::HttpError;
-use crate::http_client::test_server::{MockServer, Reply, response};
 use crate::model_catalog::IncompleteReason;
-use crate::model_catalog::RouteSupport;
-use crate::models::ModelError;
+use crate::model_error::{ModelError, parse_provider_id};
+use crate::model_http::HttpError;
+use crate::model_http::test_server::{MockServer, Reply, response};
+use crate::model_identity::RouteSupport;
 use crate::models::{
     AddManualModelRequest, ListProviderModelsRequest, ModelSource, ProviderModel,
     SetModelsSelectedRequest, UpstreamState, add_manual_model, list_provider_models,
@@ -27,6 +27,29 @@ use crate::storage::Storage;
 use rusqlite::params;
 use std::time::Duration;
 use tokio::sync::oneshot;
+
+/// Run a whole fetch on the test runtime: register, snapshot and key, download, merge.
+///
+/// The desktop command uses the same step order, but splits the blocking snapshot
+/// and merge onto Tauri's blocking pool and holds the process credential lock.
+async fn fetch_provider_models(
+    storage: &Storage,
+    store: &dyn crate::credentials::CredentialStore,
+    fetcher: &ModelFetcher,
+    registry: &ModelFetchRegistry,
+    provider_id: &str,
+    now_ms: i64,
+) -> Result<ModelFetchSummary, ModelError> {
+    let provider_id = parse_provider_id(provider_id)?;
+    let (registration, cancel) = registry.begin(&provider_id)?;
+    let prepared = prepare_fetch(storage, store, &provider_id)?;
+    let catalog = download_catalog(fetcher, &prepared, cancel).await?;
+    // The key is no longer needed; drop it before touching the database again.
+    let PreparedFetch { snapshot, key } = prepared;
+    drop(key);
+    registration.enter_merge();
+    merge_catalog(storage, &snapshot, &catalog, now_ms)
+}
 
 const PROVIDER: &str = "0123456789abcdef0123456789abcdef";
 /// A made-up key that is easy to search for in files and messages.

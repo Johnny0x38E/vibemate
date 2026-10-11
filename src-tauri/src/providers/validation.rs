@@ -1,7 +1,6 @@
 //! Provider-specific input validation, without persistence or credential writes.
 
 use super::types::*;
-pub(crate) use crate::shared::is_hidden_format_character;
 use std::collections::BTreeMap;
 use url::Url;
 

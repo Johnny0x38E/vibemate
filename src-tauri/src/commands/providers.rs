@@ -2,10 +2,9 @@
 
 use super::state::{with_credential_writes, with_provider_storage};
 use crate::credentials::{OsCredentialStore, Secret};
-use crate::provider_secrets::{self, ProviderSecretStatus, ReplaceProviderSecretRequest};
 use crate::providers::{
     self, CreateProviderRequest, ListProvidersRequest, ProviderError, ProviderPage, ProviderRecord,
-    ProviderTemplate, UpdateProviderRequest,
+    ProviderSecretStatus, ProviderTemplate, ReplaceProviderSecretRequest, UpdateProviderRequest,
 };
 
 /// Return the built-in provider templates (default URL, allowed protocols, and
@@ -109,7 +108,7 @@ pub(crate) async fn get_provider_secret_status(
 ) -> Result<ProviderSecretStatus, ProviderError> {
     let result = tauri::async_runtime::spawn_blocking(move || {
         with_provider_storage(&app, |storage| {
-            provider_secrets::get_secret_status(storage, &provider_id)
+            providers::get_secret_status(storage, &provider_id)
         })
     })
     .await
@@ -130,12 +129,7 @@ pub(crate) async fn replace_provider_secret(
         with_provider_storage(&app, |storage| {
             with_credential_writes(&app, || {
                 let now_ms = providers::current_unix_millis()?;
-                provider_secrets::replace_provider_secret(
-                    storage,
-                    &OsCredentialStore,
-                    request,
-                    now_ms,
-                )
+                providers::replace_provider_secret(storage, &OsCredentialStore, request, now_ms)
             })
         })
     })

@@ -1471,7 +1471,7 @@ BR4.e 若实际 MCP/Provider 命令调用点也需要编辑，按功能继续拆
 BR5.l 按实际文件继续分批：
 
 - [x] **BR5.l.1：本地模块入口与内部 API 注释收尾。** `models.rs`、`models/types.rs`、`models/validation.rs`、`models/repository.rs`，另含本清单。
-- [ ] **BR5.l.2：下载与缓存边界注释收尾。** `model_fetch/download.rs`、`model_fetch/cache.rs`，另含本清单。
+- [x] **BR5.l.2：下载与缓存边界注释收尾。** `model_fetch/download.rs`、`model_fetch/cache.rs`，另含本清单。
 - [ ] **BR5.l.3：架构/README/阶段概览/拆分计划/CHANGELOG 收尾。** 这五份文档为独立批次；任务状态和最终验证记录另提交本清单。
 - [ ] **BR5.l.4：完整自动检查、原生 IPC 验证与最终任务记录。** 不修改前端 UI；真实凭据与其他平台验收仍独立待验。
 

@@ -17,7 +17,9 @@ use tokio::sync::oneshot;
 /// The HTTP client and overall deadline used for fetches.
 #[derive(Debug, Clone)]
 pub struct ModelFetcher {
+    /// Shared client used by complete downloads and browse-only page requests.
     pub(super) client: HttpClient,
+    /// Overall limit for one complete download or one browse extension.
     pub(super) deadline: Duration,
 }
 
@@ -57,6 +59,8 @@ pub async fn download_catalog(
     run_cancellable(work, cancel).await
 }
 
+/// Fetch one provider page using a computed offset and an optional browse limit.
+/// Link payloads never choose the next request URL. Errors remain stable model codes.
 pub(super) async fn download_single_page(
     client: &HttpClient,
     prepared: &PreparedFetch,

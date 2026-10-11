@@ -11,6 +11,7 @@ use crate::providers::ProviderId;
 pub(super) struct CachedVendorBrowseList {
     revision: i64,
     base_url: String,
+    /// Unique upstream rows accumulated so far, in response order.
     pub(super) models: Vec<CatalogModel>,
     /// When true, another provider API page may be downloaded into `models`.
     pub(super) upstream_more: bool,

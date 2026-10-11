@@ -1,6 +1,6 @@
 # vibemate 第一阶段执行清单
 
-状态：P00–P09 与基础外观 I02–I14 已完成。P10/P11 的真实凭据验收仍有待验项；P12 模型页和手动添加、P31 中央 MCP 管理的代码/自动检查已完成。BR1–BR4 已完成测试、命令、Provider/MCP 与共享校验拆分，隔离 Linux 原生 IPC 已验证无密钥 fixture 的模型/MCP 保存与重启；真实服务商 UI、凭据库及其他平台验收按各任务继续待验。Agent 部署等后续业务尚未开始。当前设计见 [desktop-shell-design.md](desktop-shell-design.md)，实现与验证记录见 [frontend.md](../frontend.md) 和 [backend-modularity.md](backend-modularity.md)。
+状态：P00–P09 与基础外观 I02–I14 已完成。P10/P11 的真实凭据验收仍有待验项；P12 模型页和手动添加、P31 中央 MCP 管理的代码/自动检查已完成。BR1–BR5 已完成测试、命令、Provider/MCP、Models/Fetch 与共享校验拆分，隔离 Linux 原生 IPC 已验证无密钥 fixture 的模型/MCP 保存与重启；真实服务商 UI、凭据库及其他平台验收按各任务继续待验。Agent 部署等后续业务尚未开始。当前设计见 [desktop-shell-design.md](desktop-shell-design.md)，实现与验证记录见 [frontend.md](../frontend.md) 和 [backend-modularity.md](backend-modularity.md)。
 这里是唯一任务状态来源，不能在其他文件维护第二份勾选清单。
 
 ## 执行约定
@@ -1416,7 +1416,7 @@ D16（维护者批准，2026-10-10 完成）：2026-10-10 20:10（UTC+8）不带
 
 维护者提出未来 GitHub 配置备份、MCP/Skill 来源安装、给 Agent 的 API 转发，可能直接安装 Agent，以及 Vercel/更多模型服务商接入，优先规划模块边界。
 设计见 [backend-modularity.md](backend-modularity.md)。规划已推送，按下列小批任务迁移；勾选仅表示该批次已实施并完成适用回归。
-本轮 BR1–BR4 已完成：测试、命令、Provider/MCP 职责及共享文字/ID/时间已拆分。BR5–BR11 按新增功能需求开展。
+BR1–BR5 已完成：测试、命令、Provider/MCP、Models/Fetch 职责及共享文字/ID/时间已拆分。BR6–BR11 按新增功能需求开展。
 表中范围包含本清单更新；若实际 import/测试 fixture 迁移超出五个文件，先继续拆批。
 
 - [x] **BR0：检查源码并记录规划。** 基线 `165e262`，记录大小、职责、实际耦合、扩展边界和兼容要求。Files：本清单、`backend-modularity.md`、`architecture.md`、`development-plan.md`；Verification：源码核对、Markdown 格式与 diff 检查；无业务代码变更。
@@ -1447,11 +1447,11 @@ BR1/BR2/BR3 等依赖名表示该组全部子任务。具体入口仍采用原�
 统一使用 `feature.rs` + `feature/` 的模块布局，不引入 `mod.rs`。共享格式函数只做格式判断，不统一业务身份类型。
 BR4.e 若实际 MCP/Provider 命令调用点也需要编辑，按功能继续拆，不能超过文件范围。
 
-本轮 BR1–BR4 验证：测试清单与基线完全相同，Rust fmt/Clippy 与 201 项测试通过（1 项忽略）；29 个注册命令名/顺序不变；Provider/MCP SQL 字符串与基线一致。完整前端 468 项 UI/边界、8 项 release、14 项 i18n checker 和锁定 debug/release 桌面构建通过。隔离 Linux Tauri 用无密钥 Provider fixture 完成偏好/Provider 编辑、手动模型添加与批量删除、缺密钥/取消状态、MCP 保存编辑与重启重读；未执行服务器命令。真实 OS 凭据与其他平台待验项保持原状态。
+BR1–BR4 验证：测试清单与基线完全相同，Rust fmt/Clippy 与 201 项测试通过（1 项忽略）；29 个注册命令名/顺序不变；Provider/MCP SQL 字符串与基线一致。完整前端 468 项 UI/边界、8 项 release、14 项 i18n checker 和锁定 debug/release 桌面构建通过。隔离 Linux Tauri 用无密钥 Provider fixture 完成偏好/Provider 编辑、手动模型添加与批量删除、缺密钥/取消状态、MCP 保存编辑与重启重读；未执行服务器命令。真实 OS 凭据与其他平台待验项保持原状态。
 
 后续较大批次的细项在开始时按同样约定继续拆，不一次迁移全部相关文件：
 
-- [ ] **BR5：Models/Fetch。** 保留公开业务入口、ModelError IPC 码、数据/协议/调度与前端交互。按以下小批实施，合并事务仍负责重新校验快照；Fetch 独立持有自己的存储访问边界，不再借用 `models::lock`。
+- [x] **BR5：Models/Fetch。** 保留公开业务入口、ModelError IPC 码、数据/协议/调度与前端交互。按以下小批实施，合并事务仍负责重新校验快照；Fetch 独立持有自己的存储访问边界，不再借用 `models::lock`。
 
 | 待办      | 本批职责                                       | 实际文件范围（另含本清单）                                                                  | 依赖  |
 | --------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------- | ----- |
@@ -1466,16 +1466,18 @@ BR4.e 若实际 MCP/Provider 命令调用点也需要编辑，按功能继续拆
 | [x] BR5.i | 快照和获取状态 SQL 提取，数据库锁不跨凭据访问  | `model_fetch.rs`、`model_fetch/repository.rs`、`models.rs`、`models/repository.rs`          | BR5.h |
 | [x] BR5.j | 修订校验/目录合并事务和获取服务编排分离        | `model_fetch.rs`、`model_fetch/merge.rs`、`model_fetch/service.rs`、`model_fetch/tests.rs`  | BR5.i |
 | [x] BR5.k | 补浏览缓存/分页/失效/失败的行为回归            | `model_fetch/tests.rs`、`model_fetch/tests/browse.rs`                                       | BR5.j |
-| [ ] BR5.l | 最终检查、隔离原生 IPC 与文档整理              | 按文档/任务记录分批，每批至多五个实际文件                                                   | BR5.k |
+| [x] BR5.l | 最终检查、隔离原生 IPC 与文档整理              | 按文档/任务记录分批，每批至多五个实际文件                                                   | BR5.k |
 
 BR5.l 按实际文件继续分批：
 
 - [x] **BR5.l.1：本地模块入口与内部 API 注释收尾。** `models.rs`、`models/types.rs`、`models/validation.rs`、`models/repository.rs`，另含本清单。
 - [x] **BR5.l.2：下载与缓存边界注释收尾。** `model_fetch/download.rs`、`model_fetch/cache.rs`，另含本清单。
-- [ ] **BR5.l.3：架构/README/阶段概览/拆分计划/CHANGELOG 收尾。** 这五份文档为独立批次；任务状态和最终验证记录另提交本清单。
-- [ ] **BR5.l.4：完整自动检查、原生 IPC 验证与最终任务记录。** 不修改前端 UI；真实凭据与其他平台验收仍独立待验。
+- [x] **BR5.l.3：架构/README/阶段概览/拆分计划/CHANGELOG 收尾。** 这五份文档为独立批次；任务状态和最终验证记录另提交本清单。
+- [x] **BR5.l.4：完整自动检查、原生 IPC 验证与最终任务记录。** 不修改前端 UI；真实凭据与其他平台验收仍独立待验。
 
 每批运行 Rust fmt、all-targets Clippy 和完整测试；最终核对既有测试清单及新增测试、SQL/wire 合约，并执行完整前端检查、锁定 Linux debug/release 构建和隔离 IPC。前端样式/交互、schema v8、平台待验项不因重构改变。
+
+BR5 验证：Rust fmt/all-targets Clippy 零警告，206 项通过/1 项忽略；原 202 个用例全部保留，新增 5 项浏览 HTTP fixture 回归。SQL 字符串、注册/取消/缓存方法与 29 个 IPC 命令名/顺序核对一致。完整前端 468 项 UI/边界、8 项 release、14 项 i18n checker 与锁定 Linux debug/release 构建通过。隔离原生 IPC 验证模型添加/勾选/批量删除、无效游标/缺密钥错误、获取注册释放、重启重读与手动删除；偏好/Provider/MCP 同时回归，未执行 MCP 命令。前端、依赖、权限和 schema v8 不变；真实 OS 凭据/其他平台验收仍待验。
 
 - [ ] **BR6：Catalog/Storage/Credentials。** 各厂商解析局部化；迁移注册顺序和已发布 SQL 保持原样；按需要分离 OS store 实现和各业务补偿策略。开始前分别拆解析、迁移、凭据批次。
 - [ ] **BR7：外部服务适配。** GitHub 客户端/账号支持备份目标操作；Vercel 用途待确定。以真实复用需求提取 HTTP transport，保留服务专用权限/限流/错误语义。开始实施前按认证与客户端等职责拆细项。
@@ -1487,7 +1489,7 @@ BR5.l 按实际文件继续分批：
 
 **各代码批次的共同验收：** 原有公开业务入口、IPC 命令名/serde/错误码、schema v8、
 OS credential service name/引用、并发和补偿行为不变；运行 Rust fmt、all-targets Clippy
-零警告、完整测试并核对基线 201 通过/1 项忽略。命令/导出/资源移动额外执行完整
+零警告、完整测试并保留原基线 201 通过/1 项忽略的对应用例；新增测试另记。命令/导出/资源移动额外执行完整
 `check:frontend`、锁定桌面构建及适用隔离 IPC 验证。原平台待验项保持待验。
 
 ## 阶段 D：Pi 配置

@@ -56,7 +56,9 @@ builds a desktop executable without an installer.
 React uses typed, validated IPC wrappers. Rust owns configuration persistence,
 credentials and network access. Backend commands are grouped by feature under
 `src-tauri/src/commands/`; Provider and MCP internals separate types, validation,
-SQLite repositories and credential save/cleanup services. Modules use
+SQLite repositories and credential save/cleanup services. Saved models separate
+queries from edit transactions; model discovery separates registration, downloads,
+browse caching, snapshots and merging. Modules use
 `feature.rs` with a matching directory.
 The app does not write Agent configuration yet. Implementation status and
 remaining native/platform acceptance are recorded in

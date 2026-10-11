@@ -39,9 +39,12 @@ checks remain pending. [todo.md](todo.md) is the sole task-status source; curren
 UI rules and verification are in [desktop-shell-design.md](desktop-shell-design.md)
 and [frontend.md](../frontend.md).
 
-Backend BR1–BR4 has separated eight modules' behavior tests, grouped Tauri
+Backend BR1–BR5 has separated eight modules' behavior tests, grouped Tauri
 commands by feature, and split Provider/MCP types, validation, repositories and
-credential services. Domain-neutral text, ID-format and clock helpers are shared;
+credential services. Saved-model queries/edits and fetch registration, downloads,
+browse sessions, snapshot/status queries and merge orchestration are also split.
+Five added HTTP-fixture tests cover browse cache reuse, raw/result offsets,
+revision/URL invalidation, failed-page retries and cancellation. Domain-neutral text, ID-format and clock helpers are shared;
 MCP has its own identity type. Runtime modules use a `feature.rs` entrypoint with
 a matching directory. This refactoring adds no new integrations or behavior. See
 [backend-modularity.md](backend-modularity.md).

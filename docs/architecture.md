@@ -23,7 +23,10 @@
   the public domain entrypoints while `providers/` separates types, templates,
   validation, repository SQL and credential save orchestration. It stores provider instances (stable random IDs, cursor pages, optimistic
   `revision` checks); `provider_secrets.rs` reads key status and replaces keys;
-  `models.rs` stores fetched and manual model rows and selections per provider.
+  `models.rs` retains the public saved-model API. `models/types.rs` holds records
+  and errors; `validation.rs` holds bounded cursors/ID checks; `repository.rs` owns
+  local lists, fuzzy search and row conversion; `selection.rs` owns manual edits
+  and atomic selection/save transactions.
   SQLite stores only a `provider-<id>` reference per key, never the key itself.
 - **Credentials.** `src-tauri/src/credentials.rs` provides the OS credential-store
   interface, key validation and the compensation helpers that keep the store and
@@ -43,9 +46,18 @@
   map failures into their existing errors. MCP has no Provider dependency.
   The original public Provider validation and clock entrypoints remain available.
 - **HTTP and models.** `http_client.rs` performs bounded HTTPS GETs with cancellation
-  and system-proxy support; `model_catalog.rs` and `model_fetch.rs` map the three
-  phase-1 providers' list endpoints into stored catalog rows; `model_search.rs`
-  scores in-memory fuzzy queries over saved rows.
+  and system-proxy support. `model_catalog.rs` parses phase-1 vendor metadata;
+  `model_search.rs` ranks fuzzy matches. `model_fetch.rs` preserves the public
+  discovery API while `model_fetch/` separates request/result types, registration
+  and cancellation (`registry.rs`), revision/URL-aware sessions (`cache.rs`),
+  HTTP downloads/deadlines (`download.rs`), browse-only paging/ranking (`browse.rs`),
+  snapshot/status SQL (`repository.rs`), snapshot-checked catalog transactions
+  (`merge.rs`) and credential/download/merge orchestration (`service.rs`).
+  Fetch storage no longer borrows the local model repository's lock. Credentials
+  are loaded after the snapshot lock is released and dropped before merge; the
+  registration survives the merge. Browsing never writes model rows. Cancellation,
+  stale-fetch checks, manual/selected retention, pruning and API/result offsets
+  retain their existing rules.
 
 Saved provider instances and selected models are configuration only: nothing writes
 agent configuration or claims a verified inference connection yet. Manual model
@@ -60,10 +72,11 @@ The maintainer has requested planning for GitHub/Vercel integrations, more model
 providers and MCP capabilities, including GitHub configuration backups, source-based
 MCP/Skill installation, potential Agent installation and API forwarding to Agents. The [backend modularity plan](plans/backend-modularity.md)
 records current file sizes and dependency issues, incremental splits, and future
-extension boundaries. BR1–BR4 in [todo.md](plans/todo.md) are implemented:
+extension boundaries. BR1–BR5 in [todo.md](plans/todo.md) are implemented:
 eight modules have separate behavior-test files, commands are grouped by feature,
 and Provider/MCP responsibilities are split with shared text, identity and clock
-helpers. Models/Fetch and future integrations remain planned.
+helpers. Models/Fetch responsibilities are also separated. Catalog/infrastructure
+refinement and future integrations remain planned.
 The layout uses `feature.rs` plus a matching `feature/` directory. Keep cloud-service accounts separate
 from model providers and central MCP definitions. Reuse credential storage and
 extract HTTP transport only when a concrete second use requires it. Planned

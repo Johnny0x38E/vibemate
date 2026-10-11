@@ -448,6 +448,7 @@
             "location_unavailable": "The platform home directory could not be located. Check the desktop environment and refresh.",
             "operation_failed": "Discovery failed. Refresh to retry.",
             "invalid_response": "The desktop returned an invalid discovery report. Refresh to retry."
-        }
+        },
+        "complete": "Discovery complete. Entry observations are shown below."
     }
 }

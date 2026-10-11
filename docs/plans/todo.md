@@ -1581,6 +1581,14 @@ OS credential service name/引用、并发和补偿行为不变；运行 Rust fm
 **Dependencies:** P17.f。
 **Verification:** 格式与文档差异核对。
 
+### P17.h：异步结果可访问反馈
+
+- [x] 保持 status live region 挂载，刷新期间与完成后均提供双语反馈，不移动键盘焦点；行为测试检查同一 live region 的内容变化。
+
+**Files:** `AgentList.tsx`、`AgentList.test.tsx`、两份 locale、本清单。
+**Dependencies:** P17.g。
+**Verification:** AgentList 回归、完整前端检查和最终桌面构建。
+
 ### Task P18: 预览 Pi 模型配置
 
 **Description:** 将选择的 Provider/Model 编译为 Pi 配置计划，展示脱敏差异，不写文件。

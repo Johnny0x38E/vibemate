@@ -146,12 +146,17 @@ export function AgentList({
                     }
                 />
                 <p className={styles["notice"]}>{t("agents.readOnly")}</p>
-                {state.kind === "loading" && (
-                    <p role="status">{t("agents.loading")}</p>
-                )}
-                {state.kind === "preview" && (
-                    <p role="status">{t("agents.preview")}</p>
-                )}
+                {/* Keep the live region mounted so completion is announced after
+                a refresh, without moving keyboard focus away from the action. */}
+                <p className={styles["hint"]} role="status">
+                    {state.kind === "loading"
+                        ? t("agents.loading")
+                        : state.kind === "preview"
+                          ? t("agents.preview")
+                          : state.kind === "desktop"
+                            ? t("agents.complete")
+                            : ""}
+                </p>
                 {state.kind === "error" && (
                     <p className={styles["error"]} role="alert">
                         {t(`agents.errors.${state.code}`)}

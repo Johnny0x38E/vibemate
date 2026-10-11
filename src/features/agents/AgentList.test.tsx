@@ -163,6 +163,8 @@ test("blocks duplicate scans synchronously and keeps fields read-only until comp
     fireEvent.click(button);
     expect(read).toHaveBeenCalledTimes(calls + 1);
     expect(button.getAttribute("aria-disabled")).toBe("true");
+    const discoveryStatus = screen.getByRole("status");
+    expect(discoveryStatus.textContent).toBe("Discovering Agent entries…");
     expect(
         screen.getByRole("textbox", { name: "Pi entry path" }),
     ).toHaveProperty("readOnly", true);
@@ -171,6 +173,10 @@ test("blocks duplicate scans synchronously and keeps fields read-only until comp
         await next.promise;
     });
     expect(button.getAttribute("aria-disabled")).toBe("false");
+    expect(screen.getByRole("status")).toBe(discoveryStatus);
+    expect(discoveryStatus.textContent).toBe(
+        "Discovery complete. Entry observations are shown below.",
+    );
 });
 test("ignores a stale StrictMode mount reply", async () => {
     const old = deferred();

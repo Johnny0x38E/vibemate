@@ -448,6 +448,7 @@
             "location_unavailable": "无法定位系统用户目录，请检查桌面环境后刷新。",
             "operation_failed": "发现失败，请刷新重试。",
             "invalid_response": "桌面返回的发现报告无效，请刷新重试。"
-        }
+        },
+        "complete": "发现完成，入口检查结果见下方。"
     }
 }

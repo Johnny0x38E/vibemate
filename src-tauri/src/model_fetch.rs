@@ -44,6 +44,10 @@ pub use types::{
     PreparedFetch, ProviderSnapshot, UPSTREAM_BROWSE_PAGE_SIZE, UpstreamBrowseModel,
     UpstreamBrowsePage,
 };
+mod cache;
+mod registry;
+use cache::CachedVendorBrowseList;
+pub use registry::{FetchRegistration, ModelFetchRegistry};
 
 use crate::credentials::CredentialStore;
 use crate::http_client::{
@@ -59,7 +63,6 @@ use crate::providers::{ProviderId, ProviderKind, ProviderProtocol};
 use crate::storage::Storage;
 use rusqlite::{OptionalExtension, TransactionBehavior, params};
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::oneshot;
 
@@ -88,147 +91,6 @@ impl ModelFetcher {
         Self {
             client: HttpClient::new(HttpSettings::for_mock_server()).expect("test client"),
             deadline,
-        }
-    }
-}
-
-/// Upstream models accumulated for one browse session (all vendors).
-#[derive(Debug, Clone)]
-struct CachedVendorBrowseList {
-    revision: i64,
-    base_url: String,
-    models: Vec<CatalogModel>,
-    /// When true, another provider API page may be downloaded into `models`.
-    upstream_more: bool,
-    /// Next OpenRouter API offset; ignored once the vendor returns a single page.
-    upstream_api_offset: usize,
-}
-
-impl CachedVendorBrowseList {
-    fn fresh(revision: i64, base_url: String) -> Self {
-        Self {
-            revision,
-            base_url,
-            models: Vec::new(),
-            upstream_more: true,
-            upstream_api_offset: 0,
-        }
-    }
-}
-
-/// Running fetches, one per provider. Clones share the same registry.
-#[derive(Debug, Clone, Default)]
-pub struct ModelFetchRegistry {
-    /// Provider ID → the cancel sender, or `None` once the fetch is merging.
-    running: Arc<Mutex<HashMap<String, Option<oneshot::Sender<()>>>>>,
-    /// Provider ID → catalog accumulated across lazy browse requests.
-    browse_lists: Arc<Mutex<HashMap<String, CachedVendorBrowseList>>>,
-}
-
-/// Proof that a fetch is registered. Dropping it unregisters the fetch.
-#[derive(Debug)]
-pub struct FetchRegistration {
-    running: Arc<Mutex<HashMap<String, Option<oneshot::Sender<()>>>>>,
-    provider_id: String,
-}
-
-impl ModelFetchRegistry {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Register a fetch and return its registration and cancel signal.
-    ///
-    /// # Errors
-    /// `ModelFetchInProgress` when this provider already has a running fetch.
-    pub fn begin(
-        &self,
-        provider_id: &ProviderId,
-    ) -> Result<(FetchRegistration, oneshot::Receiver<()>), ModelError> {
-        let mut running = self
-            .running
-            .lock()
-            .map_err(|_| ModelError::OperationFailed)?;
-        if running.contains_key(provider_id.as_str()) {
-            return Err(ModelError::ModelFetchInProgress);
-        }
-        let (sender, receiver) = oneshot::channel();
-        running.insert(provider_id.as_str().to_owned(), Some(sender));
-        Ok((
-            FetchRegistration {
-                running: Arc::clone(&self.running),
-                provider_id: provider_id.as_str().to_owned(),
-            },
-            receiver,
-        ))
-    }
-
-    /// Ask a running fetch to stop. Returns whether a download was still running
-    /// and received the signal; `false` when nothing runs or it is already merging.
-    pub fn cancel(&self, provider_id: &ProviderId) -> bool {
-        let Ok(mut running) = self.running.lock() else {
-            return false;
-        };
-        match running.get_mut(provider_id.as_str()).and_then(Option::take) {
-            Some(sender) => sender.send(()).is_ok(),
-            None => false,
-        }
-    }
-
-    /// Read browse cache for this provider, or an empty session when stale or missing.
-    fn load_browse_cache(
-        &self,
-        provider_id: &ProviderId,
-        revision: i64,
-        base_url: &str,
-    ) -> Result<CachedVendorBrowseList, ModelError> {
-        let lists = self
-            .browse_lists
-            .lock()
-            .map_err(|_| ModelError::OperationFailed)?;
-        Ok(lists
-            .get(provider_id.as_str())
-            .filter(|entry| entry.revision == revision && entry.base_url == base_url)
-            .cloned()
-            .unwrap_or_else(|| CachedVendorBrowseList::fresh(revision, base_url.to_owned())))
-    }
-
-    fn save_browse_cache(
-        &self,
-        provider_id: &ProviderId,
-        cache: &CachedVendorBrowseList,
-    ) -> Result<(), ModelError> {
-        let mut lists = self
-            .browse_lists
-            .lock()
-            .map_err(|_| ModelError::OperationFailed)?;
-        lists.insert(provider_id.as_str().to_owned(), cache.clone());
-        Ok(())
-    }
-
-    /// Whether a fetch for this provider is registered.
-    pub fn is_running(&self, provider_id: &ProviderId) -> bool {
-        self.running
-            .lock()
-            .is_ok_and(|running| running.contains_key(provider_id.as_str()))
-    }
-}
-
-impl FetchRegistration {
-    /// Mark the fetch as merging: from now on `cancel` reports `false`.
-    pub fn enter_merge(&self) {
-        if let Ok(mut running) = self.running.lock()
-            && let Some(slot) = running.get_mut(&self.provider_id)
-        {
-            *slot = None;
-        }
-    }
-}
-
-impl Drop for FetchRegistration {
-    fn drop(&mut self) {
-        if let Ok(mut running) = self.running.lock() {
-            running.remove(&self.provider_id);
         }
     }
 }

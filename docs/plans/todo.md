@@ -1460,7 +1460,7 @@ BR4.e 若实际 MCP/Provider 命令调用点也需要编辑，按功能继续拆
 | [x] BR5.c | 本地列表/搜索、行转换与共享事务读取提取        | `models.rs`、`models/repository.rs`、`models/tests.rs`                                      | BR5.b |
 | [x] BR5.d | 模型选择/手动增删/批量保存事务提取             | `models.rs`、`models/selection.rs`、`models/repository.rs`、`models/tests.rs`               | BR5.c |
 | [x] BR5.e | Fetch 请求/快照/响应类型提取，密钥仍为内部字段 | `model_fetch.rs`、`model_fetch/types.rs`、`model_fetch/tests.rs`                            | BR5.d |
-| [ ] BR5.f | 获取注册/取消/Drop 与浏览缓存存储分离          | `model_fetch.rs`、`model_fetch/registry.rs`、`model_fetch/cache.rs`、`model_fetch/tests.rs` | BR5.e |
+| [x] BR5.f | 获取注册/取消/Drop 与浏览缓存存储分离          | `model_fetch.rs`、`model_fetch/registry.rs`、`model_fetch/cache.rs`、`model_fetch/tests.rs` | BR5.e |
 | [ ] BR5.g | HTTP 客户端、完整/单页下载与截止时间提取       | `model_fetch.rs`、`model_fetch/download.rs`、`model_fetch/tests.rs`                         | BR5.f |
 | [ ] BR5.h | 浏览分页、模糊搜索和增量缓存编排提取           | `model_fetch.rs`、`model_fetch/browse.rs`、`model_fetch/tests.rs`                           | BR5.g |
 | [ ] BR5.i | 快照和获取状态 SQL 提取，数据库锁不跨凭据访问  | `model_fetch.rs`、`model_fetch/repository.rs`、`models.rs`                                  | BR5.h |

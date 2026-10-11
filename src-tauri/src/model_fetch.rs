@@ -54,9 +54,12 @@ pub use browse::browse_upstream_page;
 
 use crate::credentials::CredentialStore;
 use crate::model_catalog::Catalog;
-use crate::models::{ModelError, lock, parse_provider_id};
-use crate::providers::{ProviderId, ProviderKind, ProviderProtocol};
+use crate::models::{ModelError, parse_provider_id};
+mod repository;
+use crate::providers::ProviderId;
 use crate::storage::Storage;
+pub use repository::fetch_status;
+use repository::lock;
 use rusqlite::{OptionalExtension, TransactionBehavior, params};
 use std::collections::{HashMap, HashSet};
 
@@ -70,39 +73,7 @@ pub fn prepare_fetch(
     store: &dyn CredentialStore,
     provider_id: &ProviderId,
 ) -> Result<PreparedFetch, ModelError> {
-    let (snapshot, reference) = {
-        let connection = lock(storage)?;
-        let row: Option<(String, String, String, i64, Option<String>)> = connection
-            .query_row(
-                "SELECT p.kind, p.protocol, p.base_url, p.revision, c.credential_ref
-                 FROM provider_instance p
-                 LEFT JOIN provider_credential c ON c.provider_id = p.id
-                 WHERE p.id = ?1",
-                [provider_id.as_str()],
-                |row| {
-                    Ok((
-                        row.get(0)?,
-                        row.get(1)?,
-                        row.get(2)?,
-                        row.get(3)?,
-                        row.get(4)?,
-                    ))
-                },
-            )
-            .optional()
-            .map_err(|_| ModelError::ReadFailed)?;
-        let (kind, protocol, base_url, revision, reference) = row.ok_or(ModelError::NotFound)?;
-        let snapshot = ProviderSnapshot {
-            provider_id: provider_id.clone(),
-            kind: ProviderKind::from_value(&kind).ok_or(ModelError::InvalidStoredProvider)?,
-            protocol: ProviderProtocol::from_value(&protocol)
-                .ok_or(ModelError::InvalidStoredProvider)?,
-            base_url,
-            revision,
-        };
-        (snapshot, reference)
-        // The connection guard is dropped here, before the credential store runs.
-    };
+    let (snapshot, reference) = repository::read_provider_snapshot(storage, provider_id)?;
     let reference = reference.ok_or(ModelError::SecretMissing)?;
     let key = store.load(&reference)?.ok_or(ModelError::SecretMissing)?;
     Ok(PreparedFetch { snapshot, key })
@@ -314,47 +285,6 @@ pub async fn fetch_provider_models(
     drop(key);
     registration.enter_merge();
     merge_catalog(storage, &snapshot, &catalog, now_ms)
-}
-
-/// Report whether a fetch is running and the last saved fetch.
-///
-/// # Errors
-/// `InvalidRequest` for a malformed ID, `NotFound`, or a storage code.
-pub fn fetch_status(
-    storage: &Storage,
-    registry: &ModelFetchRegistry,
-    provider_id: &str,
-) -> Result<ModelFetchStatus, ModelError> {
-    let provider_id = parse_provider_id(provider_id)?;
-    let connection = lock(storage)?;
-    let exists: Option<i64> = connection
-        .query_row(
-            "SELECT 1 FROM provider_instance WHERE id = ?1",
-            [provider_id.as_str()],
-            |row| row.get(0),
-        )
-        .optional()
-        .map_err(|_| ModelError::ReadFailed)?;
-    exists.ok_or(ModelError::NotFound)?;
-    let last_fetch = connection
-        .query_row(
-            "SELECT fetched_at, complete, listed_count FROM provider_model_fetch
-             WHERE provider_id = ?1",
-            [provider_id.as_str()],
-            |row| {
-                Ok(LastModelFetch {
-                    fetched_at_ms: row.get(0)?,
-                    complete: row.get::<_, i64>(1)? == 1,
-                    listed_count: row.get(2)?,
-                })
-            },
-        )
-        .optional()
-        .map_err(|_| ModelError::ReadFailed)?;
-    Ok(ModelFetchStatus {
-        running: registry.is_running(&provider_id),
-        last_fetch,
-    })
 }
 
 #[cfg(test)]

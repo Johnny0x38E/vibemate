@@ -151,7 +151,7 @@ pub(super) struct ProviderContext {
     pub(super) protocol: ProviderProtocol,
 }
 
-pub(crate) fn lock(storage: &Storage) -> Result<std::sync::MutexGuard<'_, Connection>, ModelError> {
+pub(super) fn lock(storage: &Storage) -> Result<std::sync::MutexGuard<'_, Connection>, ModelError> {
     storage.lock().map_err(|_| ModelError::StorageUnavailable)
 }
 

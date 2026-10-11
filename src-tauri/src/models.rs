@@ -13,7 +13,6 @@ pub(crate) use validation::parse_provider_id;
 pub use validation::{decode_cursor, encode_cursor};
 mod repository;
 pub use repository::list_provider_models;
-pub(crate) use repository::lock;
 mod selection;
 pub use selection::{
     add_manual_model, delete_manual_model, save_provider_model_selections, set_models_selected,

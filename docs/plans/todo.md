@@ -1541,7 +1541,7 @@ OS credential service name/引用、并发和补偿行为不变；运行 Rust fm
 
 ### P17.c：TS 运行时边界
 
-- [ ] 严格验证发现响应与错误；浏览器预览不伪造本机安装，拒绝异常路径/版本/枚举/关联状态。
+- [x] 严格验证发现响应与错误；浏览器预览不伪造本机安装，拒绝异常路径/版本/枚举/关联状态。
 
 **Files:** `src/lib/desktop/agents.ts`、`agents.test.ts`、本清单。
 **Dependencies:** P17.b。

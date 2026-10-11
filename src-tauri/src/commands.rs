@@ -1,6 +1,7 @@
 //! Desktop IPC composition. Each feature owns its command module; managed-state
 //! coordination is shared here, while domain behavior remains independent of Tauri.
 
+pub(crate) mod agents;
 pub(crate) mod app;
 pub(crate) mod mcp;
 pub(crate) mod models;

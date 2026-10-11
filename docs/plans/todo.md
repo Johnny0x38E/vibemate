@@ -1533,7 +1533,7 @@ OS credential service name/引用、并发和补偿行为不变；运行 Rust fm
 
 ### P17.b：原生 IPC 接线
 
-- [ ] 阻塞文件读取使用 blocking pool；只返回领域 DTO 与安全错误码，无新插件或能力权限。
+- [x] 阻塞文件读取使用 blocking pool；只返回领域 DTO 与安全错误码，无新插件或能力权限。
 
 **Files:** `src-tauri/src/commands/agents.rs`、`commands.rs`、`lib.rs`、本清单。
 **Dependencies:** P17.a。

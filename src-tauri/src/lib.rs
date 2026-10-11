@@ -54,6 +54,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::app::get_app_info,
+            commands::agents::discover_agents,
             commands::mcp::list_mcp_definitions,
             commands::mcp::get_mcp_definition,
             commands::mcp::save_mcp_definition,

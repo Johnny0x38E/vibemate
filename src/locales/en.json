@@ -403,15 +403,6 @@
         "versionProbe": {
             "title": "CLI version",
             "read": "Read version",
-            "hint": "Optional: run the selected CLI only after confirmation. Automatic discovery never runs it.",
-            "requiresDiscovery": "Rediscover a found entry first; unsaved path changes and browser preview cannot launch it.",
-            "confirmTitle": "Confirm version command",
-            "command": "Command",
-            "run": "Run version command",
-            "cancel": "Cancel",
-            "running": "Reading CLI version…",
-            "warning": "This starts the program shown above, not a sandbox. Even --version can read user configuration or credentials, load plugins, access the network, write files, or start other processes/containers. A found path does not prove the program is genuine. Proceed only if you trust this entry.",
-            "limits": "Only --version is passed; stdin is closed, each output pipe is limited to 8 KiB, and the direct child has a 5-second deadline. Termination targets the direct child only; descendants and side effects may remain. Raw output is not displayed or logged. Windows requires a native .exe, not a .cmd/.bat wrapper.",
             "evidence": "Reported by the user-triggered CLI command. This does not verify authenticity, capabilities, connection or effective configuration.",
             "reported": "{{version}} · CLI reported",
             "errors": {
@@ -463,7 +454,6 @@
             }
         },
         "refresh": "Discover",
-        "readOnly": "Read-only discovery: entries are never executed and Agent configuration contents are never read or changed. A found file does not prove a working installation.",
         "loading": "Discovering Agent entries…",
         "unknown": "Unverified",
         "pathLabel": "{{name}} entry path",
@@ -515,22 +505,14 @@
                 "env": "Environment file (.env)"
             }
         },
-        "precedence": {
-            "claudeCode": "Observed user settings root only. Managed, project, local and CLI settings may override it; ~/.claude.json and project files are not inspected. Configuration deployment is not implemented.",
-            "codex": "Observed user config root only (CODEX_HOME or ~/.codex). Profiles, trusted project, system, managed and CLI settings may change effective behavior. Configuration deployment is not implemented.",
-            "openCode": "Observed candidate config root only. OPENCODE_CONFIG_DIR semantics differ by version; file, inline, remote and project configuration is not inspected. Effective settings and deployment support are unverified.",
-            "hermes": "Observed CLI user-data root only. HERMES_HOME, profiles, managed settings, environment and CLI options may change effective behavior; desktop bundles can use a different root. Configuration deployment is not implemented.",
-            "pi": "Documented precedence: trusted project settings / MCP can override user settings. Models are user-level; CLI, SDK, extensions and existing sessions may change effective behavior.",
-            "grokBuild": "Documented precedence: system managed → user managed → user config → user requirements → system requirements. Trusted project MCP / plugins / permissions and CLI or sessions may change effective behavior."
-        },
-        "scope": "This report uses the desktop process environment and up to 64 PATH entries. Inputs remain in this window. Effective project, policy and session configuration has not been determined.",
         "errors": {
             "invalid_path": "Enter an absolute entry path without control characters, or clear it to use automatic discovery, then select Discover.",
             "location_unavailable": "The platform home directory could not be located. Check the desktop environment and select Discover.",
             "operation_failed": "Discovery failed. Select Discover to retry.",
             "invalid_response": "The desktop returned an invalid discovery report. Select Discover to retry."
         },
-        "complete": "Discovery complete. Open a card to review installation paths and configuration files."
+        "count_one": "{{count}} agent discovered",
+        "count_other": "{{count}} agents discovered"
     },
     "skills": {
         "title": "Skills",

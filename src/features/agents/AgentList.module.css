@@ -39,6 +39,17 @@
     list-style: none;
 }
 
+/*
+ * Skills and MCP keep only --space-sm between their summary line and the list.
+ * The Agent status line (or its error notice) is that same summary line, so the
+ * cards start at the same vertical offset as those module lists. The preview
+ * path hides the status line and keeps the full page gap.
+ */
+.view > .hint:not([hidden]) + .cards,
+.view > .error + .cards {
+    margin-top: var(--space-sm);
+}
+
 .card {
     display: flex;
     align-items: center;

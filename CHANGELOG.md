@@ -12,6 +12,16 @@ GitHub release notes are extracted from the matching version section only.
 
 ### Changed
 
+- Reading an Agent CLI version now runs the fixed `--version` command on the first click. The inline command-expansion confirmation step was removed.
+- Removed the Agent detail-page disclaimer paragraphs (read-only discovery, per-agent config precedence, and scan scope).
+- The discovered-Agent count is list-only. It no longer appears on Agent detail pages.
+- The Agent list cards now start at the same vertical offset as the Skills and MCP lists: an 8px gap under the summary line instead of a full page gap.
+- Sidebar destinations and underline tabs keep a uniform `font-weight: 600` instead of bolding only the selected item. Changing weight on selection shifted Latin labels such as **Agent** and **MCP** and made the text jitter.
+- Replaced the Hermes catalog mark's white-tile favicon with Nous Research's official transparent `logo.png` / `logo-dark.png` silhouettes, matching the light/dark pattern of the other Agent icons and removing the filled rounded background.
+- Slightly reduced the Pi and OpenCode catalog icons (90% display size). Their official SVGs fill nearly the whole canvas, so they read a step larger than the other marks at the shared box size.
+- Scaled the Codex (OpenAI Blossom) catalog icon to match the optical size of the other Agent marks. The official 716×716 SVG keeps its clear-space margins; only the displayed image is enlarged and the empty margin clipped.
+- Replaced the Agent catalog's Claude Code mark with Anthropic's official Claude favicon SVG (`claude.ai/favicon.svg`, unmodified `#D97757` starburst). The previous 192px documentation favicon was a soft raster and looked blurry at the 20px and 40px icon sizes.
+- The Agent list status line states how many entries the latest scan discovered (**已发现 3 个 Agent**; English **3 agents discovered**) instead of the previous completion sentence, following the Skills and MCP library-total pattern. Only `found` entries are counted; absent or unchecked catalog slots remain visible as cards and do not inflate the number.
 - Condensed completed development-plan records while retaining unresolved acceptance items. Clarified that request settings belong to target Agent configuration, not the central provider/model catalog.
 - Expanded read-only entry discovery to Claude Code, Codex, OpenCode, Pi, Grok Build and Nous Research Hermes Agent, with a fixed catalog, independent window-local manual paths and strict IPC. Automatic discovery never executes entries or reads configuration/credential contents; failed refreshes label retained observations as previous results, not fresh successes. Detection does not establish connection or configuration deployment support.
 - Added officially sourced identification marks for the four new Agents; Codex uses OpenAI's official Blossom, not a separately verified Codex-specific logo. Provenance, upstream notices and brand-use boundaries are in `assets/agents/README.md`; marks are not relicensed under vibemate's MIT license. Publishing review remains pending.

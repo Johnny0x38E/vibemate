@@ -34,7 +34,9 @@
     border-bottom: 1px solid var(--color-border);
 }
 
-.row:last-child {
+.row:last-child,
+/* A lone fact row keeps no divider even when live status paragraphs follow. */
+.row:only-of-type {
     border-bottom: 0;
 }
 

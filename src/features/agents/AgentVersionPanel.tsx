@@ -4,7 +4,6 @@ import {
     useRef,
     useState,
     type JSX,
-    type KeyboardEvent,
 } from "react";
 import { useTranslation } from "react-i18next";
 import { DetailFact, DetailPanel } from "../../components/DetailForm";
@@ -20,11 +19,10 @@ import styles from "./AgentList.module.css";
 
 type ProbeState =
     | { kind: "idle" }
-    | { kind: "confirm" }
     | { kind: "running" }
     | { kind: "error"; code: VersionProbeErrorCode };
 
-/** User-triggered, inline execution confirmation; never probes on mount.
+/** User-triggered inline version probe; never probes on mount.
  * The parent owns window-local results and the shared navigation/scan busy guard.
  * Remount this panel when a discovery generation or its selected target changes.
  */
@@ -51,7 +49,6 @@ export function AgentVersionPanel({
     useLayoutEffect(() => {
         hiddenNow.current = hidden;
     }, [hidden]);
-    const opener = useRef<HTMLButtonElement>(null);
     useEffect(() => {
         mounted.current = true;
         // IPC launch cannot be undone by hiding the UI. Ignore results after
@@ -68,19 +65,8 @@ export function AgentVersionPanel({
         row?.state === "found" &&
         typeof entryPath === "string" &&
         typeof resolvedPath === "string";
-    function cancel(): void {
-        if (pending.current) return;
-        setState({ kind: "idle" });
-        opener.current?.focus();
-    }
-    function cancelOnEscape(event: KeyboardEvent<HTMLButtonElement>): void {
-        if (event.key === "Escape" && state.kind === "confirm") {
-            event.preventDefault();
-            cancel();
-        }
-    }
     async function run(): Promise<void> {
-        if (!canProbe || state.kind !== "confirm" || pending.current) return;
+        if (!canProbe || pending.current) return;
         pending.current = true;
         onBusyChange(true);
         setState({ kind: "running" });
@@ -115,88 +101,19 @@ export function AgentVersionPanel({
                 label={t("agents.versionProbe.title")}
                 value={
                     <button
-                        ref={opener}
-                        onKeyDown={cancelOnEscape}
                         type="button"
                         className={buttons["secondary"]}
-                        aria-disabled={
-                            !canProbe ||
-                            state.kind === "running" ||
-                            state.kind === "confirm"
-                        }
+                        aria-disabled={!canProbe || state.kind === "running"}
                         onClick={() => {
-                            if (
-                                !canProbe ||
-                                pending.current ||
-                                state.kind === "confirm"
-                            )
-                                return;
-                            setState({ kind: "confirm" });
+                            void run();
                         }}
                     >
                         {t("agents.versionProbe.read")}
                     </button>
                 }
             />
-            <p className={styles["hint"]}>{t("agents.versionProbe.hint")}</p>
-            {!canProbe && state.kind !== "running" && (
-                <p className={styles["hint"]}>
-                    {t("agents.versionProbe.requiresDiscovery")}
-                </p>
-            )}
-            {state.kind === "confirm" && row !== undefined && (
-                <div
-                    role="group"
-                    aria-label={t("agents.versionProbe.confirmTitle")}
-                >
-                    <DetailFact
-                        label={t("agents.versionProbe.command")}
-                        value={<code>{row.resolvedPath} --version</code>}
-                    />
-                    {row.entryPath !== row.resolvedPath && (
-                        <DetailFact
-                            label={t("agents.detail.labels.entry")}
-                            value={row.entryPath}
-                        />
-                    )}
-                    <p className={styles["notice"]}>
-                        {t("agents.versionProbe.warning")}
-                    </p>
-                    <p className={styles["hint"]}>
-                        {t("agents.versionProbe.limits")}
-                    </p>
-                    <div className={styles["pathControls"]}>
-                        <button
-                            type="button"
-                            className={buttons["secondary"]}
-                            aria-disabled={!canProbe}
-                            onKeyDown={cancelOnEscape}
-                            onClick={() => {
-                                void run();
-                            }}
-                        >
-                            {t("agents.versionProbe.run")}
-                        </button>
-                        <button
-                            type="button"
-                            className={buttons["secondary"]}
-                            onClick={cancel}
-                            onKeyDown={cancelOnEscape}
-                        >
-                            {t("agents.versionProbe.cancel")}
-                        </button>
-                    </div>
-                </div>
-            )}
-            <p
-                className={styles["hint"]}
-                aria-live="polite"
-                role={state.kind === "running" ? "status" : undefined}
-            >
-                {state.kind === "running"
-                    ? t("agents.versionProbe.running")
-                    : ""}
-            </p>
+            {/* No busy label: the probe is fast, and extra card content made
+                the card jump. Repeat clicks are blocked by aria-disabled. */}
             {state.kind === "error" && (
                 <p className={styles["error"]} role="alert">
                     {t(`agents.versionProbe.errors.${state.code}`)}

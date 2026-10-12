@@ -403,15 +403,6 @@
         "versionProbe": {
             "title": "CLI 版本",
             "read": "读取版本",
-            "hint": "可选操作：确认后才启动所选 CLI。自动发现不会执行它。",
-            "requiresDiscovery": "请先重新发现可用入口；尚未检查的路径改动与浏览器预览不能启动程序。",
-            "confirmTitle": "确认版本命令",
-            "command": "命令",
-            "run": "执行版本命令",
-            "cancel": "取消",
-            "running": "正在读取 CLI 版本…",
-            "warning": "这会启动上方程序，不是沙箱。即使只传 --version，程序仍可能读取用户配置或凭据、加载插件、访问网络、写文件，或启动其他进程/容器。发现路径不证明程序真实可信，请仅在信任该入口时继续。",
-            "limits": "仅传 --version，关闭标准输入；每个输出管道限制为 8 KiB，直接子进程运行上限为 5 秒。终止仅针对直接子进程，后代进程与副作用可能保留；不展示或记录原始输出。Windows 需使用原生 .exe，不经 .cmd/.bat 包装入口。",
             "evidence": "由用户主动执行的 CLI 命令报告。不证明程序真实性、能力支持、连接成功或有效配置。",
             "reported": "{{version}} · CLI 报告",
             "errors": {
@@ -463,7 +454,6 @@
             }
         },
         "refresh": "发现",
-        "readOnly": "只读发现：不执行入口文件，不读取或修改 Agent 配置内容。发现文件不代表安装可正常运行。",
         "loading": "正在发现 Agent 入口…",
         "unknown": "未核实",
         "pathLabel": "{{name}} 入口路径",
@@ -515,22 +505,14 @@
                 "env": "环境文件 (.env)"
             }
         },
-        "precedence": {
-            "claudeCode": "仅观测用户设置路径。托管、项目、本地与 CLI 设置可能覆盖它；未检查 ~/.claude.json 或项目文件，尚未实现配置部署。",
-            "codex": "仅观测用户配置路径（CODEX_HOME 或 ~/.codex）。profile、受信任项目、系统、托管与 CLI 设置可能改变实际行为，尚未实现配置部署。",
-            "openCode": "仅观测候选配置路径。OPENCODE_CONFIG_DIR 含义随版本不同；未检查自定义文件、内联、远程或项目配置，有效配置与部署支持仍未核实。",
-            "hermes": "仅观测 CLI 用户数据路径。HERMES_HOME、profile、托管设置、环境变量与 CLI 选项可能改变实际行为；桌面包可能使用其他路径，尚未实现配置部署。",
-            "pi": "文档优先级：受信任项目的设置 / MCP 可覆盖用户设置。模型配置在用户级；CLI、SDK、扩展和已有会话可能改变实际生效行为。",
-            "grokBuild": "文档优先级：系统 managed → 用户 managed → 用户 config → 用户 requirements → 系统 requirements。受信任项目的 MCP / plugins / permission、CLI 或会话也可能影响实际行为。"
-        },
-        "scope": "报告使用桌面进程环境及 PATH 的前 64 项。输入仅保留在当前窗口，尚未判定项目、策略与会话的有效配置。",
         "errors": {
             "invalid_path": "请填写不含控制字符的绝对入口路径，或清空以自动发现，然后点击「发现」或「重新发现」。",
             "location_unavailable": "无法定位系统用户路径，请检查桌面环境后点击「发现」。",
             "operation_failed": "发现失败，请点击「发现」或「重新发现」重试。",
             "invalid_response": "桌面返回的发现报告无效，请点击「发现」或「重新发现」重试。"
         },
-        "complete": "发现完成。点击卡片可查看安装路径与配置文件。"
+        "count_one": "已发现 {{count}} 个 Agent",
+        "count_other": "已发现 {{count}} 个 Agent"
     },
     "skills": {
         "title": "技能",

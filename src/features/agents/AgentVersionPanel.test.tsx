@@ -59,24 +59,13 @@ async function mount(locale: "en" | "zh-CN" = "en", enabled = true) {
 }
 
 test.each(["en", "zh-CN"] as const)(
-    "%s requires a second explicit confirmation and exposes fixed command risks",
+    "%s launches the fixed version command on the first click",
     async (locale) => {
         const { onResult, onBusyChange } = await mount(locale);
         expect(probe).not.toHaveBeenCalled();
         fireEvent.click(
             screen.getByRole("button", {
                 name: locale === "en" ? "Read version" : "读取版本",
-            }),
-        );
-        expect(probe).not.toHaveBeenCalled();
-        expect(screen.getByText(`${row.resolvedPath} --version`)).toBeDefined();
-        expect(screen.getByText(row.entryPath)).toBeDefined();
-        expect(document.body.textContent).toContain(
-            locale === "en" ? "not a sandbox" : "不是沙箱",
-        );
-        fireEvent.click(
-            screen.getByRole("button", {
-                name: locale === "en" ? "Run version command" : "执行版本命令",
             }),
         );
         await waitFor(() => {
@@ -91,27 +80,10 @@ test.each(["en", "zh-CN"] as const)(
         expect(onBusyChange.mock.calls).toEqual([[true], [false]]);
     },
 );
-test("cancel and Escape return focus without launching", async () => {
-    await mount();
-    const opener = screen.getByRole("button", { name: "Read version" });
-    fireEvent.click(opener);
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(document.activeElement).toBe(opener);
-    fireEvent.click(opener);
-    fireEvent.keyDown(
-        screen.getByRole("button", { name: "Run version command" }),
-        { key: "Escape" },
-    );
-    expect(
-        screen.queryByRole("group", { name: "Confirm version command" }),
-    ).toBeNull();
-    expect(document.activeElement).toBe(opener);
-    expect(probe).not.toHaveBeenCalled();
-});
-test("missing discovery/preview disables confirmation", async () => {
+test("missing discovery/preview keeps the action inert", async () => {
     const { rerender, i18n, props } = await mount("en", false);
     fireEvent.click(screen.getByRole("button", { name: "Read version" }));
-    expect(screen.queryByRole("group")).toBeNull();
+    expect(probe).not.toHaveBeenCalled();
     rerender(
         <I18nextProvider i18n={i18n}>
             <AgentVersionPanel {...props} enabled={true} row={undefined} />
@@ -130,15 +102,11 @@ test("repeat click cannot launch while pending and unsafe failure remains retrya
         }),
     );
     const { onResult, onBusyChange } = await mount();
-    fireEvent.click(screen.getByRole("button", { name: "Read version" }));
-    const run = screen.getByRole("button", { name: "Run version command" });
-    fireEvent.click(run);
-    fireEvent.click(run);
-    fireEvent.click(screen.getByRole("button", { name: "Read version" }));
+    const read = screen.getByRole("button", { name: "Read version" });
+    fireEvent.click(read);
+    fireEvent.click(read);
     expect(probe).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole("status").textContent).toContain(
-        "Reading CLI version",
-    );
+    expect(read.getAttribute("aria-disabled")).toBe("true");
     await act(async () => {
         reject(new Error("synthetic-private-output"));
         await Promise.resolve();
@@ -150,9 +118,6 @@ test("repeat click cannot launch while pending and unsafe failure remains retrya
     expect(onResult).not.toHaveBeenCalled();
     expect(onBusyChange.mock.calls).toEqual([[true], [false]]);
     fireEvent.click(screen.getByRole("button", { name: "Read version" }));
-    fireEvent.click(
-        screen.getByRole("button", { name: "Run version command" }),
-    );
     await waitFor(() => {
         expect(onResult).toHaveBeenCalledExactlyOnceWith(result);
     });
@@ -161,9 +126,6 @@ test("known timeout is translated rather than reported as an installation failur
     probe.mockRejectedValue(new VersionProbeRequestError("timed_out"));
     await mount();
     fireEvent.click(screen.getByRole("button", { name: "Read version" }));
-    fireEvent.click(
-        screen.getByRole("button", { name: "Run version command" }),
-    );
     expect((await screen.findByRole("alert")).textContent).toContain(
         "Descendants or side effects may remain",
     );
@@ -180,9 +142,6 @@ test.each(["hide", "unmount"] as const)(
         probe.mockReturnValue(promise);
         const { props, rerender, unmount, i18n, onResult } = await mount();
         fireEvent.click(screen.getByRole("button", { name: "Read version" }));
-        fireEvent.click(
-            screen.getByRole("button", { name: "Run version command" }),
-        );
         if (action === "hide")
             rerender(
                 <I18nextProvider i18n={i18n}>
@@ -197,13 +156,24 @@ test.each(["hide", "unmount"] as const)(
         expect(onResult).not.toHaveBeenCalled();
     },
 );
-test("language change preserves confirmation without executing", async () => {
-    const { i18n } = await mount();
+test("language change preserves an in-flight probe without relaunching", async () => {
+    let resolve: (value: AgentVersionResult) => void = () => {
+        throw Error("not initialized");
+    };
+    const promise = new Promise<AgentVersionResult>((res) => {
+        resolve = res;
+    });
+    probe.mockReturnValue(promise);
+    const { i18n, onResult } = await mount();
     fireEvent.click(screen.getByRole("button", { name: "Read version" }));
     await act(async () => {
         await i18n.changeLanguage("zh-CN");
     });
-    expect(screen.getByRole("button", { name: "执行版本命令" })).toBeDefined();
-    expect(screen.getByText(`${row.resolvedPath} --version`)).toBeDefined();
-    expect(probe).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "读取版本" })).toBeDefined();
+    expect(probe).toHaveBeenCalledTimes(1);
+    await act(async () => {
+        resolve(result);
+        await promise;
+    });
+    expect(onResult).toHaveBeenCalledExactlyOnceWith(result);
 });

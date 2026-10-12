@@ -1008,8 +1008,9 @@ Configuration presence and precedence are not effective runtime settings.
 All six entries have locally bundled identification marks; official sources and
 usage boundaries are in [assets/agents/README.md](../assets/agents/README.md).
 Codex uses OpenAI's official Blossom, not a separately verified Codex-specific
-logo. Claude's official favicon is identical in both appearances; Hermes keeps
-its original white tile. OpenCode, Codex, Pi and Grok switch original light/dark
+logo. Claude uses Anthropic's official Claude favicon SVG (vector starburst,
+one file for both appearances); Hermes uses official transparent light/dark
+silhouettes instead of the white-tile favicon. OpenCode, Codex, Pi and Grok switch original light/dark
 files. No marks are recolored or fetched from third-party servers at runtime;
 trademark ownership is not covered by vibemate's MIT license.
 

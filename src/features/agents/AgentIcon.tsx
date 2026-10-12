@@ -1,11 +1,12 @@
 import type { JSX } from "react";
 import { Icon } from "../../components/Icon";
-import claudeCode from "../../../assets/agents/claude-code.png";
+import claudeCode from "../../../assets/agents/claude-code.svg";
 import codexDark from "../../../assets/agents/codex-dark.svg";
 import codexLight from "../../../assets/agents/codex-light.svg";
 import opencodeDark from "../../../assets/agents/opencode-dark.svg";
 import opencodeLight from "../../../assets/agents/opencode-light.svg";
-import hermes from "../../../assets/agents/hermes.svg";
+import hermesDark from "../../../assets/agents/hermes-dark.png";
+import hermesLight from "../../../assets/agents/hermes-light.png";
 import grokBuildDark from "../../../assets/agents/grok-build-dark.svg";
 import grokBuildLight from "../../../assets/agents/grok-build-light.svg";
 import piDark from "../../../assets/agents/pi-dark.svg";
@@ -22,7 +23,7 @@ const ICONS = new Map<AgentId, IconSource>([
     ["claudeCode", { light: claudeCode }],
     ["codex", { light: codexLight, dark: codexDark }],
     ["openCode", { light: opencodeLight, dark: opencodeDark }],
-    ["hermes", { light: hermes }],
+    ["hermes", { light: hermesLight, dark: hermesDark }],
     ["pi", { light: piLight, dark: piDark }],
     ["grokBuild", { light: grokBuildLight, dark: grokBuildDark }],
 ]);
@@ -51,7 +52,12 @@ export function AgentIcon({
     return (
         <span className={styles["icon"]} data-size={size}>
             {source.dark === undefined ? (
-                <img src={source.light} alt="" draggable={false} />
+                <img
+                    src={source.light}
+                    alt=""
+                    draggable={false}
+                    data-agent={id}
+                />
             ) : (
                 <>
                     <img
@@ -59,6 +65,7 @@ export function AgentIcon({
                         src={source.light}
                         alt=""
                         draggable={false}
+                        data-agent={id}
                         data-scheme="light"
                     />
                     <img
@@ -66,6 +73,7 @@ export function AgentIcon({
                         src={source.dark}
                         alt=""
                         draggable={false}
+                        data-agent={id}
                         data-scheme="dark"
                     />
                 </>

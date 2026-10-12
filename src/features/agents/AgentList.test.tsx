@@ -266,6 +266,34 @@ test.each(["en", "zh-CN"] as const)(
     },
 );
 
+test("the status line counts only discovered Agents", async () => {
+    // The fixture report has one found entry (Pi) among the six catalog slots.
+    await mount();
+    expect(await screen.findByText("1 agent discovered")).toBeDefined();
+    expect(screen.queryByText(/6 agents discovered/u)).toBeNull();
+});
+
+test("an all-absent report states zero discovered Agents", async () => {
+    read.mockResolvedValue({ kind: "desktop", items: agentReport() });
+    await mount();
+    expect(await screen.findByText("0 agents discovered")).toBeDefined();
+});
+
+test("the discovered count is localized", async () => {
+    await mount("zh-CN");
+    expect(await screen.findByText("已发现 1 个 Agent")).toBeDefined();
+});
+
+test("the discovered count stays on the list and leaves the detail page", async () => {
+    await mount();
+    expect(await screen.findByText("1 agent discovered")).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Open Pi details" }));
+    expect(
+        await screen.findByRole("button", { name: "Back to agents" }),
+    ).toBeDefined();
+    expect(screen.queryByText("1 agent discovered")).toBeNull();
+});
+
 test("catalog is visible while checking and failed refresh labels previous observations", async () => {
     const pending = deferred();
     read.mockReturnValue(pending.promise);
@@ -357,10 +385,10 @@ test("confirmed CLI result is separate, blocks scans/navigation and expires at r
     await mount();
     await openPiDetail();
     expect(probe).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Read version" }));
-    const run = screen.getByRole("button", { name: "Run version command" });
-    fireEvent.click(run);
-    fireEvent.click(run);
+    const readVersion = screen.getByRole("button", { name: "Read version" });
+    fireEvent.click(readVersion);
+    // Repeat clicks hit the same control while it is disabled.
+    fireEvent.click(readVersion);
     const calls = read.mock.calls.length;
     const back = screen.getByRole("button", { name: "Back to agents" });
     expect(back.getAttribute("aria-disabled")).toBe("true");
@@ -406,24 +434,13 @@ test("editing a manual path requires discovery before a version launch", async (
     await mount();
     await openPiDetail();
     const field = screen.getByRole("textbox");
-    fireEvent.change(field, { target: { value: "/home/test/pi" } });
-    fireEvent.click(screen.getByRole("button", { name: "Read version" }));
-    expect(
-        screen.getByRole("group", { name: "Confirm version command" }),
-    ).toBeDefined();
     fireEvent.change(field, {
         target: { value: "/different/unverified-entry" },
     });
-    fireEvent.click(
-        screen.getByRole("button", { name: "Run version command" }),
-    );
+    const read = screen.getByRole("button", { name: "Read version" });
+    expect(read.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(read);
     expect(probe).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(
-        screen
-            .getByRole("button", { name: "Read version" })
-            .getAttribute("aria-disabled"),
-    ).toBe("true");
 });
 
 test("an unavailable entry is not displayed with a successful status dot", async () => {

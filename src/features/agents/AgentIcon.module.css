@@ -5,6 +5,8 @@
     justify-content: center;
     width: 20px;
     height: 20px;
+    /* Clip official artwork padding when a mark is enlarged to match optical size. */
+    overflow: hidden;
 }
 
 .icon[data-size="row"] {
@@ -17,6 +19,28 @@
     width: 100%;
     height: 100%;
     object-fit: contain;
+}
+
+/*
+ * OpenAI Blossom ships in a 716×716 canvas with about 24% empty margin on each
+ * side (the mark fills ~51%). Scale only this image so the flower matches the
+ * optical size of the other catalog marks; the official SVG stays unmodified.
+ */
+.icon img[data-agent="codex"] {
+    width: 165%;
+    height: 165%;
+    max-width: none;
+}
+
+/*
+ * Pi and OpenCode fill nearly their whole official canvases, so they read a
+ * step larger than the other marks at the shared box size. Slightly inset only
+ * these images; the SVG files stay unmodified.
+ */
+.icon img[data-agent="pi"],
+.icon img[data-agent="openCode"] {
+    width: 90%;
+    height: 90%;
 }
 
 .icon .dark {

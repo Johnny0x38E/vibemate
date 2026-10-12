@@ -19,6 +19,8 @@
     background: none;
     font: inherit;
     font-size: 0.8125rem;
+    /* Same weight as the sidebar: selection must not change Latin letter widths. */
+    font-weight: 600;
     cursor: pointer;
 }
 
@@ -28,7 +30,6 @@
 
 .tab[aria-selected="true"] {
     color: var(--color-text);
-    font-weight: 600;
 }
 
 .tab[aria-selected="true"]::after {

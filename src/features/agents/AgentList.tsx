@@ -340,15 +340,28 @@ export function AgentList({
         );
     }
 
-    function statusLine(): JSX.Element {
-        const message =
-            state.kind === "loading"
-                ? t("agents.loading")
-                : state.kind === "preview"
-                  ? ""
-                  : state.kind === "error"
-                    ? t("agents.list.failed")
-                    : t("agents.complete");
+    /**
+     * Discovery live region. The completed count is list-only: detail pages
+     * describe the open entry and drop the region once a scan succeeds.
+     */
+    function statusLine(scope: "list" | "detail"): JSX.Element | null {
+        // Only `found` rows count; absent or unchecked catalog slots stay
+        // visible as cards and do not inflate the total.
+        let message: string;
+        if (state.kind === "loading") {
+            message = t("agents.loading");
+        } else if (state.kind === "preview") {
+            message = "";
+        } else if (state.kind === "error") {
+            message = t("agents.list.failed");
+        } else if (scope === "list") {
+            const discovered = state.items.filter(
+                (row) => row.state === "found",
+            ).length;
+            message = t("agents.count", { count: discovered });
+        } else {
+            return null;
+        }
         // Keep the live region mounted so completion is announced without
         // moving focus away from the path or refresh action.
         return (
@@ -370,7 +383,7 @@ export function AgentList({
                     title={t("desktop.nav.agents")}
                     trailing={refreshButton()}
                 />
-                {statusLine()}
+                {statusLine("list")}
                 {state.kind === "error" && (
                     <p className={styles["error"]} role="alert">
                         {t(`agents.errors.${state.code}`)}
@@ -504,7 +517,7 @@ export function AgentList({
                 }}
                 backBlocked={blocked}
             >
-                {statusLine()}
+                {statusLine("detail")}
                 {state.kind === "error" && (
                     <p className={styles["error"]} role="alert">
                         {t(`agents.errors.${state.code}`)}
@@ -601,9 +614,6 @@ export function AgentList({
                         }}
                     />
                 </section>
-                <p className={styles["notice"]}>{t("agents.readOnly")}</p>
-                <p className={styles["hint"]}>{t(`agents.precedence.${id}`)}</p>
-                <p className={styles["hint"]}>{t("agents.scope")}</p>
             </AgentPage>
         );
     }

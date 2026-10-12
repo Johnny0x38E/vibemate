@@ -213,15 +213,9 @@ Escape, Tab, outside clicks, both lock transitions, labels/icons, multiple field
 and StrictMode. The Tab test supplies visible-button rectangles because jsdom
 has no layout; it does not establish real viewport placement.
 
-Verification: frozen install, `check:frontend` (405 UI/boundary tests, 14 i18n
-checker tests and eight release-tool tests), Rust fmt/Clippy, 182 Rust tests
-(one real OS-credential test ignored), and a locked macOS no-bundle desktop build
-passed. Production license metadata for the new runtime dependencies is MIT.
-The main JavaScript bundle changed from 359.95 kB / 109.65 kB gzip to
-471.90 kB / 149.42 kB gzip in these local builds. No CSP, capability, translation
-resource or Rust code changes were needed. Visual checks follow the maintainer's
-manual-review policy; the maintainer confirmed this migration has no issues.
-Dedicated screen-reader and Windows/Linux runtime verification remain pending.
+The maintainer accepted the Select migration. Historical test counts, bundle
+measurements and build results are in Git/CI; dedicated screen-reader and
+Windows/Linux runtime verification remain pending.
 
 ## Internationalization foundation
 
@@ -380,12 +374,8 @@ variables; the retry action and `FieldSelect` trigger have visible keyboard focu
 styles.
 
 Component tests use real React and i18next instances with the desktop boundary
-replaced. Earlier isolated browser fixtures exercised explicitly labeled synthetic
-IPC outcomes, not native persistence. P08 also checked the production browser
-preview in both languages at 720×560, and the actual macOS Tauri dropdown with
-Tab, Space, arrow keys, and Enter. Native screenshots confirmed visible focus and
-bilingual save feedback. Saving English then restarting restored English despite
-a Chinese system language; follow-system selection also survived a restart.
+replaced. Recorded macOS checks covered selection and restart; browser/DOM tests
+alone do not prove native persistence or other platforms.
 
 ## Startup language gate
 
@@ -417,13 +407,9 @@ cleanup protection made both obsolete-response cases fail; restoring it passed.
 The i18next factory wrapper retains real initialization except for one explicit
 external-service failure; the startup module itself is not mocked.
 
-The macOS runtime was also started with an intentionally invalid preference in
-its throwaway database. It showed only the startup error/retry view and left the
-invalid value untouched. After explicitly repairing the test fixture, Tab/Enter
-retry re-read the preference and opened the App. This was not a production mock
-or a change to the user's real app-data. The temporary app-data and test processes
-were removed afterward. Native input preservation is covered by DOM tests with
-real child inputs; the current App scaffold has no editable form.
+Recorded isolated macOS checks covered invalid stored preferences and retry
+without modifying the value. Native platform acceptance is distinct from DOM
+input-preservation tests; historical execution details are in Git/CI.
 
 ## Manual review still matters
 
@@ -555,10 +541,8 @@ change is needed. Dispatch acknowledgment is not proof that a viewer displayed
 the file, so the UI makes no success claim. See
 [logging access and safety rules](plans/logging.md).
 
-Verified after integrating main `4e4233f` with 327 UI tests, the full frontend
-check, Rust fmt/Clippy, 174 passing Rust tests (one ignored real credential-store test), and a locked macOS no-bundle
-release build. Actual native editor/file-manager opening and visual review remain
-manual checks; no external tools were launched by the automated tests.
+Automated tests do not launch external tools. Native editor/file-manager opening
+and visual acceptance remain manual checks; historical build/test counts are in Git/CI.
 
 ## Settings About
 
@@ -849,11 +833,10 @@ validation, failed credentials, transaction rollback, legacy references,
 uncertain commits, concurrent edits, failed restoration and key exclusion from
 the database and response.
 
-Verified: `check:frontend` (frontend tests, translation checker and release-tool
-tests), Rust fmt/Clippy, passing Rust tests and a locked macOS no-bundle desktop
-build. One real OS credential-store test remains ignored. Native save/restart,
-model fetch against live providers, keychain prompts, visual acceptance and
-Windows/Linux runtime behavior remain manual checks.
+The maintainer accepted provider/model P10–P12 and Command Code routing P15/C15.
+This does not establish every credential-store interaction, protocol/model inference
+combination or Windows/Linux runtime behavior; remaining acceptance is tracked in
+`docs/plans/todo.md`, not inferred from passing automated tests.
 
 ## Product branding
 
@@ -924,30 +907,15 @@ controls, pending operations and edited input.
 
 ## Appearance acceptance and verification
 
-The maintainer closed the current basic appearance iteration on 2026-10-10.
-Visual checking is manual unless requested. Automated formatting, lint, types,
-behavior tests and applicable builds remain required. This documentation cleanup
-does not rerun or extend the recorded verification below.
+The maintainer accepted the expressive-palette shell/branding iteration and the
+Select migration. macOS/Windows system-style palette visual acceptance remains
+pending, as do native restart checks where unrecorded, Windows/Linux icon/runtime
+behavior, system-browser opening and comprehensive accessibility acceptance.
 
-| Scope      | Latest recorded result                                                                                                                                                                                                                           |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Frontend   | `check:frontend`: 101 UI tests, eight release-tool tests, format, lint, accessibility lint, both TypeScript configs and production build passed. The final CSS baseline adjustment also passed formatting and the native build's frontend build. |
-| Rust       | fmt and Clippy passed; 33 tests passed; the existing real OS-keychain smoke test was ignored.                                                                                                                                                    |
-| macOS      | Locked release builds and unsigned local app bundles passed; the final generated ICNS matches the packaged icon.                                                                                                                                 |
-| Appearance | The maintainer closed the shell, branding, settings and Dock refinements for the six expressive palettes (2026-10-10). macOS/Windows system-style palettes were added later (schema v9); visual acceptance of those two remains pending.         |
-| Pending    | Windows/Linux runtime and native icon display; actual system-browser opening; native Ink / macOS / Windows theme selection followed by restart; comprehensive accessibility testing.                                                             |
-
-Earlier checks retain their original scope: I02.d read version 0.1.0 in the
-macOS runtime and demonstrated obsolete-response test failures with cleanup
-disabled. I03 checked packaged macOS branding. I04/I05 checked real dark/Iris
-selection and restart with isolated app data and inspected the original ten
-light/dark palette variants. Those browser checks preceded the maintainer's
-manual-only visual-check preference.
-
-Ink token contrast was measured against canvas, sidebar, surface, hover and
-selected backgrounds: light primary/secondary minima 11.41/4.74, dark minima
-11.51/5.66, and light/dark focus minima 5.30/8.83. These measurements cover the
-named token pairs, not all accessibility behavior.
+Historical test counts, token contrast measurements and packaging results are in
+Git/CI. They are scoped observations, not current full-platform or accessibility
+claims. Visual checking follows the maintainer's manual-review policy; formatting,
+lint, type, behavior and applicable build checks remain required.
 
 ## Central MCP management
 
@@ -1005,14 +973,10 @@ formatting, zero-warning lint, translation consistency, both TypeScript configs
 and the production frontend build. Browser/native visual verification is left
 to the maintainer. Earlier native verification notes describe earlier revisions.
 
-Verified locally on Linux: `check:frontend` with 468 UI/boundary tests, eight
-release tests and 14 translation-checker tests; Rust fmt/Clippy and 201 passing
-Rust tests (one real credential-store test ignored); locked debug and release
-no-bundle desktop builds. An isolated real Tauri runtime saved, edited, listed,
-restarted and re-read a no-secret stdio definition; its test command never ran.
-Real MCP credential-store acceptance and macOS/Windows runtime behavior remain
-pending. Visual checks remain manual. Vite reports the existing single-chunk
-size advisory; neither it nor passing checks establishes layout or accessibility acceptance.
+Recorded isolated Linux Tauri checks covered no-secret stdio save/edit/restart
+without executing its test command. Real MCP credential-store and macOS/Windows
+acceptance remain pending. Historical test/build counts are in Git/CI; passing
+checks or the bundle-size advisory do not establish layout/accessibility acceptance.
 
 ## Read-only Agent discovery
 
@@ -1051,7 +1015,12 @@ configuration. Browser preview displays a desktop-required notice and never
 invents local installation results. Rust owns all filesystem observations, and
 `src/lib/desktop/agents.ts` checks exact response fields and evidence consistency.
 
-See [agent-discovery.md](plans/agent-discovery.md) for limits and sources. Isolated
+The next approved change is a fixed six-Agent catalog with detection for Claude
+Code, Codex, OpenCode, Pi, Grok Build and Hermes. Not-found entries will remain
+visible and allow manual paths; this is not implemented yet and does not expand
+configuration deployment support. See [agent-catalog.md](plans/agent-catalog.md).
+
+See [agent-discovery.md](plans/agent-discovery.md) for current limits and sources. Isolated
 Linux Tauri IPC and the actual Agent page have been exercised with synthetic
 entries and unopened malformed config fixtures, without process execution or
 content changes. This does not prove genuine Pi/Grok installations, macOS or

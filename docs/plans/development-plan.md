@@ -1,12 +1,12 @@
 # vibemate 第一阶段开发计划
 
-日期：2026-10-09。进度与验证记录以 [todo.md](todo.md) 为准；下一步按该清单的依赖顺序实施。
+本文件保留现行设计、依赖与风险；任务状态以 [todo.md](todo.md) 为准。已完成批次的过程从 Git/CI 查阅。
 
 ## 目标与范围
 
 做一个集中管理 Provider、Model、Skill 和 MCP Server 的桌面工具，将配置
 按各 Agent 的实际能力注入。第一阶段的 Provider 是 Command Code、
-DeepSeek、OpenRouter；Agent 是 Pi、Grok Build。目标平台是 macOS、Windows、Linux；第一阶段界面支持简体中文与英文。
+DeepSeek、OpenRouter。固定 Agent 目录与只读检测扩展为 Claude Code、Codex、OpenCode、Pi、Grok Build、Hermes；配置注入范围仍为 Pi、Grok Build。目标平台是 macOS、Windows、Linux，界面支持简体中文与英文。
 
 使用当前稳定版 Rust、最新稳定 Edition、稳定版 Tauri、React 和 TypeScript。
 遵守根目录 `AGENTS.md`、`src/AGENTS.md`，代码注释和公开 API 文档使用英文。
@@ -15,24 +15,14 @@ DeepSeek、OpenRouter；Agent 是 Pi、Grok Build。目标平台是 macOS、Wind
 本文件记录设计、依赖和风险。**唯一执行清单是 [todo.md](todo.md)**。
 依照仓库规则，两个文件都直接放在 `docs/plans/`；不建立另一套 `tasks/` 清单。
 
-## 已完成的基础
+## 已交付与当前主线
 
-以本次读取的实际仓库为准：
+基础工具链、存储/凭据、i18n、桌面壳、服务商/模型、中央 MCP 与后端职责拆分已实现。
+Pi/Grok 已有只读发现；六 Agent 目录与全部检测尚待实施。没有 Agent 配置写入、
+Skill 管理、MCP 部署或通用推理验证。已交付摘要与未完成真实/平台验收见任务清单。
 
-- 已有 Tauri + Rust + React/TypeScript 骨架、初始页面、只读版本查询和 IPC 响应校验。
-- 已有严格前端规范、ESLint/Oxlint、双 TypeScript 配置检查及 `check:frontend`。
-- 已有 MIT 协议、贡献指南、三平台原生 CI；私有学习文档位于被忽略的 `docs/local/`。
-- 已有 CHANGELOG 分版本提取、发布校验测试及四目标安装包草稿 Release 工作流。
-- 已有 UI 行为测试、SQLite 私有存储与迁移、OS 凭据接口，以及覆盖现有全部界面的中英文资源。
-- 语言偏好、启动门禁与桌面壳（双语导航、Settings 常规/关于、语言/外观下拉）已接入。
-- P10–P12（维护者 2026-10-12 验收）：Providers 页保存非敏感配置与 OS 凭据引用（统一 Save）；schema v5 实例表 + v7 模型表；Rust 获取/存储/搜索/IPC、Models 双视图 browse+save 与手动添加模型。Windows/Linux 原生仍按平台任务单独验收。
-- P31：按维护者要求提前实现 MCP 中央定义管理，schema v8 保存元数据和系统凭据引用；支持 stdio/Streamable HTTP、新增/编辑/启停与失败重读。
-- **没有** Agent 配置写入、Skill 管理、MCP 部署或「已验证推理连接」、自动路由。
-  现有界面文案已全部接入翻译，`check:i18n` 校验资源一致性（P09 已完成，维护者 2026-10-10 人工确认双语界面）；
-  不要把发布校验或基础测试当作业务接入验收。
-- 当前 codegraph 索引可查询；仓库上下文和跨模块分析使用项目绝对路径。
-
-这些基础不重新实施。后续依赖按功能需要增加，不能先搭一个庞大的插件框架。
+先更新文档并提交 push，再做 [六 Agent 发现](agent-catalog.md)，随后 P18 最小 Pi
+配置预览。P16 保留中央能力元数据和别名，不是预览的完整前置。
 
 ## 关键设计
 
@@ -52,22 +42,17 @@ Model 配置属于 Provider 实例，用实际模型 ID 标识；别名只用于
 
 ### 首页关系与启停约定
 
-维护者已提供首页草图：上方 Provider，下方 Agent，两侧共享 Skills/MCP，中央汇合
-并应用配置。绿色表达启用状态；选中状态单独表达。维护者要求在继续功能前固定桌面壳，
-以 [desktop-shell-design.md](desktop-shell-design.md) 为设计基准：固定侧栏与关系首页，
-侧栏可收起为 88 px 图标栏，右侧不设独立标题栏；macOS 原生红黄绿位置不随折叠变化。
-语言与外观位于 Settings →「常规」分组列表（下拉选择）；顶栏页签为「常规 / 关于」（关于页展示真实版本、许可证与仓库地址，见 I02.d）。
-修订预览为设计基准；生产壳、macOS Overlay 标题栏与 Win/Linux 无边框窗控已实现（见 `docs/frontend.md`）。
-**I02 已完成**：Settings「关于」通过 `get_app_info` 显示真实版本，预览与失败状态明确。侧栏固定 200/88 px（I02.e 拖动调宽已取消）。细节见 todo.md I02.d。
-共享资源开关与逐 Agent 注入开关分开，中央内容关闭后保留，停用单个目标不影响其他
-目标。操作状态区分请求、已应用、被覆盖、待重载、失败与未验证的当前会话状态。
-每种开关映射到各 Agent 核实的原生操作，不预设它们都提供同名 enabled 字段。
-详细边界见 `docs/architecture.md` 和 `docs/integrations/pi.md`。
+桌面壳与 Settings 已实现，现行 UI 规则见 [desktop-shell-design.md](desktop-shell-design.md)
+与 [frontend.md](../frontend.md)，不再重复已完成的外观迭代任务。
+共享资源中央启停与逐 Agent 部署分开；停用一个目标不影响其他目标。操作区分已写入、
+被覆盖、待重载、失败与有效状态未知，不预设各 Agent 都有同名 enabled 字段。
 
 ### 2. 能力信息与请求参数分开
 
-上下文窗口、输入模态、工具调用、推理支持属于能力信息；温度、输出上限、推理努力
-或推理预算属于请求参数。保留信息来源、获取时间和手动覆盖状态。
+上下文窗口、输入模态、工具调用、推理支持和模型最大输出长度属于能力信息；温度、
+每次请求的输出长度、推理努力或推理 token 数量属于使用设置。服务商模型页管理
+上游信息与别名；使用设置在目标 Agent 配置流程保存，必要的能力覆盖也属于该 Agent，
+保留来源，不改写中央模型或其他 Agent。详见 [model-parameters.md](model-parameters.md)。
 
 修改能力标签不会让模型获得新能力。参数必须按 Provider 协议和 Agent 字段分别校验；
 没有明确等价关系时，不把推理 effort 自动转换为数值预算。保存支持的原始扩展字段，
@@ -78,8 +63,8 @@ Model 配置属于 Provider 实例，用实际模型 ID 标识；别名只用于
 一个 Rust crate 起步，按功能逐步增加模块；Tauri command 只做输入输出边界。
 维护者提出未来 GitHub/Vercel、更多 MCP 与模型服务商扩展后，新增
 [后端职责拆分计划](backend-modularity.md)，任务状态见 `todo.md` 的 BR 系列。
-近期建议先拆内联测试、命令入口和 Provider/MCP 职责，保留 IPC、schema、凭据引用
-与并发语义；BR1/BR2 已完成测试及命令入口迁移，BR3/BR4 的业务职责拆分尚未实施。
+BR1–BR5 已完成测试、命令、Provider/MCP 和 Models/Fetch 拆分。BR6 起按实际功能
+需要推进，不将剩余重构作为六 Agent 发现或 Pi 预览的前置。
 模块布局统一使用 `feature.rs` + `feature/`。云服务账号/授权独立于模型服务商
 与 MCP 定义；后续业务实际接入时再抽取必要的通用 HTTP transport。
 维护者补充的配置备份到 GitHub、MCP/Skill 来源安装和给 Agent 的 API 转发，分别规划
@@ -89,7 +74,7 @@ Model 配置属于 Provider 实例，用实际模型 ID 标识；别名只用于
 React 使用 `src/features/<feature>/`，通过 `src/lib/desktop/` 下的类型化封装调用 Rust。
 IPC 返回值要做运行时校验，复杂数据出现时再引入适合的 schema 工具。
 
-首次 Provider 保存时引入 SQLite，包含稳定 ID、schema version、迁移和有界分页查询。
+已有 SQLite 保存稳定 ID、schema version 与有界分页查询；新行为追加迁移。
 密钥交给 OS 凭据库，数据库仅保存引用；用假凭据库和临时数据库做自动测试。
 具体 Rust 库在对应任务开始时核对当前稳定版、维护状态和 MIT 兼容性。
 不预设 SQLx、ORM、状态库、路由库或 UI 框架；选择应与实际需求相称。
@@ -148,8 +133,7 @@ Git 源在隔离目录获取固定 revision；npx 源需要核实实际安装器
 
 ### 7. 中英文是第一阶段基础
 
-在业务页面开始前完成 P07–P09。采用当前稳定的 i18n 方案，建议 i18next/react-i18next；
-实施时核对维护状态、React/Vite 兼容性与类型支持，不自建复杂翻译引擎。
+i18next/react-i18next 基础已完成；新功能复用现有资源、启动与偏好机制，不重新选型。
 支持 `zh-CN` / `en`，默认跟随系统，允许手动选择，未知语言回退英文。
 中文变体统一映射到简体中文，不在这一阶段承诺繁体中文。偏好通过 Rust 保存于
 app-data；启动时先确定偏好再显示业务界面，切换无需重启且不重置表单。
@@ -170,8 +154,8 @@ Rust 使用稳定错误 code 与安全参数，前端决定语言；不翻译配
 | -------------------- | ------- | ------------------------------------------------------ |
 | A：先排除接入风险    | P01–P03 | Provider 与两个 Agent 的有证据支持矩阵                 |
 | B：测试、存储与 i18n | P04–P09 | UI 测试、SQLite、OS 凭据边界与中英文界面               |
-| C：Provider/Model    | P10–P16 | 可保存账户、获取并勾选模型、校验特有参数               |
-| D：Pi 配置           | P17–P21 | 发现、预览、可靠写入、回滚                             |
+| C：Provider/Model    | P10–P16 | 可保存账户、获取并勾选模型、记录能力来源与编辑别名     |
+| D：Pi 配置           | P17–P21 | 发现、目标 Agent 使用设置与校验、预览、可靠写入、回滚  |
 | E：Grok Build        | P22–P24 | 第二个 Agent 接入与组合兼容检查                        |
 | F：Skill             | P25–P30 | 来源登记、安装、部署、更新、恢复                       |
 | G：MCP               | P31–P33 | 中央维护与逐 Agent 注入，或明确的支持缺口              |
@@ -185,8 +169,10 @@ Rust 使用稳定错误 code 与安全参数，前端决定语言；不翻译配
   避免先写全部实体和全部界面。
 - P10–P12 构成第一条 Provider/Model 路径：P12 为三家获取模型列表并勾选，原 P13（DeepSeek
   连接验证）与 P14（OpenRouter 模型发现）已并入 P12；P15 补 Command Code 按模型路由，
-  P16 补特有参数，最小推理检查在 P24/P38。
-- P18 生成 Pi 计划；P19 提供写入安全基础；P20/P21 完成应用与恢复。
+  P16 补中央能力元数据与别名，不在服务商页保存请求参数；最小推理检查在 P24/P38。
+- 先完成 P17.i–P17.n 六 Agent 固定目录与检测，再做 P18 最小 Pi 配置预览；只按实际需要补模型信息和过期检查，不等待完整
+  P16。使用设置按已核实的 Pi 原生字段逐项加入 Agent 配置；P19 提供写入安全基础，
+  P20/P21 完成应用与恢复。
 - P22/P23 使用同一安全写入机制接入 Grok Build；P24 检查具体组合。
 - Skill 和 MCP 管理复用存储、凭据、Agent 发现和操作日志，但各自维护格式与能力声明。
   P31 中央管理按维护者要求提前，不依赖 Agent 发现；P32 与 P33 都依赖中央 MCP 定义，各自独立；Pi 的 MCP 缺口不阻止 Grok Build 的独立任务。
@@ -253,7 +239,7 @@ UI 验证使用 `pnpm run test:ui`（已纳入 `check:frontend`）或
 
 ## 待核实事项
 
-- Command Code 与 Grok Build 的准确官网/文档/发行来源、账户/API 类型。Command Code 的 API 访问证据目前只覆盖其 GOAT 套餐；
+- 新增 Agent 的准确入口、配置位置、环境覆盖与版本证据；既有接入也需按实际版本重核。Command Code API 访问证据已覆盖官方列出的非 Go 套餐，但逐套餐模型权限/额度仍未知；
   Pro 与 Provider 套餐的 API 访问、模型权限与路由尚未核实，不能套用 GOAT 套餐的结论。
 - Pi 与 Grok Build 的安装方式、本机版本、跨平台可用性、原生协议、Skill/MCP 支持。
 - MCP 无原生支持时，是否需要第一阶段增加桥接器；决定前对应交付保持未完成。
@@ -264,7 +250,7 @@ UI 验证使用 `pnpm run test:ui`（已纳入 `check:frontend`）或
 
 ## 第一阶段最终验收
 
-- 三家 Provider 可按其真实协议配置；Model 信息与参数能保存、校验并映射。
+- 三家 Provider 可按其真实协议配置；中央 Model 信息有来源，目标 Agent 的使用设置能分别保存、校验并映射。
 - Pi、Grok Build 的兼容配置可预览、应用、回滚，原有启动方式按支持矩阵生效。
 - Skill 可维护来源、部署和更新，保留已有内容与本地修改；同步失败可恢复。
 - MCP 可集中维护并注入已支持的 Agent；任何剩余支持缺口须有维护者明确决定，

@@ -3,9 +3,10 @@
 ## Decision and status
 
 The maintainer closed the current basic appearance iteration on 2026-10-10.
-The sole task checklist is [todo.md](todo.md): I02–I14 record the shell, branding,
-settings, themes and Dock refinements. P09 remains the next unfinished task.
-Provider and agent behavior remains unimplemented.
+The sole task checklist is [todo.md](todo.md); completed shell/branding work is
+summarized there, not tracked again here. Provider/model management, central MCP
+and Pi/Grok read-only discovery are implemented. Six-Agent fixed discovery is the
+next change; configuration writes, skills and MCP deployment remain pending.
 
 The private sketch `docs/local/程序首页原型草图.png` supplied the original layout.
 The [interactive preview](desktop-shell-preview.html) is a historical layout

@@ -2,8 +2,8 @@
 
 ## Scope and decision
 
-Replace only the interaction inside `src/components/FieldSelect.tsx` with
-Base UI Select. Keep the public props, provider icons, existing CSS Modules,
+The migration is implemented and maintainer-accepted. `src/components/FieldSelect.tsx`
+uses Base UI Select. Keep the public props, provider icons, existing CSS Modules,
 36 px trigger, built-in theme palettes and all Rust-owned business behavior.
 The maintainer approved this scope after discussing headless component libraries.
 Task status is recorded only in [todo.md](todo.md).
@@ -16,19 +16,11 @@ Add stable MIT-licensed `@testing-library/user-event` 14.6.7 as a development-on
 dependency: standalone synthetic clicks do not represent the pointer press and
 animation-frame focus timing used by Select. Tests must await complete interactions.
 
-## Implementation order
+## Current implementation
 
-1. Add the pinned dependency and lockfile. Verify its installed license and
-   Select type declarations against the current official documentation.
-2. Replace the manual popup, key handlers and outside-click listener with Select.
-   Preserve controlled values: the parent commits a saved setting, not the widget.
-   Preserve native disabled controls and focusable blocked provider fields.
-3. Update shared test helpers to locate portaled options through the trigger's
-   accessible popup relationship, not its DOM parent. Add real focus/keyboard,
-   outside dismissal, icon, label and lock-transition regression coverage.
-4. Run the complete frontend check and applicable native build checks. Record
-   limitations separately from automated results; do not claim a DOM test proves
-   native WebView or screen-reader behavior.
+The pinned dependency, shared FieldSelect and portaled/asynchronous test helpers
+are implemented. Current APIs and behavior are described in [frontend.md](../frontend.md).
+Historical migration steps and test counts are in Git/CI, not an active checklist.
 
 ## Popup and state boundaries
 

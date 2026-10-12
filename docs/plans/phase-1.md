@@ -1,120 +1,85 @@
 # Phase 1: shared agent configuration
 
-## Confirmed choices
+## Confirmed scope
 
-- Name: vibemate. License: MIT.
-- Desktop: current stable Rust + stable Tauri + React + TypeScript.
-  Use the latest stable Rust edition and APIs; no nightly features.
-  The initial scaffold uses edition 2024 and Tauri 2.
-- Providers: Command Code, DeepSeek, OpenRouter.
-- Agents: Pi, Grok Build.
-- Shared skills with source tracking and updates; shared MCP definitions.
-- Phase-1 UI internationalization: Simplified Chinese (`zh-CN`) and English (`en`),
-  system-language detection, persistent manual selection, and translation checks.
-- Clear English code comments; beginner-readable implementation; GitHub CI.
+- MIT-licensed desktop app for macOS, Windows and Linux: stable Rust, edition
+  2024, Tauri 2, React and TypeScript. Follow current stable toolchains and APIs.
+- Providers: Command Code, DeepSeek and OpenRouter.
+- Fixed Agent catalog and read-only detection: Claude Code, Codex, OpenCode, Pi,
+  Grok Build and Nous Research Hermes Agent. The six-Agent expansion is planned,
+  not implemented yet. Configuration deployment remains scoped to Pi/Grok Build.
+- Shared skills with source/revision tracking and updates; shared MCP definitions
+  and explicit per-Agent deployment.
+- Simplified Chinese/English UI with system detection and persistent choice.
+- Beginner-readable code, English code comments, native CI and draft releases.
 
-## Current state
+## Implemented baseline
 
-The scaffold, private configuration storage, credential-storage foundation,
-Simplified Chinese/English startup preferences, desktop shell and appearance
-are implemented. The maintainer closed the basic appearance iteration on
-2026-10-10 (branding, Dock refinements, expressive palettes, full-width
-General/About). Built-in themes are now eight light/dark pairs in UI order
-macOS, Windows, Forest, Ink, Graphite, Linen, Iris, Ocean (`THEME_IDS`);
-schema v9 extends the appearance theme CHECK for `macos`/`windows`. Default
-remains system/forest. Visual acceptance of the two system-style palettes is
-still pending.
+The scaffold, private SQLite storage, OS credential interface, i18n startup and
+preferences, desktop shell, provider/key saving, model discovery/selection/manual
+entries and central MCP management are implemented. Provider/model P10–P12 and
+Command Code routing P15/C15 have maintainer acceptance; P15 real credential
+connection acceptance is maintainer-reported, not a new agent-executed test.
 
-CI and changelog-driven draft release workflows are present. Integration
-contracts are documented in `docs/integrations/`. P10–P12 are accepted
-(2026-10-12): Providers page with API keys and unified save; Rust-side model
-fetch, storage, search and IPC; tabbed Models UI with create gate, dual-view
-browse/save and manual model add per [models-tab-ux.md](models-tab-ux.md).
-The maintainer verified browse/save for three providers in Tauri (2026-10-11)
-and manual-model add/restart/delete (2026-10-12). Windows/Linux native
-acceptance remains a separate platform task.
+Pi/Grok read-only discovery and window-local manual paths are implemented. It
+checks entries and configuration file presence without running executables or
+reading configuration contents. Unknown versions remain unverified. Backend
+BR1–BR5 has separated commands, domain behavior, repositories and tests.
 
-P31 central MCP management is implemented ahead of Agent deployment at the
-maintainer's request: structured stdio/Streamable HTTP definitions, protected
-env/header values, editing and central enablement. No MCP server is launched or
-contacted, and no Agent config is written. Agent deployment, skills and inference
-checks remain pending.
+Agent writes, skills, MCP deployment, managed Agent installation and the later
+inference checks are not implemented. Central MCP saving does not execute or
+contact a server. No planned adapter may appear connected or supported.
 
-P17 adds read-only Pi/Grok entry discovery and window-local manual paths. Rust
-never executes an entry or reads Agent configuration contents. Pi package
-metadata and Grok filename hints have separate provenance; unknown versions
-remain unverified. The bilingual Agent page reports user config locations,
-file presence and documented precedence without claiming effective settings.
-See [agent-discovery.md](agent-discovery.md). Linux fixture-based IPC and the
-actual page passed; genuine installations and macOS/Windows acceptance remain
-pending. [todo.md](todo.md) is the sole task-status source; current
-UI rules and verification are in [desktop-shell-design.md](desktop-shell-design.md)
-and [frontend.md](../frontend.md).
+Detailed completed-task process records belong in Git/CI and `CHANGELOG.md`, not
+in the active plans. [todo.md](todo.md) is the sole task-status source, including
+remaining real-installation, credential, visual and platform acceptance items.
+The macOS/Windows system-style themes use schema v9 but still need visual
+acceptance; local or fixture-based checks do not establish other native platforms.
 
-Backend BR1–BR5 has separated eight modules' behavior tests, grouped Tauri
-commands by feature, and split Provider/MCP types, validation, repositories and
-credential services. Saved-model queries/edits and fetch registration, downloads,
-browse sessions, snapshot/status queries and merge orchestration are also split.
-Five added HTTP-fixture tests cover browse cache reuse, raw/result offsets,
-revision/URL invalidation, failed-page retries and cancellation. Domain-neutral text, ID-format and clock helpers are shared;
-MCP has its own identity type. Runtime modules use a `feature.rs` entrypoint with
-a matching directory. This refactoring adds no new integrations or behavior. See
-[backend-modularity.md](backend-modularity.md).
+## Current execution order
 
-## Execution plan
+1. Update the agreed plans, remove stale completed-task detail, commit and push
+   the documentation before changing implementation.
+2. Implement all six read-only detectors and the fixed catalog, including
+   not-found entries and manual paths. Verify each official entry/config contract;
+   preserve bounded lookup, safe errors and no-execution rules. See
+   [agent-catalog.md](agent-catalog.md).
+3. Build the minimal Pi configuration preview (P18), adding only the model
+   information and stale-plan checks it needs. Full P16 is not a prerequisite.
+   Central models hold capability metadata and aliases; request settings and
+   necessary capability overrides belong to the target Agent configuration.
+   Verify the installed Agent version can express each setting. See
+   [model-parameters.md](model-parameters.md).
+4. Add safe writes and restore for Pi, then the independently verified Grok
+   adapter: precedence, diff, concurrent-change checks, private backups, atomic
+   replacement, preservation of unrelated fields and rollback.
+5. Implement skill source/import/install/update and per-Agent symlink deployment,
+   with explicit copy-sync fallback and protection of local changes.
+6. Deploy central MCP definitions only to verified Agent features, using the
+   safe write/restore path. Unsupported features remain explicit.
+7. Complete native platform and real-integration acceptance, then prepare reviewed
+   draft release assets; do not publish automatically.
 
-The detailed development plan is [development-plan.md](development-plan.md).
-The single task checklist is [todo.md](todo.md). These files expand the same
-phase-1 scope; this overview does not contain a second execution checklist.
-Implementation is authorized. The pnpm migration is recorded as P00, and
-P01 provider evidence is in [providers.md](../integrations/providers.md).
-Provider configuration and model discovery (P10–P12) are accepted; the next
-business path is P15→P16→P18. Agent deployment and inference verification
-remain pending. Documented contracts do not establish a working inference
-connection or runtime compatibility.
+Architecture and dependency details are in [development-plan.md](development-plan.md)
+and [backend-modularity.md](backend-modularity.md). Current UI rules are in
+[desktop-shell-design.md](desktop-shell-design.md) and [frontend.md](../frontend.md);
+provider/Agent evidence is in `docs/integrations/` and must be rechecked when used.
 
-## Implementation order
+## Acceptance boundaries
 
-1. **Verify integration contracts.** Record exact product identities, official
-   URLs, API protocols, authentication, and model discovery behavior. Inspect
-   installed Pi and Grok Build versions, supported config locations, precedence,
-   skills, and MCP support. The exact Command Code and Grok Build contracts
-   need confirmation; do not invent endpoints or assume MCP support.
-2. **Provider and model configuration.** Add validated provider/model records,
-   OS credential references, persistence with schema migrations, a model list
-   fetch that runs only when the user asks (it reads the system proxy and can be
-   cancelled at once), ticked model selections, and manual model entries as a
-   supplement. A minimal user-triggered inference check comes later. Separate
-   capabilities from request parameters; support provider-specific fields.
-   Central MCP definition management (P31) was brought forward before Agent
-   injection. Its implementation does not unblock P32/P33 until safe Agent writes
-   and rollback exist.
+A user can configure verified providers, choose a model and supported settings
+for each compatible Agent, preview/apply/restore changes and understand rejected
+combinations. Skill updates preserve local edits; MCP maps only to verified
+features. Every Agent write has preview, backup and rollback.
 
-3. **Agent injection.** Implement the first verified agent adapter end to end,
-   then the second. Detect installations, preview changes, preserve unrelated
-   fields, check concurrent edits, back up, write atomically, and restore.
-4. **Skills.** Track GitHub and installer-origin skills, source URLs, revisions,
-   and local modifications. Inspect source/update differences before installation.
-   Inject with symlinks where supported and copy synchronization otherwise.
-5. **MCP.** Validate shared stdio/HTTP definitions as supported by each agent,
-   resolve credential references in Rust, preview config changes, and inject.
-6. **Cross-platform acceptance.** Validate path handling, symlink permissions,
-   config preservation, rollback, credentials, and native builds on all targets.
-
-## Acceptance criteria
-
-A user can configure each verified provider, select a model and supported
-parameters, and apply it to each compatible agent. Unsupported combinations
-have a clear explanation. Global skills can be synchronized and updated without
-silently overwriting local edits. MCP configurations map only to supported agent
-features. Every agent write has a preview, backup, and rollback path.
-
-Keep secrets out of logs and exports. Never display a planned adapter as working.
-Use native CI builds; perform real integration checks only with explicitly
-provided test credentials and report their actual results.
+Keep secrets out of logs, URLs, frontend persistence and exports. Real requests
+require explicitly permitted test credentials; record actual versions and results.
+Discovery, managed installation, configuration support, written configuration,
+effective runtime state and inference success are separate claims.
 
 ## Deferred
 
 Subscription/quota monitoring, token heatmaps, automatic routing/failover,
-arbitrary third-party executable plugins, cloud sync, and release publication.
-A local proxy is optional and only introduced for a demonstrated requirement.
+arbitrary executable plugins, cloud sync and release publication. GitHub backup,
+source installation, Agent installation and local API forwarding remain separate
+BR-series proposals until a concrete behavior and its boundaries are implemented.

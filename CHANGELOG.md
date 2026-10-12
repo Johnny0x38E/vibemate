@@ -8,6 +8,7 @@ GitHub release notes are extracted from the matching version section only.
 
 ### Changed
 
+- Condensed completed development-plan records while retaining unresolved acceptance items. Clarified that request settings belong to target Agent configuration, and documented the planned six-Agent catalog and read-only discovery expansion; no new detectors or configuration writes are implemented by this documentation change.
 - Moved secondary-page **Back** and **Save** into the shared page header: icon-only Back (accessible destination name and tooltip) on the left, Save and recovery actions on the right. Provider, MCP and Agent detail pages share the pattern; Windows/Linux window controls remain in the separate titlebar chrome above the content column. Removed the fixed bottom `SecondaryPageFooter`.
 - Aligned the secondary-page header (Back, title, Save) to the sidebar product logo centerline via shared CSS variables; increased the Back-to-title gap slightly.
 - Removed the API key field’s closed-eye indicator (the value is never revealed; a fixed mask placeholder remains when a key is configured).

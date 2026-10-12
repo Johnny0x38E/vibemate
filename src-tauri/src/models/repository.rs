@@ -4,7 +4,7 @@
 use super::types::*;
 use super::validation::{decode_cursor, encode_cursor};
 use super::{ModelError, parse_provider_id};
-use crate::model_identity::{is_valid_model_id, route_support};
+use crate::model_identity::{is_valid_model_id, resolved_protocol, route_support};
 use crate::model_search::{SearchQuery, sort_ranked};
 use crate::providers::{ProviderId, ProviderKind, ProviderProtocol};
 use crate::storage::Storage;
@@ -252,11 +252,9 @@ impl StoredModel {
             return Err(invalid);
         }
         let supported_endpoints = json_list(self.supported_endpoints)?;
-        let route_support = route_support(
-            provider.kind,
-            provider.protocol,
-            supported_endpoints.as_deref(),
-        );
+        let endpoints = supported_endpoints.as_deref();
+        let route_support = route_support(provider.kind, endpoints);
+        let resolved_protocol = resolved_protocol(provider.kind, provider.protocol, endpoints);
         let upstream_state = match (self.last_seen_at, self.missing_since) {
             (None, _) => UpstreamState::NeverListed,
             (Some(_), None) => UpstreamState::Listed,
@@ -275,6 +273,7 @@ impl StoredModel {
             output_modalities: json_list(self.output_modalities)?,
             supported_endpoints,
             route_support,
+            resolved_protocol,
             upstream_state,
             last_seen_at_ms: self.last_seen_at,
             missing_since_ms: self.missing_since,

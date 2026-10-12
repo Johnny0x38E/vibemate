@@ -161,7 +161,7 @@ test("preview blocks creation without displaying fake definitions", async () => 
     list.mockResolvedValue({ kind: "preview" });
     await setup();
     await screen.findByText(/Browser preview cannot read or save/);
-    fireEvent.click(screen.getByRole("button", { name: "New definition" }));
+    fireEvent.click(screen.getByRole("button", { name: "New" }));
     expect(screen.queryByRole("form")).toBeNull();
     expect(save).not.toHaveBeenCalled();
 });
@@ -179,7 +179,7 @@ test("new definition saves and returns to a re-read list", async () => {
     save.mockResolvedValue(row);
     await setup();
     await screen.findByText("No MCP definitions saved yet.");
-    fireEvent.click(screen.getByRole("button", { name: "New definition" }));
+    fireEvent.click(screen.getByRole("button", { name: "New" }));
     fireEvent.change(screen.getByLabelText(/^Name$/), {
         target: { value: "Tools" },
     });
@@ -228,7 +228,7 @@ test("unknown toggle result blocks every mutation until a successful list reload
         }),
     );
     await screen.findByRole("alert");
-    fireEvent.click(screen.getByRole("button", { name: "New definition" }));
+    fireEvent.click(screen.getByRole("button", { name: "New" }));
     fireEvent.click(screen.getByRole("button", { name: "Edit “Tools”" }));
     fireEvent.click(
         screen.getByRole("button", { name: "Disable “Tools” definition" }),
@@ -255,7 +255,7 @@ test("failed edit reconciliation replaces stale editable rows with read error", 
     expect(screen.queryByRole("button", { name: "Edit “Tools”" })).toBeNull();
     expect(
         screen
-            .getByRole("button", { name: "New definition" })
+            .getByRole("button", { name: "New" })
             .getAttribute("aria-disabled"),
     ).toBe("true");
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));

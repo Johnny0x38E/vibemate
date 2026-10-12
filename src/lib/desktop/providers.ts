@@ -26,11 +26,27 @@ export interface ProviderTemplate {
     kind: ProviderKind;
     /** Brand name shown as-is in every language. */
     brandName: string;
+    /** Suggested base URL for {@link defaultProtocol}. */
     defaultBaseUrl: string;
     protocols: ProviderProtocol[];
+    /**
+     * Suggested HTTPS base URL for each entry in {@link protocols} (same order).
+     * Different URLs mean a separate configuration when switching protocol.
+     */
+    protocolBaseUrls: string[];
     defaultProtocol: ProviderProtocol;
     /** Allowed extension keys; empty until evidence documents one. */
     extensionFields: string[];
+}
+
+/** Documented base URL for a template protocol, or the kind default. */
+export function baseUrlForProtocol(
+    template: ProviderTemplate,
+    protocol: ProviderProtocol,
+): string {
+    const index = template.protocols.indexOf(protocol);
+    if (index < 0) return template.defaultBaseUrl;
+    return template.protocolBaseUrls[index] ?? template.defaultBaseUrl;
 }
 
 /** One saved, non-secret provider instance. `id` is its only identity. */
@@ -263,6 +279,7 @@ function validateTemplate(value: unknown): ProviderTemplate {
         typeof value["brandName"] !== "string" ||
         typeof value["defaultBaseUrl"] !== "string" ||
         !Array.isArray(value["protocols"]) ||
+        !Array.isArray(value["protocolBaseUrls"]) ||
         !isProviderProtocol(value["defaultProtocol"]) ||
         !Array.isArray(value["extensionFields"])
     ) {
@@ -273,17 +290,31 @@ function validateTemplate(value: unknown): ProviderTemplate {
         if (!isProviderProtocol(protocol)) throw invalidResponse();
         protocols.push(protocol);
     }
+    if (value["protocolBaseUrls"].length !== protocols.length) {
+        throw invalidResponse();
+    }
+    const protocolBaseUrls: string[] = [];
+    for (const url of value["protocolBaseUrls"]) {
+        if (typeof url !== "string" || url.length === 0)
+            throw invalidResponse();
+        protocolBaseUrls.push(url);
+    }
     const extensionFields: string[] = [];
     for (const field of value["extensionFields"]) {
         if (typeof field !== "string") throw invalidResponse();
         extensionFields.push(field);
     }
     if (!protocols.includes(value["defaultProtocol"])) throw invalidResponse();
+    const defaultIndex = protocols.indexOf(value["defaultProtocol"]);
+    if (protocolBaseUrls[defaultIndex] !== value["defaultBaseUrl"]) {
+        throw invalidResponse();
+    }
     return {
         kind: value["kind"],
         brandName: value["brandName"],
         defaultBaseUrl: value["defaultBaseUrl"],
         protocols,
+        protocolBaseUrls,
         defaultProtocol: value["defaultProtocol"],
         extensionFields,
     };

@@ -19,25 +19,56 @@ fn no_extensions() -> BTreeMap<String, String> {
 }
 
 #[test]
-fn templates_use_the_documented_defaults_and_only_chat_completions() {
+fn templates_list_evidence_backed_protocols_and_per_protocol_bases() {
+    let all = [
+        ProviderProtocol::ChatCompletions,
+        ProviderProtocol::Responses,
+        ProviderProtocol::AnthropicMessages,
+    ];
     let expected = [
         (
             ProviderKind::CommandCode,
             "https://api.commandcode.ai/provider/v1",
+            "https://api.commandcode.ai/provider/v1",
         ),
-        (ProviderKind::DeepSeek, "https://api.deepseek.com"),
-        (ProviderKind::OpenRouter, "https://openrouter.ai/api/v1"),
+        (
+            ProviderKind::DeepSeek,
+            "https://api.deepseek.com",
+            "https://api.deepseek.com/anthropic",
+        ),
+        (
+            ProviderKind::OpenRouter,
+            "https://openrouter.ai/api/v1",
+            "https://openrouter.ai/api/v1",
+        ),
     ];
     assert_eq!(provider_templates().len(), expected.len());
-    for (template, (kind, url)) in provider_templates().iter().zip(expected) {
+    for (template, (kind, openai_base, anthropic_base)) in provider_templates().iter().zip(expected)
+    {
         assert_eq!(template.kind, kind);
         assert_eq!(kind.template(), template);
-        assert_eq!(template.default_base_url, url);
-        assert_eq!(template.protocols, &[ProviderProtocol::ChatCompletions]);
+        assert_eq!(template.default_base_url, openai_base);
+        assert_eq!(template.protocols, &all);
+        assert_eq!(template.protocol_base_urls.len(), all.len());
+        assert_eq!(template.default_protocol, ProviderProtocol::ChatCompletions);
         assert!(template.extension_fields.is_empty());
-        // A default must survive normalization unchanged, or a fresh form would
-        // save a different URL than the one it displayed.
-        assert_eq!(normalize_base_url(url).as_deref(), Ok(url));
+        assert_eq!(
+            base_url_for_protocol(kind, ProviderProtocol::ChatCompletions),
+            openai_base
+        );
+        assert_eq!(
+            base_url_for_protocol(kind, ProviderProtocol::Responses),
+            openai_base
+        );
+        assert_eq!(
+            base_url_for_protocol(kind, ProviderProtocol::AnthropicMessages),
+            anthropic_base
+        );
+        assert_eq!(normalize_base_url(openai_base).as_deref(), Ok(openai_base));
+        assert_eq!(
+            normalize_base_url(anthropic_base).as_deref(),
+            Ok(anthropic_base)
+        );
         assert_eq!(ProviderKind::from_value(kind.as_str()), Some(kind));
     }
 }
@@ -112,7 +143,15 @@ fn protocols_outside_the_kind_template_are_rejected() {
             parse_protocol_for(kind, "chat_completions"),
             Ok(ProviderProtocol::ChatCompletions)
         );
-        for value in ["responses", "anthropic_messages", "openai-completions", ""] {
+        assert_eq!(
+            parse_protocol_for(kind, "responses"),
+            Ok(ProviderProtocol::Responses)
+        );
+        assert_eq!(
+            parse_protocol_for(kind, "anthropic_messages"),
+            Ok(ProviderProtocol::AnthropicMessages)
+        );
+        for value in ["openai-completions", ""] {
             assert_eq!(
                 parse_protocol_for(kind, value),
                 Err(ProviderError::ProtocolNotSupported)
@@ -307,10 +346,25 @@ fn settings_validation_reports_the_first_invalid_field_in_order() {
             ProviderKind::DeepSeek,
             "Name",
             "https://api.deepseek.com",
-            "responses",
+            "openai-completions",
             &no_extensions()
         ),
         Err(ProviderError::ProtocolNotSupported)
+    );
+    assert_eq!(
+        validate_settings(
+            ProviderKind::DeepSeek,
+            "Name",
+            "https://api.deepseek.com",
+            "responses",
+            &no_extensions()
+        ),
+        Ok(ProviderSettings {
+            display_name: "Name".to_string(),
+            base_url: "https://api.deepseek.com".to_string(),
+            protocol: ProviderProtocol::Responses,
+            extensions: no_extensions(),
+        })
     );
 }
 
@@ -569,7 +623,7 @@ fn providers_stale_missing_or_malformed_edits_change_nothing() {
         Err(ProviderError::BaseUrlNotHttps)
     );
     let mut wrong_protocol = update_request(&current, "Bad protocol", "https://api.deepseek.com");
-    wrong_protocol.protocol = "responses".to_string();
+    wrong_protocol.protocol = "openai-completions".to_string();
     assert_eq!(
         update_provider(&storage, &wrong_protocol, 3),
         Err(ProviderError::ProtocolNotSupported)

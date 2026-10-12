@@ -54,6 +54,10 @@ pub enum Theme {
     Ocean,
     /// White and warm-gray surfaces inspired by Notion.
     Notion,
+    /// Apple system blue and grouped surfaces.
+    Macos,
+    /// Fluent neutrals with Windows accent blue.
+    Windows,
 }
 
 impl Theme {
@@ -65,6 +69,8 @@ impl Theme {
             Self::Iris => "iris",
             Self::Ocean => "ocean",
             Self::Notion => "notion",
+            Self::Macos => "macos",
+            Self::Windows => "windows",
         }
     }
     fn parse(value: &str) -> Result<Self, SettingsError> {
@@ -75,6 +81,8 @@ impl Theme {
             "iris" => Ok(Self::Iris),
             "ocean" => Ok(Self::Ocean),
             "notion" => Ok(Self::Notion),
+            "macos" => Ok(Self::Macos),
+            "windows" => Ok(Self::Windows),
             _ => Err(SettingsError::InvalidPreference),
         }
     }
@@ -197,6 +205,8 @@ mod tests {
             Theme::Iris,
             Theme::Ocean,
             Theme::Notion,
+            Theme::Macos,
+            Theme::Windows,
         ] {
             for appearance in [Appearance::System, Appearance::Light, Appearance::Dark] {
                 let choice = AppearancePreference { appearance, theme };

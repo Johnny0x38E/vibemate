@@ -19,8 +19,8 @@ pub const MAX_BASE_URL_LEN: usize = 2048;
 /// deserialization message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum ProviderKind {
-    /// Command Code's provider API. The recorded evidence covers the GOAT plan only;
-    /// see `docs/integrations/providers.md`.
+    /// Command Code's provider API. Plans with API access are GOAT, Pro, Max, Team,
+    /// and Provider (not Go); see `docs/integrations/providers.md`.
     #[serde(rename = "command-code")]
     CommandCode,
     /// The DeepSeek API used directly.
@@ -68,11 +68,11 @@ impl ProviderKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ProviderProtocol {
-    /// OpenAI-style `POST /chat/completions`.
+    /// OpenAI Chat Completions (`POST /chat/completions`).
     ChatCompletions,
-    /// OpenAI-style `POST /responses`.
+    /// OpenAI Responses (`POST /responses`).
     Responses,
-    /// Anthropic-style `POST /messages`.
+    /// Anthropic Messages (`POST /messages`).
     AnthropicMessages,
 }
 
@@ -133,10 +133,13 @@ pub struct ProviderTemplate {
     pub kind: ProviderKind,
     /// Brand name shown as-is in every language.
     pub brand_name: &'static str,
-    /// Documented base URL; users may replace it with another HTTPS URL.
+    /// Documented base URL for [`Self::default_protocol`]; users may replace it.
     pub default_base_url: &'static str,
-    /// Protocols an instance of this kind may use today.
+    /// Protocols an instance of this kind may use today (evidence-backed).
     pub protocols: &'static [ProviderProtocol],
+    /// Suggested HTTPS base URL for each entry in [`Self::protocols`] (same order).
+    /// Different URLs mean separate configurations when the user switches protocol.
+    pub protocol_base_urls: &'static [&'static str],
     /// Protocol preselected in a new form.
     pub default_protocol: ProviderProtocol,
     /// Allowed extension keys. Empty until evidence documents a non-secret field.

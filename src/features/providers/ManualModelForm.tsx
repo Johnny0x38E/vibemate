@@ -200,6 +200,9 @@ export function ManualModelForm({
                     }}
                 />
             </div>
+            <p className={editForm["hint"]}>
+                {t("providers.models.manual.capabilityNote")}
+            </p>
             <div
                 className={[styles["feedback"], manualStyles["feedback"]]
                     .filter(Boolean)

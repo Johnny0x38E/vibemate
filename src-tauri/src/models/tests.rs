@@ -360,16 +360,20 @@ fn selection_is_all_or_nothing_and_respects_routes() {
     assert_eq!(changed[0].route_support, RouteSupport::Supported);
     assert_eq!(changed[0].updated_at_ms, 200);
 
-    // Fetched models that do not list the protocol's route cannot be selected,
-    // and the whole batch is rolled back.
+    // Claude `/messages` is selectable under a Chat Completions preference (P15).
+    let with_claude = select(&storage, &["manual-model", "claude-sonnet-5"], true).unwrap();
+    assert_eq!(with_claude.len(), 2);
+    let claude = with_claude
+        .iter()
+        .find(|model| model.model_id == "claude-sonnet-5")
+        .expect("claude");
+    assert_eq!(claude.route_support, RouteSupport::Supported);
     assert_eq!(
-        select(&storage, &["manual-model", "claude-sonnet-5"], false).map(|models| models.len()),
-        Ok(2)
+        claude.resolved_protocol,
+        Some(crate::providers::ProviderProtocol::AnthropicMessages)
     );
-    assert_eq!(
-        select(&storage, &["manual-model", "claude-sonnet-5"], true),
-        Err(ModelError::ModelRouteNotSupported)
-    );
+
+    // Fetched models with no route declaration still cannot be selected.
     assert_eq!(
         select(&storage, &["no-routes"], true),
         Err(ModelError::ModelRouteNotSupported)
@@ -381,8 +385,11 @@ fn selection_is_all_or_nothing_and_respects_routes() {
             .iter()
             .map(|model| model.model_id.as_str())
             .collect::<Vec<_>>(),
-        ["deepseek/deepseek-v4-flash"],
-        "the failed batch left manual-model unselected"
+        [
+            "claude-sonnet-5",
+            "deepseek/deepseek-v4-flash",
+            "manual-model"
+        ],
     );
 
     // Unselecting is always allowed; an unknown ID fails the whole batch.
@@ -390,7 +397,7 @@ fn selection_is_all_or_nothing_and_respects_routes() {
         select(&storage, &["deepseek/deepseek-v4-flash", "gone"], false),
         Err(ModelError::ModelNotFound)
     );
-    assert_eq!(list(&storage, None, 10, "selected").items.len(), 1);
+    assert_eq!(list(&storage, None, 10, "selected").items.len(), 3);
     assert_eq!(select(&storage, &[], true), Err(ModelError::InvalidRequest));
     let too_many: Vec<String> = (0..=MAX_SELECTION_BATCH).map(|i| format!("m{i}")).collect();
     let too_many: Vec<&str> = too_many.iter().map(String::as_str).collect();
@@ -735,6 +742,7 @@ fn models_serialize_with_camel_case_fields_and_snake_case_values() {
     let json = serde_json::to_value(&model).unwrap();
     assert_eq!(json["modelId"], "a/b");
     assert_eq!(json["routeSupport"], "unknown");
+    assert_eq!(json["resolvedProtocol"], serde_json::Value::Null);
     assert_eq!(json["upstreamState"], "never_listed");
     assert_eq!(json["source"], "manual");
     assert_eq!(

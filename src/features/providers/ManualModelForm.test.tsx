@@ -39,6 +39,7 @@ const row: ProviderModel = {
     outputModalities: null,
     supportedEndpoints: null,
     routeSupport: "unknown",
+    resolvedProtocol: null,
     upstreamState: "never_listed",
     lastSeenAtMs: null,
     missingSinceMs: null,

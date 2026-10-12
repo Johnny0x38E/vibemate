@@ -12,6 +12,7 @@ import { useTranslation } from "react-i18next";
 import { DetailFact, DetailPanel } from "../../components/DetailForm";
 import editForm from "../../components/editForm.module.css";
 import detailForm from "../../components/detailForm.module.css";
+import { Icon } from "../../components/Icon";
 import { PageModuleHeader } from "../../components/PageModuleHeader";
 import {
     discoverAgents,
@@ -262,12 +263,15 @@ export function AgentList({
         return (
             <button
                 type="button"
-                className={buttons["primary"]}
+                className={[buttons["primary"], buttons["withIcon"]]
+                    .filter((value): value is string => value !== undefined)
+                    .join(" ")}
                 aria-disabled={blocked}
                 onClick={() => {
                     void refresh();
                 }}
             >
+                <Icon name="refresh" />
                 {t("agents.refresh")}
             </button>
         );

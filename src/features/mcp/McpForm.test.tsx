@@ -399,18 +399,23 @@ test("unmount discards late replies without saving a frontend fixture", async ()
 });
 
 test.each(["en", "zh-CN"] as const)(
-    "footer save keeps corrected input and exposes failures in %s",
+    "header save keeps corrected input and exposes failures in %s",
     async (locale) => {
         save.mockRejectedValueOnce(new McpRequestError("command_invalid"));
         const { onSaved } = await setup(row, locale);
         const saveButton = screen.getByRole("button", {
             name: locale === "en" ? "Save" : "保存",
         });
-        const footer = saveButton.closest("footer");
-        expect(footer).not.toBeNull();
+        // Save is published into the shared page header, not a bottom footer.
+        expect(saveButton.closest("footer")).toBeNull();
+        expect(
+            screen
+                .getByRole("heading", { level: 1 })
+                .parentElement?.contains(saveButton),
+        ).toBe(true);
         fireEvent.click(saveButton);
         const alert = await screen.findByRole("alert");
-        expect(footer?.contains(alert)).toBe(true);
+        expect(alert.closest("form")).not.toBeNull();
         const command = screen.getByLabelText(
             locale === "en" ? "Executable" : "可执行程序",
         );

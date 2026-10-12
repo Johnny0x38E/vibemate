@@ -8,7 +8,7 @@ use super::types::*;
 use crate::model_catalog::CatalogModel;
 use crate::model_error::ModelError;
 use crate::model_http::{run_cancellable, with_deadline};
-use crate::model_identity::route_support;
+use crate::model_identity::{resolved_protocol, route_support};
 use crate::model_search::{MatchScore, SearchQuery, sort_ranked};
 use crate::providers::ProviderKind;
 use tokio::sync::oneshot;
@@ -152,6 +152,7 @@ async fn extend_browse_catalog(
 }
 
 fn upstream_browse_model(model: &CatalogModel, snapshot: &ProviderSnapshot) -> UpstreamBrowseModel {
+    let endpoints = model.supported_endpoints.as_deref();
     UpstreamBrowseModel {
         model_id: model.model_id.clone(),
         upstream_name: model.upstream_name.clone(),
@@ -160,11 +161,8 @@ fn upstream_browse_model(model: &CatalogModel, snapshot: &ProviderSnapshot) -> U
         input_modalities: model.input_modalities.clone(),
         output_modalities: model.output_modalities.clone(),
         supported_endpoints: model.supported_endpoints.clone(),
-        route_support: route_support(
-            snapshot.kind,
-            snapshot.protocol,
-            model.supported_endpoints.as_deref(),
-        ),
+        route_support: route_support(snapshot.kind, endpoints),
+        resolved_protocol: resolved_protocol(snapshot.kind, snapshot.protocol, endpoints),
     }
 }
 

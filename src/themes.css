@@ -1,4 +1,71 @@
 /* Palette values only. App.css resolves brightness into shared semantic tokens. */
+
+/* Apple system blue and grouped surfaces (HIG-style neutrals). */
+:root[data-theme="macos"],
+[data-palette="macos"] {
+    --theme-text-light: #1d1d1f;
+    --theme-background-light: #f5f5f7;
+    --theme-sidebar-light: #ececef;
+    --theme-surface-light: #ffffff;
+    --theme-hover-light: #e5e5ea;
+    --theme-selected-light: #d8d8de;
+    --theme-border-light: #d2d2d7;
+    --theme-summary-light: #6e6e73;
+    --theme-focus-light: #007aff;
+    --theme-accent-light: #007aff;
+    --theme-chip-info-bg-light: #e8f1fc;
+    --theme-chip-info-fg-light: #0055b3;
+    --theme-chip-count-bg-light: #e3f5ea;
+    --theme-chip-count-fg-light: #1f6b3a;
+    --theme-text-dark: #f5f5f7;
+    --theme-background-dark: #1c1c1e;
+    --theme-sidebar-dark: #161618;
+    --theme-surface-dark: #2c2c2e;
+    --theme-hover-dark: #3a3a3c;
+    --theme-selected-dark: #48484a;
+    --theme-border-dark: #3a3a3c;
+    --theme-summary-dark: #98989d;
+    --theme-focus-dark: #0a84ff;
+    --theme-accent-dark: #0a84ff;
+    --theme-chip-info-bg-dark: #1a2f4a;
+    --theme-chip-info-fg-dark: #6fb6ff;
+    --theme-chip-count-bg-dark: #1a3326;
+    --theme-chip-count-fg-dark: #7dcea0;
+}
+
+/* Fluent neutrals with Windows accent blue. */
+:root[data-theme="windows"],
+[data-palette="windows"] {
+    --theme-text-light: #1b1b1b;
+    --theme-background-light: #f3f3f3;
+    --theme-sidebar-light: #eeeeee;
+    --theme-surface-light: #ffffff;
+    --theme-hover-light: #e5e5e5;
+    --theme-selected-light: #dcdcdc;
+    --theme-border-light: #e0e0e0;
+    --theme-summary-light: #5d5d5d;
+    --theme-focus-light: #0078d4;
+    --theme-accent-light: #0078d4;
+    --theme-chip-info-bg-light: #e8f2fb;
+    --theme-chip-info-fg-light: #005a9e;
+    --theme-chip-count-bg-light: #e6f4ea;
+    --theme-chip-count-fg-light: #0e6b2c;
+    --theme-text-dark: #ffffff;
+    --theme-background-dark: #202020;
+    --theme-sidebar-dark: #1c1c1c;
+    --theme-surface-dark: #2b2b2b;
+    --theme-hover-dark: #333333;
+    --theme-selected-dark: #3a3a3a;
+    --theme-border-dark: #3f3f3f;
+    --theme-summary-dark: #adadad;
+    --theme-focus-dark: #60cdff;
+    --theme-accent-dark: #60cdff;
+    --theme-chip-info-bg-dark: #1a3348;
+    --theme-chip-info-fg-dark: #8fd0ff;
+    --theme-chip-count-bg-dark: #1a3324;
+    --theme-chip-count-fg-dark: #8fd4a8;
+}
+
 :root,
 [data-palette="forest"] {
     --theme-text-light: #202621;

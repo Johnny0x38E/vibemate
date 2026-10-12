@@ -278,7 +278,7 @@ async fn command_code_fixture_is_fetched_with_the_key_and_stored_unselected() {
     assert!(requests[0].starts_with("GET /provider/v1/models HTTP/1.1"));
     assert!(sent_bearer(&server));
 
-    let mut models = all_models(&storage);
+    let models = all_models(&storage);
     let selected_page = list_provider_models(
         &storage,
         &ListProviderModelsRequest {
@@ -313,9 +313,21 @@ async fn command_code_fixture_is_fetched_with_the_key_and_stored_unselected() {
         .iter()
         .filter(|model| model.route_support == RouteSupport::Supported)
         .count();
-    assert_eq!(supported, 76);
-    models.retain(|model| model.route_support == RouteSupport::Unsupported);
-    assert_eq!(models.len(), 11);
+    // P15: every D16 model lists a known route, including Claude `/messages`.
+    assert_eq!(supported, 87);
+    assert!(
+        models
+            .iter()
+            .all(|entry| entry.route_support != RouteSupport::Unsupported)
+    );
+    let claude = models
+        .iter()
+        .find(|entry| entry.model_id.starts_with("claude"))
+        .expect("a Claude model from the fixture");
+    assert_eq!(
+        claude.resolved_protocol,
+        Some(crate::providers::ProviderProtocol::AnthropicMessages)
+    );
 
     let status = fetch_status(&storage, &ModelFetchRegistry::new(), PROVIDER).unwrap();
     assert_eq!(

@@ -77,6 +77,8 @@ pub struct UpstreamBrowseModel {
     pub output_modalities: Option<Vec<String>>,
     pub supported_endpoints: Option<Vec<String>>,
     pub route_support: RouteSupport,
+    /// Protocol this instance would use for the model (P15).
+    pub resolved_protocol: Option<crate::providers::ProviderProtocol>,
 }
 
 /// One lazy upstream page for the Models tab browse view (P12.c.5).

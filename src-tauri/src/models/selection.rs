@@ -209,11 +209,7 @@ pub fn save_provider_model_selections(
 
     for entry in &request.add {
         let endpoints = json_column(&entry.supported_endpoints)?;
-        let route = route_support(
-            provider.kind,
-            provider.protocol,
-            entry.supported_endpoints.as_deref(),
-        );
+        let route = route_support(provider.kind, entry.supported_endpoints.as_deref());
         if !matches!(route, RouteSupport::Supported | RouteSupport::NotApplicable) {
             return Err(ModelError::ModelRouteNotSupported);
         }

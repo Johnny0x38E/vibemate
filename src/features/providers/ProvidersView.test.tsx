@@ -76,6 +76,7 @@ const templates: ProviderTemplate[] = [
         brandName: "DeepSeek",
         defaultBaseUrl: "https://api.deepseek.com",
         protocols: ["chat_completions"],
+        protocolBaseUrls: ["https://api.deepseek.com"],
         defaultProtocol: "chat_completions",
         extensionFields: [],
     },
@@ -84,6 +85,7 @@ const templates: ProviderTemplate[] = [
         brandName: "OpenRouter",
         defaultBaseUrl: "https://openrouter.ai/api/v1",
         protocols: ["chat_completions"],
+        protocolBaseUrls: ["https://openrouter.ai/api/v1"],
         defaultProtocol: "chat_completions",
         extensionFields: [],
     },
@@ -252,7 +254,7 @@ test("shows a loading state, then saved rows distinguished by id, never as conne
     expect(rows()).toHaveLength(2);
     expect(screen.getAllByText("Work")).toHaveLength(2);
     expect(screen.getByText("OpenRouter")).toBeDefined();
-    expect(screen.getAllByText("Chat Completions")).toHaveLength(2);
+    expect(screen.getAllByText("OpenAI Chat Completions")).toHaveLength(2);
     expect(screen.getAllByText("0 added models")).toHaveLength(2);
     expect(editButton("b")).toBeDefined();
     expect(document.body.textContent).not.toMatch(/\bconnected\b|available/i);
@@ -357,7 +359,7 @@ test("loads more with the opaque cursor, then stops on the last page", async () 
 });
 
 /** "New" opens the create form directly. */
-async function openNew(label = "New configuration"): Promise<void> {
+async function openNew(label = "New"): Promise<void> {
     await click(label);
 }
 
@@ -373,7 +375,7 @@ test("New opens the form with the first template, in Rust's order, selected and 
     list.mockResolvedValue(page([row("a")]));
     create.mockResolvedValue(row("c", { kind: "openrouter" }));
     await mount();
-    await click("New configuration");
+    await click("New");
 
     // The secondary page replaces the list and focuses its title.
     expect(screen.queryByRole("list")).toBeNull();
@@ -524,7 +526,7 @@ test("an unknown create outcome re-reads the list before a retry is offered", as
         return Promise.reject(new ProviderRequestError("operation_failed"));
     });
     await mount("zh-CN");
-    await openNew("新建配置");
+    await openNew("新建");
     typeKey("API 密钥");
     const reads = list.mock.calls.length;
     await click("保存");
@@ -541,7 +543,7 @@ test("an unknown create outcome re-reads the list before a retry is offered", as
     expect(rows()).toHaveLength(1);
     expect(list).toHaveBeenCalledTimes(reads + 1);
     expect(document.activeElement).toBe(
-        screen.getByRole("button", { name: "新建配置" }),
+        screen.getByRole("button", { name: "新建" }),
     );
 });
 
@@ -585,6 +587,7 @@ test("sidebar home respects cancelling unsaved model checkbox drafts", async () 
                     outputModalities: null,
                     supportedEndpoints: null,
                     routeSupport: "not_applicable",
+                    resolvedProtocol: "chat_completions",
                     upstreamState: "listed",
                     lastSeenAtMs: 1,
                     missingSinceMs: null,
@@ -676,9 +679,9 @@ test("a failed template read blocks New and Edit until it is retried", async () 
     expect(screen.getByRole("alert").textContent).toBe(
         "Local configuration storage is unavailable. Restart vibemate.",
     );
-    const add = screen.getByRole("button", { name: "New configuration" });
+    const add = screen.getByRole("button", { name: "New" });
     expect(add.getAttribute("aria-disabled")).toBe("true");
-    await click("New configuration");
+    await click("New");
     expect(screen.getByRole("list")).toBeDefined();
     expect(editButton("a").getAttribute("aria-disabled")).toBe("true");
     readTemplates.mockResolvedValue({ kind: "desktop", templates });
@@ -690,13 +693,13 @@ test("Back returns focus to New without re-reading the list", async () => {
     list.mockResolvedValue(page([row("a")]));
     await mount();
     const reads = list.mock.calls.length;
-    const add = screen.getByRole("button", { name: "New configuration" });
+    const add = screen.getByRole("button", { name: "New" });
     add.focus();
 
     await openNew();
     await click("Back to provider list");
     expect(document.activeElement).toBe(
-        screen.getByRole("button", { name: "New configuration" }),
+        screen.getByRole("button", { name: "New" }),
     );
     expect(rows()).toHaveLength(1);
     expect(list).toHaveBeenCalledTimes(reads);
@@ -738,19 +741,17 @@ test("switching language keeps the open page and typed values", async () => {
 test.each([
     {
         locale: "en",
-        add: "New configuration",
-        back: "Back",
+        add: "New",
         backName: "Back to provider list",
     },
     {
         locale: "zh-CN",
-        add: "新建配置",
-        back: "返回",
+        add: "新建",
         backName: "返回服务商列表",
     },
 ] as const)(
-    "in $locale action icons are decorative and the back link's name starts with its visible text",
-    async ({ locale, add, back, backName }) => {
+    "in $locale list action icons are decorative and page Back is icon-only",
+    async ({ locale, add, backName }) => {
         list.mockResolvedValue(page([row("a")]));
         await mount(locale);
         for (const button of [
@@ -765,11 +766,11 @@ test.each([
 
         await click(add);
         const backButton = screen.getByRole("button", { name: backName });
-        expect(backButton.textContent).toBe(back);
+        // Icon-only: accessible name comes from aria-label, not visible text.
+        expect(backButton.textContent.trim()).toBe("");
         expect(
             backButton.querySelector("svg")?.getAttribute("aria-hidden"),
         ).toBe("true");
-        expect(backName.startsWith(back)).toBe(true);
     },
 );
 
@@ -817,7 +818,7 @@ test("the detail page and the create form show the provider icon next to the pro
     expect(value?.querySelectorAll("img")).toHaveLength(2);
     await click("Back to provider list");
 
-    await click("New configuration");
+    await click("New");
     const combobox = screen.getByRole("combobox", { name: "Provider" });
     const triggerIcon = (): string | null | undefined =>
         combobox.querySelector("img")?.getAttribute("src");

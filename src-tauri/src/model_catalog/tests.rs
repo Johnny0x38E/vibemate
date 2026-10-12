@@ -4,7 +4,8 @@ use std::collections::BTreeMap;
 
 use super::*;
 use crate::model_identity::{
-    MAX_MODEL_ID_CHARS, RouteSupport, is_valid_model_id, normalize_endpoint, route_support,
+    MAX_MODEL_ID_CHARS, RouteSupport, is_valid_model_id, normalize_endpoint, resolved_protocol,
+    route_support,
 };
 use crate::providers::{ProviderKind, ProviderProtocol};
 
@@ -92,12 +93,12 @@ fn command_code_fixture_matches_the_recorded_shape() {
         messages_only == model.model_id.starts_with("claude")
     }));
 
+    // P15: any vibemate-known route is selectable (including Claude `/messages`).
     let mut selectable = 0;
     let mut blocked = 0;
     for model in &page.models {
         match route_support(
             ProviderKind::CommandCode,
-            ProviderProtocol::ChatCompletions,
             model.supported_endpoints.as_deref(),
         ) {
             RouteSupport::Supported => selectable += 1,
@@ -105,7 +106,7 @@ fn command_code_fixture_matches_the_recorded_shape() {
             other => panic!("unexpected {other:?}"),
         }
     }
-    assert_eq!((selectable, blocked), (76, 11));
+    assert_eq!((selectable, blocked), (87, 0));
 
     let collected = {
         let mut collector = CatalogCollector::new();
@@ -135,27 +136,38 @@ fn endpoints_with_and_without_the_v1_prefix_are_the_same_route() {
     .unwrap();
     let first = page.models[0].supported_endpoints.as_deref().unwrap();
     assert_eq!(first, ["/chat/completions", "/responses"]);
-    for (protocol, expected) in [
-        (ProviderProtocol::ChatCompletions, RouteSupport::Supported),
-        (ProviderProtocol::Responses, RouteSupport::Supported),
-        (
-            ProviderProtocol::AnthropicMessages,
-            RouteSupport::Unsupported,
-        ),
-    ] {
-        assert_eq!(
-            route_support(ProviderKind::CommandCode, protocol, Some(first)),
-            expected
-        );
-    }
-    let second = page.models[1].supported_endpoints.as_deref();
     assert_eq!(
-        route_support(
+        route_support(ProviderKind::CommandCode, Some(first)),
+        RouteSupport::Supported
+    );
+    assert_eq!(
+        resolved_protocol(
+            ProviderKind::CommandCode,
+            ProviderProtocol::Responses,
+            Some(first),
+        ),
+        Some(ProviderProtocol::Responses)
+    );
+    assert_eq!(
+        resolved_protocol(
             ProviderKind::CommandCode,
             ProviderProtocol::AnthropicMessages,
-            second
+            Some(first),
         ),
+        Some(ProviderProtocol::ChatCompletions)
+    );
+    let second = page.models[1].supported_endpoints.as_deref();
+    assert_eq!(
+        route_support(ProviderKind::CommandCode, second),
         RouteSupport::Supported
+    );
+    assert_eq!(
+        resolved_protocol(
+            ProviderKind::CommandCode,
+            ProviderProtocol::ChatCompletions,
+            second,
+        ),
+        Some(ProviderProtocol::AnthropicMessages)
     );
 }
 
@@ -170,7 +182,6 @@ fn missing_or_malformed_endpoints_are_unknown_and_other_vendors_not_applicable()
     let support = |index: usize| {
         route_support(
             ProviderKind::CommandCode,
-            ProviderProtocol::ChatCompletions,
             page.models[index].supported_endpoints.as_deref(),
         )
     };
@@ -179,10 +190,7 @@ fn missing_or_malformed_endpoints_are_unknown_and_other_vendors_not_applicable()
     assert_eq!(support(2), RouteSupport::Unsupported);
     assert_eq!(support(3), RouteSupport::Supported);
     for kind in [ProviderKind::DeepSeek, ProviderKind::OpenRouter] {
-        assert_eq!(
-            route_support(kind, ProviderProtocol::ChatCompletions, None),
-            RouteSupport::NotApplicable
-        );
+        assert_eq!(route_support(kind, None), RouteSupport::NotApplicable);
     }
 }
 

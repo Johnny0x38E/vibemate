@@ -2,7 +2,7 @@ import type { JSX, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { ProviderPage } from "../providers/ProviderPage";
 
-/** Read-only Agent details with the shared title/content/bottom-navigation layout. */
+/** Read-only Agent details with the shared title and top Back control. */
 export interface AgentPageProps {
     title: ReactNode;
     onBack: () => void;
@@ -10,7 +10,7 @@ export interface AgentPageProps {
     children: ReactNode;
 }
 
-/** Agent details share the secondary-page shell while retaining their own Back destination. */
+/** Agent details share the secondary-page shell while retaining their own Back label. */
 export function AgentPage({
     title,
     onBack,

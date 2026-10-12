@@ -65,6 +65,7 @@ const templates: ProviderTemplate[] = [
         brandName: "DeepSeek",
         defaultBaseUrl: "https://api.deepseek.com",
         protocols: ["chat_completions"],
+        protocolBaseUrls: ["https://api.deepseek.com"],
         defaultProtocol: "chat_completions",
         extensionFields: [],
     },
@@ -74,6 +75,10 @@ const templates: ProviderTemplate[] = [
         defaultBaseUrl: "https://openrouter.ai/api/v1",
         // A second protocol lets tests observe the protocol select.
         protocols: ["chat_completions", "responses"],
+        protocolBaseUrls: [
+            "https://openrouter.ai/api/v1",
+            "https://openrouter.ai/api/v1",
+        ],
         defaultProtocol: "chat_completions",
         extensionFields: [],
     },
@@ -129,6 +134,7 @@ async function mount(
     locale: "en" | "zh-CN" = "en",
     refresh: () => Promise<boolean> = () => Promise.resolve(true),
     hidden = false,
+    formTemplates: readonly ProviderTemplate[] = templates,
 ) {
     const instance = await createAppI18n(locale);
     const onSaved = vi.fn<(record: ProviderRecord) => void>();
@@ -139,7 +145,7 @@ async function mount(
         <StrictMode>
             <I18nextProvider i18n={instance}>
                 <ProviderForm
-                    templates={templates}
+                    templates={formTemplates}
                     mode={mode}
                     onSaved={onSaved}
                     onRecordLoaded={onRecordLoaded}
@@ -277,18 +283,54 @@ test("switching provider replaces untouched defaults and only allowed protocols 
     await chooseProvider("openrouter");
     expect(fieldValue("Name")).toBe("OpenRouter");
     expect(fieldValue("Base URL")).toBe("https://openrouter.ai/api/v1");
+    // Multi-protocol templates show the preference hint (not the raw i18n key).
+    expect(
+        screen.getByText(
+            /Preferred protocol when a model lists more than one route/,
+        ),
+    ).toBeDefined();
+    expect(
+        screen.queryByText("providers.fields.protocolPreference"),
+    ).toBeNull();
     expect(fieldValue("Protocol")).toBe("chat_completions");
     expect(await fieldSelectOptionLabels(input("Protocol"))).toEqual([
-        "Chat Completions",
-        "Responses",
+        "OpenAI Chat Completions",
+        "OpenAI Responses",
     ]);
 
     await chooseProvider("deepseek");
     expect(fieldValue("Name")).toBe("DeepSeek");
     expect(fieldValue("Base URL")).toBe("https://api.deepseek.com");
     expect(await fieldSelectOptionLabels(input("Protocol"))).toEqual([
-        "Chat Completions",
+        "OpenAI Chat Completions",
     ]);
+});
+
+test("switching protocol updates the base URL only while it still matches a documented default", async () => {
+    const deepseekBases: ProviderTemplate = {
+        kind: "deepseek",
+        brandName: "DeepSeek",
+        defaultBaseUrl: "https://api.deepseek.com",
+        protocols: ["chat_completions", "responses", "anthropic_messages"],
+        protocolBaseUrls: [
+            "https://api.deepseek.com",
+            "https://api.deepseek.com",
+            "https://api.deepseek.com/anthropic",
+        ],
+        defaultProtocol: "chat_completions",
+        extensionFields: [],
+    };
+    await mount({ kind: "create" }, "en", () => Promise.resolve(true), false, [
+        deepseekBases,
+    ]);
+    expect(fieldValue("Base URL")).toBe("https://api.deepseek.com");
+    await setFieldSelectValue(input("Protocol"), "anthropic_messages");
+    expect(fieldValue("Protocol")).toBe("anthropic_messages");
+    expect(fieldValue("Base URL")).toBe("https://api.deepseek.com/anthropic");
+    type("Base URL", "https://proxy.example.com/anthropic");
+    await setFieldSelectValue(input("Protocol"), "chat_completions");
+    // Customized URL is kept when leaving Anthropic.
+    expect(fieldValue("Base URL")).toBe("https://proxy.example.com/anthropic");
 });
 
 test("switching provider keeps the fields the user edited", async () => {
@@ -638,8 +680,6 @@ test("an edit has a fixed configured indicator, never a fetched or submitted key
     expect(key.value).toBe("");
     expect(key.placeholder).toBe("••••••••");
     expect(key.required).toBe(false);
-    const indicator = screen.getByTitle("API key configured");
-    expect(indicator.querySelector("svg")).not.toBeNull();
     expect(
         document.getElementById(key.getAttribute("aria-describedby") ?? "")
             ?.textContent,

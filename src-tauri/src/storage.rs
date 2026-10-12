@@ -183,6 +183,20 @@ const MIGRATIONS: &[Migration] = &[
             credential_ref TEXT PRIMARY KEY
         ) STRICT;",
     },
+    Migration {
+        version: 9,
+        // Same rebuild pattern as v4: extend the theme CHECK for macos/windows.
+        sql: "CREATE TABLE appearance_preference_v9 (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            appearance TEXT NOT NULL CHECK (appearance IN ('system', 'light', 'dark')),
+            theme TEXT NOT NULL CHECK (theme IN (
+                'forest', 'graphite', 'linen', 'iris', 'ocean', 'notion', 'macos', 'windows'
+            ))
+        ) STRICT;
+        INSERT INTO appearance_preference_v9 SELECT id, appearance, theme FROM appearance_preference;
+        DROP TABLE appearance_preference;
+        ALTER TABLE appearance_preference_v9 RENAME TO appearance_preference;",
+    },
 ];
 
 /// Errors from opening or migrating the private database.

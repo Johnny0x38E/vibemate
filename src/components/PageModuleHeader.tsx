@@ -24,7 +24,7 @@ export interface PageModuleHeaderProps {
 
 /**
  * Shared module page title: the same 20 px nav icon as the sidebar, 1 rem
- * semibold heading, and an optional trailing slot (for example "New configuration").
+ * semibold heading, and an optional trailing slot (for example "New").
  */
 export function PageModuleHeader({
     icon,

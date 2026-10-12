@@ -8,11 +8,11 @@
 
 ## 产品身份与端点
 
-| 配置身份       | 产品与官方来源                                                                                                                        | 本阶段主要协议                                               | 基础地址                                 | 模型发现                                  |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ---------------------------------------- | ----------------------------------------- |
-| `command-code` | [Command Code Provider API](https://commandcode.ai/docs/provider)；P01 证据依据其 [GOAT 套餐](https://commandcode.ai/docs/plans/goat) | 按模型选择 Chat Completions、Responses 或 Anthropic Messages | `https://api.commandcode.ai/provider/v1` | `GET /models`，读取 `supported_endpoints` |
-| `deepseek`     | [DeepSeek 官方 API](https://api-docs.deepseek.com/en/)                                                                                | 首条路径使用 Chat Completions                                | `https://api.deepseek.com`               | `GET /models`                             |
-| `openrouter`   | [OpenRouter 官方 Chat API](https://openrouter.ai/docs/api/api-reference/chat/create-a-chat-completion)                                | 首条路径使用 Chat Completions                                | `https://openrouter.ai/api/v1`           | `GET /models`，支持有界分页               |
+| 配置身份       | 产品与官方来源                                                                                                                        | 本阶段主要协议                                                                                           | 基础地址                                                                            | 模型发现                                  |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------- |
+| `command-code` | [Command Code Provider API](https://commandcode.ai/docs/provider)；P01 证据依据其 [GOAT 套餐](https://commandcode.ai/docs/plans/goat) | OpenAI Chat Completions / OpenAI Responses / Anthropic Messages（同 Base；按模型 `supported_endpoints`） | `https://api.commandcode.ai/provider/v1`                                            | `GET /models`，读取 `supported_endpoints` |
+| `deepseek`     | [DeepSeek 官方 API](https://api-docs.deepseek.com/en/)                                                                                | 三种协议均有文档；Chat/Responses 与 Anthropic 的 Base 不同 → 分实例                                      | OpenAI：`https://api.deepseek.com`；Anthropic：`https://api.deepseek.com/anthropic` | `GET /models`                             |
+| `openrouter`   | [OpenRouter 官方 API](https://openrouter.ai/docs/api/api-reference/chat/create-a-chat-completion)                                     | OpenAI Chat Completions / OpenAI Responses / Anthropic Messages（均在 `/api/v1`）                        | `https://openrouter.ai/api/v1`                                                      | `GET /models`，支持有界分页               |
 
 这里的配置身份是 vibemate 的设计命名，不是外部 API 的模型 ID。
 DeepSeek 直连与经 Command Code/OpenRouter 使用的 DeepSeek 模型有不同的 Provider
@@ -26,22 +26,23 @@ Command Code 的 GOAT 套餐列为有 API 访问权限的编码套餐。通过 S
 同一账户密钥用于 CLI 和 API，API 调用受所属套餐的模型权限和额度限制。vibemate
 不因模型出现在公共目录里就认定当前账户有权限。
 
-**证据范围：** P01 只核实了 Command Code 的 GOAT 套餐具有 API 访问权限；本节的
-路由、按模型选择协议和错误说明来自同一份 Provider API 文档，核实时以 GOAT 套餐为
-对象。维护者告知 Pro 与 Provider 套餐也支持 API 连接，但本文件尚未记录这两个套餐
-的官方证据；它们的 API 访问、模型权限、额度和可用路由是否与 GOAT 套餐相同仍待
-P15 核实，不能据此推断。
+**证据范围（P15）：** [Provider API](https://commandcode.ai/docs/provider) 写明
+"Every plan except the Go plan has API access - GOAT, Pro, Max, Team, and
+Provider"。因此 API 访问权覆盖这些套餐；Go 套餐没有 API（`403` `upgrade_required`）。
+路由、按模型选择协议和错误说明仍来自同一份文档。各套餐的模型权限、额度与可用
+上游是否相同，文档未逐套餐展开，仍属未知：列表出现某模型不能证明当前账户可调用。
+真实鉴权与套餐权限留给显式连接检查和真实验收。
 
 推理认证使用 `Authorization: Bearer <API_KEY>`，JSON 请求使用
 `Content-Type: application/json`。官方模型列表示例没有认证头；读取公共目录
 不能证明密钥有效。实际鉴权与套餐权限留给显式连接检查和真实验收。
 
-| 路由               | 方法与相对路径           | 适配约束                                                        |
-| ------------------ | ------------------------ | --------------------------------------------------------------- |
-| Chat Completions   | `POST /chat/completions` | OpenAI/open 模型；按模型声明确认                                |
-| Responses          | `POST /responses`        | OpenAI 与多数 open 模型；客户端执行的工具与服务端工具要分开     |
-| Anthropic Messages | `POST /messages`         | 官方说明 Claude 模型只走这条路由；不能强制改为 Chat Completions |
-| Models             | `GET /models`            | 用 `supported_endpoints` 校验所选路由                           |
+| 路由（UI 名）           | 方法与相对路径           | 适配约束                                                        |
+| ----------------------- | ------------------------ | --------------------------------------------------------------- |
+| OpenAI Chat Completions | `POST /chat/completions` | OpenAI/open 模型；按模型声明确认                                |
+| OpenAI Responses        | `POST /responses`        | OpenAI 与多数 open 模型；客户端执行的工具与服务端工具要分开     |
+| Anthropic Messages      | `POST /messages`         | 官方说明 Claude 模型只走这条路由；不能强制改为 Chat Completions |
+| Models                  | `GET /models`            | 用 `supported_endpoints` 校验所选路由                           |
 
 模型的工具、图像与推理参数按其路由的 schema 和实际能力映射。`supported_endpoints`
 只说明路由，不能代替工具或图像能力证据。官方声明按对应 OpenAI/Anthropic schema
@@ -53,8 +54,13 @@ Agent 原生 MCP 支持。决定模型的 System One 路由不属于第一阶段
 格式应独立处理。官方文档还列出 ZDR 无可用上游时的 `422` 与
 `cmd_zdr_no_providers`，不能静默取消用户要求的 ZDR。此项尚未实现。
 
-P10 的 Command Code 账户实例暂只允许 `chat_completions`：路由按模型声明选择，实例级默认值只覆盖与
-Pi 首条路径一致的协议；P12 保存每个模型的 `supported_endpoints` 并据实例协议判断能否选用；按模型的 Responses/Anthropic Messages 覆盖留给 P15。
+三家模板均允许 OpenAI Chat Completions、OpenAI Responses 与 Anthropic Messages（有
+官方证据）。一个实例对应一个 Base URL 与一套密钥；实例级 `protocol` 是**偏好协议**
+（有按模型路由时优先选用，否则即线协议）。Command Code 用 `supported_endpoints`
+做按模型路由。DeepSeek 的 Anthropic 使用不同 Base（`/anthropic`），切换协议且 URL
+仍为文档默认时表单会改到对应默认 Base；用户改过的 URL 不自动覆盖——不同 Base 应
+另建实例。OpenRouter 三种协议同属 `https://openrouter.ai/api/v1`。手动模型没有上游
+路由声明，可选但能力来源为用户声明。
 
 ## P10 保存配置时的校验边界
 
@@ -83,8 +89,10 @@ ID，还声明 `name`、`context_window`、`max_output_tokens`、`input_modaliti
 [模型说明](https://api-docs.deepseek.com/quick_start/pricing/)当前列出
 `deepseek-flash` 与 `deepseek-v4-pro`；Flash 支持图像输入，Pro 不支持。
 旧 Flash 别名对应的原模型已退役，不能把仍被接受的别名展示成独立的新能力。
-两者支持工具、推理、Responses 与 Anthropic 格式；第一条实现路径先使用 Chat
-Completions，其余协议没有据此自动加入支持范围。
+两者支持工具、推理、OpenAI Responses 与 Anthropic Messages。OpenAI 兼容路径的
+Base 为 `https://api.deepseek.com`；Anthropic 格式的 Base 为
+`https://api.deepseek.com/anthropic`（[Anthropic API](https://api-docs.deepseek.com/guides/anthropic_api)）。
+配置层允许三种协议；不同 Base 用独立实例。
 
 [Chat API schema](https://api-docs.deepseek.com/api/create-chat-completion/)的关键映射：
 
@@ -153,7 +161,7 @@ Completions，其余协议没有据此自动加入支持范围。
   `authentication_error` 为 "Missing or invalid auth - pass `Authorization: Bearer` (any
   route)"，`403` `upgrade_required` 表示 Go 套餐没有 API 访问权限。
 - 同页写明 "Every plan except the Go plan has API access - GOAT, Pro, Max, Team, and
-  Provider"；本文件开头的套餐证据范围由 P15 据此正式更新。
+  Provider"；开头「证据范围」已按此更新（P15）。
 - 官方文档没有写明响应结构。经维护者批准（D16），2026-10-10 20:10（UTC+8）不带认证头
   请求 `GET https://api.commandcode.ai/provider/v1/models`，得到 HTTP 200、17079 字节：
     - 结构为 `{ "object": "list", "data": [...] }`，没有分页字段，共 87 个模型。

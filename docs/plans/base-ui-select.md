@@ -4,7 +4,7 @@
 
 Replace only the interaction inside `src/components/FieldSelect.tsx` with
 Base UI Select. Keep the public props, provider icons, existing CSS Modules,
-36 px trigger, six theme palettes and all Rust-owned business behavior.
+36 px trigger, built-in theme palettes and all Rust-owned business behavior.
 The maintainer approved this scope after discussing headless component libraries.
 Task status is recorded only in [todo.md](todo.md).
 

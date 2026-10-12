@@ -42,8 +42,10 @@ reads are invalidated when returning home.
   composed in `src/main.tsx`. Tab switches and leaving Settings keep preference
   controls mounted so pending saves and input survive.
 - `src/components/FieldSelect.tsx` is the shared single-choice dropdown (36 px
-  trigger, chevron on its own 11 rem field, Base UI Select interaction and
-  a portaled list). Settings and provider forms use it instead of a native
+  trigger, chevron on its own field — 11 rem by default, 15.5 rem when
+  `size="wide"` for longer protocol labels and the create-form provider
+  kind control — Base UI Select interaction and a portaled list). Settings
+  and provider forms use it instead of a native
   `<select>`; CSS Modules and existing theme tokens still own its appearance.
 - `src/components/IconButton.tsx` provides 36 px auxiliary form actions with
   an accessible name and a Base UI tooltip on hover or keyboard focus. Tooltips
@@ -52,8 +54,8 @@ reads are invalidated when returning home.
   env/header removal use a trash icon plus danger styling; row addition uses a
   plus icon with contextual labels. Agent path rediscovery uses a refresh icon
   with native form submission, and log file/folder actions use the same component.
-  Main save, navigation and recovery actions keep visible text. The stored-key eye icon is
-  a read-only status indicator, not a reveal button.
+  Main save, navigation and recovery actions keep visible text. A configured API key
+  uses a fixed mask placeholder only (no show/hide control; the value is never revealed).
 - Forms use two shared styles. `src/components/editForm.module.css` is the
   create/edit card: 64 px rows, label on the left, a control column up to 26 rem,
   36 px text inputs, hints, and field errors. Provider API, MCP, manual model
@@ -87,7 +89,8 @@ reads are invalidated when returning home.
   Overview, Providers list, Agents, planned Skills, MCP, and Settings use
   `PageModuleHeader`; Provider/MCP create/edit and Agent detail use the same
   metrics in `ProviderPage.module.css` (left-aligned title). Secondary-page
-  navigation and Save actions live in `SecondaryPageFooter` at the bottom.
+  Back (icon-only) and Save live in the `ProviderPage` header; editors publish
+  Save through `SecondaryPageActions`.
 - `src/components/Notifications.tsx` is the app-level notification host, mounted
   once in `App`. Features call `useNotify()` with an already translated
   `message` and optional `tone` (`success` | `error`); a plain string defaults
@@ -597,7 +600,8 @@ and update times. Names may repeat; only the ID identifies an instance. Base URL
 are parsed with the `url` crate: user names/passwords, queries, fragments and
 non-HTTPS schemes are rejected; the scheme and host are lowercased, international
 domains become punycode, and one trailing `/` is removed (no path is added).
-Every kind currently allows only `chat_completions`, and every extension
+Phase 1 templates allow all three evidence-backed protocols
+(`chat_completions`, `responses`, `anthropic_messages`). Every extension
 allowlist is empty, so any extension key is rejected
 (`extension_field_not_supported`). Keys are added only after official evidence.
 
@@ -619,7 +623,8 @@ save. The kind is never part of an edit request.
 
 **UI.** The Providers page switches views inside `ProvidersView` (state
 `list | create | edit`, no router library). The list view uses `PageModuleHeader`
-with the `providers` icon and "New configuration" in the trailing slot. The list
+with the `providers` icon and "New" / 「新建」 (leading plus icon) in the
+trailing slot. The MCP list uses the same label and icon. The list
 view shows loading, empty,
 error-with-retry, saved rows and "Load more" while `nextCursor` is set. Each row
 is two lines: line 1 has a 40 px brand icon, the official brand name, a protocol
@@ -656,40 +661,53 @@ providers." (「服务商名称和标志的商标归各自所有者，仅用于�
 above are used on that basis only.
 
 Create and edit use `ProviderPage` and `ProviderTabbedView`. The secondary header
-has a left-aligned title (20 px brand/agent icon plus name via `titleBrand`),
-matching the **36 px** `PageModuleHeader` row and 2 px top margin. Agent detail
-and MCP editors reuse this shell. `SecondaryPageFooter` keeps **Back** on the
-left and **Save**, where applicable, on the right, outside scrolling content.
-It uses the page background and a thin divider without a floating card or
-shadow. A fixed 16 px gap outside the scrollable content separates it from the
-footer divider, so moving rows never overlap that line. Content scroll wrappers
-add no horizontal inset, so form/detail cards
-share their title and tab edges, matching Settings cards. Control widths remain
-specific to their fields. Its action row shares the sidebar’s 44 px row height and 12 px bottom
-inset, centering the 36 px Back/Save controls on the Settings button’s horizontal
-centerline. This applies to expanded/collapsed sidebars and narrow windows. Keys `providers.back` and destination-specific accessible labels remain
-unchanged. Create updates the title when the provider field changes.
+row is **Back** (36 px icon-only `IconButton` with destination `aria-label` and
+tooltip), a left-aligned title (20 px brand/agent icon plus name via
+`titleBrand`), and trailing **Save** when an editor publishes actions through
+`SecondaryPageActions`. Shared CSS variables (`--brand-padding-top`,
+`--brand-logo-height`, `--page-header-height`, `--page-header-offset`) keep the
+Back / title / Save centerline aligned with the sidebar product logo. The header
+uses a **12 px** gap between Back and the title. Agent detail and MCP editors
+reuse this shell. Windows and Linux window controls stay in the separate
+titlebar chrome above the content column. Content scroll wrappers add no
+horizontal inset, so form/detail cards share their title and tab edges, matching
+Settings cards. Destination-specific accessible labels (`providers.backLabel`,
+`mcp.backLabel`, `agents.backLabel`) name the Back control. Create updates the
+title when the provider field changes.
 
 Tab layout (Settings-style tabs: **API** / 「API 配置」 and **Models** with
-optional selected count). The tab strip starts **`--page-content-gap`** (16 px)
-below the title. The first content block is also 16 px below the tab strip;
-MCP and Agent details use the same gap directly below their title. Panels
-stay mounted while switching tabs. Create shows a Models gate until the instance
-is saved. API fields scroll in a grouped card: provider (select when creating,
-read-only brand when editing), display name, base URL, protocol and API key.
-Save, form-level feedback and recovery actions ("Save again", "Refresh list",
-"Reload latest settings") live in the fixed footer.
-There is no form Cancel; **Back** leaves the page. One Save submits settings and
-an optional replacement key together.
+optional selected count). Edit seeds the Models tab label from
+`record.selectedModelCount` so the count is visible while the API tab is still
+active; `ProviderModels` refreshes the count even when its panel is hidden. The
+tab strip starts **`--page-content-gap`** (16 px) below the title. The first
+content block is also 16 px below the tab strip; MCP and Agent details use the
+same gap directly below their title. Panels stay mounted while switching tabs.
+Create shows a Models gate until the instance is saved. API fields scroll in a
+grouped card: provider (select when creating, read-only brand when editing),
+display name, base URL, protocol and API key. The protocol control lists
+**OpenAI Chat Completions**, **OpenAI Responses** and **Anthropic Messages**
+(same labels in zh-CN) for every Phase 1 vendor. The value is the **preferred**
+protocol when a model declares several routes, or the instance wire protocol
+otherwise. Templates include per-protocol suggested base URLs; switching
+protocol updates the Base URL only while it still matches a documented default
+(DeepSeek Anthropic uses `/anthropic`). Different bases are separate
+configurations. Wire values remain `chat_completions`, `responses`, and
+`anthropic_messages`. Resolved protocol appears as a badge on model rows. Manual
+models note that capability data comes from the user’s entry. Save and recovery
+actions ("Save again", "Refresh list", "Reload latest settings") live in the
+header trailing slot; form-level feedback stays in the scrollable form. There is
+no form Cancel; **Back** leaves the page. One Save submits settings and an
+optional replacement key together.
 
 The Models tab follows [models-tab-ux.md](plans/models-tab-ux.md) (P12.c.5). In
 brief: the default **Added** / 「已添加」 view lists persisted models (full
 load, scroll inside the tab panel). A fixed list title (**Added** / **All**)
 sits above the scroll region. The toolbar has a narrow search field on the left;
 **Fetch models** (secondary) on the right in the added view; upstream adds
-**Cancel** (while downloading) and **View added models** / 「查看已添加」. **Save** (primary, 36 px)
-is in the bottom footer beside page-level **Back**. The model list retains its
-independent scroll and fixed list title. **Fetch models** opens **upstream** browse with
+**Cancel** (while downloading) and **View added models** / 「查看已添加」.
+Draft selection **Save** publishes to the secondary-page header (same slot as
+API Save). The model list retains its independent scroll and fixed list title.
+**Fetch models** opens **upstream** browse with
 lazy-loaded result pages via `browse_upstream_models_page` (optional fuzzy
 `query`; session catalog in Rust). Checkboxes are draft until **Save**. Uncheck
 on the added list and **Save** removes rows from SQLite (`save_provider_model_selections`).
@@ -730,27 +748,27 @@ the row shows the values Rust stored, and the list is re-read. The save is
 confirmed by an app-level notification (`Saved name.` / 「已保存 name。」,
 see `Notifications`) that survives the jump back to the list.
 
-- Hierarchy: each view has one main primary action ("New configuration" on a
-  list or "Save" in a secondary-page footer): solid `--color-accent` with
-  `--color-background` text. Recovery actions and "Load more" are secondary
-  (`--color-border` outline). Destructive row actions (for example MCP "Remove")
-  use `dangerSecondary` (`--color-danger-border`, `--color-danger-fg`, hover
-  `--color-danger-bg`). Row "Edit" is a text button. "New configuration"
-  (`plus`) and row "Edit" (`edit`) carry a leading 18px `Icon`; create/edit Back
-  shows the back arrow and short label on the left of the fixed bottom footer.
-  Titles align left at the top. Save and
-  recovery actions stay text-only. Blocked buttons
-  use `aria-disabled` styling (muted `--color-summary`, or half opacity for the
-  primary). Labels and values use `--color-text` at 0.8125rem and normal weight;
-  hints and secondary values use `--color-summary` at 0.75rem; errors use
-  `--color-text`, semibold, with a leading rule. Every focus ring is
-  `--color-focus`. Protocol and count pills on the provider list use per-palette
-  `--color-chip-info-*` and `--color-chip-count-*` (defined in `themes.css`,
-  resolved in `App.css`).
-- Focus: opening a secondary view focuses its title; Back returns focus to "New
-  configuration" or that row's "Edit"; a successful save focuses the saved row's
-  "Edit" (found by ID), or the page heading when a new row is not on the loaded
-  pages. Controls that can hold focus are never `disabled` while work is pending:
+- Hierarchy: each view has one main primary action ("New" / 「新建」 on Providers
+  and MCP lists, "Discover" / 「发现」 on Agents, or "Save" in the secondary-page
+  header): solid `--color-accent` with `--color-background` text. Recovery
+  actions and "Load more" are secondary (`--color-border` outline). Destructive
+  row actions (for example MCP "Remove") use `dangerSecondary`
+  (`--color-danger-border`, `--color-danger-fg`, hover `--color-danger-bg`). Row
+  "Edit" is a text button. List "New" (`plus`), Agents "Discover" (`refresh`) and
+  row "Edit" (`edit`) carry a leading 18px `Icon`; create/edit Back is an
+  icon-only header control with an accessible destination name. Titles align
+  left beside Back. Save and recovery actions stay text-only in the header
+  trailing slot. Blocked buttons use `aria-disabled` styling (muted
+  `--color-summary`, or half opacity for the primary). Labels and values use
+  `--color-text` at 0.8125rem and normal weight; hints and secondary values use
+  `--color-summary` at 0.75rem; errors use `--color-text`, semibold, with a
+  leading rule. Every focus ring is `--color-focus`. Protocol and count pills on
+  the provider list use per-palette `--color-chip-info-*` and
+  `--color-chip-count-*` (defined in `themes.css`, resolved in `App.css`).
+- Focus: opening a secondary view focuses its title; Back returns focus to "New"
+  or that row's "Edit"; a successful save focuses the saved row's "Edit" (found
+  by ID), or the page heading when a new row is not on the loaded pages. Controls
+  that can hold focus are never `disabled` while work is pending:
   buttons and selects use `aria-disabled`, text fields `readOnly`, and handlers
   check the state. Back is blocked while API save or model fetch/list work is
   pending. "Saving…" is announced through a `role="status"` message.
@@ -765,8 +783,8 @@ see `Notifications`) that survives the jump back to the list.
   The key field was cleared, so the text after the refresh says that "Save
   again" needs the key typed again; the key field stays editable in this state
   while the other fields are read-only.
-- Browser preview shows that nothing can be read or saved, hides "New
-  configuration", and never calls IPC.
+- Browser preview shows that nothing can be read or saved, hides "New", and
+  never calls IPC.
 
 ### API keys
 
@@ -777,10 +795,10 @@ or update timestamp.
 
 The edit form reads `getProviderSecretStatus(id)` on mount (StrictMode may repeat
 the read). This reads only SQLite metadata, not the key or OS credential store.
-A configured key appears as a fixed `••••••••` placeholder and a non-interactive
-closed-eye icon. The input value remains empty; neither the mask nor any stored
-key is fetched or submitted. An accessible name announces that a key is
-configured. Typing a replacement removes the indicator.
+A configured key appears as a fixed `••••••••` placeholder only (no show/hide
+control). The input value remains empty; neither the mask nor any stored key is
+fetched or submitted. An accessible status text announces that a key is
+configured. Typing a replacement clears that status.
 
 A blank edit field preserves the existing key. Creation and legacy instances
 without a key require input; empty input produces a field error and moves focus
@@ -858,10 +876,12 @@ the masters, dimensions and locked Tauri generation commands.
 
 ## Built-in color themes
 
-General shows all six themes as native radio circles, in this order:
+General shows all eight themes as native radio circles, in this order:
 
 | English  | 简体中文 | Persisted ID | Palette                       |
 | -------- | -------- | ------------ | ----------------------------- |
+| macOS    | macOS    | `macos`      | System blue, grouped surfaces |
+| Windows  | Windows  | `windows`    | Fluent neutrals, accent blue  |
 | Forest   | 森林     | `forest`     | Calm green                    |
 | Ink      | 纸墨     | `notion`     | White, warm gray and charcoal |
 | Graphite | 石墨     | `graphite`   | Neutral monochrome            |
@@ -874,15 +894,18 @@ shared semantic colors. Brightness is independent of theme. System brightness
 uses `prefers-color-scheme` in CSS. Circles reuse palette accents, with translated
 names, selected rings and checks. Native radios provide arrow-key selection;
 forced-colors mode can show the native input. Brand V colors remain fixed.
+`macos` and `windows` approximate platform system palettes (Apple HIG blue /
+grouped grays; Fluent `#0078D4` / `#60CDFF`); they are not OS skins and do not
+change control chrome beyond vibemate tokens.
 
 Rust validates and atomically saves brightness/theme pairs. Thin Tauri commands
 run SQLite work in a blocking worker so database waits do not stall the async
 executor. A missing row means
 system/forest without writing defaults. Schema v3 created the singleton table;
-v4 extends its CHECK constraint by rebuilding that owned table in a transaction.
-Tests preserve all five prior themes, language and unrelated rows, save Ink
-and reopen, reject unknown themes, and verify an invalid v3 row rolls back the
-upgrade without data loss.
+v4 extends its CHECK constraint by rebuilding that owned table in a transaction;
+v9 adds `macos` and `windows` the same way. Tests preserve prior themes, language
+and unrelated rows, save the new IDs and reopen, reject unknown themes, and
+verify an invalid prior row rolls back the upgrade without data loss.
 
 The persisted `notion` ID remains unchanged after renaming the display label to
 Ink / 纸墨. Its neutral colors refer to Notion's [official public stylesheet](https://www.notion.so/_assets/77281-c4b3c46f690b55b2.css)
@@ -911,8 +934,8 @@ does not rerun or extend the recorded verification below.
 | Frontend   | `check:frontend`: 101 UI tests, eight release-tool tests, format, lint, accessibility lint, both TypeScript configs and production build passed. The final CSS baseline adjustment also passed formatting and the native build's frontend build. |
 | Rust       | fmt and Clippy passed; 33 tests passed; the existing real OS-keychain smoke test was ignored.                                                                                                                                                    |
 | macOS      | Locked release builds and unsigned local app bundles passed; the final generated ICNS matches the packaged icon.                                                                                                                                 |
-| Appearance | The maintainer closed the current shell, branding, settings, six palettes and Dock refinements.                                                                                                                                                  |
-| Pending    | Windows/Linux runtime and native icon display; actual system-browser opening; native Ink selection followed by restart; comprehensive accessibility testing.                                                                                     |
+| Appearance | The maintainer closed the shell, branding, settings and Dock refinements for the six expressive palettes (2026-10-10). macOS/Windows system-style palettes were added later (schema v9); visual acceptance of those two remains pending.          |
+| Pending    | Windows/Linux runtime and native icon display; actual system-browser opening; native Ink / macOS / Windows theme selection followed by restart; comprehensive accessibility testing.                                                             |
 
 Earlier checks retain their original scope: I02.d read version 0.1.0 in the
 macOS runtime and demonstrated obsolete-response test failures with cleanup
@@ -929,8 +952,10 @@ named token pairs, not all accessibility behavior.
 ## Central MCP management
 
 `src/features/mcp/` implements P31. The sidebar opens a metadata list lazily on
-first visit. New/edit pages collect display name (the server identifier is
-derived on first save and never displayed in either form; edits preserve it),
+first visit. The list header trailing action is **New** / 「新建」 with a leading
+plus icon (same pattern as Providers). New/edit pages collect display name (the
+server identifier is derived on first save and never displayed in either form;
+edits preserve it),
 transport, stdio executable/ordered argument rows/
 optional cwd, or Streamable HTTP URL. Environment variables and request headers
 use named password rows. An empty existing value preserves its OS reference; a
@@ -965,14 +990,14 @@ cases and one shell-navigation case, including hidden-value clearing, stale
 replies, reconciliation and browser preview. Visual and real credential-store
 acceptance remain separate from these simulated tests.
 
-MCP new and edit reuse the left-aligned `ProviderPage` title, the shared
-edit-form rows, and `FieldSelect`. Fields scroll between the title and
-`SecondaryPageFooter`, which places Back on the left and
-Save on the right. Save feedback and reload actions remain visible; pending
-saves change the button label without replacing the button or losing focus.
-The main-column scroll override applies only to visible secondary pages
-(Provider create/edit, MCP create/edit and Agent details). Lists, Settings,
-Overview and Skills retain their previous scrolling behavior.
+MCP new and edit reuse the left-aligned `ProviderPage` header (icon-only Back,
+title, trailing Save), the shared edit-form rows, and `FieldSelect`. Fields
+scroll below the header. Save feedback stays in the form; reload and Save
+actions publish to the header. Pending saves change the button label without
+replacing the button or losing focus. The main-column scroll override applies
+only to visible secondary pages (Provider create/edit, MCP create/edit and
+Agent details). Lists, Settings, Overview and Skills retain their previous
+scrolling behavior.
 
 The shared layout and sidebar-home changes passed `check:frontend` with 539
 UI/boundary tests, eight release tests and 14 translation-checker tests, plus
@@ -993,11 +1018,12 @@ size advisory; neither it nor passing checks establishes layout or accessibility
 
 `AgentList` mounts on the first Agents visit, then remains mounted while hidden.
 It calls the typed `discoverAgents` boundary once on mount and on explicit
-Refresh or “Apply path and refresh” in a detail view. Found entries appear as
-cards (official mark, name, version); opening a card shows paths, config file
-presence, and optional manual entry path override. The detail view has three
-cards: discovery/status/version, configuration path/file observations, and manual
-entry path. Cards have 8 px vertical / 16 px horizontal padding and 10 px gaps.
+**Discover** / 「发现」 (list header primary with leading refresh icon) or
+detail-view rediscovery. Found entries appear as cards (official mark, name,
+version); opening a card shows paths, config file presence, and optional manual
+entry path override. The detail view has three cards: discovery/status/version,
+configuration path/file observations, and manual entry path. Cards have 8 px
+vertical / 16 px horizontal padding and 10 px gaps.
 Read-only rows use the shared detail form (44 px minimum height and 8 px
 vertical padding, matching model rows). The editable path row uses the shared
 edit input on the 64 px form baseline, inside a detail-card surface. Status and

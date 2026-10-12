@@ -28,7 +28,7 @@ const record: ProviderRecord = {
     revision: 1,
     createdAtMs: 1000,
     updatedAtMs: 1000,
-    selectedModelCount: 0,
+    selectedModelCount: 3,
 };
 
 afterEach(cleanup);
@@ -52,7 +52,8 @@ test("edit: switches between API and Models tabs with keyboard and keeps both pa
     );
 
     const api = screen.getByRole("tab", { name: "API" });
-    const models = screen.getByRole("tab", { name: "Models" });
+    // Badge comes from the list row before the Models panel is shown.
+    const models = screen.getByRole("tab", { name: "Models (3)" });
     expect(api.getAttribute("aria-selected")).toBe("true");
     expect(screen.getByTestId("provider-form")).toBeDefined();
     expect(screen.getByTestId("provider-models")).toBeDefined();

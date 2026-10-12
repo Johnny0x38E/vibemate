@@ -27,7 +27,7 @@ import { ModelCheckbox } from "../../components/ModelCheckbox";
 import buttons from "../../components/actionButtons.module.css";
 import editForm from "../../components/editForm.module.css";
 import styles from "./ProviderModels.module.css";
-import { SecondaryPageFooter } from "../../components/SecondaryPageFooter";
+import { SecondaryPageActions } from "../../components/SecondaryPageActions";
 
 /** Search results cap; fuzzy search returns at most this many rows per query. */
 export const MODEL_PAGE_SIZE = 50;
@@ -78,8 +78,6 @@ type SaveState =
 /** Inputs for {@link ProviderModels}. */
 export interface ProviderModelsProps {
     providerId: string;
-    onBack?: (() => void) | undefined;
-    backBlocked?: boolean;
     hidden?: boolean;
     layout?: "section" | "tabPanel";
     onBusyChange?: (busy: boolean) => void;
@@ -212,8 +210,6 @@ function resolveEndOfListMessage(
  */
 export function ProviderModels({
     providerId,
-    onBack,
-    backBlocked = false,
     hidden = false,
     layout = "section",
     onBusyChange,
@@ -262,8 +258,8 @@ export function ProviderModels({
         dirtyRef.current = dirty;
     }, [dirty]);
 
+    // Tab badge count is useful while the Models panel is still hidden (API tab).
     const refreshSelectedCount = useCallback(async (): Promise<void> => {
-        if (hidden) return;
         try {
             const loaded = await listAllSelected(providerId);
             if (loaded.kind === "preview") {
@@ -278,7 +274,7 @@ export function ProviderModels({
         } catch {
             onSelectedCountChange?.(null);
         }
-    }, [providerId, hidden, onSelectedCountChange]);
+    }, [providerId, onSelectedCountChange]);
 
     useEffect(() => {
         const handle = window.setTimeout(() => {
@@ -446,6 +442,16 @@ export function ProviderModels({
         };
     }, [hidden, viewMode, debouncedQuery, upstream.kind, loadUpstreamPage]);
 
+    // Tab badge: always keep the selected-model count fresh for the inactive API tab.
+    useEffect(() => {
+        const handle = window.setTimeout(() => {
+            void refreshSelectedCount();
+        }, 0);
+        return () => {
+            clearTimeout(handle);
+        };
+    }, [providerId, refreshSelectedCount]);
+
     useEffect(() => {
         if (hidden) {
             loadGeneration.current += 1;
@@ -455,19 +461,12 @@ export function ProviderModels({
         }
         const handle = window.setTimeout(() => {
             void loadKeyStatus();
-            void refreshSelectedCount();
             void refreshBrowseRunning();
         }, 0);
         return () => {
             clearTimeout(handle);
         };
-    }, [
-        hidden,
-        providerId,
-        loadKeyStatus,
-        refreshSelectedCount,
-        refreshBrowseRunning,
-    ]);
+    }, [hidden, providerId, loadKeyStatus, refreshBrowseRunning]);
 
     useEffect(() => {
         if (hidden || viewMode !== "selected") return;
@@ -898,6 +897,24 @@ export function ProviderModels({
                                                     </span>
                                                 )}
                                             </span>
+                                            {model.resolvedProtocol !== null &&
+                                                model.routeSupport ===
+                                                    "supported" && (
+                                                    <span
+                                                        className={
+                                                            styles["badge"]
+                                                        }
+                                                    >
+                                                        {t(
+                                                            "providers.models.badges.resolvedProtocol",
+                                                            {
+                                                                protocol: t(
+                                                                    `providers.protocols.${model.resolvedProtocol}`,
+                                                                ),
+                                                            },
+                                                        )}
+                                                    </span>
+                                                )}
                                             {model.routeSupport ===
                                                 "unsupported" && (
                                                 <span
@@ -908,16 +925,18 @@ export function ProviderModels({
                                                     )}
                                                 </span>
                                             )}
-                                            {model.routeSupport ===
-                                                "unknown" && (
-                                                <span
-                                                    className={styles["badge"]}
-                                                >
-                                                    {t(
-                                                        "providers.models.badges.routeUnknown",
-                                                    )}
-                                                </span>
-                                            )}
+                                            {model.routeSupport === "unknown" &&
+                                                model.source !== "manual" && (
+                                                    <span
+                                                        className={
+                                                            styles["badge"]
+                                                        }
+                                                    >
+                                                        {t(
+                                                            "providers.models.badges.routeUnknown",
+                                                        )}
+                                                    </span>
+                                                )}
                                         </p>
                                         {model.upstreamState === "missing" &&
                                             model.missingSinceMs !== null && (
@@ -1015,6 +1034,24 @@ export function ProviderModels({
                                                     </span>
                                                 )}
                                             </span>
+                                            {model.resolvedProtocol !== null &&
+                                                model.routeSupport ===
+                                                    "supported" && (
+                                                    <span
+                                                        className={
+                                                            styles["badge"]
+                                                        }
+                                                    >
+                                                        {t(
+                                                            "providers.models.badges.resolvedProtocol",
+                                                            {
+                                                                protocol: t(
+                                                                    `providers.protocols.${model.resolvedProtocol}`,
+                                                                ),
+                                                            },
+                                                        )}
+                                                    </span>
+                                                )}
                                             {model.routeSupport ===
                                                 "unsupported" && (
                                                 <span
@@ -1022,6 +1059,16 @@ export function ProviderModels({
                                                 >
                                                     {t(
                                                         "providers.models.badges.routeUnsupported",
+                                                    )}
+                                                </span>
+                                            )}
+                                            {model.routeSupport ===
+                                                "unknown" && (
+                                                <span
+                                                    className={styles["badge"]}
+                                                >
+                                                    {t(
+                                                        "providers.models.badges.routeUnknown",
                                                     )}
                                                 </span>
                                             )}
@@ -1244,12 +1291,9 @@ export function ProviderModels({
                 listBody
             )}
             {layout === "tabPanel" && (
-                <SecondaryPageFooter
-                    onBack={onBack}
-                    backBlocked={sectionBusy || backBlocked}
-                >
+                <SecondaryPageActions active={!hidden}>
                     {saveButton}
-                </SecondaryPageFooter>
+                </SecondaryPageActions>
             )}
         </section>
     );

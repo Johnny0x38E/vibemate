@@ -8,6 +8,7 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import {
+    baseUrlForProtocol,
     createProvider,
     getProvider,
     ProviderRequestError,
@@ -21,12 +22,11 @@ import {
 import { getProviderSecretStatus } from "../../lib/desktop/providerSecrets";
 import { EditFormRow } from "../../components/EditFormRow";
 import { FieldSelect } from "../../components/FieldSelect";
-import { Icon } from "../../components/Icon";
 import editForm from "../../components/editForm.module.css";
 import { ProviderIcon } from "./ProviderIcon";
 import buttons from "../../components/actionButtons.module.css";
+import { SecondaryPageActions } from "../../components/SecondaryPageActions";
 import styles from "./ProviderForm.module.css";
-import { SecondaryPageFooter } from "../../components/SecondaryPageFooter";
 
 /**
  * Create a new instance (the provider is chosen in the form's first field), or
@@ -63,14 +63,11 @@ export interface ProviderFormProps {
     layout?: "page" | "tabPanel";
     /** Stable id for the `<form>` when callers associate external controls with it. */
     formId?: string;
-    /** Secondary-page navigation shares the fixed footer with Save. */
-    onBack?: (() => void) | undefined;
-    backBlocked?: boolean;
     /**
-     * Secondary pages use the fixed footer. The external placement is retained
-     * for standalone callers that explicitly request an in-card or toolbar action.
+     * Secondary pages publish Save into the page header. The external placements
+     * remain for standalone callers that put the action in-card or in a toolbar.
      */
-    primaryActionPlacement?: "footer" | "external";
+    primaryActionPlacement?: "header" | "external";
     /** Create mode only: sync the page title with the provider field. */
     onCreateKindChange?: (kind: ProviderKind) => void;
 }
@@ -181,9 +178,7 @@ export function ProviderForm({
     hidden = false,
     layout = "page",
     formId,
-    onBack,
-    backBlocked = false,
-    primaryActionPlacement = "footer",
+    primaryActionPlacement = "header",
     onCreateKindChange,
 }: ProviderFormProps): JSX.Element {
     const { t } = useTranslation();
@@ -314,7 +309,23 @@ export function ProviderForm({
         if (name === "protocol") {
             const protocol = protocols.find((entry) => entry === value);
             if (!protocol) return;
-            setFields((previous) => ({ ...previous, protocol }));
+            setFields((previous) => {
+                let baseUrl = previous.baseUrl;
+                // If the URL still matches a documented default for this kind,
+                // follow the suggested base for the newly selected protocol
+                // (e.g. DeepSeek Anthropic uses a different path).
+                if (template !== undefined) {
+                    const onKnownDefault = template.protocols.some(
+                        (entry) =>
+                            previous.baseUrl ===
+                            baseUrlForProtocol(template, entry),
+                    );
+                    if (onKnownDefault) {
+                        baseUrl = baseUrlForProtocol(template, protocol);
+                    }
+                }
+                return { ...previous, protocol, baseUrl };
+            });
         } else {
             setFields((previous) => ({ ...previous, [name]: value }));
         }
@@ -332,21 +343,29 @@ export function ProviderForm({
         const next = templates.find((entry) => entry.kind === value);
         if (!next) return;
         setCreateKind(next.kind);
-        setFields((previous) => ({
-            displayName:
-                previous.displayName === template?.brandName
-                    ? next.brandName
-                    : previous.displayName,
-            baseUrl:
-                previous.baseUrl === template?.defaultBaseUrl
-                    ? next.defaultBaseUrl
-                    : previous.baseUrl,
-            protocol:
+        setFields((previous) => {
+            const protocol =
                 previous.protocol !== template?.defaultProtocol &&
                 next.protocols.includes(previous.protocol)
                     ? previous.protocol
-                    : next.defaultProtocol,
-        }));
+                    : next.defaultProtocol;
+            const previousBases = new Set(
+                template?.protocols.map((entry) =>
+                    baseUrlForProtocol(template, entry),
+                ) ?? [template?.defaultBaseUrl],
+            );
+            const baseUrl = previousBases.has(previous.baseUrl)
+                ? baseUrlForProtocol(next, protocol)
+                : previous.baseUrl;
+            return {
+                displayName:
+                    previous.displayName === template?.brandName
+                        ? next.brandName
+                        : previous.displayName,
+                baseUrl,
+                protocol,
+            };
+        });
         if (status.kind === "failed") setStatus({ kind: "idle" });
     }
 
@@ -687,6 +706,7 @@ export function ProviderForm({
                                     <FieldSelect
                                         id={`${id}-kind`}
                                         value={createKind}
+                                        size="wide"
                                         blocked={saveBlocked}
                                         options={templates.map((entry) => ({
                                             value: entry.kind,
@@ -755,9 +775,15 @@ export function ProviderForm({
                             <FieldSelect
                                 id={`${id}-protocol`}
                                 value={fields.protocol}
+                                size="wide"
                                 blocked={saveBlocked}
                                 aria-invalid={fieldError === "protocol"}
-                                aria-describedby={describedBy("protocol")}
+                                aria-describedby={describedBy(
+                                    "protocol",
+                                    protocols.length > 1
+                                        ? `${id}-protocol-hint`
+                                        : undefined,
+                                )}
                                 options={protocols.map((protocol) => ({
                                     value: protocol,
                                     label: t(`providers.protocols.${protocol}`),
@@ -767,20 +793,25 @@ export function ProviderForm({
                                     update("protocol", next);
                                 }}
                             />
+                            {protocols.length > 1 && (
+                                <p
+                                    className={editForm["hint"]}
+                                    id={`${id}-protocol-hint`}
+                                >
+                                    {t("providers.fields.protocolPreference")}
+                                </p>
+                            )}
                             {errorText("protocol")}
                         </EditFormRow>
-                        {/* The fixed placeholder and eye-off mark only indicate a
-                        configured entry; neither is an input value or a reveal control. */}
+                        {/* A configured key uses a fixed mask placeholder only.
+                        The value is never revealed, so there is no show/hide control. */}
                         <EditFormRow
                             label={t("providers.fields.secret")}
                             htmlFor={`${id}-secret`}
                         >
                             <div className={styles["secretControl"]}>
                                 <input
-                                    className={[
-                                        editForm["input"],
-                                        styles["secretInput"],
-                                    ].join(" ")}
+                                    className={editForm["input"]}
                                     id={`${id}-secret`}
                                     ref={secretInput}
                                     type="password"
@@ -813,20 +844,10 @@ export function ProviderForm({
                                 />
                                 {showStoredIndicator && (
                                     <span
-                                        className={styles["keyIndicator"]}
-                                        title={t(
-                                            "providers.fields.secretConfigured",
-                                        )}
+                                        className={styles["visuallyHidden"]}
+                                        id={secretStatusId}
                                     >
-                                        <Icon name="eyeOff" />
-                                        <span
-                                            className={styles["visuallyHidden"]}
-                                            id={secretStatusId}
-                                        >
-                                            {t(
-                                                "providers.fields.secretConfigured",
-                                            )}
-                                        </span>
+                                        {t("providers.fields.secretConfigured")}
                                     </span>
                                 )}
                                 {keyStatus.kind === "loading" && (
@@ -875,69 +896,62 @@ export function ProviderForm({
                         </EditFormRow>
                     </div>
                 </div>
-                <SecondaryPageFooter
-                    onBack={onBack}
-                    backBlocked={busy || backBlocked}
-                    feedback={
-                        <div className={styles["footerFeedback"]}>
-                            {formMessage()}
-                        </div>
-                    }
-                >
-                    <div className={styles["footerActions"]}>
-                        {status.kind === "unknown" && status.refreshed && (
-                            <button
-                                className={buttons["secondary"]}
-                                type="button"
-                                onClick={() => {
-                                    // This button disappears; keep focus inside the form.
-                                    submitRef.current?.focus();
-                                    // An explicit second action after the list was re-read.
-                                    void save(true);
-                                }}
-                            >
-                                {t("providers.form.saveAgain")}
-                            </button>
-                        )}
-                        {status.kind === "unknown" && !status.refreshed && (
-                            <button
-                                className={buttons["secondary"]}
-                                type="button"
-                                onClick={() => {
-                                    submitRef.current?.focus();
-                                    void refreshAgain();
-                                }}
-                            >
-                                {t("providers.form.refreshList")}
-                            </button>
-                        )}
-                        {(status.kind === "conflict" ||
-                            status.kind === "reloadFailed") && (
-                            <button
-                                className={buttons["secondary"]}
-                                type="button"
-                                onClick={() => {
-                                    submitRef.current?.focus();
-                                    void reloadLatest();
-                                }}
-                            >
-                                {t("providers.form.reloadLatest")}
-                            </button>
-                        )}
-                        {primaryActionPlacement === "footer" && (
-                            // The one primary action. Never `disabled`: focus stays here
-                            // while saving, and save() checks the state itself.
+                <div className={styles["footerFeedback"]}>{formMessage()}</div>
+                {primaryActionPlacement === "header" && (
+                    <SecondaryPageActions active={!hidden}>
+                        <div className={styles["footerActions"]}>
+                            {status.kind === "unknown" && status.refreshed && (
+                                <button
+                                    className={buttons["secondary"]}
+                                    type="button"
+                                    onClick={() => {
+                                        // This button disappears; keep focus inside the form.
+                                        submitRef.current?.focus();
+                                        // An explicit second action after the list was re-read.
+                                        void save(true);
+                                    }}
+                                >
+                                    {t("providers.form.saveAgain")}
+                                </button>
+                            )}
+                            {status.kind === "unknown" && !status.refreshed && (
+                                <button
+                                    className={buttons["secondary"]}
+                                    type="button"
+                                    onClick={() => {
+                                        submitRef.current?.focus();
+                                        void refreshAgain();
+                                    }}
+                                >
+                                    {t("providers.form.refreshList")}
+                                </button>
+                            )}
+                            {(status.kind === "conflict" ||
+                                status.kind === "reloadFailed") && (
+                                <button
+                                    className={buttons["secondary"]}
+                                    type="button"
+                                    onClick={() => {
+                                        submitRef.current?.focus();
+                                        void reloadLatest();
+                                    }}
+                                >
+                                    {t("providers.form.reloadLatest")}
+                                </button>
+                            )}
+                            {/* Never `disabled`: focus stays here while saving. */}
                             <button
                                 className={buttons["primary"]}
                                 type="submit"
+                                form={formId}
                                 ref={submitRef}
                                 aria-disabled={saveBlocked}
                             >
                                 {t("providers.form.save")}
                             </button>
-                        )}
-                    </div>
-                </SecondaryPageFooter>
+                        </div>
+                    </SecondaryPageActions>
+                )}
             </form>
         </section>
     );

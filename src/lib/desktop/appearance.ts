@@ -5,6 +5,8 @@ import type { SettingsErrorCode } from "./settings";
 export type Appearance = "system" | "light" | "dark";
 /** Stable palette IDs also used by bundled CSS and translation keys. */
 export const THEME_IDS = [
+    "macos",
+    "windows",
     "forest",
     "notion",
     "graphite",

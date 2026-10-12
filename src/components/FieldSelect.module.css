@@ -7,6 +7,11 @@
     min-width: 0;
 }
 
+/* Longer labels such as "OpenAI Chat Completions" on the provider protocol field. */
+.fieldWide {
+    width: 15.5rem;
+}
+
 .field::after {
     content: "";
     position: absolute;

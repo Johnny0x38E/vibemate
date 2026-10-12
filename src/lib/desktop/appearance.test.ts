@@ -20,7 +20,7 @@ test("preview never invents a saved choice or invokes a mutation", async () => {
     expect(invoke).not.toHaveBeenCalled();
 });
 
-test.each(["iris", "notion"] as const)(
+test.each(["iris", "notion", "macos", "windows"] as const)(
     "reads and confirms the exact desktop pair for %s",
     async (theme) => {
         const preference = { appearance: "dark", theme } as const;

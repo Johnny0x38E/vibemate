@@ -24,6 +24,17 @@
     --color-danger-border: #f1b4ad;
     --space-sm: 8px;
     --space-md: 16px;
+    /*
+     * Sidebar brand logo and main-column page headers share one horizontal
+     * centerline. Brand sits below the titlebar strip with this top padding
+     * and logo height; content headers use --page-header-offset so
+     * padding-top + offset + half of --page-header-height equals
+     * brand padding-top + half logo height (8 + 2 + 18 = 12 + 16).
+     */
+    --brand-padding-top: 12px;
+    --brand-logo-height: 32px;
+    --page-header-height: 36px;
+    --page-header-offset: 2px;
     --space-lg: 24px;
     --space-xl: 32px;
     --space-page: 48px;

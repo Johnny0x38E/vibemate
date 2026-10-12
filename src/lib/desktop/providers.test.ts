@@ -177,6 +177,7 @@ describe("provider desktop boundary", () => {
             brandName: "OpenRouter",
             defaultBaseUrl: "https://openrouter.ai/api/v1",
             protocols: ["chat_completions"],
+            protocolBaseUrls: ["https://openrouter.ai/api/v1"],
             defaultProtocol: "chat_completions",
             extensionFields: [],
         };

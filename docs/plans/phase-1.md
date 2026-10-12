@@ -16,20 +16,23 @@
 ## Current state
 
 The scaffold, private configuration storage, credential-storage foundation,
-Simplified Chinese/English startup preferences, desktop shell and basic appearance
-are implemented. The maintainer closed the current appearance iteration on
-2026-10-10: expanded/collapsed branding, macOS Dock refinements, six light/dark
-themes and full-width General/About settings. Theme order is Forest, Ink,
-Graphite, Linen, Iris, Ocean; schema v4 preserves existing preferences.
+Simplified Chinese/English startup preferences, desktop shell and appearance
+are implemented. The maintainer closed the basic appearance iteration on
+2026-10-10 (branding, Dock refinements, expressive palettes, full-width
+General/About). Built-in themes are now eight light/dark pairs in UI order
+macOS, Windows, Forest, Ink, Graphite, Linen, Iris, Ocean (`THEME_IDS`);
+schema v9 extends the appearance theme CHECK for `macos`/`windows`. Default
+remains system/forest. Visual acceptance of the two system-style palettes is
+still pending.
 
 CI and changelog-driven draft release workflows are present. Integration
-contracts are documented in `docs/integrations/`. P10–P11 deliver the Providers
-page with API keys and unified save. P12 adds Rust-side model fetch, storage,
-search and IPC. The tabbed Models UI, create gate, dual-view browse/save and
-manual model form are implemented per [models-tab-ux.md](models-tab-ux.md).
-The maintainer verified browse/save for three providers in Tauri (2026-10-11);
-isolated Linux IPC also verified manual-model add/restart/delete using a no-key
-provider fixture. Real-provider UI and broader platform acceptance remain pending.
+contracts are documented in `docs/integrations/`. P10–P12 are accepted
+(2026-10-12): Providers page with API keys and unified save; Rust-side model
+fetch, storage, search and IPC; tabbed Models UI with create gate, dual-view
+browse/save and manual model add per [models-tab-ux.md](models-tab-ux.md).
+The maintainer verified browse/save for three providers in Tauri (2026-10-11)
+and manual-model add/restart/delete (2026-10-12). Windows/Linux native
+acceptance remains a separate platform task.
 
 P31 central MCP management is implemented ahead of Agent deployment at the
 maintainer's request: structured stdio/Streamable HTTP definitions, protected
@@ -65,9 +68,10 @@ The single task checklist is [todo.md](todo.md). These files expand the same
 phase-1 scope; this overview does not contain a second execution checklist.
 Implementation is authorized. The pnpm migration is recorded as P00, and
 P01 provider evidence is in [providers.md](../integrations/providers.md).
-Provider configuration and model discovery are implemented; Agent deployment
-and inference verification remain pending. Documented contracts do not establish
-a working inference connection or runtime compatibility.
+Provider configuration and model discovery (P10–P12) are accepted; the next
+business path is P15→P16→P18. Agent deployment and inference verification
+remain pending. Documented contracts do not establish a working inference
+connection or runtime compatibility.
 
 ## Implementation order
 

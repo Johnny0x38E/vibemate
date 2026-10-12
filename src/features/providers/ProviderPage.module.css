@@ -21,17 +21,17 @@
 .header {
     display: flex;
     flex-shrink: 0;
+    flex-wrap: nowrap;
     align-items: center;
-    justify-content: space-between;
-    gap: var(--space-lg);
+    gap: 12px;
     min-width: 0;
-    /* Match PageModuleHeader: one 36 px control row, then module body margin. */
-    min-height: 36px;
-    margin-top: 2px;
+    /* Fixed height keeps Back / title / Save on the brand logo centerline. */
+    height: var(--page-header-height);
+    margin-top: var(--page-header-offset);
     margin-bottom: 0;
 }
 
-.page > :not(.header):not(.body):not(footer) {
+.page > :not(.header):not(.body) {
     display: flex;
     flex: 1;
     flex-direction: column;
@@ -39,14 +39,27 @@
 }
 
 .title {
-    flex: 0 1 auto;
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
     min-width: 0;
     margin: 0;
-    margin-inline-start: 0;
     font-size: 1rem;
     font-weight: 600;
+    line-height: 1.25;
     text-align: start;
-    overflow-wrap: anywhere;
+    overflow: hidden;
+}
+
+.actions {
+    display: flex;
+    flex-shrink: 0;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-sm);
+    margin-inline-start: auto;
+    max-height: var(--page-header-height);
 }
 
 .titleBrand {

@@ -233,12 +233,20 @@ test("shows all built-in colors together and moves the single selection on click
     await mount();
     await ready();
     const group = screen.getByRole("radiogroup", { name: "Color theme" });
-    expect(group.querySelectorAll('input[type="radio"]')).toHaveLength(6);
+    expect(group.querySelectorAll('input[type="radio"]')).toHaveLength(8);
     expect(screen.getByRole("radio", { name: "Forest" })).toHaveProperty(
         "checked",
         true,
     );
-    for (const name of ["Graphite", "Linen", "Iris", "Ocean", "Ink"]) {
+    for (const name of [
+        "macOS",
+        "Windows",
+        "Graphite",
+        "Linen",
+        "Iris",
+        "Ocean",
+        "Ink",
+    ]) {
         fireEvent.click(screen.getByRole("radio", { name }));
         expect(screen.getByRole("radio", { name })).toHaveProperty(
             "checked",
@@ -258,7 +266,7 @@ test("saves Ink with the current brightness and restores it after remount", asyn
     save.mockResolvedValue(choice);
     const view = await mount();
     const ink = await ready("Ink");
-    expect(screen.getAllByRole("radio")[1]).toBe(ink);
+    expect(screen.getByRole("radio", { name: "Ink" })).toBe(ink);
     fireEvent.click(ink);
     await waitFor(() => {
         expect(document.documentElement.dataset["theme"]).toBe("notion");

@@ -104,6 +104,8 @@
         "theme": {
             "label": "主题配色",
             "names": {
+                "macos": "macOS",
+                "windows": "Windows",
                 "forest": "森林",
                 "graphite": "石墨",
                 "linen": "亚麻",
@@ -126,13 +128,12 @@
         "preview": "浏览器预览无法读取或保存服务商配置。请在 vibemate 桌面应用中打开此页面。",
         "loading": "正在读取已保存的服务商配置…",
         "empty": "还没有保存的服务商配置。",
-        "add": "新建配置",
+        "add": "新建",
         "retry": "重试",
         "retryTemplates": "重新读取可选服务商",
         "saved": "已保存 {{name}}。",
         "loadMore": "加载更多",
         "loadingMore": "正在加载更多…",
-        "back": "返回",
         "backLabel": "返回服务商列表",
         "list": {
             "label": "已保存的服务商配置",
@@ -192,7 +193,7 @@
             "listLabel": "此服务商配置下的模型",
             "selectModel": "勾选 {{modelId}}",
             "deselectModel": "取消勾选 {{modelId}}",
-            "manualSource": "手动添加",
+            "manualSource": "手动添加 · 能力来自你的填写",
             "createPending": "请先完成 API 配置",
             "selectedSummary": "已添加 {{count}} 个",
             "selectedSummaryMany": "已添加 {{count}}+ 个",
@@ -206,8 +207,9 @@
             },
             "badges": {
                 "upstreamMissing": "上游已不可用 · 自 {{date}}",
-                "routeUnsupported": "当前协议不支持",
-                "routeUnknown": "路由支持情况未知"
+                "routeUnsupported": "无可用 API 路由",
+                "routeUnknown": "服务商未声明路由",
+                "resolvedProtocol": "{{protocol}}"
             },
             "errors": {
                 "storage_unavailable": "本地配置存储不可用，请重启 vibemate。",
@@ -222,7 +224,7 @@
                 "model_alias_invalid": "显示名称无效。",
                 "model_already_exists": "该模型 ID 已存在。",
                 "model_not_found": "找不到该模型，请刷新列表。",
-                "model_route_not_supported": "当前协议下不能勾选该模型。",
+                "model_route_not_supported": "该模型没有 vibemate 可用的 API 路由。",
                 "secret_missing": "请先在上方填写 API 密钥，再勾选模型。",
                 "secret_invalid": "API 密钥无效。",
                 "base_url_invalid": "基础 URL 无效。",
@@ -252,7 +254,8 @@
                 "check": "检查已保存模型",
                 "uncertain": "保存结果未知。再次添加前，请先检查已保存模型；检查失败时可再次检查。",
                 "saved": "手动模型已保存。",
-                "draft": "添加手动模型前，请先保存或放弃勾选改动。"
+                "draft": "添加手动模型前，请先保存或放弃勾选改动。",
+                "capabilityNote": "手动模型没有服务商路由声明。能力信息来自你的填写，而非上游目录。"
             }
         },
         "fields": {
@@ -260,6 +263,7 @@
             "displayName": "名称",
             "baseUrl": "基础 URL",
             "protocol": "协议",
+            "protocolPreference": "模型声明多条路由时优先使用的协议。若某协议需要不同的基础 URL，请另建一个配置。",
             "secret": "API 密钥",
             "secretConfigured": "已配置 API 密钥",
             "secretLoading": "正在读取密钥状态…",
@@ -267,8 +271,8 @@
             "secretRequired": "请输入 API 密钥。"
         },
         "protocols": {
-            "chat_completions": "Chat Completions",
-            "responses": "Responses",
+            "chat_completions": "OpenAI Chat Completions",
+            "responses": "OpenAI Responses",
             "anthropic_messages": "Anthropic Messages"
         },
         "form": {
@@ -316,7 +320,7 @@
         "title": "MCP",
         "create": "新建 MCP 定义",
         "edit": "编辑 MCP 定义",
-        "new": "新建定义",
+        "new": "新建",
         "displayName": "名称",
         "serverName": "服务器标识",
         "transport": "传输方式",
@@ -344,7 +348,6 @@
         "disabled": "定义已停用",
         "save": "保存",
         "saving": "正在保存定义…",
-        "back": "返回",
         "backLabel": "返回 MCP 服务器列表",
         "reload": "重新读取后再试",
         "valuesCleared": "输入的凭据值已清空；重试前请重新填写新增或替换值。",
@@ -395,7 +398,6 @@
         }
     },
     "agents": {
-        "back": "返回",
         "backLabel": "返回已发现的 Agent 列表",
         "names": {
             "pi": "Pi",

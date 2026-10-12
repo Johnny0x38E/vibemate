@@ -25,8 +25,7 @@ DeepSeek、OpenRouter；Agent 是 Pi、Grok Build。目标平台是 macOS、Wind
 - 已有 CHANGELOG 分版本提取、发布校验测试及四目标安装包草稿 Release 工作流。
 - 已有 UI 行为测试、SQLite 私有存储与迁移、OS 凭据接口，以及覆盖现有全部界面的中英文资源。
 - 语言偏好、启动门禁与桌面壳（双语导航、Settings 常规/关于、语言/外观下拉）已接入。
-- P10–P11：Providers 页保存非敏感配置与 OS 凭据引用（统一 Save）；schema v5 实例表 + v7 模型表。
-- P12：Rust 获取/存储/搜索/IPC、Models 双视图 browse+save 和手动添加模型已落地；手动添加仍待真实桌面验收。
+- P10–P12（维护者 2026-10-12 验收）：Providers 页保存非敏感配置与 OS 凭据引用（统一 Save）；schema v5 实例表 + v7 模型表；Rust 获取/存储/搜索/IPC、Models 双视图 browse+save 与手动添加模型。Windows/Linux 原生仍按平台任务单独验收。
 - P31：按维护者要求提前实现 MCP 中央定义管理，schema v8 保存元数据和系统凭据引用；支持 stdio/Streamable HTTP、新增/编辑/启停与失败重读。
 - **没有** Agent 配置写入、Skill 管理、MCP 部署或「已验证推理连接」、自动路由。
   现有界面文案已全部接入翻译，`check:i18n` 校验资源一致性（P09 已完成，维护者 2026-10-10 人工确认双语界面）；

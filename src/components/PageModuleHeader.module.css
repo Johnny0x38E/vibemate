@@ -9,11 +9,11 @@
     justify-content: space-between;
     gap: var(--space-md);
     /*
-     * Same 36 px row as secondary-page titles. The first body block owns
-     * `--page-content-gap`; the header adds no extra bottom padding.
+     * Same fixed row as secondary-page titles so the strip shares the sidebar
+     * brand logo centerline. The first body block owns `--page-content-gap`.
      */
-    min-height: 36px;
-    margin-top: 2px;
+    min-height: var(--page-header-height);
+    margin-top: var(--page-header-offset);
     margin-bottom: 0;
 }
 
@@ -25,6 +25,7 @@
     margin: 0;
     font-size: 1rem;
     font-weight: 600;
+    line-height: 1.25;
 }
 
 .titleText {

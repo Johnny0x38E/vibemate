@@ -6,15 +6,35 @@ GitHub release notes are extracted from the matching version section only.
 
 ## [Unreleased]
 
+### Changed
+
+- Moved secondary-page **Back** and **Save** into the shared page header: icon-only Back (accessible destination name and tooltip) on the left, Save and recovery actions on the right. Provider, MCP and Agent detail pages share the pattern; Windows/Linux window controls remain in the separate titlebar chrome above the content column. Removed the fixed bottom `SecondaryPageFooter`.
+- Aligned the secondary-page header (Back, title, Save) to the sidebar product logo centerline via shared CSS variables; increased the Back-to-title gap slightly.
+- Removed the API key field’s closed-eye indicator (the value is never revealed; a fixed mask placeholder remains when a key is configured).
+- Provider edit seeds and refreshes the Models tab selected-count badge while the API tab is still active.
+- Command Code per-model routing (P15): models listing any vibemate-known route (including Claude `/messages`) are selectable on one instance; instance protocol is a preference when several routes are listed. Resolved protocol is shown on model rows; Pro/Max/Team/Provider API access is recorded from the official Provider API docs (Go still has no API).
+- Protocol UI labels are **OpenAI Chat Completions** / **OpenAI Responses** / **Anthropic Messages** in both en and zh-CN; wire values unchanged.
+- Widened the provider protocol and create-form provider-kind `FieldSelect` controls (`size="wide"`) so **OpenAI Chat Completions** is not truncated and both triggers share the same width.
+- Shortened Providers/MCP list primary actions to **New** / **新建**; MCP **New**
+  uses the same leading plus icon as Providers; Agents **Discover** uses a
+  leading refresh icon.
+- Shortened the multi-protocol preference hint (en/zh) by dropping the redundant
+  “on this base URL” / 「同一 Base URL 上」 lead-in.
+- DeepSeek and OpenRouter templates allow all three evidence-backed protocols. Templates expose per-protocol suggested base URLs; the form follows a documented default when switching protocol (DeepSeek Anthropic → `https://api.deepseek.com/anthropic`). Different bases remain separate configurations.
+
 ### Added
+
+- Added **macOS** and **Windows** built-in color themes (system-style blue accents
+  and platform neutrals) ahead of the existing expressive palettes. Schema v9
+  extends the appearance theme CHECK; default remains system/forest.
 
 - Added read-only Pi and Grok Build entry discovery with a bilingual Agent page, explicit refresh, keyboard submission and window-local manual paths. Rust observes bounded desktop PATH / documented user entries and configuration-file presence without executing an entry or reading Agent config contents. Pi versions require matching package metadata and bin targets; Grok filename hints remain unverified. The page distinguishes entry presence, version provenance, documented capabilities, config-directory overrides and precedence without claiming a working installation or effective settings. Strict IPC validation, scan guards and lifecycle checks prevent unsafe responses and stale results. No dependencies, storage migrations, config writes or capability changes were added. Rust has 217 passing tests and one existing ignored OS-store test; full frontend checks (511 UI/boundary, eight release and 14 translation-checker tests), fmt/Clippy and locked Linux debug/release no-bundle builds passed. Isolated Tauri IPC and the actual Agent page passed with unchanged synthetic entry/config fixtures and no executable launch. Genuine Pi/Grok installations, macOS/Windows and visual acceptance remain pending.
 
 - Added central MCP management with bilingual create/edit forms, stdio and Streamable HTTP definitions, bounded cursor pages and central enable/disable controls. All env/header values use OS credential storage; SQLite schema v8 stores metadata and references only. Revisions reject stale edits, immutable references preserve existing values after failed saves, and obsolete credential cleanup is retryable. Forms clear typed values on submit and navigation; uncertain outcomes require reload. Saving definitions never starts or contacts a server or writes Agent config. Agent deployment, OAuth, old SSE and imports remain deferred.
 
-- MCP verification on Linux: full frontend checks (468 UI/boundary tests, eight release tests, 14 translation-checker tests), Rust fmt/Clippy and 201 passing tests (one real credential-store test ignored), plus locked debug/release no-bundle desktop builds. Isolated real Tauri save/edit/list/restart/read passed and the stdio test command did not execute. Native MCP credential-store acceptance, visual review and other-platform runtime checks remain pending. Current forms use the shared fixed bottom Back/Save footer.
+- MCP verification on Linux: full frontend checks (468 UI/boundary tests, eight release tests, 14 translation-checker tests), Rust fmt/Clippy and 201 passing tests (one real credential-store test ignored), plus locked debug/release no-bundle desktop builds. Isolated real Tauri save/edit/list/restart/read passed and the stdio test command did not execute. Native MCP credential-store acceptance, visual review and other-platform runtime checks remain pending. Secondary-page Back/Save now live in the shared page header (see Changed above).
 
-- Added an expandable manual-model form in the Models tab’s added and upstream lists, with model ID, optional alias and an explicit "Add and save" action. Rust stores a selected manual row without a provider request; pending checkbox drafts block addition, and uncheck + Save removes manual rows through the existing atomic batch. Field errors retain editable input, duplicate submits are blocked, and unknown save outcomes require an exact-ID check across saved cursor pages before retrying. Successful additions update the selected baseline and count; hidden views ignore late replies. Verified on Linux with pinned pnpm 12.10.1: full frontend checks, 425 UI/boundary tests (15 new manual-form/list tests), 14 translation-checker tests and eight release tests. Real Tauri add/restart/delete, visual review and other-platform runtime verification remain pending.
+- Added an expandable manual-model form in the Models tab’s added and upstream lists, with model ID, optional alias and an explicit "Add and save" action. Rust stores a selected manual row without a provider request; pending checkbox drafts block addition, and uncheck + Save removes manual rows through the existing atomic batch. Field errors retain editable input, duplicate submits are blocked, and unknown save outcomes require an exact-ID check across saved cursor pages before retrying. Successful additions update the selected baseline and count; hidden views ignore late replies. Verified on Linux with pinned pnpm 12.10.1: full frontend checks, 425 UI/boundary tests (15 new manual-form/list tests), 14 translation-checker tests and eight release tests. Maintainer accepted real Tauri add/restart/delete (and visual review) on 2026-10-12; Windows/Linux native checks remain a separate platform task.
 
 - Provider edit pages use **API** and **Models** tabs (Settings-style keyboard navigation). API holds URL, protocol, and key; Models holds search, upstream browse, and draft selection. Both panels stay mounted while switching tabs.
 - Provider **Models** tab (P12.c.5): default **Added** list (only persisted choices), **Save** for draft checkboxes, and **Fetch models** for lazy upstream browse without merging the full catalog until Save. Uncheck + Save removes rows from local storage.
@@ -60,13 +80,13 @@ GitHub release notes are extracted from the matching version section only.
 - Moved model **Fetch models** beside the search field (36 px toolbar row). Secondary provider pages use a shared 16 px title/tab-to-content gap.
 - Provider **Models** tab scrolls inside the tab panel; upstream pages load on demand while browsing; end-of-list hints reflect added vs upstream browse state (English and Simplified Chinese).
 - Upstream model search uses `browse_upstream_models_page` with a fuzzy `query` over the same session cache as the full browse list (ranked result pages for every vendor). Append loads show a footer status instead of a top loading banner that shifted the list.
-- Maintainer verified the P12.c.5 Models tab flow (selected → upstream browse → save → deselect on selected) for Command Code, DeepSeek, and OpenRouter in Tauri on macOS (2026-10-11). Manual model add (P12.c.3) remains open.
+- Maintainer verified the P12.c.5 Models tab flow (selected → upstream browse → save → deselect on selected) for Command Code, DeepSeek, and OpenRouter in Tauri on macOS (2026-10-11). Maintainer accepted P10–P12 on 2026-10-12, including manual model add (P12.c.3); checkpoint C12 is closed.
 - Main module pages share `PageModuleHeader` (sidebar nav icon, 1 rem title, 36 px minimum row height, optional trailing slot). Overview uses the nav label ("Overview" / 「概览」).
 - Settings → General keeps logs in a separate titled section below language and appearance (unchanged behavior).
 - Replaced the hand-written shared dropdown with Base UI Select 1.9.0 (MIT), keeping 36 px fields, provider icons, CSS Modules and theme tokens; menus are portaled with viewport-aware positioning.
 - Settings → General logs show only the log file path with compact icon actions for View logs and Open log folder (Refresh log paths removed).
 - The Providers list and edit form no longer display provider instance IDs; edit page titles use the brand icon and official name instead of the saved display name in quotes.
-- Unified provider settings and API key editing under one Save button. Existing keys show only as a fixed mask and closed-eye indicator; an empty field preserves the key, a new value replaces it.
+- Unified provider settings and API key editing under one Save button. Existing keys show only as a fixed mask placeholder; an empty field preserves the key, a new value replaces it.
 
 - Simplified Chinese now uses one term set throughout the interface: 服务商, Agent, 技能 and MCP 服务器. The overview no longer mixes in "Provider". English text is unchanged; brand names, model IDs and URLs stay untranslated. Unused strings from the former landing page were removed.
 - Application metadata and repository-opening failures now reach the interface only as stable codes (`invalid_response`, `operation_failed`, `open_failed`); raw runtime errors are discarded at the desktop boundary.

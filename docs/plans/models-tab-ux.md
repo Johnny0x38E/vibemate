@@ -37,8 +37,8 @@ addition is the first row below the header in both views.
 - The added view offers **Fetch models** beside search.
 - Upstream offers **Cancel** while downloading and **View added models** /
   「查看已添加」.
-- The primary checkbox **Save** is in the fixed bottom footer, opposite the
-  page-level **Back** action. It is not in the search toolbar.
+- The primary checkbox **Save** is in the shared secondary-page header (trailing
+  slot), opposite icon-only **Back**. It is not in the search toolbar.
 
 There is no **All / Selected** toolbar filter toggle. The toolbar and list header
 remain fixed while the model list scrolls independently.
@@ -113,8 +113,9 @@ reads reconcile persisted state.
 
 Automated tests cover both locales, upstream manual addition and returning to the
 added list, field errors, draft blocking, exact-ID recovery, deletion and late
-replies. Real Tauri add/restart/delete and visual review remain pending in
-[todo.md](todo.md); DOM tests do not establish native persistence.
+replies. Maintainer accepted real Tauri add/restart/delete and visual review on
+2026-10-12 ([todo.md](todo.md) C12); Windows/Linux native checks remain a
+separate platform task. DOM tests do not establish native persistence.
 
 ## Rust surface
 

@@ -18,7 +18,7 @@
   remains for full-catalog merge and tests. `src-tauri/src/lib.rs` opens storage
   and registers them.
 - **Persistence.** `src-tauri/src/storage.rs` owns the private SQLite database in
-  the app-data folder and its forward-only migrations (currently schema v8).
+  the app-data folder and its forward-only migrations (currently schema v9).
   `settings.rs` and `appearance.rs` store preferences; `providers.rs` preserves
   the public domain entrypoints while `providers/` separates types, templates,
   validation, repository SQL and credential save orchestration. It stores provider instances (stable random IDs, cursor pages, optimistic

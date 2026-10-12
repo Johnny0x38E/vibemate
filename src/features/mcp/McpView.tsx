@@ -290,7 +290,15 @@ export function McpView({
                         page.kind === "list" ? (
                             <button
                                 type="button"
-                                className={buttons["primary"]}
+                                className={[
+                                    buttons["primary"],
+                                    buttons["withIcon"],
+                                ]
+                                    .filter(
+                                        (value): value is string =>
+                                            value !== undefined,
+                                    )
+                                    .join(" ")}
                                 aria-disabled={blocked || list.kind !== "ready"}
                                 onClick={() => {
                                     if (!blocked && list.kind === "ready") {
@@ -299,6 +307,7 @@ export function McpView({
                                     }
                                 }}
                             >
+                                <Icon name="plus" />
                                 {t("mcp.new")}
                             </button>
                         ) : undefined

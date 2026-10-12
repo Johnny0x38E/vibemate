@@ -75,24 +75,10 @@
 }
 
 /* Sits inside the shared control column. The grid keeps field messages under
-   the input; the eye mark is positioned against this box, not the whole row. */
+   the input. */
 .secretControl {
-    position: relative;
     display: grid;
     gap: 6px;
-}
-
-.secretInput {
-    padding-inline-end: 36px;
-}
-
-.keyIndicator {
-    position: absolute;
-    inset-inline-end: 10px;
-    top: 8px;
-    display: flex;
-    color: var(--color-summary);
-    pointer-events: none;
 }
 
 .visuallyHidden {

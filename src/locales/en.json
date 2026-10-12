@@ -104,6 +104,8 @@
         "theme": {
             "label": "Color theme",
             "names": {
+                "macos": "macOS",
+                "windows": "Windows",
                 "forest": "Forest",
                 "graphite": "Graphite",
                 "linen": "Linen",
@@ -126,13 +128,12 @@
         "preview": "The browser preview cannot read or save provider configurations. Open this page in the vibemate desktop app.",
         "loading": "Reading saved provider configurations…",
         "empty": "No provider configurations are saved yet.",
-        "add": "New configuration",
+        "add": "New",
         "retry": "Try again",
         "retryTemplates": "Try reading available providers again",
         "saved": "Saved {{name}}.",
         "loadMore": "Load more",
         "loadingMore": "Loading more…",
-        "back": "Back",
         "backLabel": "Back to provider list",
         "list": {
             "label": "Saved provider configurations",
@@ -192,7 +193,7 @@
             "listLabel": "Models for this provider configuration",
             "selectModel": "Select {{modelId}}",
             "deselectModel": "Deselect {{modelId}}",
-            "manualSource": "Added manually",
+            "manualSource": "Added manually · capability from your entry",
             "createPending": "Complete the API configuration first.",
             "selectedSummary": "{{count}} added",
             "selectedSummaryMany": "{{count}}+ added",
@@ -206,8 +207,9 @@
             },
             "badges": {
                 "upstreamMissing": "Unavailable upstream · since {{date}}",
-                "routeUnsupported": "Not supported for this protocol",
-                "routeUnknown": "Route support unknown"
+                "routeUnsupported": "No known API route",
+                "routeUnknown": "Route not declared by provider",
+                "resolvedProtocol": "{{protocol}}"
             },
             "errors": {
                 "storage_unavailable": "Local configuration storage is unavailable. Restart vibemate.",
@@ -222,7 +224,7 @@
                 "model_alias_invalid": "The display name is not valid.",
                 "model_already_exists": "This model ID is already saved.",
                 "model_not_found": "This model was not found. Refresh the list.",
-                "model_route_not_supported": "This model cannot be selected with the current protocol.",
+                "model_route_not_supported": "This model has no API route vibemate can use.",
                 "secret_missing": "Add an API key in the fields above before selecting models.",
                 "secret_invalid": "The API key is not valid.",
                 "base_url_invalid": "The base URL is not valid.",
@@ -252,7 +254,8 @@
                 "check": "Check saved models",
                 "uncertain": "The save result is unknown. Check saved models before adding again. If the check fails, try checking again.",
                 "saved": "Manual model saved.",
-                "draft": "Save or discard checkbox changes before adding a manual model."
+                "draft": "Save or discard checkbox changes before adding a manual model.",
+                "capabilityNote": "Manual models have no provider route declaration. Capability information comes from your entry, not from an upstream catalog."
             }
         },
         "fields": {
@@ -260,6 +263,7 @@
             "displayName": "Name",
             "baseUrl": "Base URL",
             "protocol": "Protocol",
+            "protocolPreference": "Preferred protocol when a model lists more than one route. Create another configuration when a protocol needs a different base URL.",
             "secret": "API key",
             "secretConfigured": "API key configured",
             "secretLoading": "Reading key status…",
@@ -267,8 +271,8 @@
             "secretRequired": "Enter the API key."
         },
         "protocols": {
-            "chat_completions": "Chat Completions",
-            "responses": "Responses",
+            "chat_completions": "OpenAI Chat Completions",
+            "responses": "OpenAI Responses",
             "anthropic_messages": "Anthropic Messages"
         },
         "form": {
@@ -316,7 +320,7 @@
         "title": "MCP",
         "create": "New MCP definition",
         "edit": "Edit MCP definition",
-        "new": "New definition",
+        "new": "New",
         "displayName": "Name",
         "serverName": "Server identifier",
         "transport": "Transport",
@@ -344,7 +348,6 @@
         "disabled": "Definition disabled",
         "save": "Save",
         "saving": "Saving definition…",
-        "back": "Back",
         "backLabel": "Back to MCP servers",
         "reload": "Reload before retrying",
         "valuesCleared": "Typed credential values were cleared. Re-enter new or replacement values before retrying.",
@@ -395,7 +398,6 @@
         }
     },
     "agents": {
-        "back": "Back",
         "backLabel": "Back to discovered agents",
         "names": {
             "pi": "Pi",

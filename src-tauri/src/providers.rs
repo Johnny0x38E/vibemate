@@ -14,7 +14,7 @@ pub use service::{
     create_provider, get_secret_status, replace_provider_secret, update_provider,
     update_provider_with_secret,
 };
-pub use templates::provider_templates;
+pub use templates::{base_url_for_protocol, provider_templates};
 pub use types::{
     CreateProviderRequest, ListProvidersRequest, MAX_BASE_URL_LEN, MAX_DISPLAY_NAME_CHARS,
     MAX_PAGE_SIZE, ProviderError, ProviderId, ProviderKind, ProviderPage, ProviderProtocol,

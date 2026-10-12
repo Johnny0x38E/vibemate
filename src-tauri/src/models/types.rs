@@ -2,6 +2,7 @@
 //! Failure codes are `crate::model_error::ModelError`.
 
 use crate::model_identity::RouteSupport;
+use crate::providers::ProviderProtocol;
 use serde::{Deserialize, Serialize};
 
 /// Largest page of models.
@@ -65,6 +66,9 @@ pub struct ProviderModel {
     pub output_modalities: Option<Vec<String>>,
     pub supported_endpoints: Option<Vec<String>>,
     pub route_support: RouteSupport,
+    /// Protocol to use for this model on the instance (P15). `None` when Command
+    /// Code has no usable route declaration.
+    pub resolved_protocol: Option<ProviderProtocol>,
     pub upstream_state: UpstreamState,
     pub last_seen_at_ms: Option<i64>,
     pub missing_since_ms: Option<i64>,

@@ -22,7 +22,7 @@ import {
     type SaveMcpInput,
 } from "../../lib/desktop/mcp";
 import styles from "./Mcp.module.css";
-import { SecondaryPageFooter } from "../../components/SecondaryPageFooter";
+import { SecondaryPageActions } from "../../components/SecondaryPageActions";
 import buttons from "../../components/actionButtons.module.css";
 import { deriveServerName, serverNameForAttempt } from "./deriveServerName";
 
@@ -288,6 +288,7 @@ export function McpForm({
             : displayName.trim() === ""
               ? t("mcp.edit")
               : displayName;
+    const formId = `${prefix}-form`;
     return (
         <div className={styles["editor"]}>
             <ProviderPage
@@ -295,10 +296,10 @@ export function McpForm({
                 onBack={leavePage}
                 backBlocked={busy}
                 backAriaLabel={t("mcp.backLabel")}
-                footerInContent
             >
                 <section className={styles["editorGroup"]} data-layout="page">
                     <form
+                        id={formId}
                         className={styles["editorForm"]}
                         aria-label={pageTitle}
                         aria-busy={busy}
@@ -764,37 +765,31 @@ export function McpForm({
                                 )}
                             </div>
                         </div>
-                        <SecondaryPageFooter
-                            onBack={leavePage}
-                            backBlocked={busy}
-                            backAriaLabel={t("mcp.backLabel")}
-                            feedback={
-                                <div className={styles["editorFeedback"]}>
-                                    {code !== null && (
-                                        <p
-                                            className={editForm["error"]}
-                                            id={errorId}
-                                            role="alert"
-                                        >
-                                            {t(`mcp.errors.${code}`)}
-                                        </p>
-                                    )}
-                                    {state.kind === "error" && (
-                                        <p className={editForm["hint"]}>
-                                            {t("mcp.valuesCleared")}
-                                        </p>
-                                    )}
-                                    {busy && (
-                                        <p
-                                            className={editForm["message"]}
-                                            role="status"
-                                        >
-                                            {t("mcp.saving")}
-                                        </p>
-                                    )}
-                                </div>
-                            }
-                        >
+                        <div className={styles["editorFeedback"]}>
+                            {code !== null && (
+                                <p
+                                    className={editForm["error"]}
+                                    id={errorId}
+                                    role="alert"
+                                >
+                                    {t(`mcp.errors.${code}`)}
+                                </p>
+                            )}
+                            {state.kind === "error" && (
+                                <p className={editForm["hint"]}>
+                                    {t("mcp.valuesCleared")}
+                                </p>
+                            )}
+                            {busy && (
+                                <p
+                                    className={editForm["message"]}
+                                    role="status"
+                                >
+                                    {t("mcp.saving")}
+                                </p>
+                            )}
+                        </div>
+                        <SecondaryPageActions active={!hidden}>
                             <div className={styles["editorActions"]}>
                                 {uncertain && (
                                     <button
@@ -811,12 +806,13 @@ export function McpForm({
                                 <button
                                     className={buttons["primary"]}
                                     type="submit"
+                                    form={formId}
                                     aria-disabled={locked}
                                 >
                                     {busy ? t("mcp.saving") : t("mcp.save")}
                                 </button>
                             </div>
-                        </SecondaryPageFooter>
+                        </SecondaryPageActions>
                     </form>
                 </section>
             </ProviderPage>

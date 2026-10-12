@@ -10,7 +10,6 @@ import { ProviderModels, type SelectedModelCount } from "./ProviderModels";
 import { ProviderModelsCreateGate } from "./ProviderModelsCreateGate";
 import tabs from "../../components/underlineTabs.module.css";
 import styles from "./ProviderEditView.module.css";
-import { SecondaryPageFooter } from "../../components/SecondaryPageFooter";
 
 type ProviderTab = "api" | "models";
 
@@ -19,8 +18,6 @@ export type { SelectedModelCount };
 /** Inputs for {@link ProviderTabbedView}. */
 export interface ProviderTabbedViewProps {
     mode: ProviderFormMode;
-    onBack?: (() => void) | undefined;
-    backBlocked?: boolean;
     templates: readonly ProviderTemplate[];
     onSaved: (record: ProviderRecord) => void;
     onRecordLoaded: (record: ProviderRecord) => void;
@@ -46,14 +43,23 @@ function formatModelsTabLabel(
     return t("providers.tabs.modelsCount", { count: selected.count });
 }
 
+/** Seed the Models tab badge from the list row so it shows before that tab opens. */
+function selectedCountFromMode(
+    mode: ProviderFormMode,
+): SelectedModelCount | null {
+    if (mode.kind !== "edit" || mode.record.selectedModelCount <= 0) {
+        return null;
+    }
+    return { count: mode.record.selectedModelCount, hasMore: false };
+}
+
 /**
  * API / Models tabs for create and edit. Panels stay mounted while switching
  * tabs; models need a saved instance id (edit) before fetch and selection work.
+ * Page Back and Save live in the shared {@link ProviderPage} header.
  */
 export function ProviderTabbedView({
     mode,
-    onBack,
-    backBlocked = false,
     templates,
     onSaved,
     onRecordLoaded,
@@ -68,7 +74,7 @@ export function ProviderTabbedView({
     const formId = useId();
     const [tab, setTab] = useState<ProviderTab>("api");
     const [selectedCount, setSelectedCount] =
-        useState<SelectedModelCount | null>(null);
+        useState<SelectedModelCount | null>(() => selectedCountFromMode(mode));
     const apiTab = useRef<HTMLButtonElement>(null);
     const modelsTab = useRef<HTMLButtonElement>(null);
     const tabIdPrefix =
@@ -164,9 +170,7 @@ export function ProviderTabbedView({
                     mode={mode}
                     layout="tabPanel"
                     formId={formId}
-                    primaryActionPlacement="footer"
-                    onBack={onBack}
-                    backBlocked={backBlocked}
+                    primaryActionPlacement="header"
                     {...(onCreateKindChange !== undefined
                         ? { onCreateKindChange }
                         : {})}
@@ -190,8 +194,6 @@ export function ProviderTabbedView({
                 {mode.kind === "edit" ? (
                     <ProviderModels
                         providerId={mode.record.id}
-                        onBack={onBack}
-                        backBlocked={backBlocked}
                         layout="tabPanel"
                         hidden={modelsPanelHidden}
                         onBusyChange={onModelsBusyChange}
@@ -202,13 +204,7 @@ export function ProviderTabbedView({
                         onSelectedCountChange={setSelectedCount}
                     />
                 ) : (
-                    <>
-                        <ProviderModelsCreateGate hidden={modelsPanelHidden} />
-                        <SecondaryPageFooter
-                            onBack={onBack}
-                            backBlocked={backBlocked}
-                        />
-                    </>
+                    <ProviderModelsCreateGate hidden={modelsPanelHidden} />
                 )}
             </div>
         </div>

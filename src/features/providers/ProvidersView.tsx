@@ -443,11 +443,8 @@ export function ProvidersView({
                         }
                         onBack={backToList}
                         backBlocked={formBusy || modelsBusy}
-                        footerInContent
                     >
                         <ProviderTabbedView
-                            onBack={backToList}
-                            backBlocked={formBusy || modelsBusy}
                             mode={page}
                             templates={availableTemplates}
                             onCreateKindChange={reportCreateKind}

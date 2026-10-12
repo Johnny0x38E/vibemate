@@ -596,6 +596,7 @@ function useDesktopProviders(): void {
                 brandName: "DeepSeek",
                 defaultBaseUrl: "https://api.deepseek.com",
                 protocols: ["chat_completions"],
+                protocolBaseUrls: ["https://api.deepseek.com"],
                 defaultProtocol: "chat_completions",
                 extensionFields: [],
             },
@@ -623,7 +624,7 @@ test.each([
         locale: "en",
         providers: "Providers",
         agents: "Agents",
-        add: "New configuration",
+        add: "New",
         name: "Name",
         key: "API key",
         edit: "Edit Personal DeepSeek",
@@ -633,7 +634,7 @@ test.each([
         locale: "zh-CN",
         providers: "服务商",
         agents: "Agent",
-        add: "新建配置",
+        add: "新建",
         name: "名称",
         key: "API 密钥",
         edit: "编辑 Personal DeepSeek",
@@ -725,9 +726,7 @@ test.each([
         render(<App />);
         fireEvent.click(screen.getByRole("button", { name: providers }));
         fireEvent.click(await screen.findByRole("button", { name: edit }));
-        await screen.findByTitle(
-            locale === "en" ? "API key configured" : "已配置 API 密钥",
-        );
+        await screen.findByPlaceholderText("••••••••");
         fireEvent.change(screen.getByRole("textbox", { name }), {
             target: { value: "Renamed" },
         });
@@ -955,7 +954,7 @@ test("MCP mounts on first visit and sidebar activation returns to its list", asy
     expect(listMcpDefinitions).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "MCP servers" }));
     await screen.findByText("No MCP definitions saved yet.");
-    fireEvent.click(screen.getByRole("button", { name: "New definition" }));
+    fireEvent.click(screen.getByRole("button", { name: "New" }));
     fireEvent.change(screen.getByLabelText(/^Name$/), {
         target: { value: "Keep this draft" },
     });
@@ -977,7 +976,7 @@ test("MCP mounts on first visit and sidebar activation returns to its list", asy
     fireEvent.click(screen.getByRole("button", { name: "MCP servers" }));
     await screen.findByText("No MCP definitions saved yet.");
     expect(screen.queryByLabelText(/^Name$/)).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "New definition" }));
+    fireEvent.click(screen.getByRole("button", { name: "New" }));
     fireEvent.click(screen.getByRole("button", { name: "MCP servers" }));
     await screen.findByText("No MCP definitions saved yet.");
     expect(screen.queryByLabelText(/^Name$/)).toBeNull();

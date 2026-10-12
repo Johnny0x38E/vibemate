@@ -19,7 +19,8 @@ export interface IconButtonProps {
 /**
  * Auxiliary form action with mouse/keyboard hints. Base UI owns tooltip
  * dismissal and positioning; the portal avoids clipping inside form cards.
- * Main save and navigation actions keep visible text. Auxiliary form submits
+ * Page Back also uses this control (icon-only with a tooltip). Primary Save
+ * keeps visible text in the secondary-page header. Auxiliary form submits
  * (for example rediscovery) may use type="submit" to preserve Enter behavior.
  */
 export function IconButton({

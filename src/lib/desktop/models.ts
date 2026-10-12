@@ -1,5 +1,10 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { hasExactKeys, isObject } from "./providers";
+import {
+    PROVIDER_PROTOCOLS,
+    hasExactKeys,
+    isObject,
+    type ProviderProtocol,
+} from "./providers";
 
 /** Safe codes emitted by Rust's ModelError; raw diagnostics never leave this module. */
 const RUST_MODEL_ERROR_CODES = [
@@ -68,6 +73,8 @@ export interface ProviderModel {
     outputModalities: string[] | null;
     supportedEndpoints: string[] | null;
     routeSupport: "supported" | "unsupported" | "unknown" | "not_applicable";
+    /** Protocol this instance would use (P15). Null when Command Code has no route. */
+    resolvedProtocol: ProviderProtocol | null;
     upstreamState: "listed" | "missing" | "never_listed";
     lastSeenAtMs: number | null;
     missingSinceMs: number | null;
@@ -126,6 +133,7 @@ export interface UpstreamBrowseModel {
     outputModalities: string[] | null;
     supportedEndpoints: string[] | null;
     routeSupport: ProviderModel["routeSupport"];
+    resolvedProtocol: ProviderProtocol | null;
 }
 
 /** One lazy upstream page for the Models tab browse view. */
@@ -232,6 +240,11 @@ function choice<T extends string>(value: unknown, choices: readonly T[]): T {
     return match;
 }
 
+function nullableProtocol(value: unknown): ProviderProtocol | null {
+    if (value === null) return null;
+    return choice(value, PROVIDER_PROTOCOLS);
+}
+
 const MODEL_KEYS = [
     "providerId",
     "modelId",
@@ -245,6 +258,7 @@ const MODEL_KEYS = [
     "outputModalities",
     "supportedEndpoints",
     "routeSupport",
+    "resolvedProtocol",
     "upstreamState",
     "lastSeenAtMs",
     "missingSinceMs",
@@ -280,6 +294,7 @@ function validateModel(value: unknown, providerId: string): ProviderModel {
             "unknown",
             "not_applicable",
         ]),
+        resolvedProtocol: nullableProtocol(data["resolvedProtocol"]),
         upstreamState: choice(data["upstreamState"], [
             "listed",
             "missing",
@@ -434,6 +449,7 @@ export async function browseUpstreamModelsPage(input: {
             "outputModalities",
             "supportedEndpoints",
             "routeSupport",
+            "resolvedProtocol",
         ]);
         if (typeof row["modelId"] !== "string" || row["modelId"].length === 0)
             throw invalidResponse();
@@ -451,6 +467,7 @@ export async function browseUpstreamModelsPage(input: {
                 "unknown",
                 "not_applicable",
             ]),
+            resolvedProtocol: nullableProtocol(row["resolvedProtocol"]),
         };
     });
     const nextOffset =

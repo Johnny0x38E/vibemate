@@ -44,16 +44,19 @@ with a selected ring and check, in this order:
 
 | Position | English  | 简体中文 | Persisted ID |
 | -------- | -------- | -------- | ------------ |
-| 1        | Forest   | 森林     | `forest`     |
-| 2        | Ink      | 纸墨     | `notion`     |
-| 3        | Graphite | 石墨     | `graphite`   |
-| 4        | Linen    | 亚麻     | `linen`      |
-| 5        | Iris     | 鸢尾     | `iris`       |
-| 6        | Ocean    | 海湾     | `ocean`      |
+| 1        | macOS    | macOS    | `macos`      |
+| 2        | Windows  | Windows  | `windows`    |
+| 3        | Forest   | 森林     | `forest`     |
+| 4        | Ink      | 纸墨     | `notion`     |
+| 5        | Graphite | 石墨     | `graphite`   |
+| 6        | Linen    | 亚麻     | `linen`      |
+| 7        | Iris     | 鸢尾     | `iris`       |
+| 8        | Ocean    | 海湾     | `ocean`      |
 
 Each theme has light and dark palettes, with brightness independent of the
-selected theme. Ink uses white/warm-gray and charcoal neutrals inspired by
-Notion. Rust saves both choices together in schema v4. Controls are disabled
+selected theme. macOS and Windows approximate platform system palettes; Ink uses
+white/warm-gray and charcoal neutrals inspired by Notion. Rust saves both
+choices together (theme CHECK extended in schema v9). Controls are disabled
 while saving; no temporary saving or success text flashes below them. Read,
 preview, error and uncertain-save/reload feedback remains available.
 

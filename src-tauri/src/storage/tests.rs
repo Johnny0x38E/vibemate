@@ -130,6 +130,107 @@ fn notion_migration_preserves_existing_preferences_and_supports_restart() {
 }
 
 #[test]
+fn system_themes_migration_preserves_existing_preferences_and_supports_restart() {
+    use crate::appearance::{Appearance, AppearancePreference, Theme};
+    for theme in [
+        Theme::Forest,
+        Theme::Graphite,
+        Theme::Linen,
+        Theme::Iris,
+        Theme::Ocean,
+        Theme::Notion,
+    ] {
+        let directory = TestDirectory::new("system-themes-upgrade");
+        let path = directory.path.join(DATABASE_FILE_NAME);
+        let old = Storage::open_file(&path, &MIGRATIONS[..8]).expect("v8 database");
+        let previous = AppearancePreference {
+            appearance: Appearance::Light,
+            theme,
+        };
+        crate::appearance::save_appearance_preference(&old, previous).expect("save old pair");
+        crate::settings::save_locale_preference(&old, crate::settings::LocalePreference::English)
+            .expect("save language");
+        old.lock()
+            .expect("lock")
+            .execute_batch("CREATE TABLE sample (value TEXT); INSERT INTO sample VALUES ('kept');")
+            .expect("unrelated row");
+        drop(old);
+        let upgraded = Storage::open_in_directory(&directory.path).expect("upgrade");
+        assert_eq!(
+            upgraded.schema_version().expect("schema"),
+            latest_version(MIGRATIONS)
+        );
+        assert_eq!(
+            crate::appearance::load_appearance_preference(&upgraded),
+            Ok(previous)
+        );
+        assert_eq!(
+            crate::settings::load_locale_preference(&upgraded),
+            Ok(crate::settings::LocalePreference::English)
+        );
+        assert_eq!(read_sample_value(&upgraded), "kept");
+        let choice = AppearancePreference {
+            appearance: Appearance::Dark,
+            theme: Theme::Macos,
+        };
+        crate::appearance::save_appearance_preference(&upgraded, choice).expect("save macos");
+        let windows = AppearancePreference {
+            appearance: Appearance::System,
+            theme: Theme::Windows,
+        };
+        crate::appearance::save_appearance_preference(&upgraded, windows).expect("save windows");
+        assert!(
+            upgraded
+                .lock()
+                .expect("lock")
+                .execute("UPDATE appearance_preference SET theme = 'unknown'", [])
+                .is_err()
+        );
+        drop(upgraded);
+        let reopened = Storage::open_in_directory(&directory.path).expect("restart");
+        assert_eq!(
+            crate::appearance::load_appearance_preference(&reopened),
+            Ok(windows)
+        );
+    }
+}
+
+#[test]
+fn failed_system_themes_migration_keeps_the_v8_table_and_data() {
+    let directory = TestDirectory::new("system-themes-failed-upgrade");
+    let path = directory.path.join(DATABASE_FILE_NAME);
+    let old = Storage::open_file(&path, &MIGRATIONS[..8]).expect("v8 database");
+    old.lock()
+        .expect("lock")
+        .execute_batch(
+            "PRAGMA ignore_check_constraints = ON; \
+             INSERT INTO appearance_preference VALUES (1, 'dark', 'unknown');",
+        )
+        .expect("corrupt v8 fixture");
+    drop(old);
+    assert!(matches!(
+        Storage::open_in_directory(&directory.path),
+        Err(StorageError::MigrationFailed { version: 9, .. })
+    ));
+    let raw = Connection::open(&path).expect("original database");
+    assert_eq!(read_schema_version(&raw).expect("schema"), 8);
+    let theme: String = raw
+        .query_row("SELECT theme FROM appearance_preference", [], |row| {
+            row.get(0)
+        })
+        .expect("original row");
+    assert_eq!(theme, "unknown");
+    let temporary_tables: u32 = raw
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_schema WHERE name = 'appearance_preference_v9'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("rolled back table");
+    assert_eq!(temporary_tables, 0);
+}
+
+#[test]
 fn failed_notion_migration_keeps_the_v3_table_and_data() {
     let directory = TestDirectory::new("notion-failed-upgrade");
     let path = directory.path.join(DATABASE_FILE_NAME);

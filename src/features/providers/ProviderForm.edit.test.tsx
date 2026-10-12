@@ -53,6 +53,7 @@ const templates: ProviderTemplate[] = [
         brandName: "DeepSeek",
         defaultBaseUrl: record.baseUrl,
         protocols: ["chat_completions"],
+        protocolBaseUrls: [record.baseUrl],
         defaultProtocol: "chat_completions",
         extensionFields: [],
     },
@@ -131,7 +132,7 @@ for (const locale of ["en", "zh-CN"] as const) {
         fireEvent.change(field, { target: { value: SECRET } });
         expect(field.placeholder).toBe("");
         expect(
-            screen.queryByTitle(
+            screen.queryByText(
                 locale === "en" ? "API key configured" : "已配置 API 密钥",
             ),
         ).toBeNull();

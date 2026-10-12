@@ -22,6 +22,11 @@ export interface FieldSelectProps {
     blocked?: boolean;
     /** Native disabled state for settings controls that use `disabled` while busy. */
     disabled?: boolean;
+    /**
+     * Trigger width. Default is the narrow settings control; `wide` fits longer
+     * protocol labels without widening language/appearance rows.
+     */
+    size?: "default" | "wide";
     "aria-describedby"?: string | undefined;
     "aria-invalid"?: boolean | undefined;
     /** Optional test hook (for example provider kind). */
@@ -40,6 +45,7 @@ export function FieldSelect({
     onChange,
     blocked = false,
     disabled = false,
+    size = "default",
     "aria-describedby": ariaDescribedBy,
     "aria-invalid": ariaInvalid,
     "data-test-value": dataTestValue,
@@ -47,13 +53,17 @@ export function FieldSelect({
     const [open, setOpen] = useState(false);
     const locked = blocked || disabled;
     const selected = options.find((entry) => entry.value === value);
+    const fieldClass =
+        size === "wide"
+            ? [styles["field"], styles["fieldWide"]].join(" ")
+            : styles["field"];
 
     // A save can lock an already-open field. Reset during this component's render
     // so the portal closes immediately and cannot reappear when the save ends.
     if (locked && open) setOpen(false);
 
     return (
-        <div className={styles["field"]} data-field-select="">
+        <div className={fieldClass} data-field-select="">
             <Select.Root<string>
                 value={value}
                 items={options}

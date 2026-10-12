@@ -48,8 +48,12 @@ const row: McpRecord = {
     updatedAtMs: 1,
     cleanupPending: false,
 };
-function page(items: McpRecord[], nextCursor: string | null = null) {
-    return { kind: "desktop" as const, page: { items, nextCursor } };
+function page(
+    items: McpRecord[],
+    nextCursor: string | null = null,
+    total = items.length,
+) {
+    return { kind: "desktop" as const, page: { items, nextCursor, total } };
 }
 async function setup(
     locale: "en" | "zh-CN" = "en",
@@ -102,6 +106,22 @@ test.each([
         expect(get).not.toHaveBeenCalled();
     },
 );
+
+test("the stored definition total is stated above the list", async () => {
+    // 9 definitions, one page loaded: the count describes the library.
+    list.mockResolvedValue(page([row], null, 9));
+    await setup();
+    expect(await screen.findByText("9 MCP servers in total")).toBeDefined();
+});
+
+test("an empty list shows no count", async () => {
+    list.mockResolvedValue(page([], null, 0));
+    await setup();
+    expect(
+        await screen.findByText("No MCP definitions saved yet."),
+    ).toBeDefined();
+    expect(screen.queryByText(/in total/)).toBeNull();
+});
 
 test("sidebar home cannot abandon pending or uncertain MCP writes", async () => {
     const homeRef = createRef<ModuleNavigationHandle>();

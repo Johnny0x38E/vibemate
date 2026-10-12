@@ -17,6 +17,7 @@ pub mod models;
 pub mod providers;
 pub mod settings;
 mod shared;
+pub mod skills;
 pub mod storage;
 
 use tauri::Manager;
@@ -28,6 +29,9 @@ use tauri::Manager;
 /// rebuild the database. Only a failure of Tauri itself stops the process.
 pub fn run() {
     tauri::Builder::default()
+        // Native folder picker for skill imports; the frontend calls vibemate's
+        // own command, so no dialog permission is granted to the webview.
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let file_logging_active = logging::initialize(app.handle());
             app.manage(log_access::LogAccess::new(
@@ -36,7 +40,12 @@ pub fn run() {
             ));
             // The database lives in the platform app-data folder, never in the project.
             let status = match app.path().app_data_dir() {
-                Ok(data_directory) => storage::StorageStatus::open_in_directory(&data_directory),
+                Ok(data_directory) => {
+                    // Managed skill copies live next to the database, so both move
+                    // together and a backup of the app-data folder stays complete.
+                    app.manage(skills::SkillLibrary::new(data_directory.join("skills")));
+                    storage::StorageStatus::open_in_directory(&data_directory)
+                }
                 Err(_) => {
                     storage::StorageStatus::Unavailable(storage::StorageError::LocateDataDirectory)
                 }
@@ -60,6 +69,11 @@ pub fn run() {
             commands::mcp::get_mcp_definition,
             commands::mcp::save_mcp_definition,
             commands::mcp::cleanup_mcp_credentials,
+            commands::skills::list_skills,
+            commands::skills::get_skill,
+            commands::skills::pick_skill_folder,
+            commands::skills::import_skill_folder,
+            commands::skills::set_skill_source,
             commands::app::get_log_location,
             commands::app::open_log_file,
             commands::app::open_log_directory,

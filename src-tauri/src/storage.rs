@@ -197,6 +197,56 @@ const MIGRATIONS: &[Migration] = &[
         DROP TABLE appearance_preference;
         ALTER TABLE appearance_preference_v9 RENAME TO appearance_preference;",
     },
+    Migration {
+        version: 10,
+        // Central skill metadata. Content lives in the private `skills/<id>` folder,
+        // so the row keeps identity, provenance and the digest baseline without
+        // storing file paths of individual files. The last CHECK states that every
+        // record explains where the content came from: a local import path or a
+        // user-recorded upstream source.
+        sql: "CREATE TABLE skill (
+            id TEXT PRIMARY KEY CHECK(length(id)=32 AND id NOT GLOB '*[^0-9a-f]*'),
+            name TEXT NOT NULL UNIQUE CHECK(length(name) BETWEEN 1 AND 64),
+            description TEXT NOT NULL CHECK(length(description) BETWEEN 1 AND 1024),
+            origin_path TEXT CHECK(origin_path IS NULL OR length(origin_path) BETWEEN 1 AND 4096),
+            source_url TEXT CHECK(source_url IS NULL OR length(source_url) BETWEEN 1 AND 512),
+            source_revision TEXT CHECK(source_revision IS NULL OR length(source_revision) BETWEEN 1 AND 128),
+            content_digest TEXT NOT NULL CHECK(length(content_digest)=64 AND content_digest NOT GLOB '*[^0-9a-f]*'),
+            file_count INTEGER NOT NULL CHECK(file_count BETWEEN 1 AND 512),
+            byte_size INTEGER NOT NULL CHECK(byte_size BETWEEN 1 AND 8388608),
+            revision INTEGER NOT NULL CHECK(revision >= 1),
+            imported_at INTEGER NOT NULL CHECK(imported_at >= 0),
+            updated_at INTEGER NOT NULL CHECK(updated_at >= imported_at),
+            CHECK(origin_path IS NOT NULL OR source_url IS NOT NULL)
+        ) STRICT;",
+    },
+    Migration {
+        version: 11,
+        // Rebuild pattern, as in v4 and v9: the per-skill size and file-count
+        // bounds are CHECK constraints, so raising them means recreating the
+        // table. Published skills with examples and test fixtures exceed the
+        // original 8 MiB total, which made them impossible to import.
+        sql: "CREATE TABLE skill_v11 (
+            id TEXT PRIMARY KEY CHECK(length(id)=32 AND id NOT GLOB '*[^0-9a-f]*'),
+            name TEXT NOT NULL UNIQUE CHECK(length(name) BETWEEN 1 AND 64),
+            description TEXT NOT NULL CHECK(length(description) BETWEEN 1 AND 1024),
+            origin_path TEXT CHECK(origin_path IS NULL OR length(origin_path) BETWEEN 1 AND 4096),
+            source_url TEXT CHECK(source_url IS NULL OR length(source_url) BETWEEN 1 AND 512),
+            source_revision TEXT CHECK(source_revision IS NULL OR length(source_revision) BETWEEN 1 AND 128),
+            content_digest TEXT NOT NULL CHECK(length(content_digest)=64 AND content_digest NOT GLOB '*[^0-9a-f]*'),
+            file_count INTEGER NOT NULL CHECK(file_count BETWEEN 1 AND 2048),
+            byte_size INTEGER NOT NULL CHECK(byte_size BETWEEN 1 AND 67108864),
+            revision INTEGER NOT NULL CHECK(revision >= 1),
+            imported_at INTEGER NOT NULL CHECK(imported_at >= 0),
+            updated_at INTEGER NOT NULL CHECK(updated_at >= imported_at),
+            CHECK(origin_path IS NOT NULL OR source_url IS NOT NULL)
+        ) STRICT;
+        INSERT INTO skill_v11 SELECT id, name, description, origin_path, source_url,
+            source_revision, content_digest, file_count, byte_size, revision,
+            imported_at, updated_at FROM skill;
+        DROP TABLE skill;
+        ALTER TABLE skill_v11 RENAME TO skill;",
+    },
 ];
 
 /// Errors from opening or migrating the private database.

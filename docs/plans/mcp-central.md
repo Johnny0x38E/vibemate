@@ -16,8 +16,9 @@ written. OAuth, old SSE, dynamic secret commands and imports are deferred.
 
 ## Storage and editing
 
-Definitions have random stable IDs and revisions. Lists use ID cursor pages;
-updates reject concurrent changes. A separate server identifier uses ASCII
+Definitions have random stable IDs and revisions. Lists use ID cursor pages and
+each page reports the stored total, so the interface can state a count without
+reading every page. Updates reject concurrent changes. A separate server identifier uses ASCII
 letters, digits, underscores and hyphens; hyphen/underscore collisions are
 rejected to match Pi's namespace rule. Display names remain bilingual user text.
 HTTP uses HTTPS or loopback HTTP, without credentials, query or fragment. Header

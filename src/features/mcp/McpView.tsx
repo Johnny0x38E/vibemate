@@ -35,6 +35,8 @@ type ListState =
           kind: "ready";
           items: McpRecord[];
           nextCursor: string | null;
+          /** Library total, not the number of loaded rows. */
+          total: number;
           more: "idle" | "loading";
       };
 type PageState =
@@ -208,6 +210,8 @@ export function McpView({
                     ...result.page.items.filter((row) => !seen.has(row.id)),
                 ],
                 nextCursor: result.page.nextCursor,
+                // Later pages repeat the same library total.
+                total: result.page.total,
                 more: "idle",
             });
             // The last page removes Load more; focus the heading if its button was focused.
@@ -382,6 +386,11 @@ export function McpView({
                     )}
                     {list.kind === "ready" && (
                         <>
+                            {list.total > 0 && (
+                                <p className={styles["count"]}>
+                                    {t("mcp.count", { count: list.total })}
+                                </p>
+                            )}
                             {list.items.length === 0 ? (
                                 <p role="status">{t("mcp.empty")}</p>
                             ) : (

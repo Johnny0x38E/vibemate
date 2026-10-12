@@ -26,9 +26,13 @@ checks entries and configuration file presence without running executables or
 reading configuration contents. Unknown versions remain unverified. Backend
 BR1–BR5 has separated commands, domain behavior, repositories and tests.
 
-Agent writes, skills, MCP deployment, managed Agent installation and the later
-inference checks are not implemented. Central MCP saving does not execute or
-contact a server. No planned adapter may appear connected or supported.
+Agent writes, skill installation/update/deployment, MCP deployment, managed Agent
+installation and the later inference checks are not implemented. Local skill
+import (P25) is implemented: the system folder picker chooses a skill folder or a
+folder of skill folders, each found skill is validated and copied into the
+private library with a content digest and a source record, and the original
+directories stay untouched. Central MCP saving does not execute or contact a
+server. No planned adapter may appear connected or supported.
 
 Detailed completed-task process records belong in Git/CI and `CHANGELOG.md`, not
 in the active plans. [todo.md](todo.md) is the sole task-status source, including
@@ -53,8 +57,9 @@ acceptance; local or fixture-based checks do not establish other native platform
 4. Add safe writes and restore for Pi, then the independently verified Grok
    adapter: precedence, diff, concurrent-change checks, private backups, atomic
    replacement, preservation of unrelated fields and rollback.
-5. Implement skill source/import/install/update and per-Agent symlink deployment,
-   with explicit copy-sync fallback and protection of local changes.
+5. Finish the skill workflow on top of the delivered local import (P25):
+   source installation, update preview and per-Agent symlink deployment, with an
+   explicit copy-sync fallback and protection of local changes.
 6. Deploy central MCP definitions only to verified Agent features, using the
    safe write/restore path. Unsupported features remain explicit.
 7. Complete native platform and real-integration acceptance, then prepare reviewed

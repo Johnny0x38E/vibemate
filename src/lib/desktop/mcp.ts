@@ -84,13 +84,19 @@ export interface SaveMcpInput {
     enabled: boolean;
     connection: McpConnectionInput;
 }
-/** One bounded cursor page, or an honest browser preview. */
+/** One bounded cursor page plus the library total, or an honest browser preview. */
 export type McpPageResult =
     | { kind: "preview" }
     | {
           kind: "desktop";
-          page: { items: McpRecord[]; nextCursor: string | null };
+          page: {
+              items: McpRecord[];
+              nextCursor: string | null;
+              total: number;
+          };
       };
+/** How many definitions the interface accepts in the reported total. */
+const MAX_TOTAL = 100_000;
 function invalid(): never {
     throw new McpRequestError("invalid_response");
 }
@@ -211,13 +217,19 @@ export async function listMcpDefinitions(
     const data = object(await call("list_mcp_definitions", { after, limit }), [
         "items",
         "nextCursor",
+        "total",
     ]);
     if (!Array.isArray(data["items"])) invalid();
     const items = data["items"].map((value: unknown) => record(value));
     const nextCursor =
         data["nextCursor"] === null ? null : identity(data["nextCursor"]);
+    // The total counts every stored definition, so it can never be smaller than
+    // the page that was read; a wilder value is a bug, not a number to display.
+    const total = integer(data["total"]);
     if (
         items.length > limit ||
+        total < items.length ||
+        total > MAX_TOTAL ||
         items.some(
             (row, index) =>
                 (after !== null && row.id <= after) ||
@@ -226,7 +238,7 @@ export async function listMcpDefinitions(
         (nextCursor !== null && nextCursor !== items[items.length - 1]?.id)
     )
         invalid();
-    return { kind: "desktop", page: { items, nextCursor } };
+    return { kind: "desktop", page: { items, nextCursor, total } };
 }
 /** Re-read non-secret metadata before editing or retrying an unknown save. */
 export async function getMcpDefinition(id: string): Promise<McpRecord> {

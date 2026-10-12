@@ -7,6 +7,7 @@ pub(crate) mod mcp;
 pub(crate) mod models;
 pub(crate) mod preferences;
 pub(crate) mod providers;
+pub(crate) mod skills;
 mod state;
 
 pub(crate) use state::CredentialLock;

@@ -136,23 +136,6 @@
 .content:has(> :is([data-mcp-editor], [data-secondary-page]):not([hidden])) {
     overflow: hidden;
 }
-.planned {
-    max-width: 680px;
-    margin-top: var(--page-content-gap);
-    padding: var(--space-lg);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-card);
-    background: var(--color-surface);
-}
-.planned h2 {
-    margin: 0;
-    font-size: 0.875rem;
-}
-.planned p {
-    margin: var(--space-md) 0 0;
-    color: var(--color-summary);
-    line-height: 1.7;
-}
 @media (max-width: 800px) {
     .content {
         padding: var(--space-sm) 20px 20px;

@@ -89,3 +89,26 @@ pub(super) fn with_mcp_storage<T>(
         .map_err(|_| crate::mcp::McpError::StorageUnavailable)?;
     operation(storage)
 }
+
+/// Resolve the managed skill library and storage together.
+///
+/// A missing library means the app started without a usable data directory, so
+/// both cases report `StorageUnavailable` and no command has to unwrap state.
+pub(super) fn with_skill_library<T>(
+    app: &tauri::AppHandle,
+    operation: impl FnOnce(
+        &crate::skills::SkillLibrary,
+        &Storage,
+    ) -> Result<T, crate::skills::SkillError>,
+) -> Result<T, crate::skills::SkillError> {
+    let status = app
+        .try_state::<StorageStatus>()
+        .ok_or(crate::skills::SkillError::StorageUnavailable)?;
+    let library = app
+        .try_state::<crate::skills::SkillLibrary>()
+        .ok_or(crate::skills::SkillError::StorageUnavailable)?;
+    let storage = status
+        .storage()
+        .map_err(|_| crate::skills::SkillError::StorageUnavailable)?;
+    operation(&library, storage)
+}

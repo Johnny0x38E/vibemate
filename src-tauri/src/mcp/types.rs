@@ -171,6 +171,9 @@ pub struct McpPage {
     pub items: Vec<McpRecord>,
     /// Last identity, or null when no further page exists.
     pub next_cursor: Option<String>,
+    /// How many definitions exist in total, so a count stays correct without
+    /// reading every page.
+    pub total: i64,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

@@ -2,7 +2,7 @@
 
 use super::repository::{
     commit_provider_update, generate_provider_id, get_provider, insert_provider_with_reference,
-    read_selected_model_count,
+    read_selected_model_count, read_status, save_reference,
 };
 use super::types::*;
 use super::validation::{parse_kind, validate_settings};
@@ -176,5 +176,75 @@ pub fn update_provider_with_secret(
             restored: false, ..
         })
         | Err(ReplaceError::CommitUncertain { .. }) => Err(ProviderError::OperationFailed),
+    }
+}
+
+/// Read a provider's key status from SQLite only.
+///
+/// # Errors
+/// `InvalidRequest` for a malformed ID, `NotFound`, `StorageUnavailable`, or
+/// `ReadFailed`.
+pub fn get_secret_status(
+    storage: &Storage,
+    provider_id: &str,
+) -> Result<ProviderSecretStatus, ProviderError> {
+    let id = ProviderId::parse(provider_id).ok_or(ProviderError::InvalidRequest)?;
+    let connection = storage
+        .lock()
+        .map_err(|_| ProviderError::StorageUnavailable)?;
+    read_status(&connection, &id)?.ok_or(ProviderError::NotFound)
+}
+
+/// Replace (or, for a missing key, set) a provider's key and return the new status.
+///
+/// Steps:
+/// 1. Check the ID and the key, then confirm in SQLite that the provider exists.
+///    An unknown provider never reaches the credential store.
+/// 2. `replace_then_commit` reads the old key as an in-memory backup and writes
+///    the new one under `provider-<id>`.
+/// 3. Its commit step inserts or updates the reference row in one transaction.
+/// 4. If the transaction fails before `COMMIT`, the old key is written back (or the
+///    new one deleted when there was none). If restoring fails too, the result is
+///    `SecretOutcomeUnknown`.
+/// 5. If `COMMIT` itself fails, the reference row may have been saved anyway, so
+///    the new key is kept and the result is `SecretOutcomeUnknown`. Restoring here
+///    could turn a first key into a `Set` row with no key behind it.
+///
+/// # Errors
+/// `InvalidRequest`, `SecretInvalid`, `NotFound`, `StorageUnavailable`,
+/// `ReadFailed`, credential-store codes (nothing changed), `WriteFailed` (the
+/// previous key was restored), or `SecretOutcomeUnknown`.
+pub fn replace_provider_secret(
+    storage: &Storage,
+    store: &dyn CredentialStore,
+    request: ReplaceProviderSecretRequest,
+    now_ms: i64,
+) -> Result<ProviderSecretStatus, ProviderError> {
+    let id = ProviderId::parse(&request.provider_id).ok_or(ProviderError::InvalidRequest)?;
+    let secret = validate_secret(request.secret)?;
+    {
+        // Release the connection before the credential store, which may wait for
+        // a system prompt.
+        let connection = storage
+            .lock()
+            .map_err(|_| ProviderError::StorageUnavailable)?;
+        read_status(&connection, &id)?.ok_or(ProviderError::NotFound)?;
+    }
+    let reference = id.credential_reference();
+    let replaced = replace_then_commit(store, &reference, &secret, || {
+        save_reference(storage, &id, &reference, now_ms)
+    });
+    match replaced {
+        Ok(status) => Ok(status),
+        Err(ReplaceError::Credential(error)) => Err(error.into()),
+        // The previous key is back, so the SQLite error describes the whole outcome.
+        Err(ReplaceError::CommitFailed {
+            source,
+            restored: true,
+        }) => Err(source),
+        Err(ReplaceError::CommitFailed {
+            restored: false, ..
+        })
+        | Err(ReplaceError::CommitUncertain { .. }) => Err(ProviderError::SecretOutcomeUnknown),
     }
 }

@@ -3,6 +3,10 @@
 use std::collections::BTreeMap;
 
 use super::*;
+use crate::model_identity::{
+    MAX_MODEL_ID_CHARS, RouteSupport, is_valid_model_id, normalize_endpoint, route_support,
+};
+use crate::providers::{ProviderKind, ProviderProtocol};
 
 /// The real Command Code response captured on 2026-10-10 (decision D16).
 const COMMAND_CODE_FIXTURE: &[u8] = include_bytes!(concat!(

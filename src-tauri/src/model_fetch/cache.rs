@@ -3,7 +3,7 @@
 
 use super::registry::ModelFetchRegistry;
 use crate::model_catalog::CatalogModel;
-use crate::models::ModelError;
+use crate::model_error::ModelError;
 use crate::providers::ProviderId;
 
 /// Upstream models accumulated for one browse session (all vendors).

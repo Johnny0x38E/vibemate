@@ -25,8 +25,7 @@ fn unified_save_replaces_the_key_and_commits_settings_and_reference_together() {
         store.stored(&original.id.credential_reference()).as_deref(),
         Some(NEW_KEY)
     );
-    let status =
-        crate::provider_secrets::get_secret_status(&storage, original.id.as_str()).unwrap();
+    let status = crate::providers::get_secret_status(&storage, original.id.as_str()).unwrap();
     assert_eq!(status.updated_at_ms, Some(20));
     assert!(!serde_json::to_string(&updated).unwrap().contains(NEW_KEY));
     drop(storage);
@@ -67,7 +66,7 @@ fn unified_save_without_a_new_key_never_accesses_or_changes_credentials() {
         Some(SYNTHETIC_KEY)
     );
     assert_eq!(
-        crate::provider_secrets::get_secret_status(&storage, original.id.as_str())
+        crate::providers::get_secret_status(&storage, original.id.as_str())
             .unwrap()
             .updated_at_ms,
         Some(10)
@@ -174,7 +173,7 @@ fn unified_save_reference_failure_rolls_back_settings_and_restores_the_key() {
         Some(SYNTHETIC_KEY)
     );
     assert_eq!(
-        crate::provider_secrets::get_secret_status(&storage, original.id.as_str())
+        crate::providers::get_secret_status(&storage, original.id.as_str())
             .unwrap()
             .updated_at_ms,
         Some(10)
@@ -203,10 +202,10 @@ fn unified_save_can_add_a_key_for_a_legacy_instance() {
     )
     .unwrap();
     assert_eq!(
-        crate::provider_secrets::get_secret_status(&storage, original.id.as_str())
+        crate::providers::get_secret_status(&storage, original.id.as_str())
             .unwrap()
             .state,
-        crate::provider_secrets::ProviderSecretState::Set
+        crate::providers::ProviderSecretState::Set
     );
     assert_eq!(
         store.stored(&original.id.credential_reference()).as_deref(),

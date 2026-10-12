@@ -2,8 +2,9 @@
 //! Internal transaction readers are shared only with local edit operations.
 
 use super::types::*;
-use super::validation::{decode_cursor, encode_cursor, parse_provider_id};
-use crate::model_catalog::{is_valid_model_id, route_support};
+use super::validation::{decode_cursor, encode_cursor};
+use super::{ModelError, parse_provider_id};
+use crate::model_identity::{is_valid_model_id, route_support};
 use crate::model_search::{SearchQuery, sort_ranked};
 use crate::providers::{ProviderId, ProviderKind, ProviderProtocol};
 use crate::storage::Storage;

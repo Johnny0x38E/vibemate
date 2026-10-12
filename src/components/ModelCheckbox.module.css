@@ -32,7 +32,7 @@
 .root[data-checked] {
     border-color: var(--color-accent);
     background: var(--color-accent);
-    color: var(--color-background);
+    color: var(--color-on-accent);
 }
 
 .indicator {

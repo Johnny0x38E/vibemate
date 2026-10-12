@@ -144,7 +144,8 @@ pnpm run check:frontend
 
 This runs Prettier, ESLint with zero allowed warnings, TypeScript for both the
 UI and Vite configuration, release-tool tests, the translation-resource check and
-its tests, UI behavior tests, and a production frontend build.
+its tests, the palette contrast check, UI behavior tests, and a production
+frontend build.
 CI and the release workflow run the same command before continuing.
 
 TypeScript enables strict, exact optional properties, and unchecked-index checks.
@@ -309,6 +310,35 @@ Official references: [i18next configuration](https://www.i18next.com/overview/co
 [TypeScript](https://www.i18next.com/overview/typescript),
 [formatting](https://www.i18next.com/translation-function/formatting), and
 [React instance provider](https://react.i18next.com/latest/i18nextprovider).
+
+## Theme color tokens and the contrast check
+
+`src/themes.css` holds palette values only: every palette declares the same token
+names with `-light`/`-dark` suffixes, and `src/App.css` resolves them into the
+semantic `--color-*` tokens that components use. Three hue families sit beside
+the neutral ramp: chips (`--theme-chip-info-*`, `--theme-chip-count-*`) label
+metadata such as a protocol, transport or model count; status colors
+(`--theme-status-success-*`, `--theme-status-danger-*`) carry an outcome for
+notifications, status dots and destructive actions; and the accent pair
+(`--theme-accent-*` with `--theme-on-accent-*`) fills primary buttons.
+
+Status hues follow the platform a palette imitates: Apple's system green and red
+for `macos`, Fluent's `colorPaletteGreen*` and `colorPaletteRed*` tokens for
+`windows`, and the original pair for the other six palettes. Apple publishes only
+solid fill colors, and its light red and green are too pale to read on a light
+page, so those two foregrounds use Apple's increased-contrast variants and the
+light red is darkened until it reaches 4.5:1. A tinted background mixes that
+foreground 12% (light) or 22% (dark) into the page background.
+
+```sh
+pnpm run test:themes   # scripts/theme-contrast.test.mjs
+```
+
+The check parses `src/themes.css` and asserts, for all eight palettes in both
+brightness modes, that chip labels reach 4.5:1 on their capsule, danger text
+reaches 4.5:1 on the page background, and the success and danger foregrounds
+reach 3:1 on the page background and on the tinted notification card. A palette
+edit that misses a floor fails with the theme, mode, pair and measured ratio.
 
 ## Language preference storage and IPC
 
@@ -735,7 +765,9 @@ see `Notifications`) that survives the jump back to the list.
 
 - Hierarchy: each view has one main primary action ("New" / 「新建」 on Providers
   and MCP lists, "Discover" / 「发现」 on Agents, or "Save" in the secondary-page
-  header): solid `--color-accent` with `--color-background` text. Recovery
+  header): solid `--color-accent` with `--color-on-accent` text. That label is
+  the page background in light mode and white for the macOS and Windows dark
+  palettes, whose accent is a saturated fill rather than a pale one. Recovery
   actions and "Load more" are secondary (`--color-border` outline). Destructive
   row actions (for example MCP "Remove") use `dangerSecondary`
   (`--color-danger-border`, `--color-danger-fg`, hover `--color-danger-bg`). Row
@@ -749,7 +781,11 @@ see `Notifications`) that survives the jump back to the list.
   `--color-summary` at 0.75rem; errors use `--color-text`, semibold, with a
   leading rule. Every focus ring is `--color-focus`. Protocol and count pills on
   the provider list use per-palette `--color-chip-info-*` and
-  `--color-chip-count-*` (defined in `themes.css`, resolved in `App.css`).
+  `--color-chip-count-*`, and success/danger feedback uses `--color-success-*`
+  and `--color-danger-*`. Both hue families are defined in `themes.css`,
+  resolved in `App.css` and checked by `scripts/theme-contrast.test.mjs`: the
+  macOS palette uses Apple's system green and red, and the Windows palette uses
+  Fluent's `colorPaletteGreen*` and `colorPaletteRed*` tokens.
 - Focus: opening a secondary view focuses its title; Back returns focus to "New"
   or that row's "Edit"; a successful save focuses the saved row's "Edit" (found
   by ID), or the page heading when a new row is not on the loaded pages. Controls

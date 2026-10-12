@@ -493,7 +493,12 @@ fn agent_discovery_opencode_xdg_and_codex_empty_override_keep_documented_distinc
     assert_eq!(rows[1].directory_source, DirectorySource::Default);
     assert_eq!(
         rows[2].config_directory,
-        fixture.0.join("xdg/opencode").to_str().map(str::to_owned)
+        fixture
+            .0
+            .join("xdg")
+            .join("opencode")
+            .to_str()
+            .map(str::to_owned)
     );
     assert_eq!(rows[2].files[0].state, FileState::Present);
     environment.xdg_config_directory = Some("relative".into());

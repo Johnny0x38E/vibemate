@@ -1,10 +1,4 @@
-import {
-    useEffect,
-    useLayoutEffect,
-    useRef,
-    useState,
-    type JSX,
-} from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type JSX } from "react";
 import { useTranslation } from "react-i18next";
 import { DetailFact, DetailPanel } from "../../components/DetailForm";
 import buttons from "../../components/actionButtons.module.css";

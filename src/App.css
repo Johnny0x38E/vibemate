@@ -12,6 +12,8 @@
     --color-summary: var(--theme-summary-light);
     --color-focus: var(--theme-focus-light);
     --color-accent: var(--theme-accent-light);
+    /* Label and glyph drawn on a filled accent control. */
+    --color-on-accent: var(--theme-on-accent-light);
     /* Chips and status hues sit beside the neutral theme ramp. */
     --color-chip-info-bg: var(--theme-chip-info-bg-light);
     --color-chip-info-fg: var(--theme-chip-info-fg-light);
@@ -66,6 +68,7 @@
         --color-summary: var(--theme-summary-dark);
         --color-focus: var(--theme-focus-dark);
         --color-accent: var(--theme-accent-dark);
+        --color-on-accent: var(--theme-on-accent-dark);
         --color-chip-info-bg: var(--theme-chip-info-bg-dark);
         --color-chip-info-fg: var(--theme-chip-info-fg-dark);
         --color-chip-count-bg: var(--theme-chip-count-bg-dark);
@@ -89,6 +92,7 @@
     --color-summary: var(--theme-summary-dark);
     --color-focus: var(--theme-focus-dark);
     --color-accent: var(--theme-accent-dark);
+    --color-on-accent: var(--theme-on-accent-dark);
     --color-chip-info-bg: var(--theme-chip-info-bg-dark);
     --color-chip-info-fg: var(--theme-chip-info-fg-dark);
     --color-chip-count-bg: var(--theme-chip-count-bg-dark);

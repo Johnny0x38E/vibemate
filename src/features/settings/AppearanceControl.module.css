@@ -35,6 +35,8 @@
         0 0 0 2px var(--color-surface),
         0 0 0 3px var(--color-text);
 }
+/* The swatch always paints the light accent behind this check, so the check
+   stays white in both brightness modes instead of following `--color-on-accent`. */
 .radio:checked + .swatch::after {
     content: "";
     position: absolute;

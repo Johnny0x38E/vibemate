@@ -1,4 +1,6 @@
 /* Palette values only. App.css resolves brightness into shared semantic tokens. */
+/* A filled accent control (primary button, checked box) pairs `--theme-accent-*`
+   with `--theme-on-accent-*`, the color of its label or glyph. */
 
 /* Apple system blue and grouped surfaces (HIG-style neutrals). */
 :root[data-theme="macos"],
@@ -13,6 +15,7 @@
     --theme-summary-light: #6e6e73;
     --theme-focus-light: #007aff;
     --theme-accent-light: #007aff;
+    --theme-on-accent-light: #f5f5f7;
     --theme-chip-info-bg-light: #e8f1fc;
     --theme-chip-info-fg-light: #0055b3;
     --theme-chip-count-bg-light: #e3f5ea;
@@ -27,6 +30,7 @@
     --theme-summary-dark: #98989d;
     --theme-focus-dark: #0a84ff;
     --theme-accent-dark: #0a84ff;
+    --theme-on-accent-dark: #ffffff;
     --theme-chip-info-bg-dark: #1a2f4a;
     --theme-chip-info-fg-dark: #6fb6ff;
     --theme-chip-count-bg-dark: #1a3326;
@@ -46,6 +50,7 @@
     --theme-summary-light: #5d5d5d;
     --theme-focus-light: #0078d4;
     --theme-accent-light: #0078d4;
+    --theme-on-accent-light: #f3f3f3;
     --theme-chip-info-bg-light: #e8f2fb;
     --theme-chip-info-fg-light: #005a9e;
     --theme-chip-count-bg-light: #e6f4ea;
@@ -59,7 +64,10 @@
     --theme-border-dark: #3f3f3f;
     --theme-summary-dark: #adadad;
     --theme-focus-dark: #60cdff;
-    --theme-accent-dark: #60cdff;
+    /* Fluent webDarkTheme `colorBrandBackground`; the pale #60cdff stays the
+       focus and accent-foreground color but is too light behind a white label. */
+    --theme-accent-dark: #115ea3;
+    --theme-on-accent-dark: #ffffff;
     --theme-chip-info-bg-dark: #1a3348;
     --theme-chip-info-fg-dark: #8fd0ff;
     --theme-chip-count-bg-dark: #1a3324;
@@ -78,6 +86,7 @@
     --theme-summary-light: #5b665e;
     --theme-focus-light: #59685e;
     --theme-accent-light: #59685e;
+    --theme-on-accent-light: #f7f8f7;
     --theme-chip-info-bg-light: #e3ebe6;
     --theme-chip-info-fg-light: #3a5248;
     --theme-chip-count-bg-light: #dce8ef;
@@ -92,6 +101,7 @@
     --theme-summary-dark: #a1ada4;
     --theme-focus-dark: #b6c9bd;
     --theme-accent-dark: #b6c9bd;
+    --theme-on-accent-dark: #191d1a;
     --theme-chip-info-bg-dark: #2a3530;
     --theme-chip-info-fg-dark: #b6c9bd;
     --theme-chip-count-bg-dark: #243540;
@@ -110,6 +120,7 @@
     --theme-summary-light: #62626c;
     --theme-focus-light: #4d4d5c;
     --theme-accent-light: #4d4d5c;
+    --theme-on-accent-light: #f7f7f8;
     --theme-chip-info-bg-light: #e8e8f0;
     --theme-chip-info-fg-light: #45455a;
     --theme-chip-count-bg-light: #e0e4f4;
@@ -124,6 +135,7 @@
     --theme-summary-dark: #adadbb;
     --theme-focus-dark: #c5c5d3;
     --theme-accent-dark: #c5c5d3;
+    --theme-on-accent-dark: #1b1b20;
     --theme-chip-info-bg-dark: #32323c;
     --theme-chip-info-fg-dark: #c5c5d3;
     --theme-chip-count-bg-dark: #2e3348;
@@ -142,6 +154,7 @@
     --theme-summary-light: #625447;
     --theme-focus-light: #88603c;
     --theme-accent-light: #88603c;
+    --theme-on-accent-light: #faf8f3;
     --theme-chip-info-bg-light: #f0e4d4;
     --theme-chip-info-fg-light: #7a5434;
     --theme-chip-count-bg-light: #ebe0f0;
@@ -156,6 +169,7 @@
     --theme-summary-dark: #c2ad94;
     --theme-focus-dark: #e1b784;
     --theme-accent-dark: #e1b784;
+    --theme-on-accent-dark: #211d19;
     --theme-chip-info-bg-dark: #3d3228;
     --theme-chip-info-fg-dark: #e1b784;
     --theme-chip-count-bg-dark: #3a3040;
@@ -174,6 +188,7 @@
     --theme-summary-light: #64546f;
     --theme-focus-light: #7654aa;
     --theme-accent-light: #7654aa;
+    --theme-on-accent-light: #f8f7fb;
     --theme-chip-info-bg-light: #ebe4f5;
     --theme-chip-info-fg-light: #5c3f8a;
     --theme-chip-count-bg-light: #e4ecf8;
@@ -188,6 +203,7 @@
     --theme-summary-dark: #b6a5cb;
     --theme-focus-dark: #c7a2ef;
     --theme-accent-dark: #c7a2ef;
+    --theme-on-accent-dark: #201b29;
     --theme-chip-info-bg-dark: #352a45;
     --theme-chip-info-fg-dark: #c7a2ef;
     --theme-chip-count-bg-dark: #2a3348;
@@ -206,6 +222,7 @@
     --theme-summary-light: #506773;
     --theme-focus-light: #266a8c;
     --theme-accent-light: #266a8c;
+    --theme-on-accent-light: #f5f8fa;
     --theme-chip-info-bg-light: #dceaf2;
     --theme-chip-info-fg-light: #1f5a75;
     --theme-chip-count-bg-light: #d8efe8;
@@ -220,6 +237,7 @@
     --theme-summary-dark: #9fb9c9;
     --theme-focus-dark: #87bfdc;
     --theme-accent-dark: #87bfdc;
+    --theme-on-accent-dark: #192229;
     --theme-chip-info-bg-dark: #243540;
     --theme-chip-info-fg-dark: #87bfdc;
     --theme-chip-count-bg-dark: #243530;
@@ -239,6 +257,7 @@
     --theme-summary-light: #686560;
     --theme-focus-light: #5f5e59;
     --theme-accent-light: #2c2c2b;
+    --theme-on-accent-light: #ffffff;
     --theme-chip-info-bg-light: #eceae6;
     --theme-chip-info-fg-light: #4a4844;
     --theme-chip-count-bg-light: #e6edf5;
@@ -253,6 +272,7 @@
     --theme-summary-dark: #ada9a3;
     --theme-focus-dark: #d4d3cf;
     --theme-accent-dark: #d4d3cf;
+    --theme-on-accent-dark: #191919;
     --theme-chip-info-bg-dark: #333330;
     --theme-chip-info-fg-dark: #d4d3cf;
     --theme-chip-count-bg-dark: #2e3338;

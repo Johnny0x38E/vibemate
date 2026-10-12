@@ -735,7 +735,9 @@ see `Notifications`) that survives the jump back to the list.
 
 - Hierarchy: each view has one main primary action ("New" / 「新建」 on Providers
   and MCP lists, "Discover" / 「发现」 on Agents, or "Save" in the secondary-page
-  header): solid `--color-accent` with `--color-background` text. Recovery
+  header): solid `--color-accent` with `--color-on-accent` text. That label is
+  the page background in light mode and white for the macOS and Windows dark
+  palettes, whose accent is a saturated fill rather than a pale one. Recovery
   actions and "Load more" are secondary (`--color-border` outline). Destructive
   row actions (for example MCP "Remove") use `dangerSecondary`
   (`--color-danger-border`, `--color-danger-fg`, hover `--color-danger-bg`). Row

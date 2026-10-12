@@ -9,13 +9,13 @@ Hermes 指 Nous Research 的 Hermes Agent；适配前核对准确产品身份。
 本轮实现范围包含六种 Agent 的自动发现和手动入口检查，不能只为新增四种提供
 “检测尚未支持”占位后宣称完成。后续再陆续扩展目录。
 
-先更新文档、提交并 push，再开始代码实施。任务状态只记录在 [todo.md](todo.md)
-的 P17.i–P17.n；本文件不另建完成清单。
+现行检测规则见 [agent-discovery.md](agent-discovery.md)；唯一任务状态在 [todo.md](todo.md)，本文件不重复完成清单。
 
 ## 范围不扩大为六种配置注入
 
-本次只有发现：不安装、不升级、不卸载、不启动 Agent，不执行 `--version` 或
-诊断命令，不读取配置、认证或密钥文件内容，不写 Agent 配置。
+自动发现不安装、不升级、不卸载、不启动 Agent，不执行 `--version` 或诊断命令，
+不读取配置、认证或密钥文件内容，不写 Agent 配置。详情页另有用户二次确认的
+[主动版本读取](agent-version-probe.md)，不承诺沙箱或无副作用；不与自动发现合并。
 
 目录列出产品不代表已支持模型、技能或 MCP 配置注入。Phase 1 的配置适配器仍为
 Pi 和 Grok Build；其余四种配置适配另行核实和规划。请求参数属于目标 Agent
@@ -42,7 +42,8 @@ Pi 和 Grok Build；其余四种配置适配另行核实和规划。请求参数
 | 检查失败 / 入口不可用 | 检查未完成或候选不可解析；可重试，不跳到后续入口冒充成功     |
 | 浏览器预览            | 没有本机检测能力；不伪造已发现或未发现                       |
 
-列表展示名称、状态、已知版本及详情入口。长路径、配置目录、文件存在状态、来源
+列表展示名称、状态、已知版本及详情入口。状态与版本同一行两端对齐，装饰圆点
+为当前已发现绿色、未发现灰色、检查失败/入口不可用红色；文字仍完整参与可访问描述。长路径、配置目录、文件存在状态、来源
 和优先级说明放详情页。无版本时显示未知，不从配置文件存在或目录名猜当前版本。
 所有条目都能打开详情，包括未发现项；扫描期间保留明确的操作锁和状态反馈。
 
@@ -66,45 +67,27 @@ Pi 和 Grok Build；其余四种配置适配另行核实和规划。请求参数
 独立观测或清楚说明未检查。无效环境覆盖不静默回退。只检查固定文件的存在/类型，
 不显示任何文件内容，也不根据残留配置认定 Agent 已安装。
 
-版本只从与解析入口明确关联的有界元数据或已核实的文件名线索获得。版本证据和
+自动发现的版本只从与解析入口明确关联的有界元数据或已核实的文件名线索获得。
+用户主动读取的 CLI 版本以独立 `cliOutput` 证据展示，不升级配置能力；重新发现时清除。版本证据和
 配置能力证据分别处理；新增四家不得因名称匹配就关联 Pi 的版本能力标记。
 无法安全关联时显示版本未知，不读取全部安装目录或选择最新 release 冒充当前入口。
 
-## 契约核对入口
+## 官方证据入口
 
-初读官方资料已完成，但实现前还需核实入口回退位置、环境覆盖、Windows 差异和
-可安全读取的版本证据。以下链接是核对入口，不表示所有细节已确认：
+| Agent        | 官方资料                                                                                                                               | 本轮观测边界                                                           |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Claude Code  | [Setup](https://code.claude.com/docs/en/setup)、[Settings](https://code.claude.com/docs/en/settings)                                   | `claude`、POSIX 用户入口、用户 settings 路径；不读 `~/.claude.json`    |
+| Codex        | [Config](https://developers.openai.com/codex/config-basic)、[source](https://github.com/openai/codex)                                  | `codex`、CODEX_HOME 默认/空覆盖/已有目录规则；不猜安装前缀             |
+| OpenCode     | [Config](https://opencode.ai/docs/config/)、[source](https://github.com/anomalyco/opencode)                                            | Anomaly CLI、POSIX 安装入口与候选配置路径；目录覆盖含义随版本不同      |
+| Pi           | [Pi 契约](../integrations/pi.md)                                                                                                       | 入口关联的 package metadata 与 PI_CODING_AGENT_DIR                     |
+| Grok Build   | [Grok 契约](../integrations/grok-build.md)                                                                                             | GROK_HOME、仅文件名版本线索，仍未核实                                  |
+| Hermes Agent | [Config](https://hermes-agent.nousresearch.com/docs/user-guide/configuration/)、[source](https://github.com/NousResearch/hermes-agent) | CLI、HERMES_HOME、Unix/Windows 用户根；不冒充桌面包或 profile 生效路径 |
 
-| Agent        | 已初读的官方资料                                                                      | 继续核实                                                   |
-| ------------ | ------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| Claude Code  | [Setup](https://code.claude.com/docs/en/setup)                                        | `claude`、原生/npm 入口、settings 路径与环境覆盖           |
-| Codex        | [Basic config](https://developers.openai.com/codex/config-basic)                      | CLI 安装入口、CODEX_HOME、用户/项目/策略配置边界           |
-| OpenCode     | [Config](https://opencode.ai/docs/config/)                                            | CLI 安装入口、XDG、配置文件与目录覆盖的区别                |
-| Pi           | [既有 Pi 契约](../integrations/pi.md)                                                 | 保留当前 package metadata 关联与环境路径规则，核对当前资料 |
-| Grok Build   | [既有 Grok 契约](../integrations/grok-build.md)                                       | 保留入口与文件名证据边界，核对当前资料                     |
-| Hermes Agent | [Configuration](https://hermes-agent.nousresearch.com/docs/user-guide/configuration/) | `hermes`、安装入口、HERMES_HOME、profiles 与默认配置边界   |
+新增四家在自动发现中没有安全关联的版本证据，保持未知；CLI 用户根的观测不覆盖全部项目、profile、托管或会话配置。未知不等于未安装或不支持。真实安装和各平台运行结果仍单独待验。
 
-遇到资料缺口先补证据，不凭产品名称猜路径，也不将未检查称为未发现。各平台实际
-安装不存在时，用隔离测试覆盖发现规则，并明确真实安装验收仍待执行。
+## 后续变更规则
 
-## 分批实施
-
-1. **P17.i：文档与执行顺序。** 记录已确认范围并先提交 push；不改代码。
-2. **P17.j：六种 Rust 发现。** 核实契约并在同一小批更新身份/输入类型、发现、命令
-   环境接线和 Rust 测试，另含任务清单最多五个文件。尽量复用已有有界路径逻辑，
-   不引入任意命令执行；通过 Rust fmt/Clippy/测试。
-3. **P17.k：前端协议与输入接线。** 同批更新严格 IPC、边界测试和现有 UI 的六种
-   手动输入选择，避免新身份被当作 Grok 路径。另含 UI 测试与任务清单最多五个文件。
-   旧发现列表布局可在此批暂时保留；通过完整前端检查。
-4. **P17.l：固定目录与双语状态。** 更新 AgentList、CSS、两份 locale 和任务清单。
-   六条固定显示，未发现可进入详情；为 loading/error/preview 保留准确语义。
-5. **P17.m：行为回归。** 单独补固定目录、六家路径隔离、错误/旧结果、刷新与焦点
-   测试；调整 App 测试数据。品牌标志若需新增，另核实来源和许可，不混入不明资产。
-6. **P17.n：整体验证与记录。** 完整前端、Rust fmt/Clippy/测试和锁定本机桌面构建；
-   检查中英文、键盘、最小窗口和长路径，记录实际环境与待验平台。
-
-如实际文件范围超过五个，开始该批前进一步拆任务，不用单个“全接入”变更替代。
-中间批次通过只表示该批完成；P17.j–P17.n 全部通过才称为本次六 Agent 改造完成。
+继续按最多约五个实际文件拆可检查行为，包含测试、资源与文档；不把所有未来适配放进单个全接入变更。新增品牌标志先核实官方来源和许可，未核实前用中性 Agent 图标，不造品牌资产。完整前端、Rust fmt/Clippy/测试与锁定本机桌面构建是代码检查；人工外观与真实/其他平台运行不是自动检查的替代品。
 
 ## 后续自动安装
 

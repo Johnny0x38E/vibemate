@@ -1,4 +1,4 @@
-//! Bounded filesystem observations for Pi and Grok. File contents are read only
+//! Bounded filesystem observations for six fixed Agent CLIs. Contents are read only
 //! for Pi package metadata tied to the resolved entry; configs remain unopened.
 
 use super::*;
@@ -59,6 +59,14 @@ fn file_state(path: &Path) -> FileState {
 
 fn entry_names(id: AgentId) -> &'static [&'static str] {
     match (id, cfg!(windows)) {
+        (AgentId::ClaudeCode, true) => &["claude.exe", "claude.cmd", "claude.bat", "claude"],
+        (AgentId::Codex, true) => &["codex.exe", "codex.cmd", "codex.bat", "codex"],
+        (AgentId::OpenCode, true) => &["opencode.exe", "opencode.cmd", "opencode.bat", "opencode"],
+        (AgentId::Hermes, true) => &["hermes.exe", "hermes.cmd", "hermes.bat", "hermes"],
+        (AgentId::ClaudeCode, false) => &["claude"],
+        (AgentId::Codex, false) => &["codex"],
+        (AgentId::OpenCode, false) => &["opencode"],
+        (AgentId::Hermes, false) => &["hermes"],
         (AgentId::Pi, true) => &["pi.exe", "pi.cmd", "pi.bat", "pi"],
         (AgentId::GrokBuild, true) => &["grok.exe", "grok.cmd", "grok.bat", "grok"],
         (AgentId::Pi, false) => &["pi"],
@@ -94,16 +102,35 @@ fn candidate(
             }
         }
     }
-    let name = if id == AgentId::Pi { "pi" } else { "grok" };
-    let mut known = vec![environment.home.join(".local/bin").join(name)];
+    // Codex npm/Homebrew installations have no single documented user bin root.
+    // PATH and an explicit manual path are sufficient; do not guess a prefix.
+    let roots = match id {
+        AgentId::Codex => Vec::new(),
+        // These installer fallback paths are documented for POSIX only.
+        // Windows still uses its desktop PATH and explicit manual entries.
+        AgentId::ClaudeCode | AgentId::OpenCode if cfg!(windows) => Vec::new(),
+        AgentId::OpenCode => vec![environment.home.join(".opencode/bin")],
+        AgentId::Hermes if cfg!(windows) => environment
+            .local_app_data
+            .as_ref()
+            .map(PathBuf::from)
+            .filter(|root| display_path(root).is_some())
+            .map(|root| vec![root.join("hermes/bin")])
+            .unwrap_or_default(),
+        _ => vec![environment.home.join(".local/bin")],
+    };
+    let mut roots = roots;
     if id == AgentId::Pi
         && let Some(directory) = directory
     {
-        known.push(directory.join("bin/pi"));
+        roots.push(directory.join("bin"));
     }
-    for path in known {
-        if has_entry(&path) {
-            return (Some(path), EntrySource::UserEntry);
+    for root in roots {
+        for name in entry_names(id) {
+            let path = root.join(name);
+            if has_entry(&path) {
+                return (Some(path), EntrySource::UserEntry);
+            }
         }
     }
     (None, EntrySource::None)
@@ -185,6 +212,73 @@ fn observe(
     environment: &DiscoveryEnvironment,
 ) -> AgentObservation {
     let (directory, directory_source) = match id {
+        AgentId::ClaudeCode => config_directory(
+            &environment.home,
+            environment.claude_directory.as_ref(),
+            ".claude",
+        ),
+        AgentId::Codex => {
+            // Codex ignores an empty CODEX_HOME, but rejects an explicit directory
+            // that does not exist. Keep that distinction without reading config.
+            let override_path = environment
+                .codex_directory
+                .as_ref()
+                .filter(|p| !p.is_empty());
+            let (root, source) = config_directory(&environment.home, override_path, ".codex");
+            if override_path.is_some() {
+                let resolved = root
+                    .filter(|p| fs::metadata(p).is_ok_and(|m| m.is_dir()))
+                    .and_then(|p| fs::canonicalize(p).ok())
+                    .filter(|p| display_path(p).is_some());
+                match resolved {
+                    Some(root) => (Some(root), source),
+                    None => (None, DirectorySource::Unavailable),
+                }
+            } else {
+                (root, source)
+            }
+        }
+        AgentId::OpenCode => {
+            // This is a candidate config root, not a claim about effective config.
+            // OPENCODE_CONFIG_DIR differs between v1 and v2; file/inline/project
+            // overrides are deliberately not interpreted by read-only discovery.
+            if environment.opencode_directory.is_some() {
+                config_directory(
+                    &environment.home,
+                    environment.opencode_directory.as_ref(),
+                    ".config/opencode",
+                )
+            } else if let Some(base) = environment
+                .xdg_config_directory
+                .as_ref()
+                .filter(|p| !p.is_empty())
+            {
+                let root = PathBuf::from(base).join("opencode");
+                if display_path(&root).is_some() {
+                    (Some(root), DirectorySource::Environment)
+                } else {
+                    (None, DirectorySource::Unavailable)
+                }
+            } else {
+                config_directory(&environment.home, None, ".config/opencode")
+            }
+        }
+        AgentId::Hermes => {
+            if environment.hermes_directory.is_some() {
+                config_directory(
+                    &environment.home,
+                    environment.hermes_directory.as_ref(),
+                    ".hermes",
+                )
+            } else if cfg!(windows) {
+                match environment.local_app_data.as_ref() {
+                    Some(base) => config_directory(&PathBuf::from(base), None, "hermes"),
+                    None => (None, DirectorySource::Unavailable),
+                }
+            } else {
+                config_directory(&environment.home, None, ".hermes")
+            }
+        }
         AgentId::Pi => config_directory(
             &environment.home,
             environment.pi_directory.as_ref(),
@@ -197,6 +291,10 @@ fn observe(
         ),
     };
     let names: &[&str] = match id {
+        AgentId::ClaudeCode => &["settings.json"],
+        AgentId::Codex => &["config.toml", "auth.json"],
+        AgentId::OpenCode => &["opencode.json", "opencode.jsonc"],
+        AgentId::Hermes => &["config.yaml", ".env", "auth.json"],
         AgentId::Pi => &["settings.json", "models.json", "mcp.json"],
         AgentId::GrokBuild => &["config.toml", "managed_config.toml", "requirements.toml"],
     };
@@ -241,6 +339,10 @@ fn observe(
                     observation.version = match id {
                         AgentId::Pi => pi_version(&resolved),
                         AgentId::GrokBuild => grok_version(&resolved),
+                        // Native binaries and launchers have no safely linked
+                        // version evidence here. Never run --version or inspect
+                        // wrapper contents merely to fill a display field.
+                        _ => None,
                     };
                     if observation.version.is_some() {
                         observation.version_evidence = if id == AgentId::Pi {
@@ -262,7 +364,7 @@ fn observe(
     observation
 }
 
-/// Observe Pi and Grok entries in stable order using a supplied environment.
+/// Observe six Agent entries in catalog order using a supplied environment.
 /// Only regular Pi package metadata is read; Agent configs and executables are
 /// never opened for content or run. Invalid manual paths reject before any scan.
 pub fn discover_agents(
@@ -272,10 +374,19 @@ pub fn discover_agents(
     if display_path(&environment.home).is_none() {
         return Err(DiscoveryError::LocationUnavailable);
     }
+    // Validate every input before observing any filesystem candidate.
+    let claude = manual_path(input.claude_path.as_deref())?;
+    let codex = manual_path(input.codex_path.as_deref())?;
+    let opencode = manual_path(input.opencode_path.as_deref())?;
     let pi = manual_path(input.pi_path.as_deref())?;
     let grok = manual_path(input.grok_path.as_deref())?;
+    let hermes = manual_path(input.hermes_path.as_deref())?;
     Ok(vec![
+        observe(AgentId::ClaudeCode, claude, environment),
+        observe(AgentId::Codex, codex, environment),
+        observe(AgentId::OpenCode, opencode, environment),
         observe(AgentId::Pi, pi, environment),
         observe(AgentId::GrokBuild, grok, environment),
+        observe(AgentId::Hermes, hermes, environment),
     ])
 }

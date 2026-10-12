@@ -398,19 +398,56 @@
         }
     },
     "agents": {
-        "backLabel": "Back to discovered agents",
+        "versionProbe": {
+            "title": "CLI version",
+            "read": "Read version",
+            "hint": "Optional: run the selected CLI only after confirmation. Automatic discovery never runs it.",
+            "requiresDiscovery": "Rediscover a found entry first; unsaved path changes and browser preview cannot launch it.",
+            "confirmTitle": "Confirm version command",
+            "command": "Command",
+            "run": "Run version command",
+            "cancel": "Cancel",
+            "running": "Reading CLI version…",
+            "warning": "This starts the program shown above, not a sandbox. Even --version can read user configuration or credentials, load plugins, access the network, write files, or start other processes/containers. A found path does not prove the program is genuine. Proceed only if you trust this entry.",
+            "limits": "Only --version is passed; stdin is closed, each output pipe is limited to 8 KiB, and the direct child has a 5-second deadline. Termination targets the direct child only; descendants and side effects may remain. Raw output is not displayed or logged. Windows requires a native .exe, not a .cmd/.bat wrapper.",
+            "evidence": "Reported by the user-triggered CLI command. This does not verify authenticity, capabilities, connection or effective configuration.",
+            "reported": "{{version}} · CLI reported",
+            "errors": {
+                "confirmation_required": "Confirm the command before starting it.",
+                "busy": "Another version probe is running. Wait, then try again.",
+                "entry_unavailable": "The entry is unavailable or not executable. Rediscover it first.",
+                "entry_changed": "The entry target changed. Rediscover and review the new target before retrying.",
+                "unsupported_entry": "This Windows entry requires a wrapper. Select and rediscover a native .exe; shell execution is not supported.",
+                "operation_failed": "The version command could not complete. Rediscover the entry or try again.",
+                "timed_out": "The version command timed out; termination of its direct child was requested. Descendants or side effects may remain.",
+                "output_too_large": "The command produced too much output; termination was requested. No raw output is shown.",
+                "command_failed": "The version command exited unsuccessfully. Its output was discarded.",
+                "unrecognized_output": "No recognized version was returned. Keep the version unverified; raw output was discarded.",
+                "desktop_required": "Reading a CLI version requires the desktop app.",
+                "invalid_response": "The version response was invalid. No version was accepted."
+            }
+        },
+        "backLabel": "Back to agents",
         "names": {
+            "claudeCode": "Claude Code",
+            "codex": "Codex",
+            "openCode": "OpenCode",
             "pi": "Pi",
-            "grokBuild": "Grok Build"
+            "grokBuild": "Grok Build",
+            "hermes": "Hermes"
         },
         "list": {
-            "label": "Discovered agents",
+            "label": "Agents",
+            "checking": "Checking…",
+            "preview": "Desktop detection required",
+            "failed": "Check failed",
+            "previousStatus": "{{status}} · previous result",
             "empty": "No Agent entries were found on this machine. Select Refresh after installing one or updating PATH, or open an agent’s detail view to specify a manual entry path.",
             "openDetail": "Open {{name}} details",
             "versionShort": "{{version}}"
         },
         "detail": {
-            "notFound": "This Agent entry is no longer reported as found. Return to the list or select Discover.",
+            "notFound": "No entry was found in the checked locations. Specify an absolute entry path below or rediscover after updating PATH.",
             "reportLabel": "Discovery report for {{name}}",
             "configFilesHeading": "Configuration files",
             "manualPathTitle": "Manual entry path",
@@ -426,7 +463,6 @@
         "refresh": "Discover",
         "readOnly": "Read-only discovery: entries are never executed and Agent configuration contents are never read or changed. A found file does not prove a working installation.",
         "loading": "Discovering Agent entries…",
-        "preview": "Local Agent discovery requires the desktop app.",
         "unknown": "Unverified",
         "pathLabel": "{{name}} entry path",
         "pathPlaceholder": "Absolute entry path; leave empty for automatic discovery",
@@ -469,10 +505,19 @@
                 "mcp.json": "MCP definitions (mcp.json)",
                 "config.toml": "User config (config.toml)",
                 "managed_config.toml": "Managed config (managed_config.toml)",
-                "requirements.toml": "Requirements (requirements.toml)"
+                "requirements.toml": "Requirements (requirements.toml)",
+                "auth.json": "Authentication file (auth.json)",
+                "opencode.json": "Configuration (opencode.json)",
+                "opencode.jsonc": "Configuration (opencode.jsonc)",
+                "config.yaml": "Configuration (config.yaml)",
+                "env": "Environment file (.env)"
             }
         },
         "precedence": {
+            "claudeCode": "Observed user settings root only. Managed, project, local and CLI settings may override it; ~/.claude.json and project files are not inspected. Configuration deployment is not implemented.",
+            "codex": "Observed user config root only (CODEX_HOME or ~/.codex). Profiles, trusted project, system, managed and CLI settings may change effective behavior. Configuration deployment is not implemented.",
+            "openCode": "Observed candidate config root only. OPENCODE_CONFIG_DIR semantics differ by version; file, inline, remote and project configuration is not inspected. Effective settings and deployment support are unverified.",
+            "hermes": "Observed CLI user-data root only. HERMES_HOME, profiles, managed settings, environment and CLI options may change effective behavior; desktop bundles can use a different root. Configuration deployment is not implemented.",
             "pi": "Documented precedence: trusted project settings / MCP can override user settings. Models are user-level; CLI, SDK, extensions and existing sessions may change effective behavior.",
             "grokBuild": "Documented precedence: system managed → user managed → user config → user requirements → system requirements. Trusted project MCP / plugins / permissions and CLI or sessions may change effective behavior."
         },

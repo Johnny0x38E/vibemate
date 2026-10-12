@@ -76,10 +76,54 @@
     font-weight: 600;
 }
 
-.cardVersion {
+.cardStatusRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--space-sm);
+    min-width: 0;
     color: var(--color-summary);
     font-size: 0.75rem;
     line-height: 1.35;
+}
+
+.cardStatus {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.statusDot {
+    flex-shrink: 0;
+    width: 8px;
+    height: 8px;
+    border: 1px solid currentColor;
+    border-radius: 50%;
+    background: currentColor;
+    color: var(--color-summary);
+}
+
+.statusDot[data-state="found"] {
+    color: var(--color-success-fg);
+}
+
+.statusDot[data-state="error"],
+.statusDot[data-state="unavailable"] {
+    color: var(--color-danger-fg);
+}
+
+.statusText,
+.cardVersion {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cardVersion {
+    flex-shrink: 0;
+    max-width: 50%;
+    text-align: end;
 }
 
 .detailGroup {

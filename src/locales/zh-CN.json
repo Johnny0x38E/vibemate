@@ -398,19 +398,56 @@
         }
     },
     "agents": {
-        "backLabel": "返回已发现的 Agent 列表",
+        "versionProbe": {
+            "title": "CLI 版本",
+            "read": "读取版本",
+            "hint": "可选操作：确认后才启动所选 CLI。自动发现不会执行它。",
+            "requiresDiscovery": "请先重新发现可用入口；尚未检查的路径改动与浏览器预览不能启动程序。",
+            "confirmTitle": "确认版本命令",
+            "command": "命令",
+            "run": "执行版本命令",
+            "cancel": "取消",
+            "running": "正在读取 CLI 版本…",
+            "warning": "这会启动上方程序，不是沙箱。即使只传 --version，程序仍可能读取用户配置或凭据、加载插件、访问网络、写文件，或启动其他进程/容器。发现路径不证明程序真实可信，请仅在信任该入口时继续。",
+            "limits": "仅传 --version，关闭标准输入；每个输出管道限制为 8 KiB，直接子进程运行上限为 5 秒。终止仅针对直接子进程，后代进程与副作用可能保留；不展示或记录原始输出。Windows 需使用原生 .exe，不经 .cmd/.bat 包装入口。",
+            "evidence": "由用户主动执行的 CLI 命令报告。不证明程序真实性、能力支持、连接成功或有效配置。",
+            "reported": "{{version}} · CLI 报告",
+            "errors": {
+                "confirmation_required": "请先确认命令，再启动程序。",
+                "busy": "另一个版本探测正在进行，请等待后重试。",
+                "entry_unavailable": "入口不可用或无法执行，请先重新发现。",
+                "entry_changed": "入口目标已变化，请重新发现并核对新目标后再试。",
+                "unsupported_entry": "此 Windows 入口需要包装程序。请指定并重新发现原生 .exe；当前不支持 shell 执行。",
+                "operation_failed": "版本命令未能完成，可重新发现入口或重试。",
+                "timed_out": "版本命令已超时，已请求终止直接子进程；后代进程或副作用可能保留。",
+                "output_too_large": "命令输出超出限制，已请求终止；不会展示原始输出。",
+                "command_failed": "版本命令未成功退出，输出已丢弃。",
+                "unrecognized_output": "未返回可识别版本，保持未核实状态；原始输出已丢弃。",
+                "desktop_required": "读取 CLI 版本需要桌面应用。",
+                "invalid_response": "版本响应无效，未接受任何版本。"
+            }
+        },
+        "backLabel": "返回 Agent 列表",
         "names": {
+            "claudeCode": "Claude Code",
+            "codex": "Codex",
+            "openCode": "OpenCode",
             "pi": "Pi",
-            "grokBuild": "Grok Build"
+            "grokBuild": "Grok Build",
+            "hermes": "Hermes"
         },
         "list": {
-            "label": "已发现的 Agent",
+            "label": "Agent",
+            "checking": "检查中…",
+            "preview": "需要桌面检测",
+            "failed": "检查失败",
+            "previousStatus": "{{status}} · 上次结果",
             "empty": "本机未发现 Agent 入口。安装 Agent 或更新 PATH 后请点击「发现」；也可在详情中填写手动入口路径。",
             "openDetail": "打开 {{name}} 详情",
             "versionShort": "{{version}}"
         },
         "detail": {
-            "notFound": "此 Agent 入口已不再报告为已发现。请返回列表或点击「发现」。",
+            "notFound": "在已检查的位置未发现入口。可在下方指定绝对入口路径，或更新 PATH 后重新发现。",
             "reportLabel": "{{name}} 发现报告",
             "configFilesHeading": "配置文件",
             "manualPathTitle": "手动指定入口",
@@ -426,7 +463,6 @@
         "refresh": "发现",
         "readOnly": "只读发现：不执行入口文件，不读取或修改 Agent 配置内容。发现文件不代表安装可正常运行。",
         "loading": "正在发现 Agent 入口…",
-        "preview": "本机 Agent 发现需要使用桌面应用。",
         "unknown": "未核实",
         "pathLabel": "{{name}} 入口路径",
         "pathPlaceholder": "填写绝对入口路径；留空则自动发现",
@@ -469,10 +505,19 @@
                 "mcp.json": "MCP 定义 (mcp.json)",
                 "config.toml": "用户配置 (config.toml)",
                 "managed_config.toml": "托管配置 (managed_config.toml)",
-                "requirements.toml": "依赖要求 (requirements.toml)"
+                "requirements.toml": "依赖要求 (requirements.toml)",
+                "auth.json": "认证文件 (auth.json)",
+                "opencode.json": "配置 (opencode.json)",
+                "opencode.jsonc": "配置 (opencode.jsonc)",
+                "config.yaml": "配置 (config.yaml)",
+                "env": "环境文件 (.env)"
             }
         },
         "precedence": {
+            "claudeCode": "仅观测用户设置路径。托管、项目、本地与 CLI 设置可能覆盖它；未检查 ~/.claude.json 或项目文件，尚未实现配置部署。",
+            "codex": "仅观测用户配置路径（CODEX_HOME 或 ~/.codex）。profile、受信任项目、系统、托管与 CLI 设置可能改变实际行为，尚未实现配置部署。",
+            "openCode": "仅观测候选配置路径。OPENCODE_CONFIG_DIR 含义随版本不同；未检查自定义文件、内联、远程或项目配置，有效配置与部署支持仍未核实。",
+            "hermes": "仅观测 CLI 用户数据路径。HERMES_HOME、profile、托管设置、环境变量与 CLI 选项可能改变实际行为；桌面包可能使用其他路径，尚未实现配置部署。",
             "pi": "文档优先级：受信任项目的设置 / MCP 可覆盖用户设置。模型配置在用户级；CLI、SDK、扩展和已有会话可能改变实际生效行为。",
             "grokBuild": "文档优先级：系统 managed → 用户 managed → 用户 config → 用户 requirements → 系统 requirements。受信任项目的 MCP / plugins / permission、CLI 或会话也可能影响实际行为。"
         },

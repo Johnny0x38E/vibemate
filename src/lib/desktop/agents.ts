@@ -1,10 +1,32 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { hasExactKeys, isObject } from "./providers";
 
-/** Stable adapters with separately documented configuration contracts. */
-export type AgentId = "pi" | "grokBuild";
-/** Optional current-window entry paths; Rust never executes either path. */
+/** Fixed catalog order; detection does not imply configuration deployment support. */
+export const AGENT_IDS = [
+    "claudeCode",
+    "codex",
+    "openCode",
+    "pi",
+    "grokBuild",
+    "hermes",
+] as const;
+/** Stable identity for a read-only detector. */
+export type AgentId = (typeof AGENT_IDS)[number];
+/** Fixed user files observed for presence only, never returned as contents. */
+export const AGENT_CONFIG_FILES: Record<AgentId, readonly string[]> = {
+    claudeCode: ["settings.json"],
+    codex: ["config.toml", "auth.json"],
+    openCode: ["opencode.json", "opencode.jsonc"],
+    pi: ["settings.json", "models.json", "mcp.json"],
+    grokBuild: ["config.toml", "managed_config.toml", "requirements.toml"],
+    hermes: ["config.yaml", ".env", "auth.json"],
+};
+/** Optional current-window entry paths; Rust never executes any path. */
 export interface DiscoveryInput {
+    claudePath: string | null;
+    codexPath: string | null;
+    opencodePath: string | null;
+    hermesPath: string | null;
     piPath: string | null;
     grokPath: string | null;
 }
@@ -25,7 +47,7 @@ export interface AgentObservation {
         state: "present" | "missing" | "unavailable";
     }[];
 }
-/** Honest preview or two validated Agent observations in adapter order. */
+/** Honest preview or six validated observations in fixed catalog order. */
 export type DiscoveryResult =
     { kind: "preview" } | { kind: "desktop"; items: AgentObservation[] };
 /** Safe error codes; raw runtime errors are never retained. */
@@ -134,10 +156,7 @@ function observation(value: unknown, id: AgentId): AgentObservation {
         (directorySource === "unavailable") !== (configDirectory === null)
     )
         return invalid();
-    const names =
-        id === "pi"
-            ? ["settings.json", "models.json", "mcp.json"]
-            : ["config.toml", "managed_config.toml", "requirements.toml"];
+    const names = AGENT_CONFIG_FILES[id];
     const rawFiles = value["files"];
     if (!Array.isArray(rawFiles) || rawFiles.length !== names.length)
         return invalid();
@@ -192,12 +211,10 @@ export async function discoverAgents(
                 : "operation_failed",
         );
     }
-    if (!Array.isArray(value) || value.length !== 2) return invalid();
+    if (!Array.isArray(value) || value.length !== AGENT_IDS.length)
+        return invalid();
     return {
         kind: "desktop",
-        items: [
-            observation(value[0], "pi"),
-            observation(value[1], "grokBuild"),
-        ],
+        items: AGENT_IDS.map((id, index) => observation(value[index], id)),
     };
 }

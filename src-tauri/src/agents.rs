@@ -1,7 +1,12 @@
-//! Read-only Agent entry discovery. No process execution, config parsing, writes,
-//! credential access or network requests belong in this feature.
+//! Static Agent discovery and a separate user-confirmed CLI version operation.
+//! Discovery never executes entries. Version execution is bounded, not sandboxed;
+//! the launched program can have side effects outside vibemate's control.
 
 mod discovery;
+mod version_probe;
+pub use version_probe::{
+    AgentVersionResult, VersionProbeError, VersionProbeGate, VersionProbeInput, probe_agent_version,
+};
 #[cfg(test)]
 mod tests;
 
@@ -9,10 +14,18 @@ pub use discovery::discover_agents;
 use serde::{Deserialize, Serialize};
 use std::{ffi::OsString, path::PathBuf};
 
-/// Agent identities with independently verified configuration contracts.
+/// Fixed Agent identities with read-only detection rules, not deployment support.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum AgentId {
+    /// Anthropic Claude Code CLI.
+    ClaudeCode,
+    /// OpenAI Codex CLI.
+    Codex,
+    /// Anomaly OpenCode CLI, not the unrelated Go project with the same name.
+    OpenCode,
+    /// Nous Research Hermes Agent CLI.
+    Hermes,
     /// Earendil Pi, not other tools named pi.
     Pi,
     /// xAI Grok Build.
@@ -23,6 +36,18 @@ pub enum AgentId {
 #[derive(Default, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DiscoveryInput {
+    /// Absolute Claude Code entry, or automatic lookup when absent.
+    #[serde(default)]
+    pub claude_path: Option<String>,
+    /// Absolute Codex entry, or automatic lookup when absent.
+    #[serde(default)]
+    pub codex_path: Option<String>,
+    /// Absolute OpenCode entry, or automatic lookup when absent.
+    #[serde(default)]
+    pub opencode_path: Option<String>,
+    /// Absolute Hermes entry, or automatic lookup when absent.
+    #[serde(default)]
+    pub hermes_path: Option<String>,
     /// Absolute Pi entry path, or automatic lookup when absent.
     pub pi_path: Option<String>,
     /// Absolute Grok entry path, or automatic lookup when absent.
@@ -30,6 +55,7 @@ pub struct DiscoveryInput {
 }
 
 /// Process environment snapshot, injectable for isolated filesystem tests.
+#[derive(Default)]
 pub struct DiscoveryEnvironment {
     /// Platform home resolved by Tauri, not a project directory.
     pub home: PathBuf,
@@ -39,6 +65,18 @@ pub struct DiscoveryEnvironment {
     pub pi_directory: Option<OsString>,
     /// Explicit Grok configuration root from the desktop environment.
     pub grok_directory: Option<OsString>,
+    /// Claude user settings root (CLAUDE_CONFIG_DIR).
+    pub claude_directory: Option<OsString>,
+    /// Codex user state root (CODEX_HOME); explicit overrides must exist.
+    pub codex_directory: Option<OsString>,
+    /// OpenCode candidate directory (OPENCODE_CONFIG_DIR); semantics vary by version.
+    pub opencode_directory: Option<OsString>,
+    /// OpenCode's XDG configuration base when no specific directory is supplied.
+    pub xdg_config_directory: Option<OsString>,
+    /// Hermes user data root (HERMES_HOME), independent of its source checkout.
+    pub hermes_directory: Option<OsString>,
+    /// Windows LOCALAPPDATA for documented Hermes source-install paths.
+    pub local_app_data: Option<OsString>,
 }
 
 /// Safe discovery failures; I/O diagnostics and user content are discarded.

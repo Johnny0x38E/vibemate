@@ -24,6 +24,8 @@ impl Fixture {
             path: None,
             pi_directory: None,
             grok_directory: None,
+            local_app_data: Some(self.0.join("local-app-data").into_os_string()),
+            ..DiscoveryEnvironment::default()
         }
     }
     fn file(&self, path: &str, content: &str) -> PathBuf {
@@ -53,9 +55,14 @@ impl Fixture {
             &DiscoveryInput {
                 pi_path: pi.map(|p| p.to_str().unwrap().to_owned()),
                 grok_path: grok.map(|p| p.to_str().unwrap().to_owned()),
+                ..DiscoveryInput::default()
             },
         )
         .unwrap()
+        .into_iter()
+        // Preserve the original Pi/Grok test focus; new tests observe all six.
+        .filter(|row| matches!(row.id, AgentId::Pi | AgentId::GrokBuild))
+        .collect()
     }
 }
 impl Drop for Fixture {
@@ -165,6 +172,7 @@ fn agent_discovery_manual_paths_validate_before_scanning() {
         let input = DiscoveryInput {
             pi_path: Some(value),
             grok_path: None,
+            ..DiscoveryInput::default()
         };
         assert_eq!(
             discover_agents(&fixture.environment(), &input).unwrap_err(),
@@ -191,13 +199,13 @@ fn agent_discovery_environment_overrides_do_not_fall_back_when_invalid() {
     environment.pi_directory = Some(custom.clone().into_os_string());
     environment.grok_directory = Some("relative-directory".into());
     let rows = discover_agents(&environment, &DiscoveryInput::default()).unwrap();
-    assert_eq!(rows[0].config_directory, custom.to_str().map(str::to_owned));
-    assert_eq!(rows[0].directory_source, DirectorySource::Environment);
-    assert_eq!(rows[0].files[1].state, FileState::Present);
-    assert_eq!(rows[1].config_directory, None);
-    assert_eq!(rows[1].directory_source, DirectorySource::Unavailable);
+    assert_eq!(rows[3].config_directory, custom.to_str().map(str::to_owned));
+    assert_eq!(rows[3].directory_source, DirectorySource::Environment);
+    assert_eq!(rows[3].files[1].state, FileState::Present);
+    assert_eq!(rows[4].config_directory, None);
+    assert_eq!(rows[4].directory_source, DirectorySource::Unavailable);
     assert!(
-        rows[1]
+        rows[4]
             .files
             .iter()
             .all(|f| f.state == FileState::Unavailable)
@@ -243,19 +251,19 @@ fn agent_discovery_symlinks_follow_entry_without_executing_and_keep_path_order()
         .unwrap(),
     );
     let rows = discover_agents(&environment, &DiscoveryInput::default()).unwrap();
-    assert_eq!(rows[0].source, EntrySource::Path);
+    assert_eq!(rows[3].source, EntrySource::Path);
     assert_eq!(
-        rows[0].entry_path,
+        rows[3].entry_path,
         fixture.0.join("first/pi").to_str().map(str::to_owned)
     );
-    assert_eq!(rows[0].version.as_deref(), Some("1.1.0"));
+    assert_eq!(rows[3].version.as_deref(), Some("1.1.0"));
     assert!(!marker.exists());
     fs::remove_file(fixture.0.join("first/pi")).unwrap();
     symlink(fixture.0.join("missing"), fixture.0.join("first/pi")).unwrap();
     let rows = discover_agents(&environment, &DiscoveryInput::default()).unwrap();
-    assert_eq!(rows[0].state, EntryState::Unavailable);
-    assert_eq!(rows[0].source, EntrySource::Path);
-    assert_eq!(rows[0].version, None);
+    assert_eq!(rows[3].state, EntryState::Unavailable);
+    assert_eq!(rows[3].source, EntrySource::Path);
+    assert_eq!(rows[3].version, None);
 }
 
 #[cfg(unix)]
@@ -284,4 +292,251 @@ fn agent_discovery_symlinked_metadata_is_not_read_and_launcher_does_not_pick_rel
     assert_eq!(rows[0].entry_path, launcher.to_str().map(str::to_owned));
     assert_eq!(rows[0].state, EntryState::Found);
     assert_eq!(rows[0].version, None);
+}
+
+#[test]
+fn agent_discovery_six_path_entries_are_observed_without_execution_or_config_reads() {
+    let fixture = Fixture::new();
+    let marker = fixture.0.join("SHOULD_NOT_RUN");
+    let names = ["claude", "codex", "opencode", "pi", "grok", "hermes"];
+    let ids = [
+        AgentId::ClaudeCode,
+        AgentId::Codex,
+        AgentId::OpenCode,
+        AgentId::Pi,
+        AgentId::GrokBuild,
+        AgentId::Hermes,
+    ];
+    for name in names {
+        let filename = if cfg!(windows) {
+            format!("{name}.cmd")
+        } else {
+            name.to_owned()
+        };
+        fixture.file(
+            &format!("bin/{filename}"),
+            &format!("#!/bin/sh\ntouch '{}'\n", marker.display()),
+        );
+    }
+    let configs = [
+        ".claude/settings.json",
+        ".codex/config.toml",
+        ".config/opencode/opencode.jsonc",
+        ".pi/agent/models.json",
+        ".grok/config.toml",
+    ];
+    for path in configs {
+        fixture.file(path, "invalid-config synthetic-secret-do-not-read");
+    }
+    let hermes_root = if cfg!(windows) {
+        "local-app-data/hermes"
+    } else {
+        ".hermes"
+    };
+    let hermes_config = format!("{hermes_root}/config.yaml");
+    fixture.file(
+        &hermes_config,
+        "invalid-config synthetic-secret-do-not-read",
+    );
+    let mut environment = fixture.environment();
+    environment.path = Some(std::env::join_paths([fixture.0.join("bin")]).unwrap());
+    let rows = discover_agents(&environment, &DiscoveryInput::default()).unwrap();
+    assert_eq!(rows.len(), 6);
+    for (row, id) in rows.iter().zip(ids) {
+        assert_eq!(row.id, id);
+        assert_eq!(row.state, EntryState::Found);
+        assert_eq!(row.source, EntrySource::Path);
+        assert!(row.files.iter().any(|f| f.state == FileState::Present));
+        assert_eq!(row.version, None);
+        assert_eq!(row.capability_evidence, CapabilityEvidence::Unverified);
+    }
+    assert!(
+        !serde_json::to_string(&rows)
+            .unwrap()
+            .contains("synthetic-secret")
+    );
+    for path in configs.into_iter().chain([hermes_config.as_str()]) {
+        assert_eq!(
+            fs::read_to_string(fixture.0.join(path)).unwrap(),
+            "invalid-config synthetic-secret-do-not-read"
+        );
+    }
+    assert!(!marker.exists());
+}
+
+#[test]
+fn agent_discovery_config_residue_does_not_claim_any_installed_entry() {
+    let fixture = Fixture::new();
+    for path in [
+        ".claude/settings.json",
+        ".codex/config.toml",
+        ".config/opencode/opencode.json",
+        ".pi/agent/settings.json",
+        ".grok/config.toml",
+        ".hermes/config.yaml",
+    ] {
+        fixture.file(path, "unopened");
+    }
+    let rows = discover_agents(&fixture.environment(), &DiscoveryInput::default()).unwrap();
+    assert_eq!(rows.len(), 6);
+    for row in rows {
+        assert_eq!(row.state, EntryState::NotFound);
+        assert_eq!(row.entry_path, None);
+        assert_eq!(row.version, None);
+    }
+}
+
+#[test]
+fn agent_discovery_every_manual_path_is_independent_and_validated() {
+    let fixture = Fixture::new();
+    let fields = [
+        "claudePath",
+        "codexPath",
+        "opencodePath",
+        "piPath",
+        "grokPath",
+        "hermesPath",
+    ];
+    let bin = fixture.file("manual-entry", "not executed");
+    let mut environment = fixture.environment();
+    fixture.file("bin/codex", "should be shadowed by explicit path");
+    environment.path = Some(std::env::join_paths([fixture.0.join("bin")]).unwrap());
+    for (index, field) in fields.iter().enumerate() {
+        let input: DiscoveryInput =
+            serde_json::from_value(serde_json::json!({field.to_string(): bin})).unwrap();
+        let rows = discover_agents(&environment, &input).unwrap();
+        assert_eq!(rows[index].source, EntrySource::Manual);
+        assert_eq!(
+            rows[index].resolved_path,
+            fs::canonicalize(&bin).unwrap().to_str().map(str::to_owned)
+        );
+        assert_eq!(
+            rows.iter()
+                .filter(|r| r.source == EntrySource::Manual)
+                .count(),
+            1
+        );
+        for invalid in ["relative", "", "/bad\npath"] {
+            let input: DiscoveryInput =
+                serde_json::from_value(serde_json::json!({field.to_string(): invalid})).unwrap();
+            assert_eq!(
+                discover_agents(&environment, &input).unwrap_err(),
+                DiscoveryError::InvalidPath
+            );
+        }
+        let missing = fixture.0.join("missing");
+        let input: DiscoveryInput =
+            serde_json::from_value(serde_json::json!({field.to_string(): missing})).unwrap();
+        let rows = discover_agents(&environment, &input).unwrap();
+        assert_eq!(rows[index].state, EntryState::NotFound);
+        assert_eq!(rows[index].source, EntrySource::Manual);
+    }
+}
+
+#[test]
+fn agent_discovery_new_directory_overrides_are_observations_not_installations() {
+    let fixture = Fixture::new();
+    let root = fixture.0.join("custom");
+    fixture.file("custom/settings.json", "unopened");
+    fixture.file("custom/config.toml", "unopened");
+    fixture.file("custom/opencode.json", "unopened");
+    fixture.file("custom/config.yaml", "unopened");
+    let mut environment = fixture.environment();
+    environment.claude_directory = Some(root.clone().into_os_string());
+    environment.codex_directory = Some(root.clone().into_os_string());
+    environment.opencode_directory = Some(root.clone().into_os_string());
+    environment.hermes_directory = Some(root.clone().into_os_string());
+    let rows = discover_agents(&environment, &DiscoveryInput::default()).unwrap();
+    for index in [0, 1, 2, 5] {
+        let expected = if index == 1 {
+            fs::canonicalize(&root).unwrap()
+        } else {
+            root.clone()
+        };
+        assert_eq!(
+            rows[index].config_directory,
+            expected.to_str().map(str::to_owned)
+        );
+        assert_eq!(rows[index].directory_source, DirectorySource::Environment);
+        assert_eq!(rows[index].files[0].state, FileState::Present);
+        assert_eq!(rows[index].state, EntryState::NotFound);
+    }
+    environment.claude_directory = Some("relative".into());
+    environment.codex_directory = Some(fixture.0.join("missing").into_os_string());
+    environment.opencode_directory = Some("relative".into());
+    environment.hermes_directory = Some("relative".into());
+    let rows = discover_agents(&environment, &DiscoveryInput::default()).unwrap();
+    for index in [0, 1, 2, 5] {
+        assert_eq!(rows[index].directory_source, DirectorySource::Unavailable);
+        assert_eq!(rows[index].config_directory, None);
+        assert!(
+            rows[index]
+                .files
+                .iter()
+                .all(|f| f.state == FileState::Unavailable)
+        );
+    }
+}
+
+#[test]
+fn agent_discovery_opencode_xdg_and_codex_empty_override_keep_documented_distinctions() {
+    let fixture = Fixture::new();
+    fixture.file("xdg/opencode/opencode.json", "unopened");
+    let mut environment = fixture.environment();
+    environment.xdg_config_directory = Some(fixture.0.join("xdg").into_os_string());
+    environment.codex_directory = Some("".into());
+    let rows = discover_agents(&environment, &DiscoveryInput::default()).unwrap();
+    assert_eq!(
+        rows[1].config_directory,
+        fixture.0.join(".codex").to_str().map(str::to_owned)
+    );
+    assert_eq!(rows[1].directory_source, DirectorySource::Default);
+    assert_eq!(
+        rows[2].config_directory,
+        fixture.0.join("xdg/opencode").to_str().map(str::to_owned)
+    );
+    assert_eq!(rows[2].files[0].state, FileState::Present);
+    environment.xdg_config_directory = Some("relative".into());
+    let rows = discover_agents(&environment, &DiscoveryInput::default()).unwrap();
+    assert_eq!(rows[2].directory_source, DirectorySource::Unavailable);
+}
+
+#[test]
+fn agent_discovery_documented_user_entries_are_detected_without_guessing_codex_prefix() {
+    let fixture = Fixture::new();
+    let filename = |name: &str| {
+        if cfg!(windows) {
+            format!("{name}.cmd")
+        } else {
+            name.to_owned()
+        }
+    };
+    fixture.file(
+        &format!(".local/bin/{}", filename("claude")),
+        "not executed",
+    );
+    fixture.file(
+        &format!(".opencode/bin/{}", filename("opencode")),
+        "not executed",
+    );
+    let hermes_root = if cfg!(windows) {
+        "local-app-data/hermes/bin"
+    } else {
+        ".local/bin"
+    };
+    fixture.file(
+        &format!("{hermes_root}/{}", filename("hermes")),
+        "not executed",
+    );
+    let rows = discover_agents(&fixture.environment(), &DiscoveryInput::default()).unwrap();
+    let known_indices: &[usize] = if cfg!(windows) { &[5] } else { &[0, 2, 5] };
+    for &index in known_indices {
+        assert_eq!(rows[index].state, EntryState::Found);
+        assert_eq!(rows[index].source, EntrySource::UserEntry);
+    }
+    assert_eq!(rows[1].state, EntryState::NotFound);
+    if cfg!(windows) {
+        assert_eq!(rows[0].state, EntryState::NotFound);
+        assert_eq!(rows[2].state, EntryState::NotFound);
+    }
 }

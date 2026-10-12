@@ -1,4 +1,11 @@
 import type { JSX } from "react";
+import { Icon } from "../../components/Icon";
+import claudeCode from "../../../assets/agents/claude-code.png";
+import codexDark from "../../../assets/agents/codex-dark.svg";
+import codexLight from "../../../assets/agents/codex-light.svg";
+import opencodeDark from "../../../assets/agents/opencode-dark.svg";
+import opencodeLight from "../../../assets/agents/opencode-light.svg";
+import hermes from "../../../assets/agents/hermes.svg";
 import grokBuildDark from "../../../assets/agents/grok-build-dark.svg";
 import grokBuildLight from "../../../assets/agents/grok-build-light.svg";
 import piDark from "../../../assets/agents/pi-dark.svg";
@@ -12,6 +19,10 @@ interface IconSource {
 }
 
 const ICONS = new Map<AgentId, IconSource>([
+    ["claudeCode", { light: claudeCode }],
+    ["codex", { light: codexLight, dark: codexDark }],
+    ["openCode", { light: opencodeLight, dark: opencodeDark }],
+    ["hermes", { light: hermes }],
     ["pi", { light: piLight, dark: piDark }],
     ["grokBuild", { light: grokBuildLight, dark: grokBuildDark }],
 ]);
@@ -20,7 +31,7 @@ const ICONS = new Map<AgentId, IconSource>([
 export type AgentIconSize = "default" | "row";
 
 /**
- * Official agent mark in a fixed box (`object-fit: contain`). Decorative
+ * Official mark where available, otherwise a neutral Agent symbol. Decorative
  * (`alt=""`); the agent name beside it identifies the row.
  */
 export function AgentIcon({
@@ -31,7 +42,12 @@ export function AgentIcon({
     size?: AgentIconSize;
 }): JSX.Element | null {
     const source = ICONS.get(id);
-    if (source === undefined) return null;
+    if (source === undefined)
+        return (
+            <span className={styles["icon"]} data-size={size}>
+                <Icon name="agents" />
+            </span>
+        );
     return (
         <span className={styles["icon"]} data-size={size}>
             {source.dark === undefined ? (

@@ -18,10 +18,20 @@ import {
     type DiscoveryResult,
 } from "../../lib/desktop/agents";
 import { AgentList } from "./AgentList";
+import {
+    probeAgentVersion,
+    type AgentVersionResult,
+} from "../../lib/desktop/agentVersions";
+import { agentReport, automaticAgentPaths } from "../../test/agentDiscovery";
 vi.mock(import("../../lib/desktop/agents"), async (original) => ({
     ...(await original()),
     discoverAgents: vi.fn(),
 }));
+vi.mock(import("../../lib/desktop/agentVersions"), async (original) => ({
+    ...(await original()),
+    probeAgentVersion: vi.fn(),
+}));
+const probe = vi.mocked(probeAgentVersion);
 const pi: AgentObservation = {
     id: "pi",
     state: "found",
@@ -53,9 +63,15 @@ const grok: AgentObservation = {
         (name) => ({ name, state: "missing" }),
     ),
 };
-const result: DiscoveryResult = { kind: "desktop", items: [pi, grok] };
+const result: DiscoveryResult = {
+    kind: "desktop",
+    items: agentReport([pi, grok]),
+};
 const read = vi.mocked(discoverAgents);
-beforeEach(() => read.mockReset().mockResolvedValue(result));
+beforeEach(() => {
+    read.mockReset().mockResolvedValue(result);
+    probe.mockReset();
+});
 afterEach(cleanup);
 async function mount(locale: "en" | "zh-CN" = "en") {
     const i18n = await createAppI18n(locale);
@@ -120,6 +136,7 @@ test.each([
             expect(read).toHaveBeenCalledTimes(calls + 1);
         });
         expect(read).toHaveBeenLastCalledWith({
+            ...automaticAgentPaths,
             piPath: "/home/test user/manual-pi",
             grokPath: null,
         });
@@ -130,31 +147,314 @@ test.each([
 test("shows browser preview without fabricated entries or a refresh call", async () => {
     read.mockResolvedValue({ kind: "preview" });
     await mount();
-    expect(
-        await screen.findByText(
-            "Local Agent discovery requires the desktop app.",
-        ),
-    ).toBeDefined();
     const button = screen.getByRole("button", { name: "Discover" });
-    expect(button.getAttribute("aria-disabled")).toBe("true");
+    await waitFor(() => {
+        expect(button.getAttribute("aria-disabled")).toBe("true");
+    });
+    expect(
+        screen.queryByText("Local Agent discovery requires the desktop app."),
+    ).toBeNull();
     const calls = read.mock.calls.length;
     fireEvent.click(button);
     expect(read).toHaveBeenCalledTimes(calls);
     expect(screen.queryByText(/Entry found/u)).toBeNull();
+    expect(screen.getByRole("list", { name: "Agents" }).children).toHaveLength(
+        6,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open Codex details" }));
+    expect(
+        await screen.findByRole("textbox", { name: "Codex entry path" }),
+    ).toHaveProperty("readOnly", true);
+    expect(read).toHaveBeenCalledTimes(calls);
 });
-test("lists only found agents as cards and opens detail on activate", async () => {
+test("keeps absent entries visible and allows manual paths from their detail", async () => {
     await mount();
+    const button = await screen.findByRole("button", {
+        name: "Open Grok Build details",
+    });
+    await waitFor(() => {
+        expect(button.getAttribute("aria-disabled")).toBe("false");
+    });
+    expect(screen.getByRole("list", { name: "Agents" }).children).toHaveLength(
+        6,
+    );
+    fireEvent.click(button);
     expect(
-        await screen.findByRole("button", { name: "Open Pi details" }),
+        await screen.findByRole("textbox", { name: "Grok Build entry path" }),
     ).toBeDefined();
+    expect(screen.getByText("User config (config.toml)")).toBeDefined();
+    expect(document.body.textContent).toContain(
+        "No entry was found in the checked locations",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Back to agents" }));
     expect(
-        screen.queryByRole("button", { name: "Open Grok Build details" }),
-    ).toBeNull();
-    expect(screen.getByText("1.1.0")).toBeDefined();
+        screen.getByRole("button", { name: "Open Grok Build details" }),
+    ).toBe(document.activeElement);
     await openPiDetail();
     expect(screen.getByText("User settings (settings.json)")).toBeDefined();
-    expect(screen.getAllByText("Not found").length).toBeGreaterThan(0);
 });
+
+test.each(["en", "zh-CN"] as const)(
+    "all six manual inputs remain independent across navigation and language in %s",
+    async (locale) => {
+        const { i18n } = await mount(locale);
+        await waitFor(() => {
+            expect(screen.getByRole("status").textContent).not.toContain("…");
+        });
+        const names = [
+            "Claude Code",
+            "Codex",
+            "OpenCode",
+            "Pi",
+            "Grok Build",
+            "Hermes",
+        ];
+        const calls = read.mock.calls.length;
+        for (const name of names) {
+            fireEvent.click(
+                screen.getByRole("button", {
+                    name:
+                        locale === "en"
+                            ? `Open ${name} details`
+                            : `打开 ${name} 详情`,
+                }),
+            );
+            fireEvent.change(
+                screen.getByRole("textbox", {
+                    name:
+                        locale === "en"
+                            ? `${name} entry path`
+                            : `${name} 入口路径`,
+                }),
+                { target: { value: `/home/test/${name}` } },
+            );
+            if (name !== "Hermes")
+                fireEvent.click(
+                    screen.getByRole("button", {
+                        name:
+                            locale === "en"
+                                ? "Back to agents"
+                                : "返回 Agent 列表",
+                    }),
+                );
+        }
+        expect(read).toHaveBeenCalledTimes(calls);
+        fireEvent.click(
+            screen.getByRole("button", {
+                name: locale === "en" ? "Rediscover" : "重新发现",
+            }),
+        );
+        await waitFor(() => {
+            expect(read).toHaveBeenCalledTimes(calls + 1);
+        });
+        expect(read).toHaveBeenLastCalledWith({
+            claudePath: "/home/test/Claude Code",
+            codexPath: "/home/test/Codex",
+            opencodePath: "/home/test/OpenCode",
+            piPath: "/home/test/Pi",
+            grokPath: "/home/test/Grok Build",
+            hermesPath: "/home/test/Hermes",
+        });
+        await act(async () => {
+            await i18n.changeLanguage(locale === "en" ? "zh-CN" : "en");
+        });
+        expect(screen.getByRole("textbox")).toHaveProperty(
+            "value",
+            "/home/test/Hermes",
+        );
+        expect(read).toHaveBeenCalledTimes(calls + 1);
+    },
+);
+
+test("catalog is visible while checking and failed refresh labels previous observations", async () => {
+    const pending = deferred();
+    read.mockReturnValue(pending.promise);
+    await mount();
+    expect(screen.getByRole("list", { name: "Agents" }).children).toHaveLength(
+        6,
+    );
+    expect(
+        screen
+            .getByRole("button", { name: "Open Claude Code details" })
+            .getAttribute("aria-disabled"),
+    ).toBe("true");
+    expect(screen.queryByText("Found")).toBeNull();
+    expect(
+        screen
+            .getByRole("button", { name: "Open Pi details" })
+            .querySelector("[data-state]")
+            ?.getAttribute("data-state"),
+    ).toBe("loading");
+    await act(async () => {
+        pending.resolve(result);
+        await pending.promise;
+    });
+    const live = screen.getByRole("status");
+    read.mockRejectedValueOnce(new Error("private-error"));
+    fireEvent.click(screen.getByRole("button", { name: "Discover" }));
+    await screen.findByRole("alert");
+    expect(screen.getByRole("status")).toBe(live);
+    expect(screen.getByText("Found · previous result")).toBeDefined();
+    const piCard = screen.getByRole("button", { name: "Open Pi details" });
+    expect(
+        piCard.querySelector("[data-state]")?.getAttribute("data-state"),
+    ).toBe("error");
+    expect(document.body.textContent).not.toContain("private-error");
+    fireEvent.click(
+        screen.getByRole("button", { name: "Open Claude Code details" }),
+    );
+    expect(
+        await screen.findByRole("textbox", { name: "Claude Code entry path" }),
+    ).toBeDefined();
+});
+
+test("an initial failed scan does not report absent installations and remains retryable", async () => {
+    read.mockRejectedValue(new Error("private-error"));
+    await mount();
+    await screen.findByRole("alert");
+    expect(screen.getByRole("list", { name: "Agents" }).children).toHaveLength(
+        6,
+    );
+    expect(screen.queryByText("Not found")).toBeNull();
+    read.mockResolvedValue(result);
+    fireEvent.click(screen.getByRole("button", { name: "Discover" }));
+    await screen.findByText("Found");
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(
+        screen
+            .getByRole("button", { name: "Open Pi details" })
+            .querySelector("[data-state]")
+            ?.getAttribute("data-state"),
+    ).toBe("found");
+    expect(
+        screen
+            .getByRole("button", { name: "Open Codex details" })
+            .querySelector("[data-state]")
+            ?.getAttribute("data-state"),
+    ).toBe("notFound");
+});
+
+test("confirmed CLI result is separate, blocks scans/navigation and expires at rediscovery", async () => {
+    read.mockResolvedValue({
+        kind: "desktop",
+        items: agentReport([
+            {
+                ...pi,
+                source: "path",
+                version: null,
+                versionEvidence: "none",
+                capabilityEvidence: "unverified",
+            },
+        ]),
+    });
+    let resolve: (value: AgentVersionResult) => void = () => {
+        throw Error("not initialized");
+    };
+    const promise = new Promise<AgentVersionResult>((res) => {
+        resolve = res;
+    });
+    probe.mockReturnValue(promise);
+    await mount();
+    await openPiDetail();
+    expect(probe).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Read version" }));
+    const run = screen.getByRole("button", { name: "Run version command" });
+    fireEvent.click(run);
+    fireEvent.click(run);
+    const calls = read.mock.calls.length;
+    const back = screen.getByRole("button", { name: "Back to agents" });
+    expect(back.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(back);
+    fireEvent.click(screen.getByRole("button", { name: "Rediscover" }));
+    expect(screen.getByRole("heading", { name: /Pi/u })).toBeDefined();
+    expect(screen.getByRole("textbox")).toHaveProperty("readOnly", true);
+    expect(read).toHaveBeenCalledTimes(calls);
+    expect(probe).toHaveBeenCalledTimes(1);
+    expect(probe).toHaveBeenLastCalledWith({
+        id: "pi",
+        entryPath: pi.entryPath,
+        resolvedPath: pi.resolvedPath,
+        confirmed: true,
+    });
+    await act(async () => {
+        resolve({
+            id: "pi",
+            entryPath: "/home/test/pi",
+            resolvedPath: "/home/test/package/dist/bundle/cli.js",
+            version: "1.1.0",
+            evidence: "cliOutput",
+        });
+        await promise;
+    });
+    expect(screen.getByText("1.1.0")).toBeDefined();
+    fireEvent.click(back);
+    const card = screen.getByRole("button", { name: "Open Pi details" });
+    expect(card.getAttribute("aria-describedby")).toBe("agent-card-status-pi");
+    expect(screen.getByText("1.1.0").getAttribute("title")).toContain(
+        "user-triggered CLI",
+    );
+    read.mockRejectedValueOnce(new Error("synthetic-private-refresh-error"));
+    fireEvent.click(screen.getByRole("button", { name: "Discover" }));
+    await screen.findByRole("alert");
+    expect(screen.queryByText("1.1.0")).toBeNull();
+    expect(card.querySelector("[data-state]")?.getAttribute("data-state")).toBe(
+        "error",
+    );
+});
+
+test("editing a manual path requires discovery before a version launch", async () => {
+    await mount();
+    await openPiDetail();
+    const field = screen.getByRole("textbox");
+    fireEvent.change(field, { target: { value: "/home/test/pi" } });
+    fireEvent.click(screen.getByRole("button", { name: "Read version" }));
+    expect(
+        screen.getByRole("group", { name: "Confirm version command" }),
+    ).toBeDefined();
+    fireEvent.change(field, {
+        target: { value: "/different/unverified-entry" },
+    });
+    fireEvent.click(
+        screen.getByRole("button", { name: "Run version command" }),
+    );
+    expect(probe).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(
+        screen
+            .getByRole("button", { name: "Read version" })
+            .getAttribute("aria-disabled"),
+    ).toBe("true");
+});
+
+test("an unavailable entry is not displayed with a successful status dot", async () => {
+    read.mockResolvedValue({
+        kind: "desktop",
+        items: agentReport([
+            {
+                ...pi,
+                state: "unavailable",
+                resolvedPath: null,
+                version: null,
+                versionEvidence: "none",
+                capabilityEvidence: "unverified",
+            },
+        ]),
+    });
+    await mount();
+    await screen.findByText("Cannot inspect");
+    const card = screen.getByRole("button", { name: "Open Pi details" });
+    expect(card.querySelector("[data-state]")?.getAttribute("data-state")).toBe(
+        "unavailable",
+    );
+    fireEvent.click(card);
+    expect(
+        screen
+            .getByRole("button", { name: "Read version" })
+            .getAttribute("aria-disabled"),
+    ).toBe("true");
+    expect(probe).not.toHaveBeenCalled();
+});
+
 test("sanitizes errors and retries with preserved manual input", async () => {
     await mount();
     await openPiDetail();
@@ -179,7 +479,7 @@ test("sanitizes errors and retries with preserved manual input", async () => {
     fireEvent.change(input, { target: { value: "" } });
     fireEvent.click(screen.getByRole("button", { name: "Rediscover" }));
     expect(await screen.findByText("Found")).toBeDefined();
-    expect(read).toHaveBeenLastCalledWith({ piPath: null, grokPath: null });
+    expect(read).toHaveBeenLastCalledWith(automaticAgentPaths);
 });
 test("blocks duplicate scans synchronously and keeps fields read-only until completion", async () => {
     await mount();
@@ -241,7 +541,7 @@ test("late discovery completion after unmount does not restore UI or scan again"
 test("keyboard Enter submits both paths and locale switching preserves them without scanning", async () => {
     read.mockResolvedValue({
         kind: "desktop",
-        items: [
+        items: agentReport([
             pi,
             {
                 ...grok,
@@ -252,7 +552,7 @@ test("keyboard Enter submits both paths and locale switching preserves them with
                 version: "1.0.50",
                 versionEvidence: "filename",
             },
-        ],
+        ]),
     });
     const { i18n } = await mount();
     fireEvent.click(
@@ -271,7 +571,7 @@ test("keyboard Enter submits both paths and locale switching preserves them with
     );
     await waitFor(() => {
         expect(read).toHaveBeenLastCalledWith({
-            piPath: null,
+            ...automaticAgentPaths,
             grokPath: "/home/test/grok",
         });
     });
@@ -287,7 +587,7 @@ test("keyboard Enter submits both paths and locale switching preserves them with
 test("filename version remains unverified and unavailable config roots do not show missing files", async () => {
     read.mockResolvedValue({
         kind: "desktop",
-        items: [
+        items: agentReport([
             pi,
             {
                 ...grok,
@@ -304,7 +604,7 @@ test("filename version remains unverified and unavailable config roots do not sh
                     state: "unavailable",
                 })),
             },
-        ],
+        ]),
     });
     await mount();
     fireEvent.click(

@@ -17,6 +17,8 @@ import { PageModuleHeader } from "../../components/PageModuleHeader";
 import {
     discoverAgents,
     DiscoveryRequestError,
+    AGENT_IDS,
+    type DiscoveryInput,
     type AgentId,
     type AgentObservation,
     type DiscoveryErrorCode,
@@ -27,6 +29,8 @@ import pageStyles from "../providers/ProviderPage.module.css";
 import { AgentIcon } from "./AgentIcon";
 import { IconButton } from "../../components/IconButton";
 import { AgentPage } from "./AgentPage";
+import { AgentVersionPanel } from "./AgentVersionPanel";
+import type { AgentVersionResult } from "../../lib/desktop/agentVersions";
 import styles from "./AgentList.module.css";
 
 type State =
@@ -42,12 +46,8 @@ function failure(error: unknown): DiscoveryErrorCode {
         : "operation_failed";
 }
 
-function versionLabel(row: AgentObservation, unknownLabel: string): string {
-    return row.version ?? unknownLabel;
-}
-
 /**
- * Read-only discovery: auto-scan on first mount, card list for found entries,
+ * Fixed six-Agent catalog: auto-scan on first mount, including absent entries,
  * and a detail view for paths and config file presence. Hidden navigation keeps
  * the last report and manual paths without rescanning.
  */
@@ -63,8 +63,29 @@ export function AgentList({
     /** Last successful desktop report; kept across refresh errors and loading. */
     const [snapshot, setSnapshot] = useState<AgentObservation[]>([]);
     const [page, setPage] = useState<AgentsPage>({ kind: "list" });
-    const [piPath, setPiPath] = useState("");
-    const [grokPath, setGrokPath] = useState("");
+    const [versions, setVersions] = useState<
+        Partial<Record<AgentId, AgentVersionResult>>
+    >({});
+    const [versionBusy, setVersionBusy] = useState(false);
+    const [confirmationEpoch, setConfirmationEpoch] = useState(0);
+    const [paths, setPaths] = useState<Record<AgentId, string>>({
+        claudeCode: "",
+        codex: "",
+        openCode: "",
+        pi: "",
+        grokBuild: "",
+        hermes: "",
+    });
+    function discoveryInput(): DiscoveryInput {
+        return {
+            claudePath: paths.claudeCode.trim() || null,
+            codexPath: paths.codex.trim() || null,
+            opencodePath: paths.openCode.trim() || null,
+            piPath: paths.pi.trim() || null,
+            grokPath: paths.grokBuild.trim() || null,
+            hermesPath: paths.hermes.trim() || null,
+        };
+    }
     const generation = useRef(0);
     const pending = useRef(false);
     const mounted = useRef(false);
@@ -82,7 +103,14 @@ export function AgentList({
         const current = ++generation.current;
         mounted.current = true;
         pending.current = true;
-        void discoverAgents({ piPath: null, grokPath: null }).then(
+        void discoverAgents({
+            claudePath: null,
+            codexPath: null,
+            opencodePath: null,
+            piPath: null,
+            grokPath: null,
+            hermesPath: null,
+        }).then(
             (result) => {
                 if (mounted.current && current === generation.current) {
                     pending.current = false;
@@ -118,12 +146,13 @@ export function AgentList({
         if (pending.current || state.kind === "preview") return;
         pending.current = true;
         const current = ++generation.current;
+        // CLI results describe a previously checked target. A new discovery
+        // invalidates them even when it later fails or returns the same path.
+        setVersions({});
+        setConfirmationEpoch((previous) => previous + 1);
         setState({ kind: "loading" });
         try {
-            const result = await discoverAgents({
-                piPath: piPath.trim() || null,
-                grokPath: grokPath.trim() || null,
-            });
+            const result = await discoverAgents(discoveryInput());
             if (mounted.current && current === generation.current) {
                 if (result.kind === "desktop") setSnapshot(result.items);
                 setState(result);
@@ -137,7 +166,16 @@ export function AgentList({
         }
     }
 
-    const blocked = state.kind === "loading" || state.kind === "preview";
+    const blocked =
+        state.kind === "loading" || state.kind === "preview" || versionBusy;
+
+    function cliVersion(row: AgentObservation): AgentVersionResult | undefined {
+        const result = versions[row.id];
+        return result?.entryPath === row.entryPath &&
+            result.resolvedPath === row.resolvedPath
+            ? result
+            : undefined;
+    }
 
     function items(): AgentObservation[] {
         return state.kind === "desktop" ? state.items : snapshot;
@@ -147,16 +185,28 @@ export function AgentList({
         return items().find((item) => item.id === id);
     }
 
-    function foundRows(): AgentObservation[] {
-        return items().filter((row) => row.state === "found");
+    function discoveryLabel(row: AgentObservation | undefined): string {
+        if (state.kind === "loading") return t("agents.list.checking");
+        if (state.kind === "preview") return t("agents.list.preview");
+        if (state.kind === "error") {
+            return row === undefined
+                ? t("agents.list.failed")
+                : t("agents.list.previousStatus", {
+                      status: t(`agents.states.${row.state}`),
+                  });
+        }
+        return row === undefined
+            ? t("agents.list.failed")
+            : t(`agents.states.${row.state}`);
     }
 
     function openDetail(id: AgentId): void {
-        if (blocked) return;
+        if (state.kind === "loading" || versionBusy) return;
         setPage({ kind: "detail", id });
     }
 
     function returnToList(from: AgentId): void {
+        if (pending.current) return;
         focusCard.current = from;
         setPage({ kind: "list" });
     }
@@ -175,6 +225,16 @@ export function AgentList({
                 return t("agents.files.items.managed_config.toml");
             case "requirements.toml":
                 return t("agents.files.items.requirements.toml");
+            case "auth.json":
+                return t("agents.files.items.auth.json");
+            case "opencode.json":
+                return t("agents.files.items.opencode.json");
+            case "opencode.jsonc":
+                return t("agents.files.items.opencode.jsonc");
+            case "config.yaml":
+                return t("agents.files.items.config.yaml");
+            case ".env":
+                return t("agents.files.items.env");
             default:
                 return name;
         }
@@ -208,12 +268,13 @@ export function AgentList({
     }
 
     function report(row: AgentObservation): JSX.Element {
+        const reported = cliVersion(row);
         return (
             <>
                 <DetailFact
                     label={t("agents.detail.labels.status")}
                     value={factBadge(
-                        t(`agents.states.${row.state}`),
+                        discoveryLabel(row),
                         t(`agents.sources.${row.source}`),
                     )}
                 />
@@ -233,8 +294,10 @@ export function AgentList({
                 <DetailFact
                     label={t("agents.detail.labels.version")}
                     value={factBadge(
-                        row.version ?? t("agents.unknown"),
-                        t(`agents.evidence.${row.versionEvidence}`),
+                        reported?.version ?? row.version ?? t("agents.unknown"),
+                        reported === undefined
+                            ? t(`agents.evidence.${row.versionEvidence}`)
+                            : t("agents.versionProbe.evidence"),
                     )}
                 />
             </>
@@ -277,26 +340,29 @@ export function AgentList({
         );
     }
 
-    function statusLine(): JSX.Element | null {
-        if (state.kind === "loading") {
-            return (
-                <p className={styles["hint"]} role="status">
-                    {t("agents.loading")}
-                </p>
-            );
-        }
-        if (state.kind === "preview") {
-            return (
-                <p className={styles["hint"]} role="status">
-                    {t("agents.preview")}
-                </p>
-            );
-        }
-        return null;
+    function statusLine(): JSX.Element {
+        const message =
+            state.kind === "loading"
+                ? t("agents.loading")
+                : state.kind === "preview"
+                  ? ""
+                  : state.kind === "error"
+                    ? t("agents.list.failed")
+                    : t("agents.complete");
+        // Keep the live region mounted so completion is announced without
+        // moving focus away from the path or refresh action.
+        return (
+            <p
+                className={styles["hint"]}
+                role="status"
+                hidden={state.kind === "preview"}
+            >
+                {message}
+            </p>
+        );
     }
 
     function listView(): JSX.Element {
-        const rows = foundRows();
         return (
             <>
                 <PageModuleHeader
@@ -310,58 +376,117 @@ export function AgentList({
                         {t(`agents.errors.${state.code}`)}
                     </p>
                 )}
-                {state.kind !== "loading" &&
-                    state.kind !== "preview" &&
-                    rows.length === 0 && (
-                        <p className={styles["notice"]} role="status">
-                            {t("agents.list.empty")}
-                        </p>
-                    )}
-                {rows.length > 0 && (
+                {
                     <ul
                         className={styles["cards"]}
                         aria-label={t("agents.list.label")}
                     >
-                        {rows.map((row) => (
-                            <li key={row.id}>
-                                <button
-                                    type="button"
-                                    className={styles["card"]}
-                                    data-agent-card={row.id}
-                                    aria-disabled={blocked}
-                                    aria-label={t("agents.list.openDetail", {
-                                        name: t(`agents.names.${row.id}`),
-                                    })}
-                                    onClick={() => {
-                                        openDetail(row.id);
-                                    }}
-                                >
-                                    <AgentIcon id={row.id} size="row" />
-                                    <span className={styles["cardText"]}>
-                                        <span className={styles["cardName"]}>
-                                            {t(`agents.names.${row.id}`)}
+                        {AGENT_IDS.map((id) => {
+                            const row = observation(id);
+                            const reported =
+                                row === undefined ? undefined : cliVersion(row);
+                            return (
+                                <li key={id}>
+                                    <button
+                                        type="button"
+                                        className={styles["card"]}
+                                        data-agent-card={id}
+                                        aria-disabled={
+                                            state.kind === "loading" ||
+                                            versionBusy
+                                        }
+                                        aria-describedby={`agent-card-status-${id}`}
+                                        aria-label={t(
+                                            "agents.list.openDetail",
+                                            {
+                                                name: t(`agents.names.${id}`),
+                                            },
+                                        )}
+                                        onClick={() => {
+                                            openDetail(id);
+                                        }}
+                                    >
+                                        <AgentIcon id={id} size="row" />
+                                        <span className={styles["cardText"]}>
+                                            <span
+                                                className={styles["cardName"]}
+                                            >
+                                                {t(`agents.names.${id}`)}
+                                            </span>
+                                            <span
+                                                className={
+                                                    styles["cardStatusRow"]
+                                                }
+                                                id={`agent-card-status-${id}`}
+                                            >
+                                                <span
+                                                    className={
+                                                        styles["cardStatus"]
+                                                    }
+                                                >
+                                                    <span
+                                                        className={
+                                                            styles["statusDot"]
+                                                        }
+                                                        aria-hidden="true"
+                                                        data-state={
+                                                            state.kind ===
+                                                            "desktop"
+                                                                ? (row?.state ??
+                                                                  "unavailable")
+                                                                : state.kind
+                                                        }
+                                                    />
+                                                    <span
+                                                        className={
+                                                            styles["statusText"]
+                                                        }
+                                                    >
+                                                        {discoveryLabel(row)}
+                                                    </span>
+                                                </span>
+                                                <span
+                                                    className={
+                                                        styles["cardVersion"]
+                                                    }
+                                                    title={
+                                                        reported === undefined
+                                                            ? row === undefined
+                                                                ? undefined
+                                                                : t(
+                                                                      `agents.evidence.${row.versionEvidence}`,
+                                                                  )
+                                                            : t(
+                                                                  "agents.versionProbe.evidence",
+                                                              )
+                                                    }
+                                                >
+                                                    {row?.state === "found"
+                                                        ? (reported?.version ??
+                                                          row.version ??
+                                                          t("agents.unknown"))
+                                                        : null}
+                                                </span>
+                                            </span>
                                         </span>
-                                        <span className={styles["cardVersion"]}>
-                                            {versionLabel(
-                                                row,
-                                                t("agents.unknown"),
-                                            )}
-                                        </span>
-                                    </span>
-                                </button>
-                            </li>
-                        ))}
+                                    </button>
+                                </li>
+                            );
+                        })}
                     </ul>
-                )}
+                }
             </>
         );
     }
 
     function detailView(id: AgentId): JSX.Element {
         const row = observation(id);
-        const pathValue = id === "pi" ? piPath : grokPath;
-        const setPath = id === "pi" ? setPiPath : setGrokPath;
+        const pathValue = paths[id];
         const name = t(`agents.names.${id}`);
+        const pathMatches =
+            pathValue.trim() === ""
+                ? row?.source !== "manual"
+                : pathValue.trim() === row?.entryPath;
 
         return (
             <AgentPage
@@ -385,15 +510,13 @@ export function AgentList({
                         {t(`agents.errors.${state.code}`)}
                     </p>
                 )}
-                {row === undefined || row.state !== "found"
-                    ? state.kind !== "error" && (
-                          <p className={styles["error"]} role="alert">
-                              {t("agents.detail.notFound")}
-                          </p>
-                      )
-                    : null}
+                {row?.state === "notFound" && state.kind === "desktop" ? (
+                    <p className={styles["notice"]}>
+                        {t("agents.detail.notFound")}
+                    </p>
+                ) : null}
                 <section className={styles["detailGroup"]} data-layout="page">
-                    {row !== undefined && row.state === "found" && (
+                    {row !== undefined && (
                         <>
                             <DetailPanel
                                 label={t("agents.detail.reportLabel", {
@@ -439,7 +562,10 @@ export function AgentList({
                                 autoComplete="off"
                                 placeholder={t("agents.pathPlaceholder")}
                                 onChange={(event) => {
-                                    setPath(event.currentTarget.value);
+                                    setPaths({
+                                        ...paths,
+                                        [id]: event.currentTarget.value,
+                                    });
                                 }}
                             />
                             <IconButton
@@ -450,7 +576,34 @@ export function AgentList({
                             />
                         </div>
                     </form>
+                    <AgentVersionPanel
+                        key={JSON.stringify([
+                            confirmationEpoch,
+                            id,
+                            row?.entryPath,
+                            row?.resolvedPath,
+                        ])}
+                        row={row}
+                        enabled={
+                            !blocked && state.kind === "desktop" && pathMatches
+                        }
+                        hidden={hidden}
+                        onBusyChange={(busy) => {
+                            pending.current = busy;
+                            if (mounted.current) setVersionBusy(busy);
+                        }}
+                        onResult={(result) => {
+                            if (mounted.current && !hidden)
+                                setVersions((previous) => ({
+                                    ...previous,
+                                    [result.id]: result,
+                                }));
+                        }}
+                    />
                 </section>
+                <p className={styles["notice"]}>{t("agents.readOnly")}</p>
+                <p className={styles["hint"]}>{t(`agents.precedence.${id}`)}</p>
+                <p className={styles["hint"]}>{t("agents.scope")}</p>
             </AgentPage>
         );
     }

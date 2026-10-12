@@ -1,6 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { beforeEach, expect, test, vi } from "vitest";
 import { discoverAgents, type AgentObservation } from "./agents";
+import { agentReport, automaticAgentPaths } from "../../test/agentDiscovery";
 vi.mock(import("@tauri-apps/api/core"));
 const pi: AgentObservation = {
     id: "pi",
@@ -33,20 +34,22 @@ const grok: AgentObservation = {
         (name) => ({ name, state: "missing" }),
     ),
 };
-const input = { piPath: "/home/test/pi", grokPath: null };
+const input = { ...automaticAgentPaths, piPath: "/home/test/pi" };
 beforeEach(() => {
     vi.mocked(isTauri).mockReturnValue(true);
-    vi.mocked(invoke).mockReset().mockResolvedValue([pi, grok]);
+    vi.mocked(invoke)
+        .mockReset()
+        .mockResolvedValue(agentReport([pi, grok]));
 });
 test("browser preview never scans or invents installations", async () => {
     vi.mocked(isTauri).mockReturnValue(false);
     expect(await discoverAgents(input)).toEqual({ kind: "preview" });
     expect(invoke).not.toHaveBeenCalled();
 });
-test("sends only selected paths and validates both adapter observations", async () => {
+test("sends only selected paths and validates six adapter observations", async () => {
     expect(await discoverAgents(input)).toEqual({
         kind: "desktop",
-        items: [pi, grok],
+        items: agentReport([pi, grok]),
     });
     expect(invoke).toHaveBeenCalledExactlyOnceWith("discover_agents", {
         input,
@@ -117,7 +120,21 @@ test.each([
 ])(
     "rejects malformed or contradictory response %#",
     async (response: unknown) => {
-        vi.mocked(invoke).mockResolvedValue(response);
+        // Expand legacy two-entry cases so malformed fields are tested after
+        // the six-entry length check, rather than all failing at that check.
+        const report = agentReport();
+        const expanded =
+            Array.isArray(response) && response.length === 2
+                ? [
+                      report[0],
+                      report[1],
+                      report[2],
+                      response[0],
+                      response[1],
+                      report[5],
+                  ]
+                : response;
+        vi.mocked(invoke).mockResolvedValue(expanded);
         await expect(discoverAgents(input)).rejects.toMatchObject({
             code: "invalid_response",
         });
@@ -129,13 +146,12 @@ test("preserves spaces, Unicode, Windows drive and UNC paths as display data", a
         "C:\\Users\\test user\\pi.cmd",
         "\\\\server\\share\\pi.cmd",
     ]) {
-        vi.mocked(invoke).mockResolvedValue([
-            { ...pi, entryPath, resolvedPath: entryPath },
-            grok,
-        ]);
+        vi.mocked(invoke).mockResolvedValue(
+            agentReport([{ ...pi, entryPath, resolvedPath: entryPath }, grok]),
+        );
         const result = await discoverAgents(input);
         expect(
-            result.kind === "desktop" ? result.items[0]?.entryPath : null,
+            result.kind === "desktop" ? result.items[3]?.entryPath : null,
         ).toBe(entryPath);
     }
 });
@@ -152,9 +168,56 @@ test("accepts unavailable directory and unverified filename evidence without dec
         directorySource: "unavailable",
         files: grok.files.map((f) => ({ ...f, state: "unavailable" })),
     };
-    vi.mocked(invoke).mockResolvedValue([pi, row]);
+    vi.mocked(invoke).mockResolvedValue(agentReport([pi, row]));
     expect(await discoverAgents(input)).toEqual({
         kind: "desktop",
-        items: [pi, row],
+        items: agentReport([pi, row]),
     });
+});
+
+test.each(["claudeCode", "codex", "openCode", "hermes"] as const)(
+    "validates %s evidence and files rather than reusing Grok schema",
+    async (id) => {
+        const report = agentReport();
+        const row = report.find((entry) => entry.id === id);
+        if (row === undefined) throw Error("missing test entry");
+        for (const patch of [
+            { files: pi.files },
+            {
+                state: "found",
+                source: "path",
+                entryPath: "/tmp/entry",
+                resolvedPath: "/tmp/entry",
+                version: "1.1.0",
+                versionEvidence: "packageMetadata",
+                capabilityEvidence: "documented",
+            },
+            { secret: "synthetic-do-not-display" },
+            { configDirectory: "relative/config" },
+        ]) {
+            vi.mocked(invoke).mockResolvedValue(
+                report.map((entry) =>
+                    entry.id === id ? { ...row, ...patch } : entry,
+                ),
+            );
+            await expect(discoverAgents(input)).rejects.toMatchObject({
+                code: "invalid_response",
+            });
+        }
+    },
+);
+
+test("rejects complete reports with duplicate, reordered or extra identities", async () => {
+    const report = agentReport();
+    for (const invalidReport of [
+        report.map((entry) => (entry.id === "codex" ? report[0] : entry)),
+        [...report].reverse(),
+        [...report, report[0]],
+        report.filter((entry) => entry.id !== "hermes"),
+    ]) {
+        vi.mocked(invoke).mockResolvedValue(invalidReport);
+        await expect(discoverAgents(input)).rejects.toMatchObject({
+            code: "invalid_response",
+        });
+    }
 });

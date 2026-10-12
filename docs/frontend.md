@@ -981,47 +981,62 @@ checks or the bundle-size advisory do not establish layout/accessibility accepta
 ## Read-only Agent discovery
 
 `AgentList` mounts on the first Agents visit, then remains mounted while hidden.
-It calls the typed `discoverAgents` boundary once on mount and on explicit
-**Discover** / 「发现」 (list header primary with leading refresh icon) or
-detail-view rediscovery. Found entries appear as cards (official mark, name,
-version); opening a card shows paths, config file presence, and optional manual
-entry path override. The detail view has three cards: discovery/status/version,
-configuration path/file observations, and manual entry path. Cards have 8 px
-vertical / 16 px horizontal padding and 10 px gaps.
-Read-only rows use the shared detail form (44 px minimum height and 8 px
-vertical padding, matching model rows). The editable path row uses the shared
-edit input on the 64 px form baseline, inside a detail-card surface. Status and
-version use model-row badges. Portaled hover/keyboard hints keep discovery and
-version provenance available, including unverified filename-derived versions.
-The configuration and manual-path cards have accessible section/form names
-without visible headings. Pi and Grok Build paths stay
-in the current window; navigation and locale changes preserve them without
-another filesystem scan. Fields become read-only during a scan, actions use
-`aria-disabled`, and an immediate pending guard rejects repeat submission.
-Generation and mount checks discard stale replies during StrictMode cleanup and
-after unmount.
+The fixed catalog lists Claude Code, Codex, OpenCode, Pi, Grok Build and Hermes
+in that order, including absent entries, loading, errors and browser preview.
+Discovery is automatic on first visit and explicit through **Discover** / 「发现」
+or detail rediscovery; it never launches an Agent.
 
-Agent marks live in `assets/agents/` (`pi-light.svg` / `pi-dark.svg` from
-https://pi.dev/favicon.svg; `grok-build-light.svg` / `grok-build-dark.svg` as
-the Grok symbol from the Feb 2025 wordmark on https://grok.com, paths taken from
-https://commons.wikimedia.org/wiki/File:Grok-feb-2025-logo.svg)
-and render through `AgentIcon`, matching the provider logo rules. The UI reuses
-`PageModuleHeader`, provider button classes, and theme tokens. Both locales
-distinguish a regular entry file, absent/unavailable paths, package-metadata
-claims and unverified filename hints. Documented capabilities are separate from
-installation authenticity and deployment support. Configuration paths report
-presence only; priority text is a documented rule, not a computed effective
-configuration. Browser preview displays a desktop-required notice and never
-invents local installation results. Rust owns all filesystem observations, and
-`src/lib/desktop/agents.ts` checks exact response fields and evidence consistency.
+Cards align status and version to opposite ends of one row. An 8px decorative
+dot supplements accessible status text: current found entries use the success
+token, absent entries the muted summary token, failed checks and unavailable
+entries the danger token. Failed refreshes cannot retain a green success dot.
 
-The next approved change is a fixed six-Agent catalog with detection for Claude
-Code, Codex, OpenCode, Pi, Grok Build and Hermes. Not-found entries will remain
-visible and allow manual paths; this is not implemented yet and does not expand
-configuration deployment support. See [agent-catalog.md](plans/agent-catalog.md).
+Each card opens entry/status/version, configuration-presence and window-local
+manual-path details. Six independent paths survive navigation/language changes.
+Fields become read-only during a scan; `aria-disabled`, immediate pending guards,
+generations and mount checks prevent duplicate work and stale replies. Failed
+refreshes label retained observations as previous results; initial failures and
+browser preview do not pretend entries are absent. Returning restores card focus.
 
-See [agent-discovery.md](plans/agent-discovery.md) for current limits and sources. Isolated
-Linux Tauri IPC and the actual Agent page have been exercised with synthetic
-entries and unopened malformed config fixtures, without process execution or
-content changes. This does not prove genuine Pi/Grok installations, macOS or
-Windows behavior. Visual acceptance remains with the maintainer.
+The UI reuses shared detail/edit forms, header, actions, tooltips and theme tokens.
+Version provenance and documented capabilities remain separate from authenticity,
+connection and deployment support. Rust owns bounded filesystem observations;
+`src/lib/desktop/agents.ts` validates all six identities, file lists and evidence.
+Configuration presence and precedence are not effective runtime settings.
+
+All six entries have locally bundled identification marks; official sources and
+usage boundaries are in [assets/agents/README.md](../assets/agents/README.md).
+Codex uses OpenAI's official Blossom, not a separately verified Codex-specific
+logo. Claude's official favicon is identical in both appearances; Hermes keeps
+its original white tile. OpenCode, Codex, Pi and Grok switch original light/dark
+files. No marks are recolored or fetched from third-party servers at runtime;
+trademark ownership is not covered by vibemate's MIT license.
+
+Full frontend checks and browser checks cover the six-card display, loaded
+light/dark assets and keyboard-opened detail at 900px width. Temporary simulated
+IPC samples also cover Chinese/light and English/dark status colors, previous
+results after failure, long paths without horizontal overflow and confirmation
+cancellation/focus. The simulation was removed; it establishes neither native
+IPC nor real-installation acceptance. These are scoped checks, not full
+accessibility or maintainer acceptance. Current filesystem
+rules, sources and native verification boundaries are in
+[agent-discovery.md](plans/agent-discovery.md); real installations, native
+cross-platform behavior and maintainer visual acceptance remain separate.
+
+### Confirmed CLI version probing
+
+`AgentVersionPanel` provides optional **Read version** / 「读取版本」. Showing the
+fixed command and risk does not execute it; a separate confirmation calls
+`src/lib/desktop/agentVersions.ts`, which validates the response and discards raw
+errors. Only a current found entry with an unchanged path is eligible; browser
+preview, unavailable entries and edited paths are blocked. The panel ignores
+hidden/unmounted replies and prevents duplicate requests. Execution blocks page
+rediscovery and Back; after launch there is no UI cancellation API, and Rust
+independently bounds the direct child.
+
+CLI results have separate `cliOutput` provenance, remain window-local and clear
+on rediscovery. They do not upgrade configuration capabilities. The selected
+program may still read credentials, access the network, write files or launch
+other processes; the protection is not a sandbox. Native execution limits,
+official command sources and the verification scope are in
+[agent-version-probe.md](plans/agent-version-probe.md).

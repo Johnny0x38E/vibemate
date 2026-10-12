@@ -41,6 +41,7 @@ import {
 } from "./lib/desktop/providerSecrets";
 import { listMcpDefinitions } from "./lib/desktop/mcp";
 import { discoverAgents } from "./lib/desktop/agents";
+import { agentReport } from "./test/agentDiscovery";
 import en from "./locales/en.json";
 
 vi.mock(import("./lib/desktop/agents"), async (original) => ({
@@ -985,7 +986,7 @@ test("MCP mounts on first visit and sidebar activation returns to its list", asy
 test("Agent discovery starts on first visit and preserves paths across navigation", async () => {
     vi.mocked(discoverAgents).mockResolvedValue({
         kind: "desktop",
-        items: [
+        items: agentReport([
             {
                 id: "pi",
                 state: "found",
@@ -1020,7 +1021,7 @@ test("Agent discovery starts on first visit and preserves paths across navigatio
                     { name: "requirements.toml", state: "missing" },
                 ],
             },
-        ],
+        ]),
     });
     render(<App />);
     expect(discoverAgents).not.toHaveBeenCalled();

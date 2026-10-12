@@ -4,7 +4,7 @@
 
 ## 当前顺序与范围
 
-1. 更新文档并提交 push，再实施六 Agent 固定目录与只读发现（P17.i–P17.n）。
+1. 六 Agent 固定目录与只读发现代码已交付；真实安装、原生运行与外观仍按待验项验收。
 2. 接着做 P18 最小 Pi 配置预览；P16 只按预览需要补模型信息，不是完整前置。
 3. 请求参数与必要能力覆盖属于目标 Agent 配置，不放在服务商模型页。
 4. 六种发现不等于六种配置注入；第一阶段配置适配仍为 Pi、Grok Build。
@@ -21,19 +21,21 @@
 
 ## 已完成摘要
 
-| 任务          | 已交付内容                                            | 现行说明                                                                             |
-| ------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| P00           | pnpm 与锁文件迁移                                     | 根目录 `AGENTS.md`                                                                   |
-| P01–P03 / C03 | Provider 与 Pi/Grok 官方接入证据                      | [integrations](../integrations/compatibility.md)，实施前重新核实版本                 |
-| P04–P06 / C06 | UI 行为测试、私有 SQLite、OS 凭据接口                 | [frontend](../frontend.md)、[architecture](../architecture.md)                       |
-| P07–P09 / C09 | 中英文资源、偏好、启动与界面接线                      | [frontend](../frontend.md)                                                           |
-| I02–I15       | 桌面壳、基础外观、共享表单与 Base UI 下拉             | [desktop-shell-design](desktop-shell-design.md)、[base-ui-select](base-ui-select.md) |
-| P10–P12 / C12 | 服务商与密钥统一保存，模型获取/选择/搜索和手动模型    | 维护者已验收；[models-tab-ux](models-tab-ux.md)                                      |
-| P13 / P14     | 模型发现任务已并入 P12                                | 最小推理检查仍在 P24/P38，不因合并而标为通过                                         |
-| P15 / C15     | 按模型协议路由与三家多协议模板                        | 维护者确认真实 Command Code 凭据连接与界面验收                                       |
-| BR0–BR5       | 测试、命令、Provider/MCP、Models/Fetch 与共享校验拆分 | [backend-modularity](backend-modularity.md)                                          |
-| P17.a–P17.h   | Pi/Grok 只读发现、窗口内手动路径、IPC 和双语详情      | [agent-discovery](agent-discovery.md)；新增六种目录改造未实施                        |
-| P31           | 中央 MCP 定义、凭据引用、编辑与启停                   | [mcp-central](mcp-central.md)；未执行或部署服务器                                    |
+| 任务          | 已交付内容                                              | 现行说明                                                                             |
+| ------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| P00           | pnpm 与锁文件迁移                                       | 根目录 `AGENTS.md`                                                                   |
+| P01–P03 / C03 | Provider 与 Pi/Grok 官方接入证据                        | [integrations](../integrations/compatibility.md)，实施前重新核实版本                 |
+| P04–P06 / C06 | UI 行为测试、私有 SQLite、OS 凭据接口                   | [frontend](../frontend.md)、[architecture](../architecture.md)                       |
+| P07–P09 / C09 | 中英文资源、偏好、启动与界面接线                        | [frontend](../frontend.md)                                                           |
+| I02–I15       | 桌面壳、基础外观、共享表单与 Base UI 下拉               | [desktop-shell-design](desktop-shell-design.md)、[base-ui-select](base-ui-select.md) |
+| P10–P12 / C12 | 服务商与密钥统一保存，模型获取/选择/搜索和手动模型      | 维护者已验收；[models-tab-ux](models-tab-ux.md)                                      |
+| P13 / P14     | 模型发现任务已并入 P12                                  | 最小推理检查仍在 P24/P38，不因合并而标为通过                                         |
+| P15 / C15     | 按模型协议路由与三家多协议模板                          | 维护者确认真实 Command Code 凭据连接与界面验收                                       |
+| BR0–BR5       | 测试、命令、Provider/MCP、Models/Fetch 与共享校验拆分   | [backend-modularity](backend-modularity.md)                                          |
+| P17.a–P17.n   | 六 Agent 固定目录、只读发现、独立手动路径与严格 IPC     | [agent-discovery](agent-discovery.md)；真实安装与人工/平台验收仍待执行               |
+| P17.o–P17.s   | 用户二次确认的受限 CLI 版本读取、双语交互与完整代码检查 | [agent-version-probe](agent-version-probe.md)；真实 CLI/平台验收仍待执行             |
+| P17.t         | 四家官方标志与状态/版本同行布局                         | [assets README](../../assets/agents/README.md)；品牌发布条款仍待核对                 |
+| P31           | 中央 MCP 定义、凭据引用、编辑与启停                     | [mcp-central](mcp-central.md)；未执行或部署服务器                                    |
 
 P15 的真实连接记录来自维护者确认，不代表代理重新执行，也不补写未提供的模型、协议或套餐细节。
 
@@ -41,7 +43,8 @@ P15 的真实连接记录来自维护者确认，不代表代理重新执行，�
 
 - [ ] C06：维护者审阅基础存储/凭据阶段（可选记录意见）。
 - [ ] I16：人工确认 macOS/Windows 系统风主题浅/深色；原生选择后重启和 Windows/Linux 显示仍待验。
-- [ ] P17：真实 Pi/Grok 安装只读核对、macOS/Windows 与外观验收；既有隔离 Linux 样本不替代真实安装。
+- [ ] P17：六家真实 CLI 安装只读核对、经具体目标授权的版本读取及其输出/副作用、macOS/Windows/Linux 原生运行与人工外观（双语、长路径、最小窗口、键盘）验收；隔离样本、浏览器模拟 IPC 和本机构建不替代这些结果。
+- [ ] P17.t：发布前核对 Anthropic/OpenAI 识别用途与品牌条款；官方资产来源不等于取得额外许可，标志不属于项目 MIT 授权。
 - [ ] P31：MCP 多值真实系统凭据库存取/替换/清理，以及 macOS/Windows 原生和人工外观验收。
 - [ ] 平台专项：现有各功能的 Windows/Linux 原生行为、真实 OS 凭据与专门读屏验证；按 P36–P38 记录，不因清理已完成任务而勾选。
 
@@ -111,68 +114,23 @@ BR0–BR5 已完成；现行边界见 [backend-modularity.md](backend-modularity
 
 ## Agent 发现改造与 Pi 配置
 
-### Task P17: 固定 Agent 目录与六种只读发现
+### Task P17: 六种只读发现已交付，验收边界保持独立
 
-既有 Pi/Grok 发现代码已完成，真实安装和其他平台验收见上方待验项。
-维护者要求本次新增 Claude Code、Codex、OpenCode、Hermes 的检测，并固定展示六种。
-设计见 [agent-catalog.md](agent-catalog.md)；不安装、不启动、不读取配置或密钥内容、不注入配置。
+固定展示 Claude Code、Codex、OpenCode、Pi、Grok Build、Hermes；全部支持有界自动发现与独立窗口内手动入口。严格 IPC 验证六条身份/顺序/文件/证据，失败不伪装未发现，旧结果明确标注。六家已接入有出处的官方品牌标志；Codex 使用 OpenAI 官方 Blossom，自动发现无法安全关联的版本保持未知。
 
-### P17.i：文档先行
+完整前端、Rust fmt/Clippy/测试与锁定 macOS no-bundle 构建通过；真实安装、人工与其他平台验收仍见上方待验项，不因代码完成而勾选。
 
-- [ ] 更新六 Agent 范围、状态和分批计划，清理过时/已完成过程记录，先提交并 push，再实施。
+检测规则见 [agent-discovery.md](agent-discovery.md)，范围见 [agent-catalog.md](agent-catalog.md)。自动发现不安装、不启动、不读取配置/密钥内容、不注入配置；配置部署仍限未来 Pi/Grok 适配任务。
 
-**Files:** 计划与状态文档，按本次已确认调整提交，不混业务代码。
-**Verification:** 格式、diff、未完成项保留核对；push 成功。
-**Dependencies:** 维护者已授权。
+### P17.o–P17.s：用户主动读取版本
 
-### P17.j：六种 Rust 发现
+P17.o–P17.s 实现与代码核验完成：固定 `--version`、路径重验、应用级单探测锁、环境/stdin/输出限制、5 秒直接子进程边界、严格 IPC、双语二次确认及生命周期保护。自动发现仍不执行程序；CLI 证据不升级能力、不持久化，重新发现时清除。主动执行不是沙箱，不承诺无副作用。
 
-- [ ] 核实六家官方 CLI 入口、已知回退位置、配置路径/环境覆盖、平台差异和版本证据。
-- [ ] 扩展固定身份与手动输入，按 Adapter 规则返回六条结果；保留 PATH 有界检查与遮蔽顺序。
-- [ ] 测试全部六家自动/手动发现、未发现/坏入口/无效覆盖、元数据边界与无执行/无配置读取。
+完整前端、Rust fmt/Clippy/测试与锁定 macOS no-bundle 构建通过；合成入口和浏览器模拟检查不替代上方真实/原生/人工验收。现行契约与核验范围见 [agent-version-probe.md](agent-version-probe.md)，不保留逐批过程。
 
-**Files:** `agents.rs`、`agents/discovery.rs`、`agents/tests.rs`、`commands/agents.rs`、本清单。
-**Verification:** Rust fmt、all-targets Clippy、完整测试。
-**Dependencies:** P17.i；路径细节必须有官方证据，未知版本不伪造。
+### P17.t：新增四家官方品牌标志
 
-### P17.k：严格 IPC 与六家输入接线
-
-- [ ] 严格验证六条身份/顺序/路径/证据/配置观测，拒绝缺失、重复、矛盾和额外字段。
-- [ ] 按 Agent 隔离窗口内手动路径；新增身份不得沿用 Grok 输入或配置标签。
-- [ ] 更新边界与输入测试，浏览器不调用扫描；本批可暂保留旧结果列表布局。
-
-**Files:** `src/lib/desktop/agents.ts`、其测试、`AgentList.tsx`、其测试、本清单。
-**Verification:** 完整 `check:frontend`。
-**Dependencies:** P17.j。
-
-### P17.l：固定目录与双语状态
-
-- [ ] 始终按 Claude Code、Codex、OpenCode、Pi、Grok Build、Hermes 顺序显示，未发现条目可进入详情并手动指定。
-- [ ] loading/error/preview 不伪装成未发现；刷新失败明确旧结果，发现不等于已连接或可配置。
-- [ ] 中英文状态、入口/文件标签与说明同步，保留键盘焦点和异步反馈；不开放安装/注入占位操作。
-
-**Files:** `AgentList.tsx`、其 CSS、两份 locale、本清单。
-**Verification:** 格式、翻译、严格类型/Lint；行为测试随 P17.m 补齐后一起完成验收。
-**Dependencies:** P17.k。
-
-### P17.m：目录行为与品牌资产回归
-
-- [ ] 测试首屏/未发现/浏览器/失败六项可见、六家手动输入隔离、旧结果、重复刷新、卸载与返回焦点。
-- [ ] 更新 App 测试数据与导航回归；新增品牌资产单独核实官方来源/许可，无法核实时不造品牌图标。
-
-**Files:** `AgentList.test.tsx`、`src/App.test.tsx`、本清单；资产与图标若需修改先另拆最多五文件批次。
-**Verification:** 完整 `check:frontend`，不存在静态标签专用重复测试。
-**Dependencies:** P17.l。
-
-### P17.n：最终验证与现行文档
-
-- [ ] 完整前端、Rust fmt/Clippy/测试和锁定本机桌面构建通过；检查无权限/执行范围扩大。
-- [ ] 记录实际版本/平台、六家真实安装结果与待验项；人工核对双语、长路径、最小窗口和键盘。
-- [ ] 更新现行说明与英文 Unreleased，删除完成批次的过程记录，不将只读发现描述为安装或配置支持。
-
-**Files:** `agent-discovery.md`、`frontend.md`、`phase-1.md`、`CHANGELOG.md`、本清单。
-**Verification:** `AGENTS.md` 规定检查；缺少真实安装/平台时明确保持待验。
-**Dependencies:** P17.j–P17.m；所有代码批次完成才称为六种检测已实现。
+已补齐四家官方资产并通过完整前端检查、浅/深色浏览器加载与键盘详情检查；来源/条款见 [assets README](../../assets/agents/README.md)。Codex 使用 OpenAI 官方 Blossom，不宣称为独立 Codex 标志；Pi/Grok 资产未改变。Anthropic/OpenAI 标志不属于项目 MIT 授权，发布前仍需核对识别用途/品牌条款，不声称取得额外许可。
 
 ### Task P18: 预览 Pi 模型配置
 

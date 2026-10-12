@@ -3,7 +3,6 @@ import type { ModuleNavigationHandle } from "./components/moduleNavigation";
 import { useTranslation } from "react-i18next";
 import { BrandLogo } from "./components/BrandLogo";
 import { Icon } from "./components/Icon";
-import { PageModuleHeader } from "./components/PageModuleHeader";
 import { NotificationProvider } from "./components/Notifications";
 import { TitlebarChrome } from "./components/TitlebarChrome";
 import { WindowDragRegion } from "./components/WindowDragRegion";
@@ -12,6 +11,7 @@ import { AgentList } from "./features/agents/AgentList";
 import { McpView } from "./features/mcp/McpView";
 import { ProvidersView } from "./features/providers/ProvidersView";
 import { SettingsView } from "./features/settings/SettingsView";
+import { SkillLibrary } from "./features/skills/SkillLibrary";
 import styles from "./App.module.css";
 import "./App.css";
 
@@ -36,16 +36,18 @@ export default function App({ languageSettings }: AppProps): JSX.Element {
     const [providersVisited, setProvidersVisited] = useState(false);
     const [mcpVisited, setMcpVisited] = useState(false);
     const [agentsVisited, setAgentsVisited] = useState(false);
+    const [skillsVisited, setSkillsVisited] = useState(false);
     const sidebarId = useId();
     const providersNavigation = useRef<ModuleNavigationHandle>(null);
     const mcpNavigation = useRef<ModuleNavigationHandle>(null);
     const agentsNavigation = useRef<ModuleNavigationHandle>(null);
     const settingsNavigation = useRef<ModuleNavigationHandle>(null);
+    const skillsNavigation = useRef<ModuleNavigationHandle>(null);
 
     function navigate(destination: Page): void {
         const target = {
             home: null,
-            skills: null,
+            skills: skillsNavigation.current,
             providers: providersNavigation.current,
             mcp: mcpNavigation.current,
             agents: agentsNavigation.current,
@@ -58,6 +60,7 @@ export default function App({ languageSettings }: AppProps): JSX.Element {
         if (destination === "providers") setProvidersVisited(true);
         if (destination === "mcp") setMcpVisited(true);
         if (destination === "agents") setAgentsVisited(true);
+        if (destination === "skills") setSkillsVisited(true);
     }
 
     const pageLabel =
@@ -159,28 +162,18 @@ export default function App({ languageSettings }: AppProps): JSX.Element {
                 />
                 <main className={styles["content"]} aria-label={pageLabel}>
                     {page === "home" && <RelationshipOverview />}
-                    {page !== "home" &&
-                        page !== "settings" &&
-                        page !== "providers" &&
-                        page !== "mcp" &&
-                        page !== "agents" && (
-                            <section>
-                                <PageModuleHeader
-                                    icon={page}
-                                    title={pageLabel}
-                                />
-                                <div className={styles["planned"]}>
-                                    <h2>{t("desktop.plannedTitle")}</h2>
-                                    <p>{t("desktop.plannedDetail")}</p>
-                                </div>
-                            </section>
-                        )}
                     {/* Hide instead of remounting to preserve pending work and caches.
                     Sidebar re-entry asks the destination to return home safely. */}
                     {agentsVisited && (
                         <AgentList
                             hidden={page !== "agents"}
                             homeRef={agentsNavigation}
+                        />
+                    )}
+                    {skillsVisited && (
+                        <SkillLibrary
+                            hidden={page !== "skills"}
+                            homeRef={skillsNavigation}
                         />
                     )}
                     {mcpVisited && (

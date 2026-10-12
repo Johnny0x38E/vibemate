@@ -197,6 +197,10 @@ fn mcp_partial_credential_failure_compensates_without_a_definition() {
             .items
             .is_empty()
     );
+    assert_eq!(
+        list_definitions(&fixture.storage, None, 10).unwrap().total,
+        0
+    );
 }
 #[test]
 fn mcp_failed_db_write_restores_old_metadata_and_keeps_old_secret() {
@@ -403,8 +407,12 @@ fn mcp_pages_are_bounded_stable_and_cursors_are_validated() {
         save_definition(&fixture.storage, &store, input, index).unwrap();
     }
     let first = list_definitions(&fixture.storage, None, 2).unwrap();
+    // Each page reports the library total, not the rows it returned.
+    assert_eq!(first.total, 5);
     let second = list_definitions(&fixture.storage, first.next_cursor.as_deref(), 2).unwrap();
+    assert_eq!(second.total, 5);
     let third = list_definitions(&fixture.storage, second.next_cursor.as_deref(), 2).unwrap();
+    assert_eq!(third.total, 5);
     let ids: Vec<_> = first
         .items
         .iter()

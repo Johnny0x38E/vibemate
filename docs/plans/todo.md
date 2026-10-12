@@ -21,21 +21,22 @@
 
 ## 已完成摘要
 
-| 任务          | 已交付内容                                              | 现行说明                                                                             |
-| ------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| P00           | pnpm 与锁文件迁移                                       | 根目录 `AGENTS.md`                                                                   |
-| P01–P03 / C03 | Provider 与 Pi/Grok 官方接入证据                        | [integrations](../integrations/compatibility.md)，实施前重新核实版本                 |
-| P04–P06 / C06 | UI 行为测试、私有 SQLite、OS 凭据接口                   | [frontend](../frontend.md)、[architecture](../architecture.md)                       |
-| P07–P09 / C09 | 中英文资源、偏好、启动与界面接线                        | [frontend](../frontend.md)                                                           |
-| I02–I15       | 桌面壳、基础外观、共享表单与 Base UI 下拉               | [desktop-shell-design](desktop-shell-design.md)、[base-ui-select](base-ui-select.md) |
-| P10–P12 / C12 | 服务商与密钥统一保存，模型获取/选择/搜索和手动模型      | 维护者已验收；[models-tab-ux](models-tab-ux.md)                                      |
-| P13 / P14     | 模型发现任务已并入 P12                                  | 最小推理检查仍在 P24/P38，不因合并而标为通过                                         |
-| P15 / C15     | 按模型协议路由与三家多协议模板                          | 维护者确认真实 Command Code 凭据连接与界面验收                                       |
-| BR0–BR5       | 测试、命令、Provider/MCP、Models/Fetch 与共享校验拆分   | [backend-modularity](backend-modularity.md)                                          |
-| P17.a–P17.n   | 六 Agent 固定目录、只读发现、独立手动路径与严格 IPC     | [agent-discovery](agent-discovery.md)；真实安装与人工/平台验收仍待执行               |
-| P17.o–P17.s   | 用户二次确认的受限 CLI 版本读取、双语交互与完整代码检查 | [agent-version-probe](agent-version-probe.md)；真实 CLI/平台验收仍待执行             |
-| P17.t         | 四家官方标志与状态/版本同行布局                         | [assets README](../../assets/agents/README.md)；品牌发布条款仍待核对                 |
-| P31           | 中央 MCP 定义、凭据引用、编辑与启停                     | [mcp-central](mcp-central.md)；未执行或部署服务器                                    |
+| 任务          | 已交付内容                                                              | 现行说明                                                                             |
+| ------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| P00           | pnpm 与锁文件迁移                                                       | 根目录 `AGENTS.md`                                                                   |
+| P01–P03 / C03 | Provider 与 Pi/Grok 官方接入证据                                        | [integrations](../integrations/compatibility.md)，实施前重新核实版本                 |
+| P04–P06 / C06 | UI 行为测试、私有 SQLite、OS 凭据接口                                   | [frontend](../frontend.md)、[architecture](../architecture.md)                       |
+| P07–P09 / C09 | 中英文资源、偏好、启动与界面接线                                        | [frontend](../frontend.md)                                                           |
+| I02–I15       | 桌面壳、基础外观、共享表单与 Base UI 下拉                               | [desktop-shell-design](desktop-shell-design.md)、[base-ui-select](base-ui-select.md) |
+| P10–P12 / C12 | 服务商与密钥统一保存，模型获取/选择/搜索和手动模型                      | 维护者已验收；[models-tab-ux](models-tab-ux.md)                                      |
+| P13 / P14     | 模型发现任务已并入 P12                                                  | 最小推理检查仍在 P24/P38，不因合并而标为通过                                         |
+| P15 / C15     | 按模型协议路由与三家多协议模板                                          | 维护者确认真实 Command Code 凭据连接与界面验收                                       |
+| BR0–BR5       | 测试、命令、Provider/MCP、Models/Fetch 与共享校验拆分                   | [backend-modularity](backend-modularity.md)                                          |
+| P17.a–P17.n   | 六 Agent 固定目录、只读发现、独立手动路径与严格 IPC                     | [agent-discovery](agent-discovery.md)；真实安装与人工/平台验收仍待执行               |
+| P17.o–P17.s   | 用户二次确认的受限 CLI 版本读取、双语交互与完整代码检查                 | [agent-version-probe](agent-version-probe.md)；真实 CLI/平台验收仍待执行             |
+| P17.t         | 四家官方标志与状态/版本同行布局                                         | [assets README](../../assets/agents/README.md)；品牌发布条款仍待核对                 |
+| P25           | 中央 Skill 库、系统选择器本地导入（单个或多个技能）、来源补充与双语列表 | [skill-library](skill-library.md)；安装、更新与部署未实施                            |
+| P31           | 中央 MCP 定义、凭据引用、编辑与启停                                     | [mcp-central](mcp-central.md)；未执行或部署服务器                                    |
 
 P15 的真实连接记录来自维护者确认，不代表代理重新执行，也不补写未提供的模型、协议或套餐细节。
 
@@ -46,6 +47,7 @@ P15 的真实连接记录来自维护者确认，不代表代理重新执行，�
 - [ ] P17：六家真实 CLI 安装只读核对、经具体目标授权的版本读取及其输出/副作用、macOS/Windows/Linux 原生运行与人工外观（双语、长路径、最小窗口、键盘）验收；隔离样本、浏览器模拟 IPC 和本机构建不替代这些结果。
 - [ ] P17.t：发布前核对 Anthropic/OpenAI 识别用途与品牌条款；官方资产来源不等于取得额外许可，标志不属于项目 MIT 授权。
 - [ ] P31：MCP 多值真实系统凭据库存取/替换/清理，以及 macOS/Windows 原生和人工外观验收。
+- [ ] P25：在桌面窗口内点击「本地导入」并用系统选择器导入真实技能目录（单个技能与含多个技能的上级目录）、确认原目录不变、技能页人工外观与 macOS/Windows 原生验收；浏览器预览与单元测试不替代原生行为。
 - [ ] 平台专项：现有各功能的 Windows/Linux 原生行为、真实 OS 凭据与专门读屏验证；按 P36–P38 记录，不因清理已完成任务而勾选。
 
 ### Task P16: 补充中央模型能力元数据
@@ -107,7 +109,7 @@ BR0–BR5 已完成；现行边界见 [backend-modularity.md](backend-modularity
 - [ ] **BR6：Catalog/Storage/Credentials。** 各厂商解析局部化；迁移注册顺序和已发布 SQL 保持原样；按需要分离 OS store 实现和各业务补偿策略。开始前分别拆解析、迁移、凭据批次。
 - [ ] **BR7：外部服务适配。** GitHub 客户端/账号支持备份目标操作；Vercel 用途待确定。以真实复用需求提取 HTTP transport，保留服务专用权限/限流/错误语义。开始实施前按认证与客户端等职责拆细项。
 - [ ] **BR8：配置备份恢复设计。** 明确版本化非敏感快照、GitHub 目标/路径、远端修订冲突、本机身份/凭据重新关联与恢复差异；先显式备份恢复，自动同步另行规划。实施前拆导出、本地恢复、GitHub 存储和 UI 的具体小任务。
-- [ ] **BR9：MCP/Skill 来源安装设计。** 确定首个实际来源及契约，拆候选元数据、固定 revision、安装计划/执行/更新/卸载、受管路径和恢复；安装、运行与 Agent 部署状态分开。承接 P25–P30、P31–P33/P34，避免重复实现。
+- [ ] **BR9：MCP/Skill 来源安装设计。** 确定首个实际来源及契约，拆候选元数据、固定 revision、安装计划/执行/更新/卸载、受管路径和恢复；安装、运行与 Agent 部署状态分开。承接 P25–P30、P31–P33/P34，避免重复实现。**已确认（路线 A）**：更新能力以「来源是否明确」为条件，须定义获取方式字段与地址到来源的映射，使本地导入的技能补齐地址与获取方式后同样可更新；若改为只允许 vibemate 安装的技能更新，须同步修改界面说明，不得保留「填了地址即可更新」的暗示。
 - [ ] **BR10：API 转发设计。** 明确首条同协议转发、gateway 生命周期、Provider/Model 路由、协议适配、流式/工具调用/取消/错误验收；Agent 通过本地 API 访问，Tauri 只管理服务。连接 P15/P16/P18–P24，不扩大为云端多用户代理。实施前拆最小路径任务。
 
 - [ ] **BR11：Agent 安装设计。** 核实首个 Agent 的安装/升级/卸载契约、目标平台/架构与现有安装来源；受管安装记录与发现/能力/配置分开。承接 P17；安装完成后只检测，不自动启动或应用配置。按实际首条路径拆小任务，保护用户已有安装与配置。
@@ -345,31 +347,30 @@ P17.o–P17.s 实现与代码核验完成：固定 `--version`、路径重验、
 
 ### Task P25: 登记中央 Skill 来源
 
-**Description:** 让用户导入已有本地 Skill 并维护准确来源，支持未知来源的明确状态。
+**Description:** 让用户导入已有本地 Skill 并维护准确来源，支持未知来源的明确状态。设计与边界见 [skill-library](skill-library.md)。
 
 **Acceptance criteria:**
 
-- [ ] 中央库记录稳定 ID、内容摘要、来源 URL/revision 和本地修改；原目录不被移动或删除。
-- [ ] 兼容本地已安装的 GitHub/npx Skill，格式和目录合法性按 Agent 约定验证。
-- [ ] 不能自动识别的来源可补充，更新能力明确；列表有界分页。
+- [x] 中央库记录稳定 ID、内容摘要与来源路径；原目录不被移动、修改或删除。
+- [x] 「本地导入」调用系统文件夹选择器；所选目录本身是技能时导入它，否则导入其直接子目录中的全部技能，逐个报告被跳过的文件夹与原因。
+- [x] 兼容含 `SKILL.md` 的本地 GitHub/npx 安装目录；frontmatter 名称/描述与目录合法性按已核实约定校验。
+- [x] 不能自动识别的上游来源可在来源页补充或清除，界面明确显示「不可自动更新」；列表按名称有界分页。
+- [x] `origin_path IS NOT NULL OR source_url IS NOT NULL` 与读取时重新校验，畸形库数据不进入界面。
+- [ ] 本地修改差异比较：导入摘要已作为基线，三方比较随 P29 实现。
+- [ ] 真实桌面与平台验收见「已交付功能仍待验」。
 
 **Verification:**
 
-- [ ] 运行 Rust `skill_import` 测试，覆盖路径、未知来源、同名和解析失败。
-- [ ] 运行 SkillLibrary 测试、`check:frontend` 与 Rust fmt/Clippy。
-- [ ] Tauri 导入临时 Skill，确认原目录不变。
+- [x] Rust skills 测试 21 项：路径、未知来源、同名、解析失败、链接与上限、原目录不变、摘要确定性、文件夹发现与批量报告、长正文与超大头部、IPC 契约；存储迁移测试覆盖 v11 保留行与放宽上限。
+- [x] 真实集合核对：`~/.skills-manager/skills`、`~/.grok/skills`、`~/.agents/skills` 各 13 个技能全部导入、无跳过（含 11 MB / 315 个文件的技能与 87 KB 的 `SKILL.md`）。
+- [x] SkillLibrary 测试 13 项（含中英文）、`desktop/skills` 边界测试 9 项；`check:frontend`、Rust fmt/Clippy 与全量测试通过。
+- [x] 浏览器预览核对：技能页、导入在预览中被明确拒绝、键盘焦点与窄宽度布局。
+- [x] 桌面启动核对：注册 dialog 插件后 `pnpm tauri dev` 正常启动并记录 `storage_ready`，无插件错误。
+- [ ] Tauri 原生窗口内点击「本地导入」、在系统选择器中选择真实技能目录并确认结果；选择器交互与人工外观验收留待维护者。
 
 **Dependencies:** P05,P17。
 
-**Files likely touched:**
-
-- `src-tauri/src/skills.rs`
-- `src-tauri/src/commands.rs`
-- `src/lib/desktop/skills.ts`
-- `src/features/skills/SkillLibrary.tsx`
-- `src/features/skills/SkillLibrary.test.tsx`
-
-**Estimated scope:** M：5 个建议主文件；如需额外文件先按执行约定拆分。
+**Files:** `src-tauri/src/skills/`（manifest/validation/repository/service/tests）、`src-tauri/src/commands/skills.rs`、`src-tauri/src/storage.rs`、`src/lib/desktop/skills.ts` 与其测试、`src/features/skills/`、双语资源。
 
 ### Task P26: 从已确认来源安装 Skill
 
@@ -379,7 +380,7 @@ P17.o–P17.s 实现与代码核验完成：固定 `--version`、路径重验、
 
 - [ ] Git 来源固定 revision；npx 来源记录准确安装器/版本/命令和退出状态，执行前显示命令。
 - [ ] 不执行 Skill 内容中的命令；校验路径遍历、失效来源和结果格式。
-- [ ] 失败不破坏已有库；成功记录来源及可更新方式，不声称未知来源可更新。
+- [ ] 失败不破坏已有库；成功记录来源及可更新方式，不声称未知来源可更新。本地导入的技能在来源页补齐地址与获取方式后写入同一字段，供 P29 使用。
 
 **Verification:**
 
@@ -465,7 +466,7 @@ P17.o–P17.s 实现与代码核验完成：固定 `--version`、路径重验、
 
 **Acceptance criteria:**
 
-- [ ] 只对来源明确的 Skill 检查更新，Git/npx 使用已记录的获取方式和版本。
+- [ ] 只对来源明确的 Skill 检查更新，Git/npx 使用已记录的获取方式和版本；本地导入的技能补齐地址与获取方式后同样适用（路线 A，见 [skill-library](skill-library.md)）。
 - [ ] 比较原 revision、中央本地修改与候选内容，显示差异与可选处理策略。
 - [ ] 更新预览不写中央或 Agent 目标；超时/失效/版本变化有明确错误。
 

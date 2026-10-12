@@ -28,7 +28,8 @@ reads are invalidated when returning home.
   (brand, Overview, four feature destinations, Settings with the icon-only
   collapse toggle), the relationship home, `ProvidersView` (mounted on the first
   visit, then kept mounted while hidden to retain caches and pending work),
-  central MCP management, read-only Agent discovery, a planned Skills page,
+  central MCP management, read-only Agent discovery, `SkillLibrary` for local
+  imports and source records,
   and `SettingsView` (mounted while hidden) for the settings area.
 - `src/features/providers/` contains `ProvidersView` (list and in-page
   navigation), `ProviderPage` (back control and title), `ProviderTabbedView`
@@ -86,7 +87,7 @@ reads are invalidated when returning home.
   minimum row height, **2 px** top margin under the window title strip, **no**
   bottom margin on the header (the first body block adds `--page-content-gap`,
   16 px, instead).
-  Overview, Providers list, Agents, planned Skills, MCP, and Settings use
+  Overview, Providers list, Agents, Skills, MCP, and Settings use
   `PageModuleHeader`; Provider/MCP create/edit and Agent detail use the same
   metrics in `ProviderPage.module.css` (left-aligned title). Secondary-page
   Back (icon-only) and Save live in the `ProviderPage` header; editors publish

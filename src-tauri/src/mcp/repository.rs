@@ -144,6 +144,9 @@ pub fn list_definitions(
         identity(cursor)?;
     }
     let connection = lock(storage)?;
+    let total: i64 = connection
+        .query_row("SELECT COUNT(*) FROM mcp_definition", [], |row| row.get(0))
+        .map_err(|_| McpError::ReadFailed)?;
     let mut statement = connection
         .prepare("SELECT id FROM mcp_definition WHERE (?1 IS NULL OR id > ?1) ORDER BY id LIMIT ?2")
         .map_err(|_| McpError::ReadFailed)?;
@@ -162,7 +165,11 @@ pub fn list_definitions(
         .take(limit as usize)
         .map(|id| read_record(&connection, id))
         .collect::<Result<_, _>>()?;
-    Ok(McpPage { items, next_cursor })
+    Ok(McpPage {
+        items,
+        next_cursor,
+        total,
+    })
 }
 
 pub(super) fn commit_definition(

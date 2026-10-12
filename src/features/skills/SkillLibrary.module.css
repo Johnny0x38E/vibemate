@@ -1,0 +1,192 @@
+/*
+ * Skill library: import panel above a bounded list, plus the source page.
+ *
+ * The list mirrors the MCP page: shared surface rows with a details column and
+ * a trailing column that keeps its actions reachable at narrow widths.
+ */
+
+.view {
+    width: 100%;
+    min-width: 0;
+}
+
+.view > p:first-of-type {
+    margin-top: var(--page-content-gap);
+}
+
+/* The source editor is a secondary page: it owns a bounded content region. */
+.view[data-secondary-page] {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+}
+
+.importFeedback {
+    display: grid;
+    gap: var(--space-sm);
+    margin-top: var(--page-content-gap);
+}
+
+/* Detail cards are spaced like the Agent detail page (10px between cards). */
+.detailGroup {
+    display: grid;
+    gap: 10px;
+    margin-top: 0;
+}
+
+/* A sentence-length value or a long identifier reads better start-aligned. */
+.longValue {
+    flex: 0 1 min(75%, 34rem);
+    margin: 0;
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    text-align: start;
+    overflow-wrap: anywhere;
+}
+
+/* Import outcome: the headline states the counts, the list names the folders. */
+.report {
+    display: grid;
+    gap: 4px;
+}
+
+.reportList {
+    margin: 0;
+    padding-inline-start: var(--space-lg);
+    color: var(--color-summary);
+    font-size: 0.75rem;
+    line-height: 1.7;
+    overflow-wrap: anywhere;
+}
+
+/* Library total: the first line above the list, never a badge or a chip. */
+.count {
+    margin: var(--page-content-gap) 0 0;
+    color: var(--color-summary);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+}
+
+.list {
+    margin: var(--page-content-gap) 0 var(--space-lg);
+}
+
+/* Directly under the total the list needs only a small gap. */
+.count + .list {
+    margin-top: var(--space-sm);
+}
+
+.details {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    gap: 4px;
+    overflow-wrap: anywhere;
+}
+
+.name {
+    margin: 0;
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+
+.subline {
+    margin: 0;
+    color: var(--color-summary);
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+}
+
+/* At most two lines of description in the list; the detail page shows it all. */
+.description {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+    margin: 0;
+    color: var(--color-summary);
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+}
+
+.meta {
+    margin: 0;
+    color: var(--color-summary);
+    font-size: 0.75rem;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.trailing {
+    display: flex;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-md);
+}
+
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-md);
+}
+
+.hint {
+    margin: 0;
+    color: var(--color-summary);
+    font-size: 0.75rem;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+
+.error {
+    color: var(--color-text);
+    border-inline-start: 2px solid var(--color-text);
+    padding-inline-start: var(--space-sm);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+
+.sourceForm {
+    display: grid;
+    gap: var(--space-md);
+    /* The page owns the scroll area so a short window cannot clip the fields. */
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.sourceActions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: var(--space-sm);
+}
+
+.factValue {
+    margin: 0;
+    color: var(--color-summary);
+    font-size: 0.8125rem;
+    overflow-wrap: anywhere;
+}
+
+.list button:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+}
+
+@media (max-width: 520px) {
+    .trailing {
+        justify-content: flex-start;
+    }
+}

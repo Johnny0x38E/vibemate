@@ -272,6 +272,10 @@ test("keeps the same settings input and colors while navigating elsewhere", asyn
 test("translates current navigation without resetting the selected page or collapse", async () => {
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: "Skills" }));
+    // The Skills page is a real module now; it opens its own heading.
+    expect(
+        await screen.findByRole("heading", { level: 1, name: "Skills" }),
+    ).toBeDefined();
     fireEvent.click(
         screen.getByRole("button", { name: "Collapse navigation" }),
     );
@@ -617,7 +621,6 @@ test("the Providers page reads nothing until first visited", async () => {
     expect(listProviderTemplates).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Providers" }));
     expect(await screen.findByText("Personal DeepSeek")).toBeDefined();
-    expect(screen.queryByText("Not implemented")).toBeNull();
 });
 
 test.each([
@@ -629,7 +632,6 @@ test.each([
         name: "Name",
         key: "API key",
         edit: "Edit Personal DeepSeek",
-        planned: "Not implemented",
     },
     {
         locale: "zh-CN",
@@ -639,17 +641,15 @@ test.each([
         name: "名称",
         key: "API 密钥",
         edit: "编辑 Personal DeepSeek",
-        planned: "功能尚未实现",
     },
 ] as const)(
     "in $locale the Providers sidebar returns to its list without remounting the module",
-    async ({ locale, providers, agents, add, name, key, edit, planned }) => {
+    async ({ locale, providers, agents, add, name, key, edit }) => {
         translator = await createAppI18n(locale);
         useDesktopProviders();
         render(<App />);
         fireEvent.click(screen.getByRole("button", { name: providers }));
         expect(await screen.findByRole("button", { name: edit })).toBeDefined();
-        expect(screen.queryByText(planned)).toBeNull();
         // Saved settings are never presented as a live connection.
         expect(document.body.textContent).not.toMatch(
             /\bconnected\b|available|已连接|可用/i,
@@ -949,7 +949,7 @@ test.each([
 test("MCP mounts on first visit and sidebar activation returns to its list", async () => {
     vi.mocked(listMcpDefinitions).mockResolvedValue({
         kind: "desktop",
-        page: { items: [], nextCursor: null },
+        page: { items: [], nextCursor: null, total: 0 },
     });
     render(<App />);
     expect(listMcpDefinitions).not.toHaveBeenCalled();

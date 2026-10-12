@@ -63,10 +63,14 @@ test("preview reads no persisted definitions and rejects writes without IPC", as
 });
 
 test("list validates safe metadata and forwards bounded cursor arguments", async () => {
-    vi.mocked(invoke).mockResolvedValue({ items: [row], nextCursor: null });
+    vi.mocked(invoke).mockResolvedValue({
+        items: [row],
+        nextCursor: null,
+        total: 4,
+    });
     expect(await listMcpDefinitions(null, 10)).toEqual({
         kind: "desktop",
-        page: { items: [row], nextCursor: null },
+        page: { items: [row], nextCursor: null, total: 4 },
     });
     expect(invoke).toHaveBeenCalledWith("list_mcp_definitions", {
         after: null,
@@ -103,17 +107,27 @@ test.each([
     },
     { ...row, connection: { ...row.connection, env: ["TOKEN", "TOKEN"] } },
 ])("rejects malformed or secret-bearing response %#", async (value) => {
-    vi.mocked(invoke).mockResolvedValue({ items: [value], nextCursor: null });
+    vi.mocked(invoke).mockResolvedValue({
+        items: [value],
+        nextCursor: null,
+        total: 1,
+    });
     await expect(listMcpDefinitions(null)).rejects.toMatchObject({
         code: "invalid_response",
     });
 });
 
 test.each([
-    { items: [row, row], nextCursor: null },
-    { items: [row], nextCursor: "f".repeat(32) },
-    { items: [row], nextCursor: 123 },
-    { items: null, nextCursor: null },
+    { items: [row, row], nextCursor: null, total: 2 },
+    { items: [row], nextCursor: "f".repeat(32), total: 1 },
+    { items: [row], nextCursor: 123, total: 1 },
+    { items: null, nextCursor: null, total: 1 },
+    // A missing, negative, non-integer or impossible definition count.
+    { items: [row], nextCursor: null },
+    { items: [row], nextCursor: null, total: -1 },
+    { items: [row], nextCursor: null, total: 0 },
+    { items: [row], nextCursor: null, total: 100_001 },
+    { items: [row], nextCursor: null, total: 1.5 },
 ])("rejects inconsistent page metadata %#", async (value) => {
     vi.mocked(invoke).mockResolvedValue(value);
     await expect(listMcpDefinitions(null)).rejects.toMatchObject({

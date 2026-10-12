@@ -196,6 +196,58 @@ fn system_themes_migration_preserves_existing_preferences_and_supports_restart()
 }
 
 #[test]
+fn raising_skill_limits_keeps_rows_and_accepts_larger_skills() {
+    let directory = TestDirectory::new("skill-limits-upgrade");
+    let path = directory.path.join(DATABASE_FILE_NAME);
+    let old = Storage::open_file(&path, &MIGRATIONS[..10]).expect("v10 database");
+    old.lock()
+        .expect("lock")
+        .execute_batch(
+            "INSERT INTO skill VALUES ('0123456789abcdef0123456789abcdef', 'demo', 'Demo skill.', \
+             '/tmp/demo', NULL, NULL, 'abababababababababababababababababababababababababababababababab', \
+             2, 128, 1, 1000, 1000);",
+        )
+        .expect("v10 row");
+    drop(old);
+
+    let upgraded = Storage::open_in_directory(&directory.path).expect("upgrade");
+    assert_eq!(
+        upgraded.schema_version().expect("version"),
+        latest_schema_version()
+    );
+    let connection = upgraded.lock().expect("lock");
+    // The existing row survives the rebuild unchanged.
+    let row: (String, i64, i64) = connection
+        .query_row(
+            "SELECT name, file_count, byte_size FROM skill WHERE id = '0123456789abcdef0123456789abcdef'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .expect("kept row");
+    assert_eq!(row, ("demo".to_string(), 2, 128));
+    // A skill far larger than the original 8 MiB bound is accepted now, and the
+    // old bound still rejects what remains outside the new limits.
+    connection
+        .execute(
+            "INSERT INTO skill VALUES ('fedcba9876543210fedcba9876543210', 'large', 'Large skill.', \
+             '/tmp/large', NULL, NULL, 'cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd', \
+             315, 11534336, 1, 1000, 1000);",
+            [],
+        )
+        .expect("larger row");
+    assert!(
+        connection
+            .execute(
+                "INSERT INTO skill VALUES ('00112233445566778899001122334455', 'huge', 'Too large.', \
+                 '/tmp/huge', NULL, NULL, 'efefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef', \
+                 1, 67108865, 1, 1000, 1000);",
+                [],
+            )
+            .is_err()
+    );
+}
+
+#[test]
 fn failed_system_themes_migration_keeps_the_v8_table_and_data() {
     let directory = TestDirectory::new("system-themes-failed-upgrade");
     let path = directory.path.join(DATABASE_FILE_NAME);

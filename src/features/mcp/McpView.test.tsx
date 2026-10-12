@@ -78,43 +78,31 @@ afterEach(() => {
     cleanup();
 });
 
-test.each([
-    {
-        locale: "en" as const,
-        label: "Not registered",
-        disable: "Disable “Tools” definition",
-        enable: "Enable “Tools” definition",
-    },
-    {
-        locale: "zh-CN" as const,
-        label: "未注册",
-        disable: "停用“Tools”定义",
-        enable: "启用“Tools”定义",
-    },
-])(
-    "central enablement does not imply Agent registration in $locale",
-    async ({ locale, label, disable, enable }) => {
-        await setup(locale);
-        await screen.findByText("Tools");
-        expect(screen.getByText(label)).toBeDefined();
-        expect(screen.queryByText("mcp.list.registeredAgents")).toBeNull();
-        expect(save).not.toHaveBeenCalled();
-        fireEvent.click(screen.getByRole("button", { name: disable }));
-        await screen.findByRole("button", { name: enable });
-        expect(screen.getByText(label)).toBeDefined();
-        expect(clean).not.toHaveBeenCalled();
-        expect(get).not.toHaveBeenCalled();
-    },
-);
+test("central enablement does not imply Agent registration", async () => {
+    await setup("en");
+    await screen.findByText("Tools");
+    expect(screen.getByText("Not registered")).toBeDefined();
+    expect(screen.queryByText("mcp.list.registeredAgents")).toBeNull();
+    expect(save).not.toHaveBeenCalled();
+    fireEvent.click(
+        screen.getByRole("button", { name: "Disable “Tools” definition" }),
+    );
+    await screen.findByRole("button", {
+        name: "Enable “Tools” definition",
+    });
+    expect(screen.getByText("Not registered")).toBeDefined();
+    expect(clean).not.toHaveBeenCalled();
+    expect(get).not.toHaveBeenCalled();
+});
 
-test("the stored definition total is stated above the list", async () => {
+test("the stored definition total is stated above the list and omitted when empty", async () => {
     // 9 definitions, one page loaded: the count describes the library.
     list.mockResolvedValue(page([row], null, 9));
     await setup();
     expect(await screen.findByText("9 MCP servers in total")).toBeDefined();
-});
 
-test("an empty list shows no count", async () => {
+    // An empty list keeps its empty-state sentence instead of a zero count.
+    cleanup();
     list.mockResolvedValue(page([], null, 0));
     await setup();
     expect(

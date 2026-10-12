@@ -167,85 +167,41 @@ test("edits retain configured values and untouched empty arguments without expos
     });
 });
 
-test.each([
-    {
-        locale: "en" as const,
-        argument: "Argument 1",
-        removeArgument: "Remove argument 1",
-        field: "Field name 1",
-        removeField: "Remove field 1",
-    },
-    {
-        locale: "zh-CN" as const,
-        argument: "参数 1",
-        removeArgument: "删除参数 1",
-        field: "字段名 1",
-        removeField: "删除字段 1",
-    },
-])(
-    "icon removal actions keep localized names and remove only their row ($locale)",
-    async (labels) => {
-        await setup(row, labels.locale);
-        fireEvent.click(
-            screen.getByRole("button", { name: labels.removeArgument }),
-        );
-        expect(screen.queryByLabelText(labels.argument)).toBeNull();
-        expect(screen.getByLabelText(labels.field)).toBeDefined();
-        fireEvent.click(
-            screen.getByRole("button", { name: labels.removeField }),
-        );
-        expect(screen.queryByLabelText(labels.field)).toBeNull();
-        expect(save).not.toHaveBeenCalled();
-    },
-);
+test("removal actions remove only their own row", async () => {
+    await setup(row, "en");
+    fireEvent.click(screen.getByRole("button", { name: "Remove argument 1" }));
+    expect(screen.queryByLabelText("Argument 1")).toBeNull();
+    expect(screen.getByLabelText("Field name 1")).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Remove field 1" }));
+    expect(screen.queryByLabelText("Field name 1")).toBeNull();
+    expect(save).not.toHaveBeenCalled();
+});
 
-test.each([
-    {
-        locale: "en" as const,
-        addArgument: "Add argument",
-        argument: "Argument 2",
-        addEnv: "Add environment variable",
-        field: "Field name 2",
-        addHeader: "Add header",
-        firstField: "Field name 1",
-    },
-    {
-        locale: "zh-CN" as const,
-        addArgument: "添加参数",
-        argument: "参数 2",
-        addEnv: "添加环境变量",
-        field: "字段名 2",
-        addHeader: "添加请求头",
-        firstField: "字段名 1",
-    },
-])(
-    "localized plus buttons add argument, env and header rows without saving ($locale)",
-    async (labels) => {
-        const view = await setup(row, labels.locale);
-        fireEvent.click(
-            screen.getByRole("button", { name: labels.addArgument }),
-        );
-        expect(screen.getByLabelText(labels.argument)).toBeDefined();
-        fireEvent.click(screen.getByRole("button", { name: labels.addEnv }));
-        expect(screen.getByLabelText(labels.field)).toBeDefined();
-        expect(save).not.toHaveBeenCalled();
-        view.unmount();
-        await setup(
-            {
-                ...row,
-                connection: {
-                    type: "http",
-                    url: "https://example.com/mcp",
-                    headers: [],
-                },
+test("plus buttons add argument, env and header rows without saving", async () => {
+    const view = await setup(row, "en");
+    fireEvent.click(screen.getByRole("button", { name: "Add argument" }));
+    expect(screen.getByLabelText("Argument 2")).toBeDefined();
+    fireEvent.click(
+        screen.getByRole("button", { name: "Add environment variable" }),
+    );
+    expect(screen.getByLabelText("Field name 2")).toBeDefined();
+    expect(save).not.toHaveBeenCalled();
+    view.unmount();
+    await setup(
+        {
+            ...row,
+            connection: {
+                type: "http",
+                url: "https://example.com/mcp",
+                headers: [],
             },
-            labels.locale,
-        );
-        fireEvent.click(screen.getByRole("button", { name: labels.addHeader }));
-        expect(screen.getByLabelText(labels.firstField)).toBeDefined();
-        expect(save).not.toHaveBeenCalled();
-    },
-);
+        },
+        "en",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Add header" }));
+    expect(screen.getByLabelText("Field name 1")).toBeDefined();
+    expect(save).not.toHaveBeenCalled();
+});
 
 test("removed env fields are omitted from the save", async () => {
     await setup(row);
@@ -398,38 +354,23 @@ test("unmount discards late replies without saving a frontend fixture", async ()
     expect(onSaved).not.toHaveBeenCalled();
 });
 
-test.each(["en", "zh-CN"] as const)(
-    "header save keeps corrected input and exposes failures in %s",
-    async (locale) => {
-        save.mockRejectedValueOnce(new McpRequestError("command_invalid"));
-        const { onSaved } = await setup(row, locale);
-        const saveButton = screen.getByRole("button", {
-            name: locale === "en" ? "Save" : "保存",
-        });
-        // Save is published into the shared page header, not a bottom footer.
-        expect(saveButton.closest("footer")).toBeNull();
-        expect(
-            screen
-                .getByRole("heading", { level: 1 })
-                .parentElement?.contains(saveButton),
-        ).toBe(true);
-        fireEvent.click(saveButton);
-        const alert = await screen.findByRole("alert");
-        expect(alert.closest("form")).not.toBeNull();
-        const command = screen.getByLabelText(
-            locale === "en" ? "Executable" : "可执行程序",
-        );
-        fireEvent.change(command, { target: { value: "corrected-command" } });
-        fireEvent.click(saveButton);
-        await waitFor(() => {
-            expect(onSaved).toHaveBeenCalledOnce();
-        });
-        expect(save).toHaveBeenCalledTimes(2);
-        expect(save.mock.calls[1]?.[0].connection).toMatchObject({
-            command: "corrected-command",
-        });
-    },
-);
+test("header save keeps corrected input and exposes failures", async () => {
+    save.mockRejectedValueOnce(new McpRequestError("command_invalid"));
+    const { onSaved } = await setup(row, "en");
+    const saveButton = screen.getByRole("button", { name: "Save" });
+    fireEvent.click(saveButton);
+    await screen.findByRole("alert");
+    const command = screen.getByLabelText("Executable");
+    fireEvent.change(command, { target: { value: "corrected-command" } });
+    fireEvent.click(saveButton);
+    await waitFor(() => {
+        expect(onSaved).toHaveBeenCalledOnce();
+    });
+    expect(save).toHaveBeenCalledTimes(2);
+    expect(save.mock.calls[1]?.[0].connection).toMatchObject({
+        command: "corrected-command",
+    });
+});
 
 test("language switching preserves draft input and translates feedback", async () => {
     save.mockRejectedValue(new McpRequestError("command_invalid"));
@@ -467,32 +408,22 @@ test("create retries with a suffix when the derived identifier is taken", async 
     expect(save.mock.calls[1]?.[0].serverName).toBe("tools-2");
 });
 
-test.each(["en", "zh-CN"] as const)(
-    "create and edit hide the internal identifier while preserving save behavior in %s",
-    async (locale) => {
-        await setup(null, locale);
-        expect(screen.queryByText(/Server identifier|服务器标识/)).toBeNull();
-        cleanup();
-        await setup(row, locale);
-        expect(screen.queryByText(/Server identifier|服务器标识/)).toBeNull();
-        fireEvent.change(
-            screen.getByLabelText(locale === "en" ? "Name" : "名称"),
-            {
-                target: { value: "Renamed tools" },
-            },
-        );
-        fireEvent.click(
-            screen.getByRole("button", {
-                name: locale === "en" ? "Save" : "保存",
-            }),
-        );
-        await waitFor(() => {
-            expect(save).toHaveBeenCalledOnce();
-        });
-        expect(save.mock.calls[0]?.[0]).toMatchObject({
-            serverName: "tools",
-            displayName: "Renamed tools",
-            expectedRevision: row.revision,
-        });
-    },
-);
+test("create and edit hide the internal identifier while preserving save behavior", async () => {
+    await setup(null, "en");
+    expect(screen.queryByText(/Server identifier/)).toBeNull();
+    cleanup();
+    await setup(row, "en");
+    expect(screen.queryByText(/Server identifier/)).toBeNull();
+    fireEvent.change(screen.getByLabelText("Name"), {
+        target: { value: "Renamed tools" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+        expect(save).toHaveBeenCalledOnce();
+    });
+    expect(save.mock.calls[0]?.[0]).toMatchObject({
+        serverName: "tools",
+        displayName: "Renamed tools",
+        expectedRevision: row.revision,
+    });
+});

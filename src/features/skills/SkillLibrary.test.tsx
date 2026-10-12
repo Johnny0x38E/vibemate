@@ -156,30 +156,14 @@ test("a large skill reports its size in megabytes", async () => {
     expect(await screen.findByText("11 MB")).toBeDefined();
 });
 
-test("the import action sits in the page header and imports a folder", async () => {
-    await setup();
-    const heading = await screen.findByRole("heading", {
-        level: 1,
-        name: "Skills",
-    });
-    const button = screen.getByRole("button", { name: "Local import" });
-    // Same row as the title, like the other module pages.
-    expect(heading.parentElement).toBe(button.parentElement);
-    // Importing an existing folder is not creating a skill, so the glyph is the
-    // folder icon rather than the plus used by the "New" actions.
-    expect(button.querySelector("path")?.getAttribute("d")).toBe(
-        "M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7l-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2Z",
-    );
-});
-
-test("the library total is stated above the list", async () => {
+test("the library total is stated above the list and omitted when empty", async () => {
     // 7 skills, one page loaded: the count describes the library, not the page.
     list.mockResolvedValue(page([row], null, 7));
     await setup();
     expect(await screen.findByText("7 skills in total")).toBeDefined();
-});
 
-test("an empty library explains what to do next without a count", async () => {
+    // An empty library explains the next step instead of showing a zero count.
+    cleanup();
     list.mockResolvedValue(page([], null, 0));
     await setup();
     expect(

@@ -124,18 +124,11 @@ no-argument open requests, browser preview, both languages, duplicate prevention
 retry/focus behavior, stale results and retaining paths/pending actions across tab
 and sidebar navigation. These tests never launch an external tool.
 
-Local macOS verification passed with Rust 1.99.0, Node.js 26.3.0 and pnpm 12.10.1:
-
-- Rust formatting and locked all-targets Clippy with warnings denied.
-- Locked Rust tests after integrating main `4e4233f`: 174 passed, including five
-  logging and six log-access tests; one real
-  OS-credential-store smoke test remains intentionally ignored.
-- `pnpm run check:frontend`: formatting, lint, 8 release-tool tests, 14 i18n-tool
-  tests, translation validation, 327 UI tests, both TypeScript checks and build.
-- `pnpm run tauri build --no-bundle -- --locked`: release executable built.
-
-Clippy found a pre-existing modulo check in `models.rs`; it was replaced with
-stable `usize::is_multiple_of(2)` without changing cursor validation behavior.
+Local macOS verification passed: Rust formatting and locked all-targets Clippy
+with warnings denied, the locked Rust test suite (one real OS-credential-store
+smoke test stays intentionally ignored), `pnpm run check:frontend`, and
+`pnpm run tauri build --no-bundle -- --locked`. Tool versions and per-run test
+counts are in Git/CI.
 
 Native Windows/Linux runtime verification and manual inspection after an actual
 GUI launch remain pending, including TextEdit/Finder and Windows/Linux editor and

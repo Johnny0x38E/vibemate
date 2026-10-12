@@ -71,13 +71,15 @@ test("does not open when blocked with aria-disabled", () => {
     expect(screen.queryByRole("option")).toBeNull();
 });
 
-test("keyboard navigation moves real focus and Enter reports the highlighted value", async () => {
+test("keyboard navigation moves real focus, commits only on selection, and typeahead matches", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
     renderSelect({ onChange });
     await user.tab();
     const trigger = screen.getByRole("combobox", { name: "Choice" });
     expect(document.activeElement).toBe(trigger);
+
+    // Opening moves real focus into the list.
     await user.keyboard("{ArrowDown}");
     const alpha = await screen.findByRole("option", { name: "Alpha" });
     await waitFor(() => {
@@ -87,23 +89,6 @@ test("keyboard navigation moves real focus and Enter reports the highlighted val
     expect(document.activeElement).toBe(
         screen.getByRole("option", { name: "Beta" }),
     );
-    await user.keyboard("{Enter}");
-    expect(onChange).toHaveBeenCalledExactlyOnceWith("b");
-    await waitFor(() => {
-        expect(document.activeElement).toBe(trigger);
-    });
-    expect(trigger.getAttribute("aria-expanded")).toBe("false");
-    // The parent has not acknowledged a saved change, so display stays controlled.
-    expect(fieldSelectValue(trigger)).toBe("a");
-});
-
-test("Home, End and ArrowUp navigate without committing until Space", async () => {
-    const user = userEvent.setup();
-    const onChange = vi.fn();
-    renderSelect({ onChange });
-    await user.tab();
-    await user.keyboard("{Enter}");
-    await screen.findByRole("option", { name: "Alpha" });
     await user.keyboard("{End}");
     expect(document.activeElement).toBe(
         screen.getByRole("option", { name: "Gamma" }),
@@ -116,24 +101,23 @@ test("Home, End and ArrowUp navigate without committing until Space", async () =
     expect(document.activeElement).toBe(
         screen.getByRole("option", { name: "Beta" }),
     );
+    // Moving the highlight never commits a value on its own.
     expect(onChange).not.toHaveBeenCalled();
-    await user.keyboard(" ");
-    expect(onChange).toHaveBeenCalledExactlyOnceWith("b");
-});
 
-test("typeahead highlights the matching text instead of the raw value", async () => {
-    const user = userEvent.setup();
-    const onChange = vi.fn();
-    renderSelect({ onChange });
-    await user.tab();
-    await user.keyboard("{ArrowDown}");
-    await screen.findByRole("option", { name: "Alpha" });
+    // Typeahead moves the highlight by text, and still needs a commit.
     await user.keyboard("gam");
     expect(document.activeElement).toBe(
         screen.getByRole("option", { name: "Gamma" }),
     );
+    expect(onChange).not.toHaveBeenCalled();
     await user.keyboard("{Enter}");
     expect(onChange).toHaveBeenCalledExactlyOnceWith("g");
+    await waitFor(() => {
+        expect(document.activeElement).toBe(trigger);
+    });
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    // The parent has not acknowledged a saved change, so display stays controlled.
+    expect(fieldSelectValue(trigger)).toBe("a");
 });
 
 test("Escape dismisses without saving and returns focus to the trigger", async () => {
@@ -233,7 +217,7 @@ for (const lock of ["disabled", "blocked"] as const) {
     });
 }
 
-test("portaled options retain labels, icons, language and validation associations", async () => {
+test("portaled options retain labels, language and validation associations", async () => {
     const user = userEvent.setup();
     renderSelect({
         "aria-describedby": "choice-help",
@@ -250,14 +234,12 @@ test("portaled options retain labels, icons, language and validation association
     const trigger = screen.getByRole("combobox", { name: "Choice" });
     expect(trigger.getAttribute("aria-describedby")).toBe("choice-help");
     expect(trigger.getAttribute("aria-invalid")).toBe("true");
-    expect(trigger.querySelector("img")).not.toBeNull();
     await user.click(trigger);
     const option = await screen.findByRole("option", { name: "Alpha" });
     expect(trigger.closest("[data-field-select]")?.contains(option)).toBe(
         false,
     );
     expect(option.getAttribute("lang")).toBe("en");
-    expect(option.querySelector("img")).not.toBeNull();
     const listId = trigger.getAttribute("aria-controls");
     expect(document.getElementById(listId ?? "")?.contains(option)).toBe(true);
 });

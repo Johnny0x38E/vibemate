@@ -121,6 +121,9 @@ checks in CI and Release Actions; do not weaken them to bypass a failure.
 - Add meaningful tests for config preservation, protocol mapping, credentials,
   rollback, and platform-specific behavior as these features are implemented.
   Do not add tests that merely assert a static label or duplicate the code.
+  Do not test styling or layout: class names, CSS selectors, colors, sizes and
+  positions are verified by eye in the app and the browser preview, not in code.
+  `src/AGENTS.md` states the frontend rule in full.
 - Maintain `CHANGELOG.md` in English. Keep pending changes under `Unreleased`;
   stable release notes use `## [X.Y.Z] - YYYY-MM-DD`. Tag releases as `vX.Y.Z`.
   GitHub Release bodies must come from that version entry, not the whole file

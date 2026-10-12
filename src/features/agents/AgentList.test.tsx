@@ -5,6 +5,7 @@ import {
     render,
     screen,
     waitFor,
+    within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StrictMode } from "react";
@@ -100,50 +101,31 @@ async function openPiDetail(): Promise<void> {
     await screen.findByRole("heading", { name: /Pi/u });
 }
 
-test.each([
-    {
-        locale: "en",
-        label: "Pi entry path",
-        refresh: "Discover",
-        rediscover: "Rediscover",
-        found: "Found",
-        openPi: "Open Pi details",
-    },
-    {
-        locale: "zh-CN",
-        label: "Pi 入口路径",
-        refresh: "发现",
-        rediscover: "重新发现",
-        found: "已发现",
-        openPi: "打开 Pi 详情",
-    },
-] as const)(
-    "in $locale manual paths scan only on Rediscover and never show connected state",
-    async ({ locale, label, rediscover, found, openPi }) => {
-        await mount(locale);
-        expect(
-            await screen.findByRole("button", { name: openPi }),
-        ).toBeDefined();
-        fireEvent.click(screen.getByRole("button", { name: openPi }));
-        expect(await screen.findByText(found)).toBeDefined();
-        const calls = read.mock.calls.length;
-        fireEvent.change(screen.getByRole("textbox", { name: label }), {
-            target: { value: " /home/test user/manual-pi " },
-        });
-        expect(read).toHaveBeenCalledTimes(calls);
-        fireEvent.click(screen.getByRole("button", { name: rediscover }));
-        await waitFor(() => {
-            expect(read).toHaveBeenCalledTimes(calls + 1);
-        });
-        expect(read).toHaveBeenLastCalledWith({
-            ...automaticAgentPaths,
-            piPath: "/home/test user/manual-pi",
-            grokPath: null,
-        });
-        expect(await screen.findByText(found)).toBeDefined();
-        expect(document.body.textContent).not.toMatch(/\bconnected\b|已连接/u);
-    },
-);
+test("manual paths scan only on Rediscover and never show connected state", async () => {
+    await mount();
+    expect(
+        await screen.findByRole("button", { name: "Open Pi details" }),
+    ).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Open Pi details" }));
+    expect(await screen.findByText("Found")).toBeDefined();
+    const calls = read.mock.calls.length;
+    fireEvent.change(screen.getByRole("textbox", { name: "Pi entry path" }), {
+        target: { value: " /home/test user/manual-pi " },
+    });
+    expect(read).toHaveBeenCalledTimes(calls);
+    fireEvent.click(screen.getByRole("button", { name: "Rediscover" }));
+    await waitFor(() => {
+        expect(read).toHaveBeenCalledTimes(calls + 1);
+    });
+    expect(read).toHaveBeenLastCalledWith({
+        ...automaticAgentPaths,
+        piPath: "/home/test user/manual-pi",
+        grokPath: null,
+    });
+    expect(await screen.findByText("Found")).toBeDefined();
+    expect(document.body.textContent).not.toMatch(/\bconnected\b|已连接/u);
+});
+
 test("shows browser preview without fabricated entries or a refresh call", async () => {
     read.mockResolvedValue({ kind: "preview" });
     await mount();
@@ -266,22 +248,21 @@ test.each(["en", "zh-CN"] as const)(
     },
 );
 
-test("the status line counts only discovered Agents", async () => {
+test("the status line counts only discovered Agents, states zero and is localized", async () => {
     // The fixture report has one found entry (Pi) among the six catalog slots.
     await mount();
     expect(await screen.findByText("1 agent discovered")).toBeDefined();
     expect(screen.queryByText(/6 agents discovered/u)).toBeNull();
-});
 
-test("an all-absent report states zero discovered Agents", async () => {
+    cleanup();
+    await mount("zh-CN");
+    expect(await screen.findByText("已发现 1 个 Agent")).toBeDefined();
+
+    // A report with no found entries states zero instead of hiding the line.
+    cleanup();
     read.mockResolvedValue({ kind: "desktop", items: agentReport() });
     await mount();
     expect(await screen.findByText("0 agents discovered")).toBeDefined();
-});
-
-test("the discovered count is localized", async () => {
-    await mount("zh-CN");
-    expect(await screen.findByText("已发现 1 个 Agent")).toBeDefined();
 });
 
 test("the discovered count stays on the list and leaves the detail page", async () => {
@@ -307,12 +288,6 @@ test("catalog is visible while checking and failed refresh labels previous obser
             .getAttribute("aria-disabled"),
     ).toBe("true");
     expect(screen.queryByText("Found")).toBeNull();
-    expect(
-        screen
-            .getByRole("button", { name: "Open Pi details" })
-            .querySelector("[data-state]")
-            ?.getAttribute("data-state"),
-    ).toBe("loading");
     await act(async () => {
         pending.resolve(result);
         await pending.promise;
@@ -323,10 +298,6 @@ test("catalog is visible while checking and failed refresh labels previous obser
     await screen.findByRole("alert");
     expect(screen.getByRole("status")).toBe(live);
     expect(screen.getByText("Found · previous result")).toBeDefined();
-    const piCard = screen.getByRole("button", { name: "Open Pi details" });
-    expect(
-        piCard.querySelector("[data-state]")?.getAttribute("data-state"),
-    ).toBe("error");
     expect(document.body.textContent).not.toContain("private-error");
     fireEvent.click(
         screen.getByRole("button", { name: "Open Claude Code details" }),
@@ -348,18 +319,17 @@ test("an initial failed scan does not report absent installations and remains re
     fireEvent.click(screen.getByRole("button", { name: "Discover" }));
     await screen.findByText("Found");
     expect(screen.queryByRole("alert")).toBeNull();
+    // The catalog keeps its six slots: Pi is now found, Codex is still absent.
     expect(
-        screen
-            .getByRole("button", { name: "Open Pi details" })
-            .querySelector("[data-state]")
-            ?.getAttribute("data-state"),
-    ).toBe("found");
+        within(
+            screen.getByRole("button", { name: "Open Pi details" }),
+        ).getByText("Found"),
+    ).toBeDefined();
     expect(
-        screen
-            .getByRole("button", { name: "Open Codex details" })
-            .querySelector("[data-state]")
-            ?.getAttribute("data-state"),
-    ).toBe("notFound");
+        within(
+            screen.getByRole("button", { name: "Open Codex details" }),
+        ).getByText("Not found"),
+    ).toBeDefined();
 });
 
 test("confirmed CLI result is separate, blocks scans/navigation and expires at rediscovery", async () => {
@@ -443,7 +413,7 @@ test("editing a manual path requires discovery before a version launch", async (
     expect(probe).not.toHaveBeenCalled();
 });
 
-test("an unavailable entry is not displayed with a successful status dot", async () => {
+test("an unavailable entry reports its state and cannot launch a version probe", async () => {
     read.mockResolvedValue({
         kind: "desktop",
         items: agentReport([
@@ -459,11 +429,7 @@ test("an unavailable entry is not displayed with a successful status dot", async
     });
     await mount();
     await screen.findByText("Cannot inspect");
-    const card = screen.getByRole("button", { name: "Open Pi details" });
-    expect(card.querySelector("[data-state]")?.getAttribute("data-state")).toBe(
-        "unavailable",
-    );
-    fireEvent.click(card);
+    fireEvent.click(screen.getByRole("button", { name: "Open Pi details" }));
     expect(
         screen
             .getByRole("button", { name: "Read version" })

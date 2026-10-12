@@ -122,51 +122,43 @@ async function save(name = "Save") {
     });
 }
 
-for (const locale of ["en", "zh-CN"] as const) {
-    test(`editing in ${locale} replaces the key in the same request and clears it before acknowledgment`, async () => {
-        const pending = deferred<ProviderRecord>();
-        update.mockReturnValue(pending.promise);
-        const { onSaved, onBusyChange } = await mount(locale);
-        const field = key();
-        expect(field.placeholder).toBe("••••••••");
-        fireEvent.change(field, { target: { value: SECRET } });
-        expect(field.placeholder).toBe("");
-        expect(
-            screen.queryByText(
-                locale === "en" ? "API key configured" : "已配置 API 密钥",
-            ),
-        ).toBeNull();
-        const button = screen.getByRole("button", {
-            name: locale === "en" ? "Save" : "保存",
-        });
-        button.focus();
-        await save(locale === "en" ? "Save" : "保存");
-        expect(update).toHaveBeenCalledExactlyOnceWith({
-            id: record.id,
-            expectedRevision: 1,
-            displayName: record.displayName,
-            baseUrl: record.baseUrl,
-            protocol: record.protocol,
-            extensions: {},
-            secret: SECRET,
-        });
-        expect(field.value).toBe("");
-        expect(field.getAttribute("value")).toBe("");
-        expect(field.readOnly).toBe(true);
-        expect(document.activeElement).toBe(button);
-        expect(onSaved).not.toHaveBeenCalled();
-        await save(locale === "en" ? "Save" : "保存");
-        expect(update).toHaveBeenCalledTimes(1);
-        await act(async () => {
-            pending.resolve({ ...record, revision: 2 });
-            await pending.promise;
-        });
-        expect(onSaved).toHaveBeenCalledTimes(1);
-        expect(onBusyChange).toHaveBeenLastCalledWith(false);
-        expect(document.body.textContent).not.toContain(SECRET);
-        expect(JSON.stringify(onSaved.mock.calls)).not.toContain(SECRET);
+test("editing replaces the key in the same request and clears it before acknowledgment", async () => {
+    const pending = deferred<ProviderRecord>();
+    update.mockReturnValue(pending.promise);
+    const { onSaved, onBusyChange } = await mount();
+    const field = key();
+    expect(field.placeholder).toBe("••••••••");
+    fireEvent.change(field, { target: { value: SECRET } });
+    expect(field.placeholder).toBe("");
+    expect(screen.queryByText("API key configured")).toBeNull();
+    const button = screen.getByRole("button", { name: "Save" });
+    button.focus();
+    await save("Save");
+    expect(update).toHaveBeenCalledExactlyOnceWith({
+        id: record.id,
+        expectedRevision: 1,
+        displayName: record.displayName,
+        baseUrl: record.baseUrl,
+        protocol: record.protocol,
+        extensions: {},
+        secret: SECRET,
     });
-}
+    expect(field.value).toBe("");
+    expect(field.getAttribute("value")).toBe("");
+    expect(field.readOnly).toBe(true);
+    expect(document.activeElement).toBe(button);
+    expect(onSaved).not.toHaveBeenCalled();
+    await save("Save");
+    expect(update).toHaveBeenCalledTimes(1);
+    await act(async () => {
+        pending.resolve({ ...record, revision: 2 });
+        await pending.promise;
+    });
+    expect(onSaved).toHaveBeenCalledTimes(1);
+    expect(onBusyChange).toHaveBeenLastCalledWith(false);
+    expect(document.body.textContent).not.toContain(SECRET);
+    expect(JSON.stringify(onSaved.mock.calls)).not.toContain(SECRET);
+});
 
 test("an edited legacy instance requires a key but never submits a placeholder", async () => {
     readKey.mockResolvedValue({

@@ -105,8 +105,14 @@ Read `docs/frontend.md` before introducing a new frontend pattern.
   synchronize HTML lang, accessible status, and localized window titles.
 - Rust returns safe structured error codes and parameters; UI translates them.
   Do not display raw internal errors or unresolved translation keys.
-- Include key/placeholder completeness checks and bilingual behavior tests in
-  `check:frontend`. Inspect both languages, long content, and keyboard feedback.
+- Include the key and placeholder completeness checks in `check:frontend`, and
+  test language where language is the behavior: switching preserves input and
+  state and applies the new translation, the system language resolves correctly,
+  and a failed save keeps the previous choice. Do not run a whole scenario once
+  per locale when the locale only chooses which strings the test queries; the
+  resource check already enforces key, placeholder and plural parity, so one
+  locale is enough there. Inspect both languages, long content, and keyboard
+  feedback by hand.
 
 ## Comments, tests, and completion
 
@@ -117,6 +123,16 @@ Read `docs/frontend.md` before introducing a new frontend pattern.
   interactions using user-visible behavior. Mock the desktop boundary in UI
   tests. Avoid implementation snapshots or assertions for static labels alone.
   Introduce the UI test runner when the first interactive behavior needs it.
+- Do not write styling or layout tests. Do not assert class names, CSS-module
+  selectors, computed or inline styles, color or token values, element sizes and
+  positions, or which decorative asset renders. jsdom has no layout engine, so
+  such a test cannot show how the window actually looks, and it breaks whenever
+  the stylesheet changes. Appearance, spacing and visual hierarchy are verified
+  in the browser preview and the native app. Keep tests to behavior a user or a
+  screen reader acts on: roles, accessible names, focus, keyboard, state text,
+  and the data those states carry.
+- An image or icon that only decorates the surrounding text needs no test. A
+  control's accessible name, not its styling, is what identifies it.
 - Run `pnpm run check:frontend` before completing frontend changes. CI and the
   release prepare job must run this command. No warnings are accepted by ESLint.
 - For visible changes, inspect the browser preview using ego-browser and check

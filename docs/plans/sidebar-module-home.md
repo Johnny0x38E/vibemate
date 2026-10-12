@@ -21,8 +21,6 @@
 
 Implemented and covered by bilingual App navigation tests, provider pending-save
 and model-draft cancellation tests, and MCP pending/uncertain/late-read tests.
-`pnpm run check:frontend` passed with 539 UI/boundary tests, eight release tests,
-14 translation-checker tests, formatting, zero-warning lint, translation
-consistency, both TypeScript configs and the production frontend build. Vite’s
-existing chunk-size advisory remains nonfatal. Browser/native navigation
-acceptance is left to the maintainer; no native writes are claimed.
+`pnpm run check:frontend` passes; per-run test counts are in Git/CI. Browser and
+native navigation acceptance is left to the maintainer, and no native writes are
+claimed.

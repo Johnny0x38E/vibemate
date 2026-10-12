@@ -9,7 +9,6 @@ import {
 import { StrictMode, createRef, type Ref } from "react";
 import type { ModuleNavigationHandle } from "../../components/moduleNavigation";
 import { I18nextProvider } from "react-i18next";
-import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { NotificationProvider } from "../../components/Notifications";
 import {
@@ -268,61 +267,46 @@ test("shows a loading state, then saved rows distinguished by id, never as conne
     expect(document.body.textContent).not.toMatch(/已连接|可用/);
 });
 
-test.each([
-    ["en", "No provider configurations are saved yet."],
-    ["zh-CN", "还没有保存的服务商配置。"],
-] as const)("shows an empty state in %s", async (locale, text) => {
+test("shows an empty state", async () => {
     list.mockResolvedValue(page([]));
-    await mount(locale);
-    expect(screen.getByText(text)).toBeDefined();
+    await mount();
+    expect(
+        screen.getByText("No provider configurations are saved yet."),
+    ).toBeDefined();
     expect(screen.queryByRole("list")).toBeNull();
 });
 
-test.each([
-    ["en", "Provider settings could not be read. Try again.", "Try again"],
-    ["zh-CN", "无法读取服务商配置，请重试。", "重试"],
-] as const)(
-    "a failed read explains it in %s and retries",
-    async (locale, message, retry) => {
-        // StrictMode reads twice on mount, so failures are set per phase.
-        list.mockRejectedValue(new ProviderRequestError("read_failed"));
-        await mount(locale);
-        expect(screen.getByRole("alert").textContent).toBe(message);
-        list.mockResolvedValue(page([row("a")]));
-        await click(retry);
-        // The retry button is replaced; focus lands on the page heading.
-        expect(document.activeElement).toBe(
-            screen.getByRole("heading", { level: 1 }),
-        );
-        expect(rows()).toHaveLength(1);
-        expect(screen.queryByRole("alert")).toBeNull();
-    },
-);
+test("a failed read explains it and retries", async () => {
+    // StrictMode reads twice on mount, so failures are set per phase.
+    list.mockRejectedValue(new ProviderRequestError("read_failed"));
+    await mount();
+    expect(screen.getByRole("alert").textContent).toBe(
+        "Provider settings could not be read. Try again.",
+    );
+    list.mockResolvedValue(page([row("a")]));
+    await click("Try again");
+    // The retry button is replaced; focus lands on the page heading.
+    expect(document.activeElement).toBe(
+        screen.getByRole("heading", { level: 1 }),
+    );
+    expect(rows()).toHaveLength(1);
+    expect(screen.queryByRole("alert")).toBeNull();
+});
 
-test.each([
-    [
-        "en",
+test("browser preview shows the preview state and offers no save", async () => {
+    readTemplates.mockResolvedValue({ kind: "preview" });
+    list.mockResolvedValue({ kind: "preview" });
+    await mount();
+    expect(within(view()).getByRole("status").textContent).toBe(
         "The browser preview cannot read or save provider configurations. Open this page in the vibemate desktop app.",
-    ],
-    [
-        "zh-CN",
-        "浏览器预览无法读取或保存服务商配置。请在 vibemate 桌面应用中打开此页面。",
-    ],
-] as const)(
-    "browser preview shows the preview state in %s and offers no save",
-    async (locale, text) => {
-        readTemplates.mockResolvedValue({ kind: "preview" });
-        list.mockResolvedValue({ kind: "preview" });
-        await mount(locale);
-        expect(within(view()).getByRole("status").textContent).toBe(text);
-        expect(screen.queryByRole("list")).toBeNull();
-        expect(screen.queryByRole("form")).toBeNull();
-        expect(screen.queryAllByRole("button")).toHaveLength(0);
-        expect(create).not.toHaveBeenCalled();
-    },
-);
+    );
+    expect(screen.queryByRole("list")).toBeNull();
+    expect(screen.queryByRole("form")).toBeNull();
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
+    expect(create).not.toHaveBeenCalled();
+});
 
-test("the stored total is stated above the list", async () => {
+test("the stored total is stated above the list and omitted when empty", async () => {
     // 7 configurations exist, one page is loaded: the count describes storage,
     // not the loaded rows, like the MCP and skill lists.
     list.mockResolvedValue(page([row("a")], null, 7));
@@ -330,9 +314,9 @@ test("the stored total is stated above the list", async () => {
     expect(
         await screen.findByText("7 provider configurations in total"),
     ).toBeDefined();
-});
 
-test("an empty list states no total", async () => {
+    // An empty list keeps its empty-state sentence instead of a zero count.
+    cleanup();
     list.mockResolvedValue(page([]));
     await mount();
     expect(
@@ -758,43 +742,7 @@ test("switching language keeps the open page and typed values", async () => {
     expect(screen.getByLabelText("名称")).toHaveProperty("value", "Draft");
 });
 
-test.each([
-    {
-        locale: "en",
-        add: "New",
-        backName: "Back to provider list",
-    },
-    {
-        locale: "zh-CN",
-        add: "新建",
-        backName: "返回服务商列表",
-    },
-] as const)(
-    "in $locale list action icons are decorative and page Back is icon-only",
-    async ({ locale, add, backName }) => {
-        list.mockResolvedValue(page([row("a")]));
-        await mount(locale);
-        for (const button of [
-            screen.getByRole("button", { name: add }),
-            editButton("a"),
-        ]) {
-            const icon = button.querySelector("svg");
-            expect(icon?.getAttribute("aria-hidden")).toBe("true");
-        }
-        // The visible label stays plain text next to the icon.
-        expect(screen.getByRole("button", { name: add }).textContent).toBe(add);
-
-        await click(add);
-        const backButton = screen.getByRole("button", { name: backName });
-        // Icon-only: accessible name comes from aria-label, not visible text.
-        expect(backButton.textContent.trim()).toBe("");
-        expect(
-            backButton.querySelector("svg")?.getAttribute("aria-hidden"),
-        ).toBe("true");
-    },
-);
-
-test("rows show the provider's icon before the name; an unknown kind shows none", async () => {
+test("a kind from a newer build still lists its row", async () => {
     const unknown = {
         ...row("c", { displayName: "Future" }),
         // A kind from a newer build must not break the list.
@@ -804,52 +752,11 @@ test("rows show the provider's icon before the name; an unknown kind shows none"
         page([row("a"), row("b", { kind: "openrouter" }), unknown]),
     );
     await mount();
-    const [deepseekItem, openrouterItem, futureItem] = rows();
-    const primaryRow = (item: HTMLElement | undefined): HTMLElement => {
-        const row = item?.querySelector('[class*="primaryRow"]');
-        if (!(row instanceof HTMLElement)) {
-            throw new Error("Missing primary row");
-        }
-        return row;
-    };
-    const files = (row: HTMLElement): (string | null)[] =>
-        Array.from(
-            row.querySelectorAll("img"),
-            (image) => image.getAttribute("src")?.replace(/^.*\//, "") ?? null,
-        );
-    expect(files(primaryRow(deepseekItem))).toEqual(["deepseek.svg"]);
-    expect(files(primaryRow(openrouterItem))).toEqual([
-        "openrouter.svg",
-        "openrouter-volt.svg",
-    ]);
-    expect(files(primaryRow(futureItem))).toEqual([]);
+    const [, , futureItem] = rows();
     if (!futureItem) throw new Error("Missing future row");
     expect(within(futureItem).getByText("Future")).toBeDefined();
     expect(within(futureItem).getByText("future-provider")).toBeDefined();
     expect(screen.getAllByText("Work")).toHaveLength(2);
-});
-
-test("the detail page and the create form show the provider icon next to the provider", async () => {
-    list.mockResolvedValue(page([row("b", { kind: "openrouter" })]));
-    await mount();
-    await clickEdit("b");
-    const value = screen.getByText("Provider").nextElementSibling;
-    expect(value?.textContent).toBe("OpenRouter");
-    expect(value?.querySelectorAll("img")).toHaveLength(2);
-    await click("Back to provider list");
-
-    await click("New");
-    const combobox = screen.getByRole("combobox", { name: "Provider" });
-    const triggerIcon = (): string | null | undefined =>
-        combobox.querySelector("img")?.getAttribute("src");
-    expect(triggerIcon()).toMatch(/\/deepseek\.svg$/);
-    fireEvent.click(combobox);
-    const openRouterOption = screen.getByRole("option", {
-        name: "OpenRouter",
-    });
-    expect(openRouterOption.querySelectorAll("img")).toHaveLength(2);
-    await userEvent.setup().click(openRouterOption);
-    expect(triggerIcon()).toMatch(/\/openrouter\.svg$/);
 });
 
 test("the edit page combines configuration and key with one Save while the list shows no key state", async () => {
@@ -871,10 +778,6 @@ test("the edit page combines configuration and key with one Save while the list 
             /updated|This field is cleared|system credential store/i,
         ),
     ).toBeNull();
-    const primaries = screen
-        .getAllByRole("button")
-        .filter((button) => /primary/.test(button.className));
-    expect(primaries.map((button) => button.textContent)).toEqual(["Save"]);
 });
 
 test("one Save sends both edited settings and a replacement key and leaves only after success", async () => {

@@ -9,9 +9,8 @@ and Pi/Grok read-only discovery are implemented. Six-Agent fixed discovery is th
 next change; configuration writes, skills and MCP deployment remain pending.
 
 The private sketch `docs/local/程序首页原型草图.png` supplied the original layout.
-The [interactive preview](desktop-shell-preview.html) is a historical layout
-artifact; its controls and persistence do not represent the current app.
-Current implementation details are in [frontend.md](../frontend.md).
+An HTML layout preview was retired once it stopped matching the app; current
+implementation details are in [frontend.md](../frontend.md).
 
 ## Layout
 

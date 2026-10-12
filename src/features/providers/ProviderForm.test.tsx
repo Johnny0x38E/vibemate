@@ -467,9 +467,12 @@ test("keeps focus on Save, announces saving and ignores a second submit while pe
     expect(fieldValue("Name")).toBe("OpenRouter");
     // The page blocks its back control while this is reported.
     expect(onBusyChange).toHaveBeenLastCalledWith(true);
+    // A forced key value is dropped along with the ignored submit.
+    fireEvent.change(keyField(), { target: { value: SECRET } });
     fireEvent.click(save);
     fireEvent.submit(screen.getByRole("form"));
     expect(create).toHaveBeenCalledTimes(1);
+    expectKeyCleared();
     await act(async () => {
         request.resolve({ ...saved, revision: 1 });
         await request.promise;
@@ -691,28 +694,23 @@ test("an edit has a fixed configured indicator, never a fetched or submitted key
     expect(onSaved).toHaveBeenCalledTimes(1);
 });
 
-test.each([
-    ["en", "", "Enter the API key.", "Save"],
-    ["zh-CN", "   ", "请输入 API 密钥。", "保存"],
-] as const)(
-    "in %s an empty key is caught before any request and shown next to the field",
-    async (locale, key, message, save) => {
-        await mount({ kind: "create" }, locale);
-        await submit(save, key);
-        expect(create).not.toHaveBeenCalled();
-        const alert = screen.getByRole("alert");
-        expect(alert.textContent).toBe(message);
-        const field = keyField();
-        expect(field.getAttribute("aria-invalid")).toBe("true");
-        expect(field.getAttribute("aria-describedby")).toContain(alert.id);
-        // Focus moves to the field to fix, and whitespace is cleared too.
-        expect(document.activeElement).toBe(field);
-        expect(field.value).toBe("");
-        fireEvent.change(field, { target: { value: "s" } });
-        expect(screen.queryByRole("alert")).toBeNull();
-        expect(field.getAttribute("aria-invalid")).toBe("false");
-    },
-);
+test("an empty key is caught before any request and shown next to the field", async () => {
+    await mount({ kind: "create" });
+    // Whitespace only: it must be rejected and cleared like a truly empty field.
+    await submit("Save", "   ");
+    expect(create).not.toHaveBeenCalled();
+    const alert = screen.getByRole("alert");
+    expect(alert.textContent).toBe("Enter the API key.");
+    const field = keyField();
+    expect(field.getAttribute("aria-invalid")).toBe("true");
+    expect(field.getAttribute("aria-describedby")).toContain(alert.id);
+    // Focus moves to the field to fix, and whitespace is cleared too.
+    expect(document.activeElement).toBe(field);
+    expect(field.value).toBe("");
+    fireEvent.change(field, { target: { value: "s" } });
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(field.getAttribute("aria-invalid")).toBe("false");
+});
 
 test("secret_invalid from Rust is shown next to the key field, which is cleared", async () => {
     create.mockRejectedValue(new ProviderRequestError("secret_invalid"));
@@ -876,20 +874,4 @@ test("a plain Enter after an unknown outcome is ignored but still clears the key
     expectKeyCleared();
     expect(screen.getByRole("button", { name: "Save again" })).toBeDefined();
     expect(screen.queryByText("Enter the API key.")).toBeNull();
-});
-
-test("a second submit while saving is ignored and leaves no key behind", async () => {
-    const request = deferred<ProviderRecord>();
-    create.mockReturnValueOnce(request.promise);
-    await mount();
-    await submit();
-    // The field is read-only while saving; even a forced value is dropped.
-    fireEvent.change(keyField(), { target: { value: SECRET } });
-    fireEvent.submit(screen.getByRole("form"));
-    expect(create).toHaveBeenCalledTimes(1);
-    expectKeyCleared();
-    await act(async () => {
-        request.resolve({ ...saved, revision: 1 });
-        await request.promise;
-    });
 });

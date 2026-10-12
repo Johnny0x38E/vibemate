@@ -180,88 +180,62 @@ describe("ProviderModels", () => {
     });
 });
 
-test.each([
-    {
-        locale: "en" as const,
-        fetch: "Fetch models",
-        toggle: "Add a model manually",
-        modelId: "Model ID",
-        alias: "Alias (optional)",
-        add: "Add and save",
-        view: "View added models",
-        checkbox: "Deselect vendor/manual",
-    },
-    {
-        locale: "zh-CN" as const,
-        fetch: "获取模型",
-        toggle: "手动添加模型",
-        modelId: "模型 ID",
-        alias: "别名（可选）",
-        add: "添加并保存",
-        view: "查看已添加",
-        checkbox: "取消勾选 vendor/manual",
-    },
-])(
-    "manual addition from upstream browse is saved and visible in added models ($locale)",
-    async (labels) => {
-        list.mockResolvedValue(desktopPage([]));
-        browse.mockResolvedValue({
-            items: [],
-            nextOffset: null,
-            morePages: false,
-        });
-        const manual = model({
+test("manual addition from upstream browse is saved and visible in added models", async () => {
+    list.mockResolvedValue(desktopPage([]));
+    browse.mockResolvedValue({
+        items: [],
+        nextOffset: null,
+        morePages: false,
+    });
+    const manual = model({
+        modelId: "vendor/manual",
+        source: "manual",
+        alias: "Work",
+    });
+    addManual.mockResolvedValue(manual);
+    await renderModels(false, "en");
+    const fetchButton = await screen.findByRole("button", {
+        name: "Fetch models",
+    });
+    await waitFor(() => {
+        expect(fetchButton.getAttribute("aria-disabled")).toBe("false");
+    });
+    fireEvent.click(fetchButton);
+    await screen.findByRole("button", { name: "View added models" });
+    fireEvent.click(
+        screen.getByText("Add a model manually", { selector: "summary" }),
+    );
+    fireEvent.change(screen.getByPlaceholderText("Model ID"), {
+        target: { value: "vendor/manual" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Alias (optional)"), {
+        target: { value: "Work" },
+    });
+    await waitFor(() => {
+        expect(
+            screen
+                .getByRole("button", { name: "Add and save" })
+                .getAttribute("aria-disabled"),
+        ).toBe("false");
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add and save" }));
+    await waitFor(() => {
+        expect(addManual).toHaveBeenCalledWith({
+            providerId: ID,
             modelId: "vendor/manual",
-            source: "manual",
             alias: "Work",
         });
-        addManual.mockResolvedValue(manual);
-        await renderModels(false, labels.locale);
-        const fetchButton = await screen.findByRole("button", {
-            name: labels.fetch,
-        });
-        await waitFor(() => {
-            expect(fetchButton.getAttribute("aria-disabled")).toBe("false");
-        });
-        fireEvent.click(fetchButton);
-        await screen.findByRole("button", { name: labels.view });
-        fireEvent.click(
-            screen.getByText(labels.toggle, { selector: "summary" }),
-        );
-        fireEvent.change(screen.getByPlaceholderText(labels.modelId), {
-            target: { value: "vendor/manual" },
-        });
-        fireEvent.change(screen.getByPlaceholderText(labels.alias), {
-            target: { value: "Work" },
-        });
-        await waitFor(() => {
-            expect(
-                screen
-                    .getByRole("button", { name: labels.add })
-                    .getAttribute("aria-disabled"),
-            ).toBe("false");
-        });
-        fireEvent.click(screen.getByRole("button", { name: labels.add }));
-        await waitFor(() => {
-            expect(addManual).toHaveBeenCalledWith({
-                providerId: ID,
-                modelId: "vendor/manual",
-                alias: "Work",
-            });
-        });
-        await waitFor(() => {
-            expect(
-                screen
-                    .getByPlaceholderText(labels.modelId)
-                    .getAttribute("value"),
-            ).toBe("");
-        });
-        list.mockResolvedValue(desktopPage([manual]));
-        fireEvent.click(screen.getByRole("button", { name: labels.view }));
-        await screen.findByRole("checkbox", { name: labels.checkbox });
-        expect(saveSelections).not.toHaveBeenCalled();
-    },
-);
+    });
+    await waitFor(() => {
+        expect(
+            screen.getByPlaceholderText("Model ID").getAttribute("value"),
+        ).toBe("");
+    });
+    list.mockResolvedValue(desktopPage([manual]));
+    fireEvent.click(screen.getByRole("button", { name: "View added models" }));
+    await screen.findByRole("checkbox", { name: "Deselect vendor/manual" });
+    expect(saveSelections).not.toHaveBeenCalled();
+});
 
 test("manual creation updates the selected row and count without a provider request", async () => {
     list.mockResolvedValue(desktopPage([]));

@@ -30,6 +30,6 @@
 
 `agents/version_probe.rs` 负责受限进程与版本解析，薄命令仅转发；`agentVersions.ts` 严格核验身份、路径、版本与 `cliOutput` 证据。`AgentVersionPanel` 提供双语二次确认、取消/Escape、重试及生命周期保护；扫描与当前页导航在执行期间锁定。CLI 结果仅留在窗口中，重新发现时清除，不替代配置能力证据。Tokio 增加 `process`/`io-util` feature，Cargo 锁文件相应增加既有 `signal-hook-registry` 依赖边；没有升级依赖版本或扩大 Tauri capability。
 
-完整前端检查通过（602 个 UI/边界测试、8 个发布工具测试、14 个翻译检查器测试）；Rust fmt/Clippy 通过，237 个测试通过，1 个既有真实凭据库测试忽略；锁定 macOS arm64 no-bundle 桌面构建通过。浏览器模拟 IPC 样本检查了中文浅色/英文深色、900px 宽度、长路径、失败旧结果及确认/取消焦点；模拟环境已移除。这不是原生 IPC 或真实安装验收。
+完整前端检查、Rust fmt/Clippy 与锁定 macOS arm64 no-bundle 桌面构建通过；单次运行的测试计数与工具版本见 Git/CI。浏览器模拟 IPC 只覆盖显示与焦点分支，不构成原生 IPC 或真实安装验收。
 
 六家真实 CLI 版本格式/副作用、Windows/Linux 原生执行、专门读屏与维护者外观验收仍待执行；品牌发布条款见 [assets README](../../assets/agents/README.md)。唯一状态清单仍为 [todo.md](todo.md)。未经另行确认具体目标，不执行维护者真实安装的 Agent 来测试；原生进程测试只启动隔离的合成入口。

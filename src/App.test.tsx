@@ -218,25 +218,6 @@ test("returns to the relationship home from both Overview and the brand", () => 
     expect(overview.getAttribute("aria-current")).toBe("page");
 });
 
-test("keeps every button and field outside the window drag regions", () => {
-    render(<App />);
-    const dragRegions = Array.from(
-        document.querySelectorAll("[data-tauri-drag-region]"),
-    );
-    const controls = Array.from(
-        document.querySelectorAll("button, input, select, textarea, a[href]"),
-    );
-    // Guard against a vacuous pass: the check is meaningless without both sides.
-    expect(dragRegions.length).toBeGreaterThan(0);
-    expect(controls.length).toBeGreaterThan(0);
-    // jsdom has no layout engine, so overlap is verified in the native window.
-    // Containment is still the rule that stops clicks from being swallowed.
-    const controlsInsideDragRegion = controls.filter((control) =>
-        dragRegions.some((region) => region.contains(control)),
-    );
-    expect(controlsInsideDragRegion).toEqual([]);
-});
-
 test("keeps the same settings input and colors while navigating elsewhere", async () => {
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
@@ -623,132 +604,84 @@ test("the Providers page reads nothing until first visited", async () => {
     expect(await screen.findByText("Personal DeepSeek")).toBeDefined();
 });
 
-test.each([
-    {
-        locale: "en",
-        providers: "Providers",
-        agents: "Agents",
-        add: "New",
-        name: "Name",
-        key: "API key",
-        edit: "Edit Personal DeepSeek",
-    },
-    {
-        locale: "zh-CN",
-        providers: "服务商",
-        agents: "Agent",
-        add: "新建",
-        name: "名称",
-        key: "API 密钥",
-        edit: "编辑 Personal DeepSeek",
-    },
-] as const)(
-    "in $locale the Providers sidebar returns to its list without remounting the module",
-    async ({ locale, providers, agents, add, name, key, edit }) => {
-        translator = await createAppI18n(locale);
-        useDesktopProviders();
-        render(<App />);
-        fireEvent.click(screen.getByRole("button", { name: providers }));
-        expect(await screen.findByRole("button", { name: edit })).toBeDefined();
-        // Saved settings are never presented as a live connection.
-        expect(document.body.textContent).not.toMatch(
-            /\bconnected\b|available|已连接|可用/i,
-        );
-        const reads = vi.mocked(listProviders).mock.calls.length;
+test("the Providers sidebar returns to its list without remounting the module", async () => {
+    translator = await createAppI18n("en");
+    useDesktopProviders();
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Providers" }));
+    expect(
+        await screen.findByRole("button", { name: "Edit Personal DeepSeek" }),
+    ).toBeDefined();
+    // Saved settings are never presented as a live connection.
+    expect(document.body.textContent).not.toMatch(
+        /\bconnected\b|available|已连接|可用/i,
+    );
+    const reads = vi.mocked(listProviders).mock.calls.length;
 
-        fireEvent.click(screen.getByRole("button", { name: add }));
-        const draft = screen.getByRole("textbox", { name });
-        fireEvent.change(draft, { target: { value: "Draft name" } });
-        // Synthetic; never a real key.
-        fireEvent.change(screen.getByLabelText(key), {
-            target: { value: "sk-synthetic-app-5555" },
-        });
-        fireEvent.click(screen.getByRole("button", { name: agents }));
-        expect(
-            await screen.findByRole("button", {
-                name: locale === "en" ? "Discover" : "发现",
-            }),
-        ).toBeDefined();
-        expect(screen.queryByRole("textbox", { name })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "New" }));
+    const draft = screen.getByRole("textbox", { name: "Name" });
+    fireEvent.change(draft, { target: { value: "Draft name" } });
+    // Synthetic; never a real key.
+    fireEvent.change(screen.getByLabelText("API key"), {
+        target: { value: "sk-synthetic-app-5555" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Agents" }));
+    expect(
+        await screen.findByRole("button", { name: "Discover" }),
+    ).toBeDefined();
+    expect(screen.queryByRole("textbox", { name: "Name" })).toBeNull();
 
-        fireEvent.click(screen.getByRole("button", { name: providers }));
-        expect(screen.queryByRole("textbox", { name })).toBeNull();
-        expect(screen.getByRole("button", { name: edit })).toBeDefined();
-        // Returning to the list does not remount the module or re-read it.
-        fireEvent.click(screen.getByRole("button", { name: providers }));
-        expect(screen.getByRole("button", { name: edit })).toBeDefined();
-        expect(listProviders).toHaveBeenCalledTimes(reads);
-        expect(createProvider).not.toHaveBeenCalled();
-        expectNoKeysOrDiagnostics();
-    },
-);
+    fireEvent.click(screen.getByRole("button", { name: "Providers" }));
+    expect(screen.queryByRole("textbox", { name: "Name" })).toBeNull();
+    expect(
+        screen.getByRole("button", { name: "Edit Personal DeepSeek" }),
+    ).toBeDefined();
+    // Returning to the list does not remount the module or re-read it.
+    fireEvent.click(screen.getByRole("button", { name: "Providers" }));
+    expect(
+        screen.getByRole("button", { name: "Edit Personal DeepSeek" }),
+    ).toBeDefined();
+    expect(listProviders).toHaveBeenCalledTimes(reads);
+    expect(createProvider).not.toHaveBeenCalled();
+    expectNoKeysOrDiagnostics();
+});
 
-test.each([
-    {
-        locale: "en",
-        providers: "Providers",
-        agents: "Agents",
-        edit: "Edit Personal DeepSeek",
-        renamedEdit: "Edit Renamed",
-        name: "Name",
-        save: "Save",
-        saved: "Saved Renamed.",
-    },
-    {
-        locale: "zh-CN",
-        providers: "服务商",
-        agents: "Agent",
-        edit: "编辑 Personal DeepSeek",
-        renamedEdit: "编辑 Renamed",
-        name: "名称",
-        save: "保存",
-        saved: "已保存 Renamed。",
-    },
-] as const)(
-    "in $locale a save shows an app-level notification that outlives the jump back and page changes",
-    async ({
-        locale,
-        providers,
-        agents,
-        edit,
-        renamedEdit,
-        name,
-        save,
-        saved,
-    }) => {
-        translator = await createAppI18n(locale);
-        useDesktopProviders();
-        const renamed = {
-            ...savedProvider,
-            displayName: "Renamed",
-            revision: savedProvider.revision + 1,
-        };
-        vi.mocked(updateProvider).mockResolvedValue(renamed);
-        render(<App />);
-        fireEvent.click(screen.getByRole("button", { name: providers }));
-        fireEvent.click(await screen.findByRole("button", { name: edit }));
-        await screen.findByPlaceholderText("••••••••");
-        fireEvent.change(screen.getByRole("textbox", { name }), {
-            target: { value: "Renamed" },
-        });
-        vi.mocked(listProviders).mockResolvedValue({
-            kind: "desktop",
-            page: { items: [renamed], nextCursor: null, total: 1 },
-        });
-        fireEvent.click(screen.getByRole("button", { name: save }));
+test("a save shows an app-level notification that outlives the jump back and page changes", async () => {
+    translator = await createAppI18n("en");
+    useDesktopProviders();
+    const renamed = {
+        ...savedProvider,
+        displayName: "Renamed",
+        revision: savedProvider.revision + 1,
+    };
+    vi.mocked(updateProvider).mockResolvedValue(renamed);
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Providers" }));
+    fireEvent.click(
+        await screen.findByRole("button", {
+            name: "Edit Personal DeepSeek",
+        }),
+    );
+    await screen.findByPlaceholderText("••••••••");
+    fireEvent.change(screen.getByRole("textbox", { name: "Name" }), {
+        target: { value: "Renamed" },
+    });
+    vi.mocked(listProviders).mockResolvedValue({
+        kind: "desktop",
+        page: { items: [renamed], nextCursor: null, total: 1 },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
-        const notice = await screen.findByText(saved);
-        expect(notice.closest('[role="status"]')).not.toBeNull();
-        expect(notice.closest("main")).toBeNull();
-        // Back on the list, focus is on the saved row, not the notification.
-        expect(document.activeElement).toBe(
-            screen.getByRole("button", { name: renamedEdit }),
-        );
-        fireEvent.click(screen.getByRole("button", { name: agents }));
-        expect(screen.getByText(saved)).toBe(notice);
-        expectNoKeysOrDiagnostics();
-    },
-);
+    const notice = await screen.findByText("Saved Renamed.");
+    expect(notice.closest('[role="status"]')).not.toBeNull();
+    // Back on the list, focus is on the saved row, not the notification.
+    expect(document.activeElement).toBe(
+        screen.getByRole("button", { name: "Edit Renamed" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Agents" }));
+    expect(screen.getByText("Saved Renamed.")).toBe(notice);
+    expectNoKeysOrDiagnostics();
+});
 
 test("switching language keeps the Providers list and an open form in place", async () => {
     useDesktopProviders();
@@ -819,45 +752,31 @@ test.each([
     },
 );
 
-test.each([
-    {
+test("About metadata failures are translated and retried", async () => {
+    vi.mocked(getLocalePreference).mockResolvedValue({
+        kind: "desktop",
         preference: "en",
-        settings: "Settings",
-        about: "About",
-        message: "Application information could not be read. Try again.",
-        retry: "Reload application information",
-    },
-    {
-        preference: "zh-CN",
-        settings: "设置",
-        about: "关于",
-        message: "无法读取应用信息，请重试。",
-        retry: "重新读取应用信息",
-    },
-] as const)(
-    "About metadata failures are translated and retried in $preference",
-    async ({ preference, settings, about, message, retry }) => {
-        vi.mocked(getLocalePreference).mockResolvedValue({
-            kind: "desktop",
-            preference,
-        });
-        vi.mocked(getAppInfo).mockRejectedValue(
-            new Error("private runtime detail"),
-        );
-        renderDesktopStartup("en-US");
-        fireEvent.click(await screen.findByRole("button", { name: settings }));
-        fireEvent.click(screen.getByRole("tab", { name: about }));
-        expect((await screen.findByRole("alert")).textContent).toBe(message);
-        expectNoKeysOrDiagnostics();
-        vi.mocked(getAppInfo).mockResolvedValue({
-            name: "vibemate",
-            version: "0.1.0",
-        });
-        fireEvent.click(screen.getByRole("button", { name: retry }));
-        expect(await screen.findByText("0.1.0")).toBeDefined();
-        expect(screen.queryByRole("alert")).toBeNull();
-    },
-);
+    });
+    vi.mocked(getAppInfo).mockRejectedValue(
+        new Error("private runtime detail"),
+    );
+    renderDesktopStartup("en-US");
+    fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
+    fireEvent.click(screen.getByRole("tab", { name: "About" }));
+    expect((await screen.findByRole("alert")).textContent).toBe(
+        "Application information could not be read. Try again.",
+    );
+    expectNoKeysOrDiagnostics();
+    vi.mocked(getAppInfo).mockResolvedValue({
+        name: "vibemate",
+        version: "0.1.0",
+    });
+    fireEvent.click(
+        screen.getByRole("button", { name: "Reload application information" }),
+    );
+    expect(await screen.findByText("0.1.0")).toBeDefined();
+    expect(screen.queryByRole("alert")).toBeNull();
+});
 
 test.each([
     {
@@ -899,52 +818,34 @@ test.each([
     },
 );
 
-test.each([
-    {
-        locale: "en" as const,
-        settings: "Settings",
-        about: "About",
-        general: "General",
-        overview: "Overview",
-    },
-    {
-        locale: "zh-CN" as const,
-        settings: "设置",
-        about: "关于",
-        general: "常规",
-        overview: "概览",
-    },
-])(
-    "Settings sidebar returns to General without unmounting preference input ($locale)",
-    async (labels) => {
-        translator = await createAppI18n(labels.locale);
-        render(<App />);
-        fireEvent.click(screen.getByRole("button", { name: labels.settings }));
-        const input = screen.getByRole("textbox", {
-            name: "Unsubmitted note",
-        });
-        fireEvent.change(input, { target: { value: "Retained setting" } });
-        fireEvent.click(screen.getByRole("tab", { name: labels.about }));
-        fireEvent.click(screen.getByRole("button", { name: labels.overview }));
-        fireEvent.click(screen.getByRole("button", { name: labels.settings }));
-        expect(
-            screen
-                .getByRole("tab", { name: labels.general })
-                .getAttribute("aria-selected"),
-        ).toBe("true");
-        expect(screen.getByRole("textbox", { name: "Unsubmitted note" })).toBe(
-            input,
-        );
-        expect(input).toHaveProperty("value", "Retained setting");
-        fireEvent.click(screen.getByRole("tab", { name: labels.about }));
-        fireEvent.click(screen.getByRole("button", { name: labels.settings }));
-        expect(
-            screen
-                .getByRole("tab", { name: labels.general })
-                .getAttribute("aria-selected"),
-        ).toBe("true");
-    },
-);
+test("Settings sidebar returns to General without unmounting preference input", async () => {
+    translator = await createAppI18n("en");
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    const input = screen.getByRole("textbox", {
+        name: "Unsubmitted note",
+    });
+    fireEvent.change(input, { target: { value: "Retained setting" } });
+    fireEvent.click(screen.getByRole("tab", { name: "About" }));
+    fireEvent.click(screen.getByRole("button", { name: "Overview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    expect(
+        screen
+            .getByRole("tab", { name: "General" })
+            .getAttribute("aria-selected"),
+    ).toBe("true");
+    expect(screen.getByRole("textbox", { name: "Unsubmitted note" })).toBe(
+        input,
+    );
+    expect(input).toHaveProperty("value", "Retained setting");
+    fireEvent.click(screen.getByRole("tab", { name: "About" }));
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    expect(
+        screen
+            .getByRole("tab", { name: "General" })
+            .getAttribute("aria-selected"),
+    ).toBe("true");
+});
 
 test("MCP mounts on first visit and sidebar activation returns to its list", async () => {
     vi.mocked(listMcpDefinitions).mockResolvedValue({

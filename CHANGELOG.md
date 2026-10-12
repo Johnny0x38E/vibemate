@@ -147,6 +147,8 @@ are not implemented yet.
 
 ### Fixed
 
+- Fixed Windows Clippy's `unused_mut` failure in CLI version-probe temporary-directory creation. Mutability is confined to Unix permission setup, preserving mode `0700` without suppressing warnings.
+
 - Sidebar module clicks now open each module home rather than its previous editor/detail page, including re-clicking the current module. Providers/MCP/Agents return to lists and Settings to General without remounting cached modules. Preserved model-draft cancellation, pending-write protection, MCP uncertain-outcome protection, Agent paths and Settings controls; late MCP edit reads cannot reopen the editor after returning home.
 
 - Fixed the Agent rediscovery icon button being narrowed by an old text-button width override. Restored a left-label/right-control layout for the manual entry path, with the input and square rediscovery button kept together.

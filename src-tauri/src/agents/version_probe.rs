@@ -102,12 +102,15 @@ impl ScratchDirectory {
             if !path.is_absolute() {
                 return Err(VersionProbeError::OperationFailed);
             }
-            let mut builder = fs::DirBuilder::new();
+            let builder = fs::DirBuilder::new();
+            // Only Unix permission setup needs mutation; Windows keeps an immutable builder.
             #[cfg(unix)]
-            {
+            let builder = {
                 use std::os::unix::fs::DirBuilderExt;
+                let mut builder = builder;
                 builder.mode(0o700);
-            }
+                builder
+            };
             match builder.create(&path) {
                 Ok(()) => return Ok(Self(path)),
                 Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,

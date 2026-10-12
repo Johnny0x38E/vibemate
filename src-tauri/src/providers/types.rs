@@ -370,6 +370,9 @@ pub struct ProviderPage {
     pub items: Vec<ProviderRecord>,
     /// Pass this as `after` to read the next page; `None` means this is the last page.
     pub next_cursor: Option<String>,
+    /// How many instances exist in total, so a count stays correct without
+    /// reading every page.
+    pub total: i64,
 }
 
 /// Whether a provider has a key, as recorded in SQLite.

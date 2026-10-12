@@ -110,8 +110,9 @@ function row(id: string, overrides: Partial<ProviderRecord> = {}) {
 function page(
     items: ProviderRecord[],
     nextCursor: string | null = null,
+    total: number = items.length,
 ): ProviderPageResult {
-    return { kind: "desktop", page: { items, nextCursor } };
+    return { kind: "desktop", page: { items, nextCursor, total } };
 }
 
 function deferred<T>() {
@@ -320,6 +321,25 @@ test.each([
         expect(create).not.toHaveBeenCalled();
     },
 );
+
+test("the stored total is stated above the list", async () => {
+    // 7 configurations exist, one page is loaded: the count describes storage,
+    // not the loaded rows, like the MCP and skill lists.
+    list.mockResolvedValue(page([row("a")], null, 7));
+    await mount();
+    expect(
+        await screen.findByText("7 provider configurations in total"),
+    ).toBeDefined();
+});
+
+test("an empty list states no total", async () => {
+    list.mockResolvedValue(page([]));
+    await mount();
+    expect(
+        await screen.findByText("No provider configurations are saved yet."),
+    ).toBeDefined();
+    expect(screen.queryByText(/in total/)).toBeNull();
+});
 
 test("loads more with the opaque cursor, then stops on the last page", async () => {
     const more: (() => Promise<ProviderPageResult>)[] = [

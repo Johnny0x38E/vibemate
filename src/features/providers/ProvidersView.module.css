@@ -43,8 +43,21 @@
     margin-top: var(--space-md);
 }
 
+/* Stored configuration total: the first line above the list. */
+.count {
+    margin: var(--page-content-gap) 0 0;
+    color: var(--color-summary);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+}
+
 .list {
     margin: var(--page-content-gap) 0 0;
+}
+
+/* Directly under the total the list needs only a small gap. */
+.count + .list {
+    margin-top: var(--space-sm);
 }
 
 .details {

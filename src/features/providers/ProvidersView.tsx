@@ -54,6 +54,8 @@ type ListState =
           items: ProviderRecord[];
           nextCursor: string | null;
           more: MoreState;
+          /** Stored instances in total, not the rows loaded so far. */
+          total: number;
       };
 
 /**
@@ -88,6 +90,7 @@ function listFromResult(result: ProviderPageResult): ListState {
               items: result.page.items,
               nextCursor: result.page.nextCursor,
               more: { kind: "idle" },
+              total: result.page.total,
           };
 }
 
@@ -287,6 +290,8 @@ export function ProvidersView({
                           items: mergeRows(previous.items, result.page.items),
                           nextCursor: result.page.nextCursor,
                           more: { kind: "idle" },
+                          // Later pages repeat the same stored total.
+                          total: result.page.total,
                       }
                     : previous,
             );
@@ -311,7 +316,13 @@ export function ProvidersView({
             if (previous.kind !== "ready") return previous;
             const known = previous.items.some((item) => item.id === record.id);
             if (!known && previous.nextCursor !== null) return previous;
-            return { ...previous, items: mergeRows(previous.items, [record]) };
+            // A row that was not listed before is a just-created instance, so
+            // the stored total grows by one until the confirming re-read lands.
+            return {
+                ...previous,
+                items: mergeRows(previous.items, [record]),
+                total: known ? previous.total : previous.total + 1,
+            };
         });
     }
 
@@ -556,6 +567,12 @@ export function ProvidersView({
                             {t("providers.retry")}
                         </button>
                     </div>
+                )}
+
+                {list.kind === "ready" && list.total > 0 && (
+                    <p className={styles["count"]}>
+                        {t("providers.count", { count: list.total })}
+                    </p>
                 )}
 
                 {list.kind === "ready" && list.items.length === 0 && (

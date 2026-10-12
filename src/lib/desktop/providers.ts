@@ -71,6 +71,8 @@ export interface ProviderPage {
     items: ProviderRecord[];
     /** Opaque; pass it back as `after` for the next page. `null` on the last page. */
     nextCursor: string | null;
+    /** Stored instances in total, so a count stays correct without reading every page. */
+    total: number;
 }
 
 /** Fields for a new instance. Rust validates and normalizes every field. */
@@ -203,6 +205,12 @@ const RECORD_KEYS = [
     "selectedModelCount",
 ] as const;
 
+/** Page response keys, checked strictly so an extra field is not passed along. */
+const PAGE_KEYS = ["items", "nextCursor", "total"] as const;
+
+/** Sanity bound for the stored total, matching the other list boundaries. */
+const MAX_TOTAL = 100_000;
+
 function isProviderKind(value: unknown): value is ProviderKind {
     return PROVIDER_KINDS.some((kind) => kind === value);
 }
@@ -323,18 +331,28 @@ function validateTemplate(value: unknown): ProviderTemplate {
 function validatePage(value: unknown, limit: number): ProviderPage {
     if (
         !isObject(value) ||
+        !hasExactKeys(value, PAGE_KEYS) ||
         !Array.isArray(value["items"]) ||
         value["items"].length > limit ||
         !(
             value["nextCursor"] === null ||
             typeof value["nextCursor"] === "string"
-        )
+        ) ||
+        !Number.isSafeInteger(value["total"]) ||
+        typeof value["total"] !== "number" ||
+        value["total"] < 0 ||
+        value["total"] > MAX_TOTAL
     ) {
         throw invalidResponse();
     }
+    const items = value["items"].map(validateRecord);
+    // The total counts every stored instance, so it can never be smaller than
+    // the page that was read; a wilder value is a bug, not a number to display.
+    if (value["total"] < items.length) throw invalidResponse();
     return {
-        items: value["items"].map(validateRecord),
+        items,
         nextCursor: value["nextCursor"],
+        total: value["total"],
     };
 }
 

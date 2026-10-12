@@ -1,6 +1,16 @@
 /* Palette values only. App.css resolves brightness into shared semantic tokens. */
 /* A filled accent control (primary button, checked box) pairs `--theme-accent-*`
    with `--theme-on-accent-*`, the color of its label or glyph. */
+/* Two hue families sit beside the neutral ramp: `--theme-chip-*` badges carry
+   metadata (protocol, transport, count), and `--theme-status-*` colors carry an
+   outcome (success, danger). Status hues follow the platform that the palette
+   imitates: Apple's system green and red, or Fluent's `colorPaletteGreen*` and
+   `colorPaletteRed*` tokens. Apple only publishes solid fill colors, and its
+   light red and green are too pale to read on a light page, so those two
+   foregrounds use Apple's increased-contrast variants; the light red is then
+   darkened 5% to reach 4.5:1. Tinted backgrounds mix that foreground 12%
+   (light) or 22% (dark) into the page background, and the danger border mixes
+   40%. `scripts/theme-contrast.test.mjs` checks every pair. */
 
 /* Apple system blue and grouped surfaces (HIG-style neutrals). */
 :root[data-theme="macos"],
@@ -35,6 +45,18 @@
     --theme-chip-info-fg-dark: #6fb6ff;
     --theme-chip-count-bg-dark: #1a3326;
     --theme-chip-count-fg-dark: #7dcea0;
+    /* Apple system green #008932 (increased contrast) and red #db142a
+       (#E9152D darkened 5%), plus their dark counterparts #30D158 / #FF4245. */
+    --theme-status-success-bg-light: #d8e8df;
+    --theme-status-success-fg-light: #008932;
+    --theme-status-danger-bg-light: #f2dade;
+    --theme-status-danger-fg-light: #db142a;
+    --theme-status-danger-border-light: #eb9ba5;
+    --theme-status-success-bg-dark: #20442b;
+    --theme-status-success-fg-dark: #30d158;
+    --theme-status-danger-bg-dark: #4e2427;
+    --theme-status-danger-fg-dark: #ff4245;
+    --theme-status-danger-border-dark: #772b2e;
 }
 
 /* Fluent neutrals with Windows accent blue. */
@@ -72,6 +94,18 @@
     --theme-chip-info-fg-dark: #8fd0ff;
     --theme-chip-count-bg-dark: #1a3324;
     --theme-chip-count-fg-dark: #8fd4a8;
+    /* Fluent `colorPaletteGreen/Red` tokens: Background1, Foreground1 and
+       Border1 in both brightness modes. */
+    --theme-status-success-bg-light: #f1faf1;
+    --theme-status-success-fg-light: #0e700e;
+    --theme-status-danger-bg-light: #fdf6f6;
+    --theme-status-danger-fg-light: #bc2f32;
+    --theme-status-danger-border-light: #f1bbbc;
+    --theme-status-success-bg-dark: #052505;
+    --theme-status-success-fg-dark: #54b054;
+    --theme-status-danger-bg-dark: #3f1011;
+    --theme-status-danger-fg-dark: #e37d80;
+    --theme-status-danger-border-dark: #d13438;
 }
 
 :root,
@@ -106,6 +140,17 @@
     --theme-chip-info-fg-dark: #b6c9bd;
     --theme-chip-count-bg-dark: #243540;
     --theme-chip-count-fg-dark: #9ec9de;
+    /* The accent-free palettes share the original status pair. */
+    --theme-status-success-bg-light: #daf0e4;
+    --theme-status-success-fg-light: #16794a;
+    --theme-status-danger-bg-light: #fce8e6;
+    --theme-status-danger-fg-light: #b42318;
+    --theme-status-danger-border-light: #f1b4ad;
+    --theme-status-success-bg-dark: #1a3328;
+    --theme-status-success-fg-dark: #6bc497;
+    --theme-status-danger-bg-dark: #3d1f1f;
+    --theme-status-danger-fg-dark: #f08979;
+    --theme-status-danger-border-dark: #8a4a42;
 }
 
 :root[data-theme="graphite"],
@@ -140,6 +185,16 @@
     --theme-chip-info-fg-dark: #c5c5d3;
     --theme-chip-count-bg-dark: #2e3348;
     --theme-chip-count-fg-dark: #aeb8e8;
+    --theme-status-success-bg-light: #daf0e4;
+    --theme-status-success-fg-light: #16794a;
+    --theme-status-danger-bg-light: #fce8e6;
+    --theme-status-danger-fg-light: #b42318;
+    --theme-status-danger-border-light: #f1b4ad;
+    --theme-status-success-bg-dark: #1a3328;
+    --theme-status-success-fg-dark: #6bc497;
+    --theme-status-danger-bg-dark: #3d1f1f;
+    --theme-status-danger-fg-dark: #f08979;
+    --theme-status-danger-border-dark: #8a4a42;
 }
 
 :root[data-theme="linen"],
@@ -174,6 +229,16 @@
     --theme-chip-info-fg-dark: #e1b784;
     --theme-chip-count-bg-dark: #3a3040;
     --theme-chip-count-fg-dark: #d4b8e8;
+    --theme-status-success-bg-light: #daf0e4;
+    --theme-status-success-fg-light: #16794a;
+    --theme-status-danger-bg-light: #fce8e6;
+    --theme-status-danger-fg-light: #b42318;
+    --theme-status-danger-border-light: #f1b4ad;
+    --theme-status-success-bg-dark: #1a3328;
+    --theme-status-success-fg-dark: #6bc497;
+    --theme-status-danger-bg-dark: #3d1f1f;
+    --theme-status-danger-fg-dark: #f08979;
+    --theme-status-danger-border-dark: #8a4a42;
 }
 
 :root[data-theme="iris"],
@@ -208,6 +273,16 @@
     --theme-chip-info-fg-dark: #c7a2ef;
     --theme-chip-count-bg-dark: #2a3348;
     --theme-chip-count-fg-dark: #a8c4ef;
+    --theme-status-success-bg-light: #daf0e4;
+    --theme-status-success-fg-light: #16794a;
+    --theme-status-danger-bg-light: #fce8e6;
+    --theme-status-danger-fg-light: #b42318;
+    --theme-status-danger-border-light: #f1b4ad;
+    --theme-status-success-bg-dark: #1a3328;
+    --theme-status-success-fg-dark: #6bc497;
+    --theme-status-danger-bg-dark: #3d1f1f;
+    --theme-status-danger-fg-dark: #f08979;
+    --theme-status-danger-border-dark: #8a4a42;
 }
 
 :root[data-theme="ocean"],
@@ -242,6 +317,16 @@
     --theme-chip-info-fg-dark: #87bfdc;
     --theme-chip-count-bg-dark: #243530;
     --theme-chip-count-fg-dark: #8fd4bc;
+    --theme-status-success-bg-light: #daf0e4;
+    --theme-status-success-fg-light: #16794a;
+    --theme-status-danger-bg-light: #fce8e6;
+    --theme-status-danger-fg-light: #b42318;
+    --theme-status-danger-border-light: #f1b4ad;
+    --theme-status-success-bg-dark: #1a3328;
+    --theme-status-success-fg-dark: #6bc497;
+    --theme-status-danger-bg-dark: #3d1f1f;
+    --theme-status-danger-fg-dark: #f08979;
+    --theme-status-danger-border-dark: #8a4a42;
 }
 
 /* Notion-inspired neutrals; secondary text is darkened for readable contrast. */
@@ -277,4 +362,14 @@
     --theme-chip-info-fg-dark: #d4d3cf;
     --theme-chip-count-bg-dark: #2e3338;
     --theme-chip-count-fg-dark: #b8cce0;
+    --theme-status-success-bg-light: #daf0e4;
+    --theme-status-success-fg-light: #16794a;
+    --theme-status-danger-bg-light: #fce8e6;
+    --theme-status-danger-fg-light: #b42318;
+    --theme-status-danger-border-light: #f1b4ad;
+    --theme-status-success-bg-dark: #1a3328;
+    --theme-status-success-fg-dark: #6bc497;
+    --theme-status-danger-bg-dark: #3d1f1f;
+    --theme-status-danger-fg-dark: #f08979;
+    --theme-status-danger-border-dark: #8a4a42;
 }

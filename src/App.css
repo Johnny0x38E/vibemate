@@ -19,11 +19,11 @@
     --color-chip-info-fg: var(--theme-chip-info-fg-light);
     --color-chip-count-bg: var(--theme-chip-count-bg-light);
     --color-chip-count-fg: var(--theme-chip-count-fg-light);
-    --color-success-fg: #16794a;
-    --color-success-bg: #daf0e4;
-    --color-danger-fg: #b42318;
-    --color-danger-bg: #fce8e6;
-    --color-danger-border: #f1b4ad;
+    --color-success-fg: var(--theme-status-success-fg-light);
+    --color-success-bg: var(--theme-status-success-bg-light);
+    --color-danger-fg: var(--theme-status-danger-fg-light);
+    --color-danger-bg: var(--theme-status-danger-bg-light);
+    --color-danger-border: var(--theme-status-danger-border-light);
     --space-sm: 8px;
     --space-md: 16px;
     /*
@@ -73,11 +73,11 @@
         --color-chip-info-fg: var(--theme-chip-info-fg-dark);
         --color-chip-count-bg: var(--theme-chip-count-bg-dark);
         --color-chip-count-fg: var(--theme-chip-count-fg-dark);
-        --color-success-fg: #6bc497;
-        --color-success-bg: #1a3328;
-        --color-danger-fg: #f08979;
-        --color-danger-bg: #3d1f1f;
-        --color-danger-border: #8a4a42;
+        --color-success-fg: var(--theme-status-success-fg-dark);
+        --color-success-bg: var(--theme-status-success-bg-dark);
+        --color-danger-fg: var(--theme-status-danger-fg-dark);
+        --color-danger-bg: var(--theme-status-danger-bg-dark);
+        --color-danger-border: var(--theme-status-danger-border-dark);
     }
 }
 :root[data-appearance="dark"] {
@@ -97,11 +97,11 @@
     --color-chip-info-fg: var(--theme-chip-info-fg-dark);
     --color-chip-count-bg: var(--theme-chip-count-bg-dark);
     --color-chip-count-fg: var(--theme-chip-count-fg-dark);
-    --color-success-fg: #6bc497;
-    --color-success-bg: #1a3328;
-    --color-danger-fg: #f08979;
-    --color-danger-bg: #3d1f1f;
-    --color-danger-border: #8a4a42;
+    --color-success-fg: var(--theme-status-success-fg-dark);
+    --color-success-bg: var(--theme-status-success-bg-dark);
+    --color-danger-fg: var(--theme-status-danger-fg-dark);
+    --color-danger-bg: var(--theme-status-danger-bg-dark);
+    --color-danger-border: var(--theme-status-danger-border-dark);
 }
 * {
     box-sizing: border-box;

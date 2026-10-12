@@ -609,7 +609,7 @@ function useDesktopProviders(): void {
     });
     vi.mocked(listProviders).mockResolvedValue({
         kind: "desktop",
-        page: { items: [savedProvider], nextCursor: null },
+        page: { items: [savedProvider], nextCursor: null, total: 1 },
     });
 }
 
@@ -733,7 +733,7 @@ test.each([
         });
         vi.mocked(listProviders).mockResolvedValue({
             kind: "desktop",
-            page: { items: [renamed], nextCursor: null },
+            page: { items: [renamed], nextCursor: null, total: 1 },
         });
         fireEvent.click(screen.getByRole("button", { name: save }));
 

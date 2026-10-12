@@ -75,10 +75,11 @@ describe("provider desktop boundary", () => {
         vi.mocked(invoke).mockResolvedValueOnce({
             items: [record],
             nextCursor: `1000.${ID}`,
+            total: 1,
         });
         expect(await listProviders({ after: null, limit: 1 })).toEqual({
             kind: "desktop",
-            page: { items: [record], nextCursor: `1000.${ID}` },
+            page: { items: [record], nextCursor: `1000.${ID}`, total: 1 },
         });
         expect(invoke).toHaveBeenLastCalledWith("list_providers", {
             request: { after: null, limit: 1 },
@@ -217,13 +218,32 @@ describe("provider desktop boundary", () => {
         vi.mocked(invoke).mockResolvedValueOnce({
             items: [record, { ...record, id: "f".repeat(32) }],
             nextCursor: null,
+            total: 2,
         });
         await expect(
             listProviders({ after: null, limit: 1 }),
         ).rejects.toMatchObject({ code: "invalid_response" });
-        vi.mocked(invoke).mockResolvedValueOnce({ items: [], nextCursor: 5 });
+        vi.mocked(invoke).mockResolvedValueOnce({
+            items: [],
+            nextCursor: 5,
+            total: 0,
+        });
         await expect(
             listProviders({ after: null, limit: 1 }),
+        ).rejects.toMatchObject({ code: "invalid_response" });
+    });
+
+    it.each([
+        { items: [record], nextCursor: null },
+        { items: [record], nextCursor: null, total: -1 },
+        { items: [record], nextCursor: null, total: 0 },
+        { items: [record], nextCursor: null, total: 100_001 },
+        { items: [record], nextCursor: null, total: 1.5 },
+        { items: [record], nextCursor: null, total: 1, extra: true },
+    ])("rejects a malformed page %j", async (response) => {
+        vi.mocked(invoke).mockResolvedValue(response);
+        await expect(
+            listProviders({ after: null, limit: 10 }),
         ).rejects.toMatchObject({ code: "invalid_response" });
     });
 

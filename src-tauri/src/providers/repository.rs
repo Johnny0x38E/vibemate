@@ -182,7 +182,8 @@ pub fn get_provider(storage: &Storage, id: &str) -> Result<ProviderRecord, Provi
 /// order is total and stable. Editing never moves an instance, because edits do
 /// not change `created_at`. One extra row is fetched to learn whether another
 /// page exists. A row this build cannot read fails the whole page rather than
-/// being skipped silently.
+/// being skipped silently. Every page also reports the stored total, which may
+/// be larger than the rows on the page.
 ///
 /// # Errors
 /// `InvalidRequest` for a limit outside 1..=`MAX_PAGE_SIZE` or a malformed
@@ -205,6 +206,13 @@ pub fn list_providers(
     let connection = storage
         .lock()
         .map_err(|_| ProviderError::StorageUnavailable)?;
+    // The count covers the whole table, so a caller can state the stored total
+    // without reading every page.
+    let total: i64 = connection
+        .query_row("SELECT COUNT(*) FROM provider_instance", [], |row| {
+            row.get(0)
+        })
+        .map_err(|_| ProviderError::ReadFailed)?;
     // `(a, b) > (x, y)` is SQLite's row-value comparison: a > x, or a = x and b > y.
     // With no cursor, `?1 IS NULL` is true and the comparison is not needed.
     let mut statement = connection
@@ -239,7 +247,11 @@ pub fn list_providers(
     } else {
         None
     };
-    Ok(ProviderPage { items, next_cursor })
+    Ok(ProviderPage {
+        items,
+        next_cursor,
+        total,
+    })
 }
 
 /// Columns read for a record, in the order `StoredRow::read` expects.

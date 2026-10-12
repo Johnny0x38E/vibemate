@@ -6,6 +6,10 @@ GitHub release notes are extracted from the matching version section only.
 
 ## [Unreleased]
 
+### Added
+
+- The provider list states how many configurations are stored above the list, matching the MCP and skill lists. Each page read carries the stored total from Rust, so the count stays correct while paging, and a just-created configuration is counted from the moment its row appears.
+
 ### Changed
 
 - Condensed completed development-plan records while retaining unresolved acceptance items. Clarified that request settings belong to target Agent configuration, not the central provider/model catalog.

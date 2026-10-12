@@ -871,7 +871,8 @@ fn providers_pages_are_bounded_and_ordered_by_creation_then_id() {
         page(&storage, None, 3),
         ProviderPage {
             items: Vec::new(),
-            next_cursor: None
+            next_cursor: None,
+            total: 0
         }
     );
     // Three instances share one millisecond, so only the ID can order them.
@@ -898,6 +899,9 @@ fn providers_pages_are_bounded_and_ordered_by_creation_then_id() {
     assert_eq!(page_sizes, vec![2, 2, 1]);
     assert_eq!(seen, expected);
 
+    // Every page reports the stored total, not the rows it returned.
+    assert_eq!(page(&storage, None, 2).total, 5);
+
     // A page that exactly fits the remaining rows reports no further page.
     assert_eq!(page(&storage, None, 5).next_cursor, None);
     assert_eq!(page(&storage, None, MAX_PAGE_SIZE).items.len(), 5);
@@ -915,6 +919,8 @@ fn providers_instances_added_between_pages_are_not_repeated() {
     create(&storage, create_request("openrouter", "Older"), 0).expect("older");
     let newer = create(&storage, create_request("openrouter", "Newer"), 9).expect("newer");
     let second = page(&storage, first.next_cursor, 2);
+    // The total covers rows written between two page reads as well.
+    assert_eq!(second.total, 5);
     let first_ids: Vec<_> = first.items.iter().map(|record| record.id.clone()).collect();
     assert!(
         second

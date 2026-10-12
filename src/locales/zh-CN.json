@@ -126,6 +126,8 @@
         "preview": "浏览器预览无法读取或保存服务商配置。请在 vibemate 桌面应用中打开此页面。",
         "loading": "正在读取已保存的服务商配置…",
         "empty": "还没有保存的服务商配置。",
+        "count_one": "共 {{count}} 个服务商配置",
+        "count_other": "共 {{count}} 个服务商配置",
         "add": "新建",
         "retry": "重试",
         "retryTemplates": "重新读取可选服务商",

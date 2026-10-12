@@ -126,6 +126,8 @@
         "preview": "The browser preview cannot read or save provider configurations. Open this page in the vibemate desktop app.",
         "loading": "Reading saved provider configurations…",
         "empty": "No provider configurations are saved yet.",
+        "count_one": "{{count}} provider configuration in total",
+        "count_other": "{{count}} provider configurations in total",
         "add": "New",
         "retry": "Try again",
         "retryTemplates": "Try reading available providers again",

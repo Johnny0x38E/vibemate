@@ -29,7 +29,10 @@ import { ProviderTabbedView } from "./ProviderTabbedView";
 import { ProviderIcon } from "./ProviderIcon";
 import { ProviderPage } from "./ProviderPage";
 import pageStyles from "./ProviderPage.module.css";
-import buttons from "./providerButtons.module.css";
+import buttons from "../../components/actionButtons.module.css";
+import editForm from "../../components/editForm.module.css";
+import chip from "../../components/infoChip.module.css";
+import surfaceList from "../../components/surfaceList.module.css";
 import styles from "./ProvidersView.module.css";
 
 /** Rows per page; small enough to render instantly, well under the Rust cap. */
@@ -503,7 +506,13 @@ export function ProvidersView({
 
                 {!preview && templates.kind === "error" && (
                     <div className={styles["notice"]}>
-                        <p className={styles["error"]} role="alert">
+                        <p
+                            className={[
+                                editForm["error"],
+                                styles["error"],
+                            ].join(" ")}
+                            role="alert"
+                        >
                             {t(`providers.errors.${templates.code}`)}
                         </p>
                         <button
@@ -529,7 +538,13 @@ export function ProvidersView({
 
                 {list.kind === "error" && (
                     <div className={styles["notice"]}>
-                        <p className={styles["error"]} role="alert">
+                        <p
+                            className={[
+                                editForm["error"],
+                                styles["error"],
+                            ].join(" ")}
+                            role="alert"
+                        >
                             {t(`providers.errors.${list.code}`)}
                         </p>
                         <button
@@ -552,12 +567,20 @@ export function ProvidersView({
 
                 {list.kind === "ready" && list.items.length > 0 && (
                     <ul
-                        className={styles["list"]}
+                        className={[surfaceList["list"], styles["list"]].join(
+                            " ",
+                        )}
                         aria-label={t("providers.list.label")}
                     >
                         {list.items.map((record) => {
                             return (
-                                <li className={styles["item"]} key={record.id}>
+                                <li
+                                    className={[
+                                        surfaceList["item"],
+                                        styles["item"],
+                                    ].join(" ")}
+                                    key={record.id}
+                                >
                                     <div className={styles["details"]}>
                                         <div className={styles["primaryRow"]}>
                                             <ProviderIcon
@@ -581,15 +604,15 @@ export function ProvidersView({
                                                 </p>
                                             </div>
                                             <div className={styles["tagGroup"]}>
-                                                <span className={styles["tag"]}>
+                                                <span className={chip["chip"]}>
                                                     {protocolLabel(
                                                         record.protocol,
                                                     )}
                                                 </span>
                                                 <span
                                                     className={[
-                                                        styles["tag"],
-                                                        styles["tagModels"],
+                                                        chip["chip"],
+                                                        chip["count"],
                                                     ].join(" ")}
                                                 >
                                                     {t(
@@ -637,7 +660,12 @@ export function ProvidersView({
                 )}
 
                 {list.kind === "ready" && list.more.kind === "error" && (
-                    <p className={styles["error"]} role="alert">
+                    <p
+                        className={[editForm["error"], styles["error"]].join(
+                            " ",
+                        )}
+                        role="alert"
+                    >
                         {t(`providers.errors.${list.more.code}`)}
                     </p>
                 )}

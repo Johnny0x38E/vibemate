@@ -88,54 +88,6 @@
     margin-top: 0;
 }
 
-.detailPanel {
-    overflow: hidden;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-card);
-    background: var(--color-surface);
-}
-
-.detailPanel > .facts {
-    padding: var(--space-sm) var(--space-md);
-}
-
-.facts {
-    display: flex;
-    flex-direction: column;
-}
-
-.factRow {
-    display: flex;
-    /* Match model-list rows while keeping editable form sizing independent. */
-    min-height: 44px;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-lg);
-    padding: 8px 0;
-    border-bottom: 1px solid var(--color-border);
-}
-
-.factRow:last-child {
-    border-bottom: 0;
-}
-
-.factLabel {
-    flex-shrink: 0;
-    margin: 0;
-    color: var(--color-summary);
-    font-size: 0.8125rem;
-    font-weight: 400;
-}
-
-.factValue {
-    flex: 0 1 min(65%, 28rem);
-    margin: 0;
-    font-size: 0.8125rem;
-    line-height: 1.5;
-    text-align: end;
-    overflow-wrap: anywhere;
-}
-
 /* Match the smaller badges displayed inside model-list rows. */
 .badge {
     display: inline-flex;
@@ -187,14 +139,6 @@
     gap: var(--space-sm) var(--space-lg);
     margin-top: 0;
     padding: var(--space-sm) var(--space-md);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-card);
-    background: var(--color-surface);
-}
-
-.pathLabel {
-    font-size: 0.8125rem;
-    color: var(--color-summary);
 }
 
 .pathControls {
@@ -206,27 +150,17 @@
     /* IconButton owns its square size; do not override it with text-button rules. */
 }
 
-.input {
-    box-sizing: border-box;
+/* The shared edit input is width 100%. This field shares a row with the
+   refresh button, so flex sizing has to win over that width. */
+.pathControls .pathInput {
     flex: 1 1 0;
+    width: 0;
     min-width: 0;
-    height: 36px;
-    padding: 0 10px;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-control);
-    background: var(--color-background);
-    color: var(--color-text);
-    font: inherit;
 }
 
-.input:focus-visible {
-    /* Match model search: focus stays within the input border. */
-    outline: 2px solid var(--color-focus);
-    outline-offset: -2px;
-}
-
-.input:read-only {
-    color: var(--color-summary);
+/* A scan locks the path. The text cursor stays so it still reads as a path field. */
+.pathControls .pathInput:read-only {
+    cursor: text;
 }
 
 .error {

@@ -1,3 +1,25 @@
+/* Narrow dropdown used by settings rows and by create/edit rows. The chevron
+   sits over the trigger padding; the trigger itself fills this box. */
+.field {
+    position: relative;
+    width: 11rem;
+    flex: 0 0 auto;
+    min-width: 0;
+}
+
+.field::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    right: 10px;
+    width: 6px;
+    height: 6px;
+    border-right: 1.5px solid var(--color-summary);
+    border-bottom: 1.5px solid var(--color-summary);
+    transform: translateY(-65%) rotate(45deg);
+    pointer-events: none;
+}
+
 .trigger {
     display: flex;
     align-items: center;
@@ -90,4 +112,10 @@
 .optionText {
     min-width: 0;
     overflow-wrap: anywhere;
+}
+
+@media (max-width: 520px) {
+    .field {
+        width: 100%;
+    }
 }

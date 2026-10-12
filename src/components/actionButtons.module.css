@@ -1,12 +1,11 @@
 /*
- * Button hierarchy shared by the Providers pages. Each view has exactly one
- * `primary` action (solid accent); recovery actions and "Load more" are
- * `secondary` (outline); destructive row actions use `dangerSecondary`;
- * row "Edit" is `text`. Page Back is styled in
- * `ProviderPage.module.css`, not these shared classes.
+ * Text buttons shared by Provider, MCP, and Agent pages. Each view has exactly
+ * one `primary` action (solid accent). Recovery actions and "Load more" are
+ * `secondary` (outline). Destructive row actions use `dangerSecondary`.
+ * Row "Edit" is `text`. Page Back lives in SecondaryPageFooter, not here.
  * Blocked buttons keep focus, so they are styled by aria-disabled, never
- * :disabled. Only existing theme tokens are used; text on the accent uses the
- * page background, which contrasts with the accent in light and dark themes.
+ * :disabled. Text on the accent uses the page background, which contrasts with
+ * the accent in light and dark themes.
  */
 .primary,
 .secondary,

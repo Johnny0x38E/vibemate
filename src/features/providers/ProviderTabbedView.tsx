@@ -8,6 +8,7 @@ import type {
 import { ProviderForm, type ProviderFormMode } from "./ProviderForm";
 import { ProviderModels, type SelectedModelCount } from "./ProviderModels";
 import { ProviderModelsCreateGate } from "./ProviderModelsCreateGate";
+import tabs from "../../components/underlineTabs.module.css";
 import styles from "./ProviderEditView.module.css";
 import { SecondaryPageFooter } from "../../components/SecondaryPageFooter";
 
@@ -111,13 +112,13 @@ export function ProviderTabbedView({
     return (
         <div className={styles["edit"]}>
             <div
-                className={styles["tabs"]}
+                className={[tabs["tabs"], styles["tabs"]].join(" ")}
                 role="tablist"
                 aria-label={t("providers.tabs.ariaLabel")}
             >
                 <button
                     type="button"
-                    className={styles["tab"]}
+                    className={tabs["tab"]}
                     role="tab"
                     onKeyDown={handleTabKey}
                     aria-selected={tab === "api"}
@@ -133,7 +134,7 @@ export function ProviderTabbedView({
                 </button>
                 <button
                     type="button"
-                    className={styles["tab"]}
+                    className={tabs["tab"]}
                     role="tab"
                     onKeyDown={handleTabKey}
                     aria-selected={tab === "models"}

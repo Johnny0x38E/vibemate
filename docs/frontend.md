@@ -33,15 +33,16 @@ reads are invalidated when returning home.
 - `src/features/providers/` contains `ProvidersView` (list and in-page
   navigation), `ProviderPage` (back control and title), `ProviderTabbedView`
   (API / Models tabs), `ProviderForm` (API fields in a settings-style card),
-  `ProviderModels` and `ProviderModelsCreateGate`, `ProviderIcon`, and
-  `providerButtons.module.css`; see [Provider configurations](#provider-configurations).
+  `ProviderModels` and `ProviderModelsCreateGate`, and `ProviderIcon`; see
+  [Provider configurations](#provider-configurations). Text buttons live in
+  `src/components/actionButtons.module.css` and are also used by MCP and Agents.
 - `src/features/settings/SettingsView.tsx` uses `PageModuleHeader`, General/About
   tabs, and panels. General hosts `LanguageSelector` (with `footer={<AppearanceControl />}`)
   and a separate `LogSettings` section (group heading plus its own card), both
   composed in `src/main.tsx`. Tab switches and leaving Settings keep preference
   controls mounted so pending saves and input survive.
 - `src/components/FieldSelect.tsx` is the shared single-choice dropdown (36 px
-  trigger, chevron from `settingsField.field`, Base UI Select interaction and
+  trigger, chevron on its own 11 rem field, Base UI Select interaction and
   a portaled list). Settings and provider forms use it instead of a native
   `<select>`; CSS Modules and existing theme tokens still own its appearance.
 - `src/components/IconButton.tsx` provides 36 px auxiliary form actions with
@@ -53,8 +54,21 @@ reads are invalidated when returning home.
   with native form submission, and log file/folder actions use the same component.
   Main save, navigation and recovery actions keep visible text. The stored-key eye icon is
   a read-only status indicator, not a reveal button.
-- `src/features/settings/settingsField.module.css` shares the grouped-card row
-  layout (label left, control right) for language and appearance.
+- Forms use two shared styles. `src/components/editForm.module.css` is the
+  create/edit card: 64 px rows, label on the left, a control column up to 26 rem,
+  36 px text inputs, hints, and field errors. Provider API, MCP, manual model
+  entry, and the Agent path field use it through `EditFormRow` where the row is
+  one label plus that column. Settings language, appearance, and log-path rows
+  use the same card and row, with `FieldSelect`'s own width instead of the wide
+  column. `src/components/detailForm.module.css` is the read-only detail card:
+  44 px fact rows, muted labels, and end-aligned values. Agent discovery and
+  configuration cards use `DetailPanel` / `DetailFact`. The Agent path card
+  reuses the detail surface and the edit input together. Model search uses that
+  same input with a surface fill. Provider and model errors use the same error
+  rule. Settings and Provider tabs share `underlineTabs.module.css`. Provider
+  and MCP index rows share `surfaceList.module.css` and `infoChip.module.css`.
+  About keeps its 56 px definition list. Model checkbox rows keep their own
+  44 px list layout.
 - Sidebar width is fixed at 200/88 px (`--sidebar-width`, `data-collapsed`); only
   the collapse button changes layout.
 - `src/components/WindowDragRegion.tsx` and `TitlebarChrome.tsx` (with
@@ -951,9 +965,9 @@ cases and one shell-navigation case, including hidden-value clearing, stale
 replies, reconciliation and browser preview. Visual and real credential-store
 acceptance remain separate from these simulated tests.
 
-MCP new and edit reuse the left-aligned `ProviderPage` title, `settingsField`
-rows, `ProviderForm` control widths and shared `FieldSelect`. Fields scroll
-between the title and `SecondaryPageFooter`, which places Back on the left and
+MCP new and edit reuse the left-aligned `ProviderPage` title, the shared
+edit-form rows, and `FieldSelect`. Fields scroll between the title and
+`SecondaryPageFooter`, which places Back on the left and
 Save on the right. Save feedback and reload actions remain visible; pending
 saves change the button label without replacing the button or losing focus.
 The main-column scroll override applies only to visible secondary pages
@@ -984,8 +998,9 @@ cards (official mark, name, version); opening a card shows paths, config file
 presence, and optional manual entry path override. The detail view has three
 cards: discovery/status/version, configuration path/file observations, and manual
 entry path. Cards have 8 px vertical / 16 px horizontal padding and 10 px gaps.
-Read-only rows use a 44 px minimum height and 8 px vertical padding, matching
-model rows; the editable path row retains the 64 px form baseline. Status and
+Read-only rows use the shared detail form (44 px minimum height and 8 px
+vertical padding, matching model rows). The editable path row uses the shared
+edit input on the 64 px form baseline, inside a detail-card surface. Status and
 version use model-row badges. Portaled hover/keyboard hints keep discovery and
 version provenance available, including unverified filename-derived versions.
 The configuration and manual-path cards have accessible section/form names

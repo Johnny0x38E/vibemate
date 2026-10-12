@@ -103,28 +103,13 @@
     border: 0;
 }
 
-.searchInput {
-    display: block;
-    width: 100%;
-    height: 36px;
-    min-height: 36px;
-    padding: 0 10px;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-control);
+/* Search uses the shared edit input. A surface fill keeps it visible on the
+   page background, and a disabled fetch fades it. */
+.searchField .searchInput {
     background: var(--color-surface);
-    color: var(--color-text);
-    font: inherit;
-    font-size: 0.8125rem;
 }
 
-/* Inset ring: the Models tab panel uses overflow:hidden, so an outer outline
-   would clip on the left edge of the search field. */
-.searchInput:focus-visible {
-    outline: 2px solid var(--color-focus);
-    outline-offset: -2px;
-}
-
-.searchInput:disabled {
+.searchField .searchInput:disabled {
     opacity: 0.55;
     cursor: not-allowed;
 }
@@ -139,15 +124,9 @@
     overflow-wrap: anywhere;
 }
 
-.error {
+/* Model-list errors keep a gap below the message. */
+p.error {
     margin: 0 0 var(--space-md);
-    padding-inline-start: var(--space-sm);
-    border-inline-start: 2px solid var(--color-text);
-    color: var(--color-text);
-    font-size: 0.8125rem;
-    font-weight: 600;
-    line-height: 1.6;
-    overflow-wrap: anywhere;
 }
 
 .manualRow {

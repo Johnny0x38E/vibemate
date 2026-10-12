@@ -35,17 +35,8 @@
     outline-offset: 2px;
 }
 
-/* Errors read differently from muted notes: foreground, semibold, a rule. */
-.error {
-    margin: 0;
-    padding-inline-start: var(--space-sm);
-    border-inline-start: 2px solid var(--color-text);
-    color: var(--color-text);
-    font-size: 0.8125rem;
-    font-weight: 600;
-    line-height: 1.6;
-    overflow-wrap: anywhere;
-}
+/* The shared edit-form error supplies the rule. This class only adds space
+   when the message follows the preview notice or the list. */
 
 .notice + .error,
 .list + .error {
@@ -53,27 +44,7 @@
 }
 
 .list {
-    width: 100%;
     margin: var(--page-content-gap) 0 0;
-    padding: 0;
-    overflow: hidden;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-card);
-    background: var(--color-surface);
-    list-style: none;
-}
-
-.item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-lg);
-    padding: 12px var(--space-md);
-    border-bottom: 1px solid var(--color-border);
-}
-
-.item:last-child {
-    border-bottom: 0;
 }
 
 .details {
@@ -117,28 +88,6 @@
     margin-inline-start: auto;
 }
 
-.tag {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0;
-    min-height: 1.625rem;
-    padding: 0 11px;
-    border-radius: 999px;
-    background: var(--color-chip-info-bg);
-    color: var(--color-chip-info-fg);
-    font-size: 0.8125rem;
-    font-weight: 500;
-    line-height: 1;
-    overflow-wrap: anywhere;
-    white-space: nowrap;
-}
-
-.tagModels {
-    background: var(--color-chip-count-bg);
-    color: var(--color-chip-count-fg);
-}
-
 .displayName {
     margin: 0;
     color: var(--color-summary);
@@ -156,11 +105,6 @@
 }
 
 @media (max-width: 520px) {
-    .item {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
     .item > button {
         align-self: flex-start;
     }

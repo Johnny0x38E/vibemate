@@ -16,7 +16,7 @@ import {
     type LocalePreferenceResult,
 } from "../../lib/desktop/settings";
 import { FieldSelect } from "../../components/FieldSelect";
-import fieldStyles from "./settingsField.module.css";
+import editForm from "../../components/editForm.module.css";
 import styles from "./LanguageSelector.module.css";
 
 /** Startup supplies a validated choice and the system language before mounting. */
@@ -174,14 +174,13 @@ export function LanguageSelector({
 
     return (
         <div className={styles["selector"]}>
-            <div className={fieldStyles["group"]}>
+            <div className={editForm["group"]}>
                 <div
-                    className={[
-                        fieldStyles["row"],
-                        fieldStyles["rowUniform"],
-                    ].join(" ")}
+                    className={[editForm["row"], editForm["rowUniform"]].join(
+                        " ",
+                    )}
                 >
-                    <label className={fieldStyles["label"]} htmlFor={id}>
+                    <label className={editForm["label"]} htmlFor={id}>
                         {t("settings.language.label")}
                     </label>
                     <FieldSelect

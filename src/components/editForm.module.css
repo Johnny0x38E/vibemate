@@ -1,0 +1,124 @@
+/*
+ * Editable form chrome for create/edit pages.
+ *
+ * A card holds left-label / right-control rows on a 64px baseline. Text inputs,
+ * hints, and field errors live here so Provider API, MCP, manual models, and the
+ * Agent path field share one control. Settings preference rows use the same card
+ * and row, but their dropdown keeps FieldSelect's own width.
+ *
+ * Read-only detail cards use detailForm.module.css instead.
+ */
+
+.group {
+    width: 100%;
+    margin-top: var(--page-content-gap);
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    background: var(--color-surface);
+}
+
+/* Tab and editor panels already separate the card from the title, so the
+   card margin would double that gap. Apply this with .group. */
+.groupFlush {
+    margin-top: 0;
+}
+
+.row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-lg);
+    padding: 14px var(--space-md);
+    border-bottom: 1px solid var(--color-border);
+}
+
+/* A common baseline avoids shorter text/badge rows; tall content can grow. */
+.rowUniform {
+    min-height: var(--form-row-min-height);
+    padding-block: 12px;
+    box-sizing: border-box;
+}
+
+.group > .row:last-child {
+    border-bottom: 0;
+}
+
+.label {
+    margin: 0;
+    flex-shrink: 0;
+    font-size: 0.8125rem;
+    font-weight: 400;
+}
+
+/* Right-hand column on create/edit pages. Settings dropdowns do not use it. */
+.control {
+    display: grid;
+    gap: 6px;
+    width: min(26rem, 100%);
+    min-width: 0;
+}
+
+.input {
+    box-sizing: border-box;
+    width: 100%;
+    height: 36px;
+    min-height: 36px;
+    padding: 0 10px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    color: var(--color-text);
+    background: var(--color-background);
+    font: inherit;
+    font-size: 0.8125rem;
+}
+
+.input:focus-visible {
+    /* Inset so a clipped scroll parent cannot cut the ring off. */
+    outline: 2px solid var(--color-focus);
+    outline-offset: -2px;
+}
+
+/* Blocked fields stay focusable through readOnly. */
+.input:read-only {
+    color: var(--color-summary);
+    cursor: not-allowed;
+}
+
+.input[aria-invalid="true"] {
+    border-width: 2px;
+}
+
+.hint,
+.message {
+    margin: 0;
+    color: var(--color-summary);
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+
+.hint {
+    font-size: 0.75rem;
+}
+
+.message {
+    font-size: 0.8125rem;
+}
+
+.error {
+    margin: 0;
+    padding-inline-start: var(--space-sm);
+    border-inline-start: 2px solid var(--color-text);
+    color: var(--color-text);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 520px) {
+    .row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}

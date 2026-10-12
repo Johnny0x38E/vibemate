@@ -19,11 +19,12 @@ import {
     type ProviderTemplate,
 } from "../../lib/desktop/providers";
 import { getProviderSecretStatus } from "../../lib/desktop/providerSecrets";
+import { EditFormRow } from "../../components/EditFormRow";
 import { FieldSelect } from "../../components/FieldSelect";
 import { Icon } from "../../components/Icon";
-import fieldStyles from "../settings/settingsField.module.css";
+import editForm from "../../components/editForm.module.css";
 import { ProviderIcon } from "./ProviderIcon";
-import buttons from "./providerButtons.module.css";
+import buttons from "../../components/actionButtons.module.css";
 import styles from "./ProviderForm.module.css";
 import { SecondaryPageFooter } from "../../components/SecondaryPageFooter";
 
@@ -488,7 +489,7 @@ export function ProviderForm({
         else return null;
         return (
             <p
-                className={styles["error"]}
+                className={editForm["error"]}
                 id={`${id}-${name}-error`}
                 role="alert"
             >
@@ -502,29 +503,29 @@ export function ProviderForm({
             case "failed":
                 // Field errors sit by their field, store errors at the top.
                 return fieldError || topError ? null : (
-                    <p className={styles["error"]} role="alert">
+                    <p className={editForm["error"]} role="alert">
                         {t(`providers.errors.${status.code}`)}
                     </p>
                 );
             case "saving":
                 return (
-                    <p className={styles["message"]} role="status">
+                    <p className={editForm["message"]} role="status">
                         {t("providers.form.saving")}
                     </p>
                 );
             case "refreshing":
                 return (
-                    <p className={styles["message"]} role="status">
+                    <p className={editForm["message"]} role="status">
                         {t("providers.form.refreshing")}
                     </p>
                 );
             case "unknown":
                 return (
                     <>
-                        <p className={styles["error"]} role="alert">
+                        <p className={editForm["error"]} role="alert">
                             {t(`providers.errors.${status.code}`)}
                         </p>
-                        <p className={styles["message"]}>
+                        <p className={editForm["message"]}>
                             {!status.refreshed
                                 ? t("providers.form.refreshFailed")
                                 : editing
@@ -539,25 +540,25 @@ export function ProviderForm({
                 );
             case "conflict":
                 return (
-                    <p className={styles["error"]} role="alert">
+                    <p className={editForm["error"]} role="alert">
                         {t("providers.errors.revision_conflict")}
                     </p>
                 );
             case "reloading":
                 return (
-                    <p className={styles["message"]} role="status">
+                    <p className={editForm["message"]} role="status">
                         {t("providers.form.reloading")}
                     </p>
                 );
             case "reloaded":
                 return (
-                    <p className={styles["message"]} role="status">
+                    <p className={editForm["message"]} role="status">
                         {t("providers.form.reloaded")}
                     </p>
                 );
             case "reloadFailed":
                 return (
-                    <p className={styles["error"]} role="alert">
+                    <p className={editForm["error"]} role="alert">
                         {t(`providers.errors.${status.code}`)}
                     </p>
                 );
@@ -605,7 +606,7 @@ export function ProviderForm({
                 >
                     {topError && (
                         <div className={styles["feedback"]}>
-                            <p className={styles["error"]} role="alert">
+                            <p className={editForm["error"]} role="alert">
                                 {t(`providers.errors.${topError}`)}
                             </p>
                         </div>
@@ -627,9 +628,9 @@ export function ProviderForm({
                     )}
                     <div
                         className={[
-                            fieldStyles["group"],
+                            editForm["group"],
                             layout === "tabPanel"
-                                ? styles["fieldCard"]
+                                ? editForm["groupFlush"]
                                 : undefined,
                         ]
                             .filter(
@@ -640,7 +641,7 @@ export function ProviderForm({
                         {saveInCardRow && (
                             <div
                                 className={[
-                                    fieldStyles["row"],
+                                    editForm["row"],
                                     styles["saveRow"],
                                 ].join(" ")}
                             >
@@ -655,184 +656,131 @@ export function ProviderForm({
                             </div>
                         )}
                         {/* The provider is part of the instance identity: chosen when
-                        creating, then fixed, so an edit shows it read-only. */}
+                        creating, then fixed, so an edit shows it read-only.
+                        The value stays on the row, outside the edit control column. */}
                         {editing ? (
                             <div
                                 className={[
-                                    fieldStyles["row"],
-                                    fieldStyles["rowUniform"],
+                                    editForm["row"],
+                                    editForm["rowUniform"],
                                 ].join(" ")}
                             >
-                                <span className={fieldStyles["label"]}>
+                                <span className={editForm["label"]}>
                                     {t("providers.fields.kind")}
                                 </span>
                                 <span
                                     className={[
                                         styles["value"],
                                         styles["valueWithIcon"],
-                                    ]
-                                        .filter(
-                                            (value): value is string =>
-                                                value !== undefined,
-                                        )
-                                        .join(" ")}
+                                    ].join(" ")}
                                 >
                                     <ProviderIcon kind={editing.kind} />
                                     {template?.brandName ?? editing.kind}
                                 </span>
                             </div>
                         ) : (
-                            <div
-                                className={[
-                                    fieldStyles["row"],
-                                    fieldStyles["rowUniform"],
-                                ].join(" ")}
+                            <EditFormRow
+                                label={t("providers.fields.kind")}
+                                htmlFor={`${id}-kind`}
                             >
-                                <label
-                                    className={fieldStyles["label"]}
-                                    htmlFor={`${id}-kind`}
-                                >
-                                    {t("providers.fields.kind")}
-                                </label>
-                                <div className={styles["control"]}>
-                                    {createKind !== undefined && (
-                                        <FieldSelect
-                                            id={`${id}-kind`}
-                                            value={createKind}
-                                            blocked={saveBlocked}
-                                            options={templates.map((entry) => ({
-                                                value: entry.kind,
-                                                label: entry.brandName,
-                                                leading: (
-                                                    <ProviderIcon
-                                                        kind={entry.kind}
-                                                    />
-                                                ),
-                                            }))}
-                                            onChange={changeKind}
-                                        />
-                                    )}
-                                </div>
-                            </div>
+                                {createKind !== undefined && (
+                                    <FieldSelect
+                                        id={`${id}-kind`}
+                                        value={createKind}
+                                        blocked={saveBlocked}
+                                        options={templates.map((entry) => ({
+                                            value: entry.kind,
+                                            label: entry.brandName,
+                                            leading: (
+                                                <ProviderIcon
+                                                    kind={entry.kind}
+                                                />
+                                            ),
+                                        }))}
+                                        onChange={changeKind}
+                                    />
+                                )}
+                            </EditFormRow>
                         )}
-                        <div
-                            className={[
-                                fieldStyles["row"],
-                                fieldStyles["rowUniform"],
-                            ].join(" ")}
+                        <EditFormRow
+                            label={t("providers.fields.displayName")}
+                            htmlFor={`${id}-displayName`}
                         >
-                            <label
-                                className={fieldStyles["label"]}
-                                htmlFor={`${id}-displayName`}
-                            >
-                                {t("providers.fields.displayName")}
-                            </label>
-                            <div className={styles["control"]}>
-                                <input
-                                    className={styles["input"]}
-                                    id={`${id}-displayName`}
-                                    type="text"
-                                    autoComplete="off"
-                                    value={fields.displayName}
-                                    readOnly={saveBlocked}
-                                    aria-invalid={fieldError === "displayName"}
-                                    aria-describedby={describedBy(
+                            <input
+                                className={editForm["input"]}
+                                id={`${id}-displayName`}
+                                type="text"
+                                autoComplete="off"
+                                value={fields.displayName}
+                                readOnly={saveBlocked}
+                                aria-invalid={fieldError === "displayName"}
+                                aria-describedby={describedBy("displayName")}
+                                onChange={(event) => {
+                                    update(
                                         "displayName",
-                                    )}
-                                    onChange={(event) => {
-                                        update(
-                                            "displayName",
-                                            event.currentTarget.value,
-                                        );
-                                    }}
-                                />
-                                {errorText("displayName")}
-                            </div>
-                        </div>
-                        <div
-                            className={[
-                                fieldStyles["row"],
-                                fieldStyles["rowUniform"],
-                            ].join(" ")}
+                                        event.currentTarget.value,
+                                    );
+                                }}
+                            />
+                            {errorText("displayName")}
+                        </EditFormRow>
+                        <EditFormRow
+                            label={t("providers.fields.baseUrl")}
+                            htmlFor={`${id}-baseUrl`}
                         >
-                            <label
-                                className={fieldStyles["label"]}
-                                htmlFor={`${id}-baseUrl`}
-                            >
-                                {t("providers.fields.baseUrl")}
-                            </label>
-                            <div className={styles["control"]}>
-                                <input
-                                    className={styles["input"]}
-                                    id={`${id}-baseUrl`}
-                                    type="url"
-                                    inputMode="url"
-                                    autoComplete="off"
-                                    spellCheck={false}
-                                    value={fields.baseUrl}
-                                    readOnly={saveBlocked}
-                                    aria-invalid={fieldError === "baseUrl"}
-                                    aria-describedby={describedBy("baseUrl")}
-                                    onChange={(event) => {
-                                        update(
-                                            "baseUrl",
-                                            event.currentTarget.value,
-                                        );
-                                    }}
-                                />
-                                {errorText("baseUrl")}
-                            </div>
-                        </div>
-                        <div
-                            className={[
-                                fieldStyles["row"],
-                                fieldStyles["rowUniform"],
-                            ].join(" ")}
+                            <input
+                                className={editForm["input"]}
+                                id={`${id}-baseUrl`}
+                                type="url"
+                                inputMode="url"
+                                autoComplete="off"
+                                spellCheck={false}
+                                value={fields.baseUrl}
+                                readOnly={saveBlocked}
+                                aria-invalid={fieldError === "baseUrl"}
+                                aria-describedby={describedBy("baseUrl")}
+                                onChange={(event) => {
+                                    update(
+                                        "baseUrl",
+                                        event.currentTarget.value,
+                                    );
+                                }}
+                            />
+                            {errorText("baseUrl")}
+                        </EditFormRow>
+                        <EditFormRow
+                            label={t("providers.fields.protocol")}
+                            htmlFor={`${id}-protocol`}
                         >
-                            <label
-                                className={fieldStyles["label"]}
-                                htmlFor={`${id}-protocol`}
-                            >
-                                {t("providers.fields.protocol")}
-                            </label>
-                            <div className={styles["control"]}>
-                                <FieldSelect
-                                    id={`${id}-protocol`}
-                                    value={fields.protocol}
-                                    blocked={saveBlocked}
-                                    aria-invalid={fieldError === "protocol"}
-                                    aria-describedby={describedBy("protocol")}
-                                    options={protocols.map((protocol) => ({
-                                        value: protocol,
-                                        label: t(
-                                            `providers.protocols.${protocol}`,
-                                        ),
-                                    }))}
-                                    onChange={(next) => {
-                                        if (saveBlocked) return;
-                                        update("protocol", next);
-                                    }}
-                                />
-                                {errorText("protocol")}
-                            </div>
-                        </div>
+                            <FieldSelect
+                                id={`${id}-protocol`}
+                                value={fields.protocol}
+                                blocked={saveBlocked}
+                                aria-invalid={fieldError === "protocol"}
+                                aria-describedby={describedBy("protocol")}
+                                options={protocols.map((protocol) => ({
+                                    value: protocol,
+                                    label: t(`providers.protocols.${protocol}`),
+                                }))}
+                                onChange={(next) => {
+                                    if (saveBlocked) return;
+                                    update("protocol", next);
+                                }}
+                            />
+                            {errorText("protocol")}
+                        </EditFormRow>
                         {/* The fixed placeholder and eye-off mark only indicate a
                         configured entry; neither is an input value or a reveal control. */}
-                        <div
-                            className={[
-                                fieldStyles["row"],
-                                fieldStyles["rowUniform"],
-                            ].join(" ")}
+                        <EditFormRow
+                            label={t("providers.fields.secret")}
+                            htmlFor={`${id}-secret`}
                         >
-                            <label
-                                className={fieldStyles["label"]}
-                                htmlFor={`${id}-secret`}
-                            >
-                                {t("providers.fields.secret")}
-                            </label>
                             <div className={styles["secretControl"]}>
                                 <input
-                                    className={styles["input"]}
+                                    className={[
+                                        editForm["input"],
+                                        styles["secretInput"],
+                                    ].join(" ")}
                                     id={`${id}-secret`}
                                     ref={secretInput}
                                     type="password"
@@ -883,7 +831,7 @@ export function ProviderForm({
                                 )}
                                 {keyStatus.kind === "loading" && (
                                     <p
-                                        className={styles["message"]}
+                                        className={editForm["message"]}
                                         role="status"
                                     >
                                         {t("providers.fields.secretLoading")}
@@ -892,7 +840,7 @@ export function ProviderForm({
                                 {keyStatus.kind === "error" && (
                                     <>
                                         <p
-                                            className={styles["error"]}
+                                            className={editForm["error"]}
                                             role="alert"
                                         >
                                             {t(
@@ -918,13 +866,13 @@ export function ProviderForm({
                                     </>
                                 )}
                                 {keyStatus.kind === "preview" && (
-                                    <p className={styles["message"]}>
+                                    <p className={editForm["message"]}>
                                         {t("providers.errors.desktop_required")}
                                     </p>
                                 )}
                                 {errorText("secret")}
                             </div>
-                        </div>
+                        </EditFormRow>
                     </div>
                 </div>
                 <SecondaryPageFooter

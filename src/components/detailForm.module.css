@@ -1,0 +1,56 @@
+/*
+ * Read-only detail cards.
+ *
+ * Facts use a 44px row, a muted label, and an end-aligned value. Create/edit
+ * fields use editForm.module.css, including an editable path placed beside
+ * these cards: that path reuses `.card` for the surface and the edit input
+ * for the control.
+ */
+
+.card {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    background: var(--color-surface);
+}
+
+.panel {
+    overflow: hidden;
+}
+
+.facts {
+    display: flex;
+    flex-direction: column;
+    padding: var(--space-sm) var(--space-md);
+}
+
+.row {
+    display: flex;
+    /* Match model-list rows while editable forms keep the 64px baseline. */
+    min-height: 44px;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-lg);
+    padding: 8px 0;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.row:last-child {
+    border-bottom: 0;
+}
+
+.label {
+    flex-shrink: 0;
+    margin: 0;
+    color: var(--color-summary);
+    font-size: 0.8125rem;
+    font-weight: 400;
+}
+
+.value {
+    flex: 0 1 min(65%, 28rem);
+    margin: 0;
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    text-align: end;
+    overflow-wrap: anywhere;
+}

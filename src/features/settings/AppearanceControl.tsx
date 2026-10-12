@@ -16,7 +16,7 @@ import {
     type AppearancePreference,
 } from "../../lib/desktop/appearance";
 import { FieldSelect } from "../../components/FieldSelect";
-import fieldStyles from "./settingsField.module.css";
+import editForm from "../../components/editForm.module.css";
 import styles from "./AppearanceControl.module.css";
 
 type ControlState =
@@ -175,12 +175,10 @@ export function AppearanceControl(): JSX.Element {
     return (
         <>
             <div
-                className={[fieldStyles["row"], fieldStyles["rowUniform"]].join(
-                    " ",
-                )}
+                className={[editForm["row"], editForm["rowUniform"]].join(" ")}
             >
                 <label
-                    className={fieldStyles["label"]}
+                    className={editForm["label"]}
                     htmlFor={`${id}-appearance`}
                 >
                     {t("settings.appearance.label")}
@@ -204,8 +202,8 @@ export function AppearanceControl(): JSX.Element {
                     }}
                 />
             </div>
-            <div className={fieldStyles["row"]}>
-                <span id={`${id}-theme-label`} className={fieldStyles["label"]}>
+            <div className={editForm["row"]}>
+                <span id={`${id}-theme-label`} className={editForm["label"]}>
                     {t("settings.theme.label")}
                 </span>
                 <div

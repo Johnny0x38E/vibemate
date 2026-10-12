@@ -7,8 +7,9 @@ import {
     type ModelErrorCode,
     type ProviderModel,
 } from "../../lib/desktop/models";
+import editForm from "../../components/editForm.module.css";
 import styles from "./ProviderForm.module.css";
-import buttons from "./providerButtons.module.css";
+import buttons from "../../components/actionButtons.module.css";
 import manualStyles from "./ManualModelForm.module.css";
 
 type SaveState =
@@ -162,7 +163,7 @@ export function ManualModelForm({
                     {t("providers.models.manual.modelId")}
                 </label>
                 <input
-                    className={styles["input"]}
+                    className={editForm["input"]}
                     id={`${id}-model`}
                     placeholder={t("providers.models.manual.modelId")}
                     value={modelId}
@@ -184,7 +185,7 @@ export function ManualModelForm({
                     {t("providers.models.manual.alias")}
                 </label>
                 <input
-                    className={styles["input"]}
+                    className={editForm["input"]}
                     id={`${id}-alias`}
                     placeholder={t("providers.models.manual.alias")}
                     value={alias}
@@ -207,19 +208,19 @@ export function ManualModelForm({
                 {fieldError !== null && (
                     <p
                         id={`${id}-error`}
-                        className={styles["error"]}
+                        className={editForm["error"]}
                         role="alert"
                     >
                         {t(`providers.models.errors.${fieldError}`)}
                     </p>
                 )}
                 {uncertain && (
-                    <p className={styles["error"]} role="alert">
+                    <p className={editForm["error"]} role="alert">
                         {t("providers.models.manual.uncertain")}
                     </p>
                 )}
                 {state.kind === "saving" && (
-                    <p role="status" className={styles["message"]}>
+                    <p role="status" className={editForm["message"]}>
                         {t("providers.models.saving")}
                     </p>
                 )}

@@ -934,7 +934,7 @@ does not rerun or extend the recorded verification below.
 | Frontend   | `check:frontend`: 101 UI tests, eight release-tool tests, format, lint, accessibility lint, both TypeScript configs and production build passed. The final CSS baseline adjustment also passed formatting and the native build's frontend build. |
 | Rust       | fmt and Clippy passed; 33 tests passed; the existing real OS-keychain smoke test was ignored.                                                                                                                                                    |
 | macOS      | Locked release builds and unsigned local app bundles passed; the final generated ICNS matches the packaged icon.                                                                                                                                 |
-| Appearance | The maintainer closed the shell, branding, settings and Dock refinements for the six expressive palettes (2026-10-10). macOS/Windows system-style palettes were added later (schema v9); visual acceptance of those two remains pending.          |
+| Appearance | The maintainer closed the shell, branding, settings and Dock refinements for the six expressive palettes (2026-10-10). macOS/Windows system-style palettes were added later (schema v9); visual acceptance of those two remains pending.         |
 | Pending    | Windows/Linux runtime and native icon display; actual system-browser opening; native Ink / macOS / Windows theme selection followed by restart; comprehensive accessibility testing.                                                             |
 
 Earlier checks retain their original scope: I02.d read version 0.1.0 in the

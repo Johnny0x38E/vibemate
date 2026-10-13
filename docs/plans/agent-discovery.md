@@ -35,4 +35,4 @@ Rust 在 blocking pool 内执行只读发现，不提供通用脚本 API、持�
 
 Rust/IPC/UI 测试覆盖六家自动与手动路径、配置残留、环境覆盖、元数据边界、无执行/无配置读取、旧结果、扫描锁与生命周期。完整前端检查、Rust fmt/Clippy/测试与锁定 macOS no-bundle 构建通过；单次运行的平台与工具版本见 Git/CI。既有隔离 Linux 样本仅验证当时 Pi/Grok 原生 IPC，不替代新增四家运行检查。
 
-六家真实 CLI 安装、macOS/Windows/Linux 原生运行、人工双语/最小窗口/长路径/键盘及读屏验收仍待执行；代码和本机构建通过不替代这些结果。唯一任务状态见 [todo.md](todo.md)。
+六家真实 CLI 安装、原生运行、人工双语/最小窗口/长路径/键盘验收已通过（2026-10-13）；Windows/Linux 与专门读屏延后到发布前平台验证。唯一任务状态见 [todo.md](todo.md)。

@@ -19,9 +19,13 @@
 
 The scaffold, private SQLite storage, OS credential interface, i18n startup and
 preferences, desktop shell, provider/key saving, model discovery/selection/manual
-entries and central MCP management are implemented. Provider/model P10–P12 and
+entries, model aliases/capability evidence/saved-model refresh, safe provider
+deletion and central MCP management are implemented. Provider/model P10–P12 and
 Command Code routing P15/C15 have maintainer acceptance; P15 real credential
 connection acceptance is maintainer-reported, not a new agent-executed test.
+Six-Agent discovery, version reading, local skill import, the central MCP
+credential-store checks and the provider/model additions passed maintainer
+acceptance on 2026-10-13; central MCP deletion is still missing (see todo.md).
 
 Six-Agent read-only discovery and independent window-local manual paths are
 implemented. Automatic discovery checks entries and configuration file presence
@@ -43,34 +47,33 @@ server. No planned adapter may appear connected or supported.
 Detailed completed-task process records belong in Git/CI and `CHANGELOG.md`, not
 in the active plans. [todo.md](todo.md) is the sole task-status source, including
 remaining real-installation, credential, visual and platform acceptance items.
-The macOS/Windows system-style themes use schema v9 but still need visual
-acceptance; local or fixture-based checks do not establish other native platforms.
+The macOS/Windows system-style themes passed visual acceptance on 2026-10-13;
+Windows/Linux display verification is deferred to the release-time platform check.
 
 ## Current execution order
 
-1. Finish real-installation, native runtime and visual acceptance for the six-Agent
-   catalog separately from the passing automated checks and local macOS build.
-   See [agent-catalog.md](agent-catalog.md); no Agent execution is required for
-   discovery. Genuine version-command tests require separate authorization for
-   concrete targets; see [agent-version-probe.md](agent-version-probe.md).
-2. Build the minimal Claude Code configuration preview (P18), adding only the model
+The six-Agent catalog, version reading and local skill import passed maintainer
+acceptance on 2026-10-13; Windows/Linux and screen-reader verification is
+deferred to the release-time platform check.
+
+1. Build the minimal Claude Code configuration preview (P18), adding only the model
    information and stale-plan checks it needs. Full P16 is not a prerequisite.
    Central models hold capability metadata and aliases; request settings and
    necessary capability overrides belong to the target Agent configuration.
    Verify the installed Agent version can express each setting. See
    [model-parameters.md](model-parameters.md). Verify Claude Code's official
    settings format and record it in `docs/integrations/` before implementation.
-3. Add safe writes and restore for Claude Code first, then Pi (second adapter)
+2. Add safe writes and restore for Claude Code first, then Pi (second adapter)
    and the independently verified Grok adapter (third): precedence, diff,
    concurrent-change checks, private backups, atomic replacement, preservation
    of unrelated fields and rollback. The maintainer uses Pi during coding, so
    Pi must not be the first configuration write target.
-4. Finish the skill workflow on top of the delivered local import (P25):
+3. Finish the skill workflow on top of the delivered local import (P25):
    source installation, update preview and per-Agent symlink deployment, with an
    explicit copy-sync fallback and protection of local changes.
-5. Deploy central MCP definitions only to verified Agent features, using the
+4. Deploy central MCP definitions only to verified Agent features, using the
    safe write/restore path. Unsupported features remain explicit.
-6. Complete native platform and real-integration acceptance, then prepare reviewed
+5. Complete native platform and real-integration acceptance, then prepare reviewed
    draft release assets; do not publish automatically.
 
 Architecture and dependency details are in [development-plan.md](development-plan.md)

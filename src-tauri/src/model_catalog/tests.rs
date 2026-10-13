@@ -208,6 +208,11 @@ fn deepseek_documented_example_parses() {
             input_modalities: Some(vec!["text".to_owned(), "image".to_owned()]),
             output_modalities: Some(vec!["text".to_owned()]),
             supported_endpoints: None,
+            capabilities: ModelCapabilities {
+                thinking: evidence(true, CapabilitySource::DeepseekModelEffortLevels),
+                image_input: evidence(true, CapabilitySource::DeepseekModelInputModalities),
+                tool_calls: evidence(true, CapabilitySource::DeepseekModelFeatures),
+            },
         }
     );
     assert_eq!(page.models[1].model_id, "deepseek-v4-pro");
@@ -237,6 +242,12 @@ fn openrouter_page_maps_nested_fields_and_paging_links() {
             input_modalities: Some(vec!["text".to_owned()]),
             output_modalities: Some(vec!["text".to_owned()]),
             supported_endpoints: None,
+            capabilities: ModelCapabilities {
+                thinking: unknown_capability(),
+                image_input: evidence(false, CapabilitySource::OpenrouterModelInputModalities),
+                // `["temperature"]` is a valid exhaustive list that omits tools.
+                tool_calls: evidence(false, CapabilitySource::OpenrouterModelSupportedParameters),
+            },
         }
     );
     let last = parse_openrouter_page(&openrouter_body(&["a"], None, 1)).unwrap();
@@ -311,6 +322,111 @@ fn invalid_ids_are_skipped_and_counted() {
     assert_eq!(ids, ["ok/with-slash.v1:free", long_ok.as_str()]);
     // Characters count, not bytes: 256 CJK characters are still valid.
     assert!(is_valid_model_id(&"模".repeat(MAX_MODEL_ID_CHARS)));
+}
+
+#[test]
+fn capability_parser_keeps_unknown_distinct_from_explicit_non_support() {
+    let body = |architecture: &str, parameters: &str, reasoning: &str| {
+        format!(
+            r#"{{"data":[{{"id":"model","architecture":{architecture},"supported_parameters":{parameters},"reasoning":{reasoning}}}],"links":{{"next":null}},"total_count":1}}"#
+        )
+    };
+    let supported = parse_openrouter_page(
+        body(
+            r#"{"input_modalities":["text","image"]}"#,
+            r#"["temperature","tools"]"#,
+            r#"{"supported_efforts":["low","high"]}"#,
+        )
+        .as_bytes(),
+    )
+    .unwrap()
+    .models
+    .remove(0)
+    .capabilities;
+    assert_eq!(supported.image_input.state, CapabilityState::Supported);
+    assert_eq!(supported.tool_calls.state, CapabilityState::Supported);
+    assert_eq!(supported.thinking.state, CapabilityState::Supported);
+    assert!(supported.has_valid_sources());
+
+    let unsupported = parse_openrouter_page(
+        body(
+            r#"{"input_modalities":["text"]}"#,
+            r#"["temperature"]"#,
+            r#"{"supported_efforts":[]}"#,
+        )
+        .as_bytes(),
+    )
+    .unwrap()
+    .models
+    .remove(0)
+    .capabilities;
+    assert_eq!(unsupported.image_input.state, CapabilityState::Unsupported);
+    assert_eq!(unsupported.tool_calls.state, CapabilityState::Unsupported);
+    assert_eq!(unsupported.thinking.state, CapabilityState::Unsupported);
+    assert!(unsupported.has_valid_sources());
+
+    let null_efforts = parse_openrouter_page(
+        body(
+            r#"{"input_modalities":[]}"#,
+            "null",
+            r#"{"supported_efforts":null}"#,
+        )
+        .as_bytes(),
+    )
+    .unwrap()
+    .models
+    .remove(0)
+    .capabilities;
+    assert_eq!(null_efforts.image_input.state, CapabilityState::Unsupported);
+    assert_eq!(null_efforts.thinking.state, CapabilityState::Supported);
+    assert_eq!(null_efforts.tool_calls.state, CapabilityState::Unknown);
+
+    for unknown in [
+        body("null", "null", "null"),
+        body("{}", "{}", "{}"),
+        body(
+            r#"{"input_modalities":["text",7]}"#,
+            r#"["tools",7]"#,
+            r#"{"supported_efforts":["low",7]}"#,
+        ),
+        body(
+            r#"{"input_modalities":"text,image"}"#,
+            r#""tools""#,
+            r#"{"supported_efforts":"high"}"#,
+        ),
+    ] {
+        let capabilities = parse_openrouter_page(unknown.as_bytes())
+            .unwrap()
+            .models
+            .remove(0)
+            .capabilities;
+        assert_eq!(capabilities.image_input.state, CapabilityState::Unknown);
+        assert_eq!(capabilities.tool_calls.state, CapabilityState::Unknown);
+        assert_eq!(capabilities.thinking.state, CapabilityState::Unknown);
+        assert!(capabilities.has_valid_sources());
+    }
+
+    let deepseek = parse_deepseek(DEEPSEEK_EXAMPLE.as_bytes()).unwrap();
+    assert_eq!(
+        deepseek.models[1].capabilities.image_input.state,
+        CapabilityState::Unsupported
+    );
+    assert_eq!(
+        deepseek.models[1].capabilities.tool_calls.state,
+        CapabilityState::Supported
+    );
+    assert_eq!(
+        deepseek.models[1].capabilities.thinking.state,
+        CapabilityState::Unknown
+    );
+    let new_id = br#"{"object":"list","data":[{"id":"deepseek-v4-pro-preview","input_modalities":["text"]}]}"#;
+    assert_eq!(
+        parse_deepseek(new_id).unwrap().models[0]
+            .capabilities
+            .tool_calls
+            .state,
+        CapabilityState::Unknown
+    );
 }
 
 #[test]

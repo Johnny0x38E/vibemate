@@ -28,6 +28,7 @@ import {
 import { ProviderTabbedView } from "./ProviderTabbedView";
 import { ProviderIcon } from "./ProviderIcon";
 import { ProviderPage } from "./ProviderPage";
+import { ProviderDeleteAction } from "./ProviderDeleteAction";
 import pageStyles from "./ProviderPage.module.css";
 import buttons from "../../components/actionButtons.module.css";
 import editForm from "../../components/editForm.module.css";
@@ -324,6 +325,21 @@ export function ProvidersView({
                 total: known ? previous.total : previous.total + 1,
             };
         });
+    }
+
+    /** Drop a deleted row now and return focus to a stable list control. */
+    function forgetRecord(id: string): void {
+        setList((previous) => {
+            if (previous.kind !== "ready") return previous;
+            const items = previous.items.filter((item) => item.id !== id);
+            if (items.length === previous.items.length) return previous;
+            return {
+                ...previous,
+                items,
+                total: Math.max(0, previous.total - 1),
+            };
+        });
+        focusTarget.current = { kind: "add" };
     }
 
     // Recreate the narrow handle each render so busy/dirty checks never use
@@ -667,6 +683,18 @@ export function ProvidersView({
                                         <Icon name="edit" />
                                         {t("providers.list.edit")}
                                     </button>
+                                    <ProviderDeleteAction
+                                        record={record}
+                                        blocked={editBlocked}
+                                        onDeleted={(deleted) => {
+                                            forgetRecord(deleted.id);
+                                        }}
+                                        onReload={() => {
+                                            setListAttempt(
+                                                (previous) => previous + 1,
+                                            );
+                                        }}
+                                    />
                                 </li>
                             );
                         })}

@@ -3,6 +3,7 @@
 use super::repository::{lock, read_model, read_provider};
 use super::types::*;
 use super::{ModelError, parse_provider_id};
+use crate::model_catalog::ModelCapabilities;
 use crate::model_identity::{RouteSupport, is_valid_model_id, route_support};
 use crate::providers::validate_display_name;
 use crate::storage::Storage;
@@ -100,13 +101,15 @@ pub fn add_manual_model(
     transaction
         .execute(
             "INSERT INTO provider_model
-                 (provider_id, model_id, source, selected, alias, created_at, updated_at)
-             VALUES (?1, ?2, ?3, 1, ?4, ?5, ?5)",
+                 (provider_id, model_id, source, selected, alias, capabilities, created_at, updated_at)
+             VALUES (?1, ?2, ?3, 1, ?4, ?5, ?6, ?6)",
             params![
                 provider_id.as_str(),
                 model_id,
                 ModelSource::Manual.as_str(),
                 alias,
+                serde_json::to_string(&ModelCapabilities::unknown())
+                    .map_err(|_| ModelError::WriteFailed)?,
                 now_ms
             ],
         )
@@ -215,6 +218,8 @@ pub fn save_provider_model_selections(
         }
         let input = json_column(&entry.input_modalities)?;
         let output = json_column(&entry.output_modalities)?;
+        let capabilities =
+            serde_json::to_string(&entry.capabilities).map_err(|_| ModelError::WriteFailed)?;
         let existing = read_model(&transaction, &provider_id, &entry.model_id)?;
         if let Some(stored) = existing {
             if stored.source == ModelSource::Manual.as_str() {
@@ -223,9 +228,9 @@ pub fn save_provider_model_selections(
                         "UPDATE provider_model SET
                              selected = 1, upstream_name = ?3, context_window = ?4,
                              max_output_tokens = ?5, input_modalities = ?6,
-                             output_modalities = ?7, supported_endpoints = ?8,
-                             last_seen_at = ?9, missing_since = NULL,
-                             updated_at = max(updated_at, ?9)
+                             output_modalities = ?7, supported_endpoints = ?8, capabilities = ?9,
+                             last_seen_at = ?10, missing_since = NULL,
+                             updated_at = max(updated_at, ?10)
                          WHERE provider_id = ?1 AND model_id = ?2",
                         params![
                             provider_id.as_str(),
@@ -236,6 +241,7 @@ pub fn save_provider_model_selections(
                             input,
                             output,
                             endpoints,
+                            capabilities,
                             now_ms
                         ],
                     )
@@ -246,9 +252,9 @@ pub fn save_provider_model_selections(
                         "UPDATE provider_model SET
                              selected = 1, upstream_name = ?3, context_window = ?4,
                              max_output_tokens = ?5, input_modalities = ?6,
-                             output_modalities = ?7, supported_endpoints = ?8,
-                             last_seen_at = ?9, missing_since = NULL,
-                             updated_at = max(updated_at, ?9)
+                             output_modalities = ?7, supported_endpoints = ?8, capabilities = ?9,
+                             last_seen_at = ?10, missing_since = NULL,
+                             updated_at = max(updated_at, ?10)
                          WHERE provider_id = ?1 AND model_id = ?2",
                         params![
                             provider_id.as_str(),
@@ -259,6 +265,7 @@ pub fn save_provider_model_selections(
                             input,
                             output,
                             endpoints,
+                            capabilities,
                             now_ms
                         ],
                     )
@@ -270,8 +277,8 @@ pub fn save_provider_model_selections(
                     "INSERT INTO provider_model
                          (provider_id, model_id, source, selected, upstream_name, context_window,
                           max_output_tokens, input_modalities, output_modalities,
-                          supported_endpoints, created_at, updated_at, last_seen_at)
-                     VALUES (?1, ?2, 'fetched', 1, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9, ?9)",
+                          supported_endpoints, capabilities, created_at, updated_at, last_seen_at)
+                     VALUES (?1, ?2, 'fetched', 1, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10, ?10)",
                     params![
                         provider_id.as_str(),
                         entry.model_id,
@@ -281,6 +288,7 @@ pub fn save_provider_model_selections(
                         input,
                         output,
                         endpoints,
+                        capabilities,
                         now_ms
                     ],
                 )

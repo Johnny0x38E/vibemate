@@ -36,6 +36,8 @@ pub enum ModelError {
     ModelAlreadyExists,
     /// A requested model does not exist (the list may have changed).
     ModelNotFound,
+    /// Saved model content changed after the editor read it; reload before retrying.
+    ModelChanged,
     /// A fetched model does not support the instance's protocol, so it cannot be selected.
     ModelRouteNotSupported,
     /// The operation could not finish (for example the HTTP client could not be built).
@@ -93,6 +95,7 @@ impl ModelError {
             Self::ModelAliasInvalid => "model_alias_invalid",
             Self::ModelAlreadyExists => "model_already_exists",
             Self::ModelNotFound => "model_not_found",
+            Self::ModelChanged => "model_changed",
             Self::ModelRouteNotSupported => "model_route_not_supported",
             Self::OperationFailed => "operation_failed",
             Self::SecretMissing => "secret_missing",

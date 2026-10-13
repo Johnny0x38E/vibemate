@@ -247,6 +247,24 @@ const MIGRATIONS: &[Migration] = &[
         DROP TABLE skill;
         ALTER TABLE skill_v11 RENAME TO skill;",
     },
+    Migration {
+        // Version 12 belongs to the parallel Agent auto-probe worktree
+        // (`agent_version_preference`), and both worktrees can open the same
+        // app-data database. This branch reserves the number with an empty step so
+        // version numbers stay consecutive and a database already at 12 still
+        // receives version 13. When those branches merge, the other worktree's
+        // v12 body replaces this placeholder and 13 keeps the capabilities column.
+        version: 12,
+        sql: "",
+    },
+    Migration {
+        version: 13,
+        // Capability values carry their own per-field evidence source. Existing
+        // saved models begin unknown; provider refreshes can replace that metadata.
+        sql: "ALTER TABLE provider_model ADD COLUMN capabilities TEXT NOT NULL
+            DEFAULT '{\"thinking\":{\"state\":\"unknown\",\"source\":null},\"imageInput\":{\"state\":\"unknown\",\"source\":null},\"toolCalls\":{\"state\":\"unknown\",\"source\":null}}'
+            CHECK(json_valid(capabilities));",
+    },
 ];
 
 /// Errors from opening or migrating the private database.

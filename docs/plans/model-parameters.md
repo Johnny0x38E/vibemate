@@ -17,9 +17,12 @@
 
 ## 现状与边界
 
-当前模型记录保存名称、上下文/输出上限、模态和路由。别名可在手动添加时保存，
-尚无独立编辑操作。模型行没有 revision，也没有请求参数。SQLite 最新迁移为 v9，
-已用于系统风主题；需要新增持久化时追加迁移，不改写旧 SQL。
+当前模型记录保存名称、上下文/输出上限、模态、路由和逐字段能力证据。别名已有带
+内容摘要保护的独立编辑操作：Rust 读取模型并返回 SHA-256 摘要，只有摘要未变才写入，
+过期编辑返回 `model_changed` 并要求重新加载（[provider-completion.md](provider-completion.md)）。
+模型行仍没有请求参数，也没有供配置预览绑定的模型 revision，预览过期检查留在 P18。
+SQLite 最新迁移为 v13（v11 为技能上限重建，v12 为并行工作区的 Agent 自动探测偏好保留、本分支留空占位，v13 为能力列）；新增持久化时追加迁移，
+不改写旧 SQL。
 
 能力上限和请求设置不是同一字段。例如 Pi 模型定义中的 `maxTokens` 描述模型上限，
 不能直接当作每次请求想生成的 token 数量。Agent 配置只能提供已核实版本可表达的
@@ -45,10 +48,12 @@
   `supports_max_tokens` 为 true 时公开推理 token 数量设置；`mandatory` 为 true 时禁止关闭。
   同页对努力与 token 数量并用的说明不一致，未来提供该设置时采用二选一，并核实
   目标 Agent 是否能够表达，不在服务商页开放请求参数。
-- [DeepSeek 模型目录](https://api-docs.deepseek.com/api/list-models/)：浏览器报
-  `ERR_CONNECTION_CLOSED`，后台请求也失败。Context7 返回的该来源 schema 只有
-  `id/object/owned_by`，未确认仓库旧记录中的 `effort/api_capabilities` 扩展。
-  这不是扩展字段已被移除的证据；解析前必须重新核实。
+- [DeepSeek 模型目录](https://api-docs.deepseek.com/api/list-models/)：2026-10-13 重新核实
+  可访问，页面记录 `name`、`context_window`、`max_output_tokens`、
+  `input_modalities`（`text`/`image`）、`output_modalities`、
+  `effort.supported_levels`/`default_level` 与
+  `api_capabilities.anthropic_messages.system_prompt_update`。旧记录中“无法确认扩展字段”
+  已由本次核实替代；工具调用不在该目录里，由官方定价页的逐模型能力表提供。
 - [DeepSeek Chat schema](https://api-docs.deepseek.com/api/create-chat-completion/)：
   上一轮仅取得 Context7 官方来源摘录，包含 `reasoning_effort` 的
   `none/low/high/max`、兼容别名和 thinking 模式下 temperature 不生效的说明。
@@ -70,6 +75,14 @@ P16 保留目录能力解析、来源记录、持久化和只读显示，以及�
 稳定内容摘要，并补齐所有影响预览的更新路径；现有时间戳不能直接充当 revision。
 新增中央模型 revision 的任务留在 P16，P18 最小路径可采用经验证的内容摘要，
 但不能跳过模型变化检查。
+
+实现状态（2026-10-13）：逐字段能力解析、来源记录、v13 持久化与列表图标已完成，
+只对“明确支持”显示图标；别名编辑使用 SHA-256 内容摘要做并发保护，过期编辑返回
+`model_changed`；已保存模型的目录刷新（只更新已保存行、保留别名、完整目录才标记缺失）
+与服务商安全删除（确认、并发保护、凭据补偿与未知结果反馈）均已完成。字段证据与映射
+规则见 [providers.md](../integrations/providers.md)。供 Agent 预览绑定的模型 revision
+仍未完成，拆分与验收要求见 [provider-completion.md](provider-completion.md)；P35 的
+Agent 引用检查不在此列。
 
 ## P18：以 Pi 配置预览为下一主线
 

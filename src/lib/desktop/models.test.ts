@@ -6,6 +6,9 @@ import {
     deleteManualProviderModel,
     fetchProviderModels,
     getProviderModelFetchStatus,
+    getProviderModelSnapshot,
+    refreshSavedProviderModels,
+    updateProviderModelAlias,
     listProviderModels,
     ModelRequestError,
     setProviderModelsSelected,
@@ -26,6 +29,11 @@ const model: ProviderModel = {
     inputModalities: ["text"],
     outputModalities: null,
     supportedEndpoints: ["/chat/completions"],
+    capabilities: {
+        thinking: { state: "unknown", source: null },
+        imageInput: { state: "unknown", source: null },
+        toolCalls: { state: "unknown", source: null },
+    },
     routeSupport: "supported",
     resolvedProtocol: "chat_completions",
     upstreamState: "listed",
@@ -59,6 +67,83 @@ beforeEach(() => {
 });
 
 describe("model IPC boundary", () => {
+    it("reads model snapshots and saves or clears aliases with exact identity and version", async () => {
+        const identity = { providerId: ID, modelId: model.modelId };
+        const contentDigest = "a".repeat(64);
+        vi.mocked(invoke).mockResolvedValueOnce({ model, contentDigest });
+        expect(await getProviderModelSnapshot(identity)).toEqual({
+            model,
+            contentDigest,
+        });
+        expect(invoke).toHaveBeenLastCalledWith("get_provider_model_snapshot", {
+            request: identity,
+        });
+        for (const alias of [" My model ", null]) {
+            const request = {
+                ...identity,
+                alias,
+                expectedDigest: contentDigest,
+            };
+            const response = {
+                model: { ...model, alias: alias?.trim() ?? null },
+                contentDigest: "b".repeat(64),
+            };
+            vi.mocked(invoke).mockResolvedValueOnce(response);
+            expect(await updateProviderModelAlias(request)).toEqual(response);
+            expect(invoke).toHaveBeenLastCalledWith(
+                "update_provider_model_alias",
+                { request },
+            );
+        }
+    });
+
+    it("rejects malformed snapshots, wrong identities, and alias acknowledgments", async () => {
+        const identity = { providerId: ID, modelId: model.modelId };
+        const contentDigest = "a".repeat(64);
+        for (const response of [
+            { model, contentDigest: "bad" },
+            { model },
+            { model, contentDigest, extra: true },
+            { model: { ...model, modelId: "another" }, contentDigest },
+            { model: { ...model, providerId: "f".repeat(32) }, contentDigest },
+            { model: { ...model, selected: "true" }, contentDigest },
+        ]) {
+            vi.mocked(invoke).mockResolvedValueOnce(response);
+            await expect(
+                getProviderModelSnapshot(identity),
+            ).rejects.toMatchObject({ code: "invalid_response" });
+        }
+        vi.mocked(invoke).mockResolvedValueOnce({ model, contentDigest });
+        await expect(
+            updateProviderModelAlias({
+                ...identity,
+                alias: "New",
+                expectedDigest: contentDigest,
+            }),
+        ).rejects.toMatchObject({ code: "invalid_response" });
+        vi.mocked(invoke).mockRejectedValueOnce("model_changed");
+        await expect(
+            updateProviderModelAlias({
+                ...identity,
+                alias: null,
+                expectedDigest: contentDigest,
+            }),
+        ).rejects.toMatchObject({ code: "model_changed" });
+        vi.mocked(isTauri).mockReturnValue(false);
+        vi.mocked(invoke).mockClear();
+        await expect(getProviderModelSnapshot(identity)).rejects.toMatchObject({
+            code: "desktop_required",
+        });
+        await expect(
+            updateProviderModelAlias({
+                ...identity,
+                alias: null,
+                expectedDigest: contentDigest,
+            }),
+        ).rejects.toMatchObject({ code: "desktop_required" });
+        expect(invoke).not.toHaveBeenCalled();
+    });
+
     it("makes no requests on import or in preview and refuses every mutation", async () => {
         expect(invoke).not.toHaveBeenCalled();
         vi.mocked(isTauri).mockReturnValue(false);
@@ -188,6 +273,48 @@ describe("model IPC boundary", () => {
         await expect(deleteManualProviderModel(deletion)).rejects.toMatchObject(
             { code: "invalid_response" },
         );
+    });
+
+    it("validates saved-model refresh summaries before reporting them", async () => {
+        const refresh = {
+            complete: true,
+            incompleteReason: null,
+            refreshed: 2,
+            markedMissing: 1,
+            skippedInvalid: 0,
+            fetchedAtMs: 1000,
+        };
+        vi.mocked(invoke).mockResolvedValueOnce(refresh);
+        expect(await refreshSavedProviderModels(ID)).toEqual(refresh);
+        expect(invoke).toHaveBeenLastCalledWith(
+            "refresh_saved_provider_models",
+            { providerId: ID },
+        );
+        const partial = {
+            ...refresh,
+            complete: false,
+            incompleteReason: "page_limit",
+        };
+        vi.mocked(invoke).mockResolvedValueOnce(partial);
+        expect(await refreshSavedProviderModels(ID)).toEqual(partial);
+        for (const response of [
+            { ...refresh, complete: false },
+            { ...partial, incompleteReason: null },
+            { ...refresh, extra: null },
+            { ...refresh, refreshed: -1 },
+            { ...refresh, incompleteReason: "timeout" },
+        ]) {
+            vi.mocked(invoke).mockResolvedValueOnce(response);
+            await expect(refreshSavedProviderModels(ID)).rejects.toMatchObject({
+                code: "invalid_response",
+            });
+        }
+        vi.mocked(isTauri).mockReturnValue(false);
+        vi.mocked(invoke).mockClear();
+        await expect(refreshSavedProviderModels(ID)).rejects.toMatchObject({
+            code: "desktop_required",
+        });
+        expect(invoke).not.toHaveBeenCalled();
     });
 
     it("fetches only when called and validates complete/incomplete summaries", async () => {

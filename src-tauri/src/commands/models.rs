@@ -5,6 +5,7 @@ use super::state::{CredentialLock, model_timestamp, with_model_storage};
 use crate::credentials::OsCredentialStore;
 use crate::model_fetch::{
     self, ModelFetchRegistry, ModelFetchStatus, ModelFetchSummary, ModelFetcher,
+    ModelRefreshSummary,
 };
 use crate::models::{
     self, AddManualModelRequest, DeleteManualModelRequest, ListProviderModelsRequest, ModelError,
@@ -54,6 +55,46 @@ pub(crate) async fn fetch_provider_models(
         let _registration = registration;
         with_model_storage(&app, |storage| {
             model_fetch::merge_catalog(storage, &snapshot, &catalog, model_timestamp()?)
+        })
+    })
+    .await
+    .map_err(|_| ModelError::OperationFailed)?
+}
+
+/// Refresh the metadata of already saved models without inserting or deleting rows
+/// (P16.c). It reuses the fetch registration, credential and snapshot steps, so a
+/// running fetch or a changed provider rejects it with the same safe codes.
+#[tauri::command]
+pub(crate) async fn refresh_saved_provider_models(
+    app: tauri::AppHandle,
+    provider_id: String,
+) -> Result<ModelRefreshSummary, ModelError> {
+    let id = models::parse_provider_id(&provider_id)?;
+    let registry = app
+        .try_state::<ModelFetchRegistry>()
+        .ok_or(ModelError::OperationFailed)?;
+    let (registration, cancel) = registry.begin(&id)?;
+    let prepare_app = app.clone();
+    let (prepared, fetcher) = tauri::async_runtime::spawn_blocking(move || {
+        with_model_storage(&prepare_app, |storage| {
+            let lock = prepare_app
+                .try_state::<CredentialLock>()
+                .ok_or(ModelError::OperationFailed)?;
+            let _credential_access = lock.0.lock().unwrap_or_else(PoisonError::into_inner);
+            let prepared = model_fetch::prepare_fetch(storage, &OsCredentialStore, &id)?;
+            Ok((prepared, ModelFetcher::production()?))
+        })
+    })
+    .await
+    .map_err(|_| ModelError::OperationFailed)??;
+    let catalog = model_fetch::download_catalog(&fetcher, &prepared, cancel).await?;
+    let snapshot = prepared.snapshot.clone();
+    drop(prepared);
+    registration.enter_merge();
+    tauri::async_runtime::spawn_blocking(move || {
+        let _registration = registration;
+        with_model_storage(&app, |storage| {
+            model_fetch::refresh_saved_models(storage, &snapshot, &catalog, model_timestamp()?)
         })
     })
     .await
@@ -199,6 +240,36 @@ pub(crate) async fn add_manual_provider_model(
     tauri::async_runtime::spawn_blocking(move || {
         with_model_storage(&app, |storage| {
             models::add_manual_model(storage, &request, model_timestamp()?)
+        })
+    })
+    .await
+    .map_err(|_| ModelError::OperationFailed)?
+}
+
+/// Read a saved model and its opaque content digest without network or credential access.
+#[tauri::command]
+pub(crate) async fn get_provider_model_snapshot(
+    app: tauri::AppHandle,
+    request: models::GetModelSnapshotRequest,
+) -> Result<models::ModelSnapshot, ModelError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        with_model_storage(&app, |storage| {
+            models::get_model_snapshot(storage, &request)
+        })
+    })
+    .await
+    .map_err(|_| ModelError::OperationFailed)?
+}
+
+/// Update only the alias when the model content still matches the supplied snapshot.
+#[tauri::command]
+pub(crate) async fn update_provider_model_alias(
+    app: tauri::AppHandle,
+    request: models::UpdateModelAliasRequest,
+) -> Result<models::ModelSnapshot, ModelError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        with_model_storage(&app, |storage| {
+            models::update_model_alias(storage, &request, model_timestamp()?)
         })
     })
     .await

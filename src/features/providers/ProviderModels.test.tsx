@@ -1,6 +1,7 @@
 import {
     act,
     cleanup,
+    within,
     fireEvent,
     render,
     screen,
@@ -15,9 +16,12 @@ import {
     browseUpstreamModelsPage,
     cancelProviderModelFetch,
     getProviderModelFetchStatus,
+    getProviderModelSnapshot,
     listProviderModels,
+    refreshSavedProviderModels,
     saveProviderModelSelections,
     type ProviderModel,
+    updateProviderModelAlias,
 } from "../../lib/desktop/models";
 import { getProviderSecretStatus } from "../../lib/desktop/providerSecrets";
 import { ProviderModels } from "./ProviderModels";
@@ -30,6 +34,9 @@ vi.mock(import("../../lib/desktop/models"), async (importOriginal) => ({
     browseUpstreamModelsPage: vi.fn(),
     cancelProviderModelFetch: vi.fn(),
     getProviderModelFetchStatus: vi.fn(),
+    getProviderModelSnapshot: vi.fn(),
+    refreshSavedProviderModels: vi.fn(),
+    updateProviderModelAlias: vi.fn(),
 }));
 vi.mock(
     import("../../lib/desktop/providerSecrets"),
@@ -62,6 +69,11 @@ function model(overrides: Partial<ProviderModel> = {}): ProviderModel {
         inputModalities: null,
         outputModalities: null,
         supportedEndpoints: null,
+        capabilities: {
+            thinking: { state: "unknown", source: null },
+            imageInput: { state: "unknown", source: null },
+            toolCalls: { state: "unknown", source: null },
+        },
         routeSupport: "not_applicable",
         resolvedProtocol: "chat_completions",
         upstreamState: "listed",
@@ -103,6 +115,9 @@ afterEach(() => {
 });
 beforeEach(() => {
     addManual.mockReset();
+    vi.mocked(getProviderModelSnapshot).mockReset();
+    vi.mocked(updateProviderModelAlias).mockReset();
+    vi.mocked(refreshSavedProviderModels).mockReset();
     list.mockReset();
     saveSelections.mockReset().mockResolvedValue(undefined);
     browse.mockReset();
@@ -118,10 +133,217 @@ beforeEach(() => {
 });
 
 describe("ProviderModels", () => {
+    test("edits a saved alias without changing membership and blocks competing actions", async () => {
+        const row = model();
+        list.mockResolvedValue(desktopPage([row]));
+        vi.mocked(getProviderModelSnapshot).mockResolvedValue({
+            model: row,
+            contentDigest: "a".repeat(64),
+        });
+        vi.mocked(updateProviderModelAlias).mockResolvedValue({
+            model: { ...row, alias: "Work model" },
+            contentDigest: "b".repeat(64),
+        });
+        await renderModels();
+        const edit = await screen.findByRole("button", {
+            name: "Edit alias for deepseek-chat",
+        });
+        await waitFor(() => {
+            expect(edit.getAttribute("aria-disabled")).toBe("false");
+        });
+        const checkbox = screen.getByRole("checkbox", {
+            name: "Deselect deepseek-chat",
+        });
+        fireEvent.click(checkbox);
+        expect(edit.getAttribute("aria-disabled")).toBe("true");
+        fireEvent.click(edit);
+        expect(getProviderModelSnapshot).not.toHaveBeenCalled();
+        fireEvent.click(checkbox);
+        edit.focus();
+        fireEvent.click(edit);
+        const editor = await screen.findByRole("dialog", {
+            name: "Edit alias for deepseek-chat",
+        });
+        const field = within(editor).getByRole<HTMLInputElement>("textbox", {
+            name: "Alias (optional)",
+        });
+        await waitFor(() => {
+            expect(field.readOnly).toBe(false);
+        });
+        fireEvent.change(field, { target: { value: "Work model" } });
+        fireEvent.click(screen.getByRole("button", { name: "Save alias" }));
+        await screen.findByText("Work model");
+        await waitFor(() => {
+            expect(document.activeElement).toBe(edit);
+        });
+        expect(
+            screen
+                .getByRole("checkbox", { name: "Deselect deepseek-chat" })
+                .getAttribute("aria-checked"),
+        ).toBe("true");
+        expect(saveSelections).not.toHaveBeenCalled();
+        expect(browse).not.toHaveBeenCalled();
+
+        // Reopen and cancel with Escape: Base UI closes the dialog and returns
+        // focus to the row action that opened it.
+        await waitFor(() => {
+            expect(edit.getAttribute("aria-disabled")).toBe("false");
+        });
+        fireEvent.click(edit);
+        const reopened = await screen.findByRole("dialog", {
+            name: "Edit alias for deepseek-chat",
+        });
+        const reopenedField = within(reopened).getByRole<HTMLInputElement>(
+            "textbox",
+            { name: "Alias (optional)" },
+        );
+        await waitFor(() => {
+            expect(reopenedField.readOnly).toBe(false);
+        });
+        fireEvent.keyDown(reopenedField, { key: "Escape" });
+        await waitFor(() => {
+            expect(screen.queryByRole("dialog")).toBeNull();
+        });
+        await waitFor(() => {
+            expect(document.activeElement).toBe(edit);
+        });
+        expect(updateProviderModelAlias).toHaveBeenCalledTimes(1);
+    });
+
+    test("hiding models closes the alias editor and a late reply cannot rename a row", async () => {
+        const row = model();
+        list.mockResolvedValue(desktopPage([row]));
+        vi.mocked(getProviderModelSnapshot).mockResolvedValue({
+            model: row,
+            contentDigest: "a".repeat(64),
+        });
+        let finish:
+            | ((value: { model: ProviderModel; contentDigest: string }) => void)
+            | undefined;
+        vi.mocked(updateProviderModelAlias).mockImplementation(
+            () =>
+                new Promise((resolve) => {
+                    finish = resolve;
+                }),
+        );
+        const { rerenderHidden } = await renderModels();
+        const edit = await screen.findByRole("button", {
+            name: "Edit alias for deepseek-chat",
+        });
+        await waitFor(() => {
+            expect(edit.getAttribute("aria-disabled")).toBe("false");
+        });
+        fireEvent.click(edit);
+        await waitFor(() => {
+            expect(
+                screen.getByRole<HTMLButtonElement>("button", {
+                    name: "Save alias",
+                }).disabled,
+            ).toBe(false);
+        });
+        fireEvent.click(screen.getByRole("button", { name: "Save alias" }));
+        rerenderHidden(true);
+        await act(async () => {
+            finish?.({
+                model: { ...row, alias: "Late reply" },
+                contentDigest: "b".repeat(64),
+            });
+            await Promise.resolve();
+        });
+        rerenderHidden(false);
+        await screen.findByText("DeepSeek Chat");
+        expect(screen.queryByText("Late reply")).toBeNull();
+        expect(
+            screen.queryByRole("form", {
+                name: "Edit alias for deepseek-chat",
+            }),
+        ).toBeNull();
+    });
+
     test("prompts to fetch when no models are selected", async () => {
         list.mockResolvedValue(desktopPage([]));
         await renderModels();
         await screen.findByText(/Fetch models to browse/i);
+    });
+
+    test("shows only declared capabilities with accessible evidence hints", async () => {
+        list.mockResolvedValue(
+            desktopPage([
+                model({
+                    capabilities: {
+                        thinking: {
+                            state: "supported",
+                            source: "deepseek_model_effort_levels",
+                        },
+                        imageInput: {
+                            state: "unsupported",
+                            source: "deepseek_model_input_modalities",
+                        },
+                        toolCalls: { state: "unknown", source: null },
+                    },
+                }),
+            ]),
+        );
+        await renderModels(false, "en");
+        await screen.findByRole("checkbox", { name: "Deselect deepseek-chat" });
+        const capability = screen.getByRole("img", {
+            name: "Thinking support declared by the provider catalog",
+        });
+        expect(capability).toBeTruthy();
+        expect(
+            screen.queryByRole("img", {
+                name: "Image input support declared by the provider catalog",
+            }),
+        ).toBeNull();
+        expect(
+            screen.queryByRole("img", {
+                name: "Tool-call support declared by the provider catalog",
+            }),
+        ).toBeNull();
+    });
+
+    test("refreshes saved model metadata and re-reads the list", async () => {
+        list.mockResolvedValue(desktopPage([model()]));
+        vi.mocked(refreshSavedProviderModels).mockResolvedValue({
+            complete: true,
+            incompleteReason: null,
+            refreshed: 1,
+            markedMissing: 0,
+            skippedInvalid: 0,
+            fetchedAtMs: 2000,
+        });
+        await renderModels();
+        await screen.findByRole("checkbox", {
+            name: "Deselect deepseek-chat",
+        });
+        const readsBefore = list.mock.calls.length;
+        fireEvent.click(
+            screen.getByRole("button", { name: "Refresh saved models" }),
+        );
+        await waitFor(() => {
+            expect(refreshSavedProviderModels).toHaveBeenCalledWith(ID);
+        });
+        await waitFor(() => {
+            expect(list.mock.calls.length).toBeGreaterThan(readsBefore);
+        });
+        expect(saveSelections).not.toHaveBeenCalled();
+        expect(browse).not.toHaveBeenCalled();
+    });
+
+    test("blocks refresh while checkbox drafts exist", async () => {
+        list.mockResolvedValue(desktopPage([model()]));
+        await renderModels();
+        fireEvent.click(
+            await screen.findByRole("checkbox", {
+                name: "Deselect deepseek-chat",
+            }),
+        );
+        const refreshButton = screen.getByRole("button", {
+            name: "Refresh saved models",
+        });
+        expect(refreshButton.getAttribute("aria-disabled")).toBe("true");
+        fireEvent.click(refreshButton);
+        expect(refreshSavedProviderModels).not.toHaveBeenCalled();
     });
 
     test("shows preview notice in browser mode", async () => {
@@ -143,6 +365,11 @@ describe("ProviderModels", () => {
                     inputModalities: null,
                     outputModalities: null,
                     supportedEndpoints: null,
+                    capabilities: {
+                        thinking: { state: "unknown", source: null },
+                        imageInput: { state: "unknown", source: null },
+                        toolCalls: { state: "unknown", source: null },
+                    },
                     routeSupport: "not_applicable",
                     resolvedProtocol: "chat_completions",
                 },

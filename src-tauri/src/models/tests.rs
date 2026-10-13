@@ -136,6 +136,7 @@ fn save_selections_deletes_removed_rows_and_inserts_new_ones() {
                 input_modalities: None,
                 output_modalities: None,
                 supported_endpoints: None,
+                capabilities: crate::model_catalog::ModelCapabilities::unknown(),
             }],
         },
         300,

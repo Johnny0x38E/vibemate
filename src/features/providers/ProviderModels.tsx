@@ -16,6 +16,7 @@ import {
     getProviderModelFetchStatus,
     listProviderModels,
     ModelRequestError,
+    refreshSavedProviderModels,
     saveProviderModelSelections,
     type ModelErrorCode,
     type ProviderModel,
@@ -23,6 +24,8 @@ import {
 } from "../../lib/desktop/models";
 import { getProviderSecretStatus } from "../../lib/desktop/providerSecrets";
 import { ManualModelForm } from "./ManualModelForm";
+import { ModelAliasAction } from "./ModelAliasAction";
+import { ModelCapabilityIcons } from "./ModelCapabilityIcons";
 import { ModelCheckbox } from "../../components/ModelCheckbox";
 import buttons from "../../components/actionButtons.module.css";
 import editForm from "../../components/editForm.module.css";
@@ -71,6 +74,11 @@ type KeyState =
       };
 
 type SaveState =
+    | { kind: "idle" }
+    | { kind: "running" }
+    | { kind: "error"; code: ModelErrorCode };
+
+type RefreshState =
     | { kind: "idle" }
     | { kind: "running" }
     | { kind: "error"; code: ModelErrorCode };
@@ -239,6 +247,12 @@ export function ProviderModels({
     const [browseRunning, setBrowseRunning] = useState(false);
     const [serverBrowseRunning, setServerBrowseRunning] = useState(false);
     const [manualBusy, setManualBusy] = useState(false);
+    const [aliasBusy, setAliasBusy] = useState(false);
+    const [refreshState, setRefreshState] = useState<RefreshState>({
+        kind: "idle",
+    });
+    const refreshGeneration = useRef(0);
+    const searchField = useRef<HTMLInputElement>(null);
     const [saveState, setSaveState] = useState<SaveState>({ kind: "idle" });
 
     const loadGeneration = useRef(0);
@@ -583,6 +597,11 @@ export function ProviderModels({
                 inputModalities: row?.inputModalities ?? null,
                 outputModalities: row?.outputModalities ?? null,
                 supportedEndpoints: row?.supportedEndpoints ?? null,
+                capabilities: row?.capabilities ?? {
+                    thinking: { state: "unknown", source: null },
+                    imageInput: { state: "unknown", source: null },
+                    toolCalls: { state: "unknown", source: null },
+                },
             });
         }
         try {
@@ -606,6 +625,36 @@ export function ProviderModels({
             await refreshSelectedCount();
         } catch (error: unknown) {
             setSaveState({ kind: "error", code: errorCode(error) });
+        }
+    }
+
+    /** Refresh saved rows only; never changes membership, so drafts block it. */
+    async function runRefreshSaved(): Promise<void> {
+        if (refreshState.kind === "running" || dirty) return;
+        const generation = ++refreshGeneration.current;
+        setRefreshState({ kind: "running" });
+        try {
+            const summary = await refreshSavedProviderModels(providerId);
+            if (hidden || generation !== refreshGeneration.current) return;
+            setRefreshState({ kind: "idle" });
+            await loadSelectedList();
+            notify({
+                tone: "success",
+                message: t(
+                    summary.complete
+                        ? "providers.models.refreshNotice"
+                        : "providers.models.refreshPartial",
+                    { count: summary.refreshed },
+                ),
+            });
+        } catch (error: unknown) {
+            if (hidden || generation !== refreshGeneration.current) return;
+            const code = errorCode(error);
+            setRefreshState({ kind: "error", code });
+            notify({
+                tone: "error",
+                message: t(`providers.models.errors.${code}`),
+            });
         }
     }
 
@@ -641,7 +690,9 @@ export function ProviderModels({
               : null;
 
     const sectionBusy =
+        aliasBusy ||
         manualBusy ||
+        refreshState.kind === "running" ||
         browseActive ||
         saveState.kind === "running" ||
         (viewMode === "selected" && list.kind === "loading") ||
@@ -897,6 +948,11 @@ export function ProviderModels({
                                                     </span>
                                                 )}
                                             </span>
+                                            <ModelCapabilityIcons
+                                                capabilities={
+                                                    model.capabilities
+                                                }
+                                            />
                                             {model.resolvedProtocol !== null &&
                                                 model.routeSupport ===
                                                     "supported" && (
@@ -961,6 +1017,38 @@ export function ProviderModels({
                                                 </div>
                                             )}
                                     </div>
+                                    {!hidden && (
+                                        <ModelAliasAction
+                                            providerId={providerId}
+                                            model={model}
+                                            blocked={
+                                                sectionBusy ||
+                                                dirty ||
+                                                searchInput.trim() !==
+                                                    debouncedQuery
+                                            }
+                                            onBusyChange={setAliasBusy}
+                                            onReload={() => {
+                                                void loadSelectedList();
+                                            }}
+                                            onSaved={(updated) => {
+                                                setList((current) =>
+                                                    current.kind === "ready"
+                                                        ? {
+                                                              ...current,
+                                                              items: current.items.map(
+                                                                  (row) =>
+                                                                      row.modelId ===
+                                                                      updated.modelId
+                                                                          ? updated
+                                                                          : row,
+                                                              ),
+                                                          }
+                                                        : current,
+                                                );
+                                            }}
+                                        />
+                                    )}
                                 </li>
                             );
                         })}
@@ -1034,6 +1122,11 @@ export function ProviderModels({
                                                     </span>
                                                 )}
                                             </span>
+                                            <ModelCapabilityIcons
+                                                capabilities={
+                                                    model.capabilities
+                                                }
+                                            />
                                             {model.resolvedProtocol !== null &&
                                                 model.routeSupport ===
                                                     "supported" && (
@@ -1144,6 +1237,15 @@ export function ProviderModels({
                 </p>
             )}
 
+            {refreshState.kind === "error" && (
+                <p
+                    className={[editForm["error"], styles["error"]].join(" ")}
+                    role="alert"
+                >
+                    {t(`providers.models.errors.${refreshState.code}`)}
+                </p>
+            )}
+
             {keyMissing && (
                 <p className={styles["message"]} role="status">
                     {t("providers.models.needKey")}
@@ -1158,6 +1260,7 @@ export function ProviderModels({
                             styles["searchInput"],
                         ].join(" ")}
                         id="provider-models-search"
+                        ref={searchField}
                         type="search"
                         value={searchInput}
                         autoComplete="off"
@@ -1165,6 +1268,7 @@ export function ProviderModels({
                         placeholder={t("providers.models.searchPlaceholder")}
                         aria-label={t("providers.models.searchPlaceholder")}
                         disabled={
+                            aliasBusy ||
                             manualBusy ||
                             list.kind === "preview" ||
                             keyMissing ||
@@ -1180,33 +1284,65 @@ export function ProviderModels({
                 </div>
                 <div className={styles["toolbarActions"]}>
                     {viewMode === "selected" ? (
-                        <button
-                            type="button"
-                            className={[
-                                buttons["secondary"],
-                                styles["toolbarButton"],
-                            ].join(" ")}
-                            aria-disabled={
-                                sectionBusy ||
-                                list.kind === "preview" ||
-                                keyMissing ||
-                                keyState.kind === "loading"
-                            }
-                            onClick={() => {
-                                if (
+                        <>
+                            <button
+                                type="button"
+                                className={[
+                                    buttons["secondary"],
+                                    styles["toolbarButton"],
+                                ].join(" ")}
+                                aria-disabled={
+                                    sectionBusy ||
+                                    list.kind !== "ready" ||
+                                    dirty ||
+                                    keyMissing ||
+                                    keyState.kind === "loading"
+                                }
+                                onClick={() => {
+                                    if (
+                                        sectionBusy ||
+                                        list.kind !== "ready" ||
+                                        dirty ||
+                                        keyMissing ||
+                                        keyState.kind === "loading"
+                                    ) {
+                                        return;
+                                    }
+                                    void runRefreshSaved();
+                                }}
+                            >
+                                {refreshState.kind === "running"
+                                    ? t("providers.models.refreshing")
+                                    : t("providers.models.refreshSaved")}
+                            </button>
+                            <button
+                                type="button"
+                                className={[
+                                    buttons["secondary"],
+                                    styles["toolbarButton"],
+                                ].join(" ")}
+                                aria-disabled={
                                     sectionBusy ||
                                     list.kind === "preview" ||
                                     keyMissing ||
                                     keyState.kind === "loading"
-                                ) {
-                                    return;
                                 }
-                                if (dirty && !confirmDiscardDraft()) return;
-                                void startUpstreamBrowse();
-                            }}
-                        >
-                            {t("providers.models.fetch")}
-                        </button>
+                                onClick={() => {
+                                    if (
+                                        sectionBusy ||
+                                        list.kind === "preview" ||
+                                        keyMissing ||
+                                        keyState.kind === "loading"
+                                    ) {
+                                        return;
+                                    }
+                                    if (dirty && !confirmDiscardDraft()) return;
+                                    void startUpstreamBrowse();
+                                }}
+                            >
+                                {t("providers.models.fetch")}
+                            </button>
+                        </>
                     ) : (
                         <>
                             {browseActive && (

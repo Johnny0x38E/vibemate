@@ -139,7 +139,17 @@
             "label": "Saved provider configurations",
             "selectedModels": "{{count}} added models",
             "edit": "Edit",
-            "editLabel": "Edit {{name}}"
+            "editLabel": "Edit {{name}}",
+            "deleteLabel": "Delete {{name}}"
+        },
+        "delete": {
+            "open": "Delete",
+            "title": "Delete provider",
+            "body_one": "Delete “{{name}}”? This removes the configuration, its {{count}} added model and the stored API key. Agent configuration files are not changed.",
+            "body_other": "Delete “{{name}}”? This removes the configuration, its {{count}} added models and the stored API key. Agent configuration files are not changed.",
+            "confirm": "Delete provider",
+            "cancel": "Cancel",
+            "done": "Deleted “{{name}}”."
         },
         "tabs": {
             "ariaLabel": "Provider configuration sections",
@@ -154,6 +164,12 @@
         },
         "models": {
             "fetch": "Fetch models",
+            "refreshSaved": "Refresh saved models",
+            "refreshing": "Refreshing…",
+            "refreshNotice_one": "Refreshed {{count}} saved model from the provider catalog.",
+            "refreshNotice_other": "Refreshed {{count}} saved models from the provider catalog.",
+            "refreshPartial_one": "Refreshed {{count}} saved model, but the provider returned a partial catalog; nothing was marked unavailable.",
+            "refreshPartial_other": "Refreshed {{count}} saved models, but the provider returned a partial catalog; nothing was marked unavailable.",
             "fetching": "Fetching models…",
             "cancelFetch": "Cancel",
             "needKey": "Add an API key in the API configuration before fetching models.",
@@ -193,7 +209,7 @@
             "listLabel": "Models for this provider configuration",
             "selectModel": "Select {{modelId}}",
             "deselectModel": "Deselect {{modelId}}",
-            "manualSource": "Added manually · capability from your entry",
+            "manualSource": "Added manually",
             "createPending": "Complete the API configuration first.",
             "selectedSummary": "{{count}} added",
             "selectedSummaryMany": "{{count}}+ added",
@@ -214,7 +230,7 @@
             "errors": {
                 "storage_unavailable": "Local configuration storage is unavailable. Restart vibemate.",
                 "read_failed": "Models could not be read. Try again.",
-                "write_failed": "The selection was not saved. Try again.",
+                "write_failed": "Model changes were not saved. Try again.",
                 "operation_failed": "The operation could not finish. Try again.",
                 "invalid_request": "The request is invalid. Refresh and try again.",
                 "not_found": "This provider configuration was not found. Return to the list and refresh.",
@@ -224,6 +240,7 @@
                 "model_alias_invalid": "The display name is not valid.",
                 "model_already_exists": "This model ID is already saved.",
                 "model_not_found": "This model was not found. Refresh the list.",
+                "model_changed": "This model changed since you opened it. Reload before saving.",
                 "model_route_not_supported": "This model has no API route vibemate can use.",
                 "secret_missing": "Add an API key in the fields above before selecting models.",
                 "secret_invalid": "The API key is not valid.",
@@ -246,6 +263,19 @@
                 "invalid_response": "The app returned an unrecognized response. Try again.",
                 "desktop_required": "Model changes require the vibemate desktop app."
             },
+            "capabilities": {
+                "thinking": "Thinking support declared by the provider catalog",
+                "imageInput": "Image input support declared by the provider catalog",
+                "toolCalls": "Tool-call support declared by the provider catalog"
+            },
+            "aliasEditor": {
+                "title": "Edit alias for {{modelId}}",
+                "save": "Save alias",
+                "cancel": "Cancel",
+                "saved": "Model alias saved.",
+                "reload": "Reload saved alias and discard draft",
+                "uncertain": "The save result is unknown. Reload the saved alias before trying again."
+            },
             "manual": {
                 "title": "Add a model manually",
                 "modelId": "Model ID",
@@ -254,8 +284,7 @@
                 "check": "Check saved models",
                 "uncertain": "The save result is unknown. Check saved models before adding again. If the check fails, try checking again.",
                 "saved": "Manual model saved.",
-                "draft": "Save or discard checkbox changes before adding a manual model.",
-                "capabilityNote": "Manual models have no provider route declaration. Capability information comes from your entry, not from an upstream catalog."
+                "draft": "Save or discard checkbox changes before adding a manual model."
             }
         },
         "fields": {
@@ -313,7 +342,8 @@
             "credential_store_access_denied": "vibemate could not access the system credential store. It may be locked or access was refused, and nothing was changed. Unlock it or allow access, then try again.",
             "credential_store_failed": "The system credential store reported an error and nothing was changed. If you denied access in a system prompt, try again and allow it.",
             "create_outcome_unknown": "vibemate could not confirm whether this configuration was saved, and an unused key entry may remain in the system credential store (vibemate never reads it). Refresh the list to check before adding it again.",
-            "secret_outcome_unknown": "vibemate could not confirm whether the key was replaced; the system credential store may already hold the new key. Refresh the key status and replace it again if unsure."
+            "secret_outcome_unknown": "vibemate could not confirm whether the key was replaced; the system credential store may already hold the new key. Refresh the key status and replace it again if unsure.",
+            "delete_outcome_unknown": "vibemate could not confirm whether the provider was deleted. Refresh the list before trying again."
         }
     },
     "mcp": {

@@ -98,14 +98,17 @@ pub fn merge_catalog(
         let input = json(&model.input_modalities)?;
         let output = json(&model.output_modalities)?;
         let endpoints = json(&model.supported_endpoints)?;
+        let capabilities =
+            serde_json::to_string(&model.capabilities).map_err(|_| ModelError::WriteFailed)?;
         if existing.contains_key(&model.model_id) {
             transaction
                 .execute(
                     "UPDATE provider_model SET
                          upstream_name = ?3, context_window = ?4, max_output_tokens = ?5,
                          input_modalities = ?6, output_modalities = ?7,
-                         supported_endpoints = ?8, last_seen_at = ?9, missing_since = NULL,
-                         updated_at = max(updated_at, ?9)
+                         supported_endpoints = ?8, capabilities = ?9,
+                         last_seen_at = ?10, missing_since = NULL,
+                         updated_at = max(updated_at, ?10)
                      WHERE provider_id = ?1 AND model_id = ?2",
                     params![
                         provider_id,
@@ -116,6 +119,7 @@ pub fn merge_catalog(
                         input,
                         output,
                         endpoints,
+                        capabilities,
                         now_ms
                     ],
                 )
@@ -127,8 +131,8 @@ pub fn merge_catalog(
                     "INSERT INTO provider_model
                          (provider_id, model_id, source, selected, upstream_name, context_window,
                           max_output_tokens, input_modalities, output_modalities,
-                          supported_endpoints, created_at, updated_at, last_seen_at)
-                     VALUES (?1, ?2, 'fetched', 0, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9, ?9)",
+                          supported_endpoints, capabilities, created_at, updated_at, last_seen_at)
+                     VALUES (?1, ?2, 'fetched', 0, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10, ?10)",
                     params![
                         provider_id,
                         model.model_id,
@@ -138,6 +142,7 @@ pub fn merge_catalog(
                         input,
                         output,
                         endpoints,
+                        capabilities,
                         now_ms
                     ],
                 )

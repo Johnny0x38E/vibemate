@@ -379,6 +379,83 @@ pub fn replace_then_commit<T, E>(
     }
 }
 
+/// Why deleting a credential and committing its database record failed.
+#[derive(Debug)]
+pub enum DeleteError<E> {
+    /// Reading or deleting the secret failed. The commit step never ran, so the
+    /// database is unchanged.
+    Credential(CredentialError),
+    /// The commit step failed after the secret was deleted.
+    CommitFailed {
+        /// The error returned by the commit step.
+        source: E,
+        /// `true` when the previous credential state was restored.
+        ///
+        /// `false` means the record may survive without its secret: either
+        /// restoring failed, or the previous secret was unreadable.
+        restored: bool,
+    },
+    /// `COMMIT` failed and may have taken effect. The credential was restored
+    /// even though the record may be gone, because a saved record without its
+    /// secret is worse than an unreferenced entry the app never reads.
+    CommitUncertain {
+        /// The error returned by the commit step.
+        source: E,
+        /// `true` when the credential was put back after the uncertain commit.
+        restored: bool,
+    },
+}
+
+/// Delete the secret for `reference`, then run `commit` to remove its record.
+///
+/// Steps:
+/// 1. Read the secret as a private backup. Stop if the read fails, except when
+///    the stored value is unreadable: deleting is the only repair for that case.
+/// 2. Delete the secret. Stop if the delete fails; the record is untouched.
+/// 3. Run `commit`, usually the database delete of the record, and return its
+///    value on success.
+/// 4. If `commit` fails before `COMMIT`, restore the previous state: write the
+///    old secret back, or do nothing when none existed.
+/// 5. If `COMMIT` itself failed, restore the secret as well. Either the record is
+///    still there and needs its key, or it is gone and the entry is unreferenced;
+///    the app never reads an unreferenced entry, while a saved record without its
+///    key cannot be used.
+///
+/// The backup lives only in a local variable and is dropped when this function
+/// returns. It is never written to disk, logged, or returned.
+pub fn delete_then_commit<T, E>(
+    store: &dyn CredentialStore,
+    reference: &str,
+    commit: impl FnOnce() -> Result<T, CommitFailure<E>>,
+) -> Result<T, DeleteError<E>> {
+    let backup = match store.load(reference) {
+        Ok(Some(old)) => Backup::Saved(old),
+        Ok(None) => Backup::Missing,
+        Err(CredentialError::CorruptValue) => Backup::Unreadable,
+        Err(error) => return Err(DeleteError::Credential(error)),
+    };
+    store.delete(reference).map_err(DeleteError::Credential)?;
+    let restore = |backup: &Backup| -> bool {
+        match backup {
+            Backup::Saved(old) => store.save(reference, old).is_ok(),
+            // No earlier secret existed, so the deleted state is the previous state.
+            Backup::Missing => true,
+            Backup::Unreadable => false,
+        }
+    };
+    match commit() {
+        Ok(value) => Ok(value),
+        Err(CommitFailure::NotCommitted(source)) => Err(DeleteError::CommitFailed {
+            source,
+            restored: restore(&backup),
+        }),
+        Err(CommitFailure::Uncertain(source)) => Err(DeleteError::CommitUncertain {
+            source,
+            restored: restore(&backup),
+        }),
+    }
+}
+
 /// An in-memory credential store for tests in any module of this crate.
 ///
 /// It never touches the real OS store. Tests can make each operation fail on

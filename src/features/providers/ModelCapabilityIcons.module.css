@@ -1,0 +1,48 @@
+.icons {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 4px;
+    vertical-align: middle;
+}
+
+.icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    color: var(--color-summary);
+    cursor: help;
+}
+
+.icon svg {
+    width: 15px;
+    height: 15px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.icon:focus-visible {
+    border-radius: 3px;
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+}
+
+.positioner {
+    z-index: var(--layer-popover);
+}
+
+.tooltip {
+    max-width: 18rem;
+    padding: 6px 10px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-size: 0.75rem;
+    line-height: 1.4;
+}

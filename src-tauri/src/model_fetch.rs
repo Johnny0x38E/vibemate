@@ -22,6 +22,11 @@
 //! and holds the credential lock around the snapshot. Tests repeat the same step
 //! order in a helper that may block.
 //!
+//! A second entry point, `refresh_saved_models`, downloads the same catalog but
+//! updates only already-saved rows (P16.c): it never inserts or deletes, and it
+//! preserves `source`, `selected` and `alias`. Its absence rule matches the merge
+//! rule: only a complete catalog marks a previously listed row missing.
+//!
 //! Merge rules (a complete fetch saw the whole, non-empty list without hitting a cap):
 //! - A listed model that has no row is inserted as `fetched` and **not selected**.
 //! - A listed model that has a row gets fresh metadata, `last_seen_at = now` and
@@ -42,6 +47,7 @@ mod browse;
 mod cache;
 mod download;
 mod merge;
+mod refresh;
 mod registry;
 mod repository;
 mod service;
@@ -50,13 +56,14 @@ mod types;
 pub use browse::browse_upstream_page;
 pub use download::{ModelFetcher, download_catalog};
 pub use merge::merge_catalog;
+pub use refresh::refresh_saved_models;
 pub use registry::{FetchRegistration, ModelFetchRegistry};
 pub use repository::fetch_status;
 pub use service::prepare_fetch;
 pub use types::{
     BrowseUpstreamModelsRequest, LastModelFetch, ModelFetchStatus, ModelFetchSummary,
-    PreparedFetch, ProviderSnapshot, UPSTREAM_BROWSE_PAGE_SIZE, UpstreamBrowseModel,
-    UpstreamBrowsePage,
+    ModelRefreshSummary, PreparedFetch, ProviderSnapshot, UPSTREAM_BROWSE_PAGE_SIZE,
+    UpstreamBrowseModel, UpstreamBrowsePage,
 };
 
 #[cfg(test)]

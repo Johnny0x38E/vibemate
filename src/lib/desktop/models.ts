@@ -19,6 +19,7 @@ const RUST_MODEL_ERROR_CODES = [
     "model_alias_invalid",
     "model_already_exists",
     "model_not_found",
+    "model_changed",
     "model_route_not_supported",
     "operation_failed",
     "secret_missing",
@@ -59,6 +60,27 @@ export class ModelRequestError extends Error {
     }
 }
 
+export type CapabilityState = "unknown" | "supported" | "unsupported";
+
+export type CapabilitySource =
+    | "deepseek_model_input_modalities"
+    | "deepseek_model_effort_levels"
+    | "deepseek_model_features"
+    | "openrouter_model_input_modalities"
+    | "openrouter_model_supported_parameters"
+    | "openrouter_model_reasoning";
+
+export interface CapabilityEvidence {
+    state: CapabilityState;
+    source: CapabilitySource | null;
+}
+
+export interface ModelCapabilities {
+    thinking: CapabilityEvidence;
+    imageInput: CapabilityEvidence;
+    toolCalls: CapabilityEvidence;
+}
+
 /** Metadata is not proof that inference or a particular capability works. */
 export interface ProviderModel {
     providerId: string;
@@ -72,6 +94,7 @@ export interface ProviderModel {
     inputModalities: string[] | null;
     outputModalities: string[] | null;
     supportedEndpoints: string[] | null;
+    capabilities: ModelCapabilities;
     routeSupport: "supported" | "unsupported" | "unknown" | "not_applicable";
     /** Protocol this instance would use (P15). Null when Command Code has no route. */
     resolvedProtocol: ProviderProtocol | null;
@@ -80,6 +103,24 @@ export interface ProviderModel {
     missingSinceMs: number | null;
     createdAtMs: number;
     updatedAtMs: number;
+}
+
+/** Saved model plus an opaque Rust-generated token for detecting stale edits. */
+export interface ModelSnapshot {
+    model: ProviderModel;
+    contentDigest: string;
+}
+
+/** Identity for a snapshot read, independent of the displayed alias. */
+export interface ModelIdentity {
+    providerId: string;
+    modelId: string;
+}
+
+/** Null clears the alias; Rust validates and trims nonempty labels. */
+export interface UpdateModelAliasInput extends ModelIdentity {
+    expectedDigest: string;
+    alias: string | null;
 }
 
 /** Opaque cursor pagination, or ranked search with a total and no cursor. */
@@ -114,6 +155,7 @@ export interface SaveProviderModelEntry {
     inputModalities: string[] | null;
     outputModalities: string[] | null;
     supportedEndpoints: string[] | null;
+    capabilities: ModelCapabilities;
 }
 
 /** Remove unchecked rows and upsert newly checked ones in one transaction. */
@@ -132,6 +174,7 @@ export interface UpstreamBrowseModel {
     inputModalities: string[] | null;
     outputModalities: string[] | null;
     supportedEndpoints: string[] | null;
+    capabilities: ModelCapabilities;
     routeSupport: ProviderModel["routeSupport"];
     resolvedProtocol: ProviderProtocol | null;
 }
@@ -240,6 +283,39 @@ function choice<T extends string>(value: unknown, choices: readonly T[]): T {
     return match;
 }
 
+const CAPABILITY_SOURCES = [
+    "deepseek_model_input_modalities",
+    "deepseek_model_effort_levels",
+    "deepseek_model_features",
+    "openrouter_model_input_modalities",
+    "openrouter_model_supported_parameters",
+    "openrouter_model_reasoning",
+] as const satisfies readonly CapabilitySource[];
+
+function capabilityEvidence(value: unknown): CapabilityEvidence {
+    const data = object(value, ["state", "source"]);
+    const state = choice(data["state"], [
+        "unknown",
+        "supported",
+        "unsupported",
+    ]);
+    const source =
+        data["source"] === null
+            ? null
+            : choice(data["source"], CAPABILITY_SOURCES);
+    if ((state === "unknown") !== (source === null)) throw invalidResponse();
+    return { state, source };
+}
+
+function modelCapabilities(value: unknown): ModelCapabilities {
+    const data = object(value, ["thinking", "imageInput", "toolCalls"]);
+    return {
+        thinking: capabilityEvidence(data["thinking"]),
+        imageInput: capabilityEvidence(data["imageInput"]),
+        toolCalls: capabilityEvidence(data["toolCalls"]),
+    };
+}
+
 function nullableProtocol(value: unknown): ProviderProtocol | null {
     if (value === null) return null;
     return choice(value, PROVIDER_PROTOCOLS);
@@ -257,6 +333,7 @@ const MODEL_KEYS = [
     "inputModalities",
     "outputModalities",
     "supportedEndpoints",
+    "capabilities",
     "routeSupport",
     "resolvedProtocol",
     "upstreamState",
@@ -288,6 +365,7 @@ function validateModel(value: unknown, providerId: string): ProviderModel {
         inputModalities: stringList(data["inputModalities"]),
         outputModalities: stringList(data["outputModalities"]),
         supportedEndpoints: stringList(data["supportedEndpoints"]),
+        capabilities: modelCapabilities(data["capabilities"]),
         routeSupport: choice(data["routeSupport"], [
             "supported",
             "unsupported",
@@ -359,6 +437,44 @@ export async function listProviderModels(
     )
         throw invalidResponse();
     return { kind: "desktop", page };
+}
+
+function validateSnapshot(value: unknown, input: ModelIdentity): ModelSnapshot {
+    const data = object(value, ["model", "contentDigest"]);
+    const model = validateModel(data["model"], input.providerId);
+    const contentDigest = data["contentDigest"];
+    if (
+        model.modelId !== input.modelId ||
+        typeof contentDigest !== "string" ||
+        !/^[0-9a-f]{64}$/.test(contentDigest)
+    )
+        throw invalidResponse();
+    return { model, contentDigest };
+}
+
+/** Read a saved model without fetching its provider catalog or accessing credentials. */
+export async function getProviderModelSnapshot(
+    input: ModelIdentity,
+): Promise<ModelSnapshot> {
+    requireDesktop();
+    return validateSnapshot(
+        await call("get_provider_model_snapshot", { request: input }),
+        input,
+    );
+}
+
+/** Change only an alias, rejecting stale content in Rust and mismatched IPC here. */
+export async function updateProviderModelAlias(
+    input: UpdateModelAliasInput,
+): Promise<ModelSnapshot> {
+    requireDesktop();
+    const snapshot = validateSnapshot(
+        await call("update_provider_model_alias", { request: input }),
+        input,
+    );
+    if (snapshot.model.alias !== (input.alias?.trim() ?? null))
+        throw invalidResponse();
+    return snapshot;
 }
 
 /** Persist a batch only in desktop mode; reject mismatched acknowledgments. */
@@ -448,6 +564,7 @@ export async function browseUpstreamModelsPage(input: {
             "inputModalities",
             "outputModalities",
             "supportedEndpoints",
+            "capabilities",
             "routeSupport",
             "resolvedProtocol",
         ]);
@@ -461,6 +578,7 @@ export async function browseUpstreamModelsPage(input: {
             inputModalities: stringList(row["inputModalities"]),
             outputModalities: stringList(row["outputModalities"]),
             supportedEndpoints: stringList(row["supportedEndpoints"]),
+            capabilities: modelCapabilities(row["capabilities"]),
             routeSupport: choice(row["routeSupport"], [
                 "supported",
                 "unsupported",
@@ -529,6 +647,56 @@ export async function fetchProviderModels(
         summary.complete !== (summary.incompleteReason === null) ||
         summary.added + summary.updated !== summary.listed
     )
+        throw invalidResponse();
+    return summary;
+}
+
+/** What one saved-model refresh changed. Never inserts or deletes rows. */
+export interface ModelRefreshSummary {
+    complete: boolean;
+    incompleteReason: IncompleteReason | null;
+    refreshed: number;
+    markedMissing: number;
+    skippedInvalid: number;
+    fetchedAtMs: number;
+}
+
+/**
+ * Refresh the metadata of already saved models from the provider catalog (P16.c).
+ * The confirmation and blocked states live in the Models tab; this wrapper only
+ * validates the summary and requires the desktop runtime.
+ */
+export async function refreshSavedProviderModels(
+    providerId: string,
+): Promise<ModelRefreshSummary> {
+    requireDesktop();
+    const data = object(
+        await call("refresh_saved_provider_models", { providerId }),
+        [
+            "complete",
+            "incompleteReason",
+            "refreshed",
+            "markedMissing",
+            "skippedInvalid",
+            "fetchedAtMs",
+        ],
+    );
+    const summary: ModelRefreshSummary = {
+        complete: boolean(data["complete"]),
+        incompleteReason:
+            data["incompleteReason"] === null
+                ? null
+                : choice<IncompleteReason>(data["incompleteReason"], [
+                      "model_limit",
+                      "page_limit",
+                      "empty_list",
+                  ]),
+        refreshed: integer(data["refreshed"]),
+        markedMissing: integer(data["markedMissing"]),
+        skippedInvalid: integer(data["skippedInvalid"]),
+        fetchedAtMs: integer(data["fetchedAtMs"]),
+    };
+    if (summary.complete !== (summary.incompleteReason === null))
         throw invalidResponse();
     return summary;
 }

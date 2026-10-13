@@ -1,7 +1,7 @@
 //! Non-secret fetch/browse requests and results, plus the internal prepared credential.
 
 use crate::credentials::Secret;
-use crate::model_catalog::IncompleteReason;
+use crate::model_catalog::{IncompleteReason, ModelCapabilities};
 use crate::model_identity::RouteSupport;
 use crate::providers::{ProviderId, ProviderKind, ProviderProtocol};
 use serde::{Deserialize, Serialize};
@@ -48,6 +48,22 @@ pub struct ModelFetchSummary {
     pub fetched_at_ms: i64,
 }
 
+/// What one saved-model refresh changed, returned to the frontend (P16.c).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelRefreshSummary {
+    /// Whether the refresh saw the whole list (only then are rows marked missing).
+    pub complete: bool,
+    pub incomplete_reason: Option<IncompleteReason>,
+    /// Saved rows whose metadata was updated from the catalog.
+    pub refreshed: usize,
+    /// Saved rows newly marked as missing upstream.
+    pub marked_missing: usize,
+    /// Entries skipped because their ID was invalid or repeated.
+    pub skipped_invalid: usize,
+    pub fetched_at_ms: i64,
+}
+
 /// The last saved fetch of a provider.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -76,6 +92,7 @@ pub struct UpstreamBrowseModel {
     pub input_modalities: Option<Vec<String>>,
     pub output_modalities: Option<Vec<String>>,
     pub supported_endpoints: Option<Vec<String>>,
+    pub capabilities: ModelCapabilities,
     pub route_support: RouteSupport,
     /// Protocol this instance would use for the model (P15).
     pub resolved_protocol: Option<crate::providers::ProviderProtocol>,

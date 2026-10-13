@@ -258,9 +258,9 @@ fn capability_migration_runs_on_a_database_already_at_schema_12() {
     let directory = TestDirectory::new("capability-shared-v12");
     let path = directory.path.join(DATABASE_FILE_NAME);
     let old = Storage::open_file(&path, &MIGRATIONS[..11]).expect("v11 database");
-    // Reproduce a database the parallel Agent auto-probe worktree already
-    // upgraded to 12: it holds that worktree's table and has no capabilities
-    // column. The capabilities migration must still run for it.
+    // Reproduce a database the Agent auto-probe branch already upgraded to 12:
+    // it holds the v12 preference table and has no capabilities column. The
+    // capabilities migration must still run for it.
     old.lock()
         .expect("lock")
         .execute_batch(
@@ -271,11 +271,11 @@ fn capability_migration_runs_on_a_database_already_at_schema_12() {
              ('0123456789abcdef0123456789abcdef', 'deepseek-flash', 'fetched', 1, 1, 1); \
              CREATE TABLE agent_version_preference (\
                  id INTEGER PRIMARY KEY CHECK (id = 1),\
-                 enabled INTEGER NOT NULL CHECK (enabled IN (0, 1))\
+                 auto_probe INTEGER NOT NULL CHECK (auto_probe IN (0, 1))\
              ) STRICT; \
              PRAGMA user_version = 12;",
         )
-        .expect("v12 database from the parallel worktree");
+        .expect("v12 database from the Agent auto-probe branch");
     drop(old);
 
     let upgraded = Storage::open_in_directory(&directory.path).expect("upgrade");

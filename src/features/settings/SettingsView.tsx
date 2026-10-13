@@ -12,6 +12,7 @@ import type { ModuleNavigationHandle } from "../../components/moduleNavigation";
 import { PageModuleHeader } from "../../components/PageModuleHeader";
 import tabs from "../../components/underlineTabs.module.css";
 import { AboutPanel } from "./AboutPanel";
+import { AgentVersionSettings } from "./AgentVersionSettings";
 import { LogSettings } from "./LogSettings";
 import styles from "./SettingsView.module.css";
 
@@ -124,6 +125,7 @@ export function SettingsView({
                 hidden={tab !== "general"}
             >
                 {languageSettings}
+                <AgentVersionSettings />
                 <LogSettings />
             </div>
             <div

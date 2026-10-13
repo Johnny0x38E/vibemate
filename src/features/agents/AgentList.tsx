@@ -30,7 +30,11 @@ import { AgentIcon } from "./AgentIcon";
 import { IconButton } from "../../components/IconButton";
 import { AgentPage } from "./AgentPage";
 import { AgentVersionPanel } from "./AgentVersionPanel";
-import type { AgentVersionResult } from "../../lib/desktop/agentVersions";
+import {
+    probeAgentVersion,
+    type AgentVersionResult,
+} from "../../lib/desktop/agentVersions";
+import { getAutoVersionProbe } from "../../lib/desktop/settings";
 import styles from "./AgentList.module.css";
 
 type State =
@@ -67,6 +71,8 @@ export function AgentList({
         Partial<Record<AgentId, AgentVersionResult>>
     >({});
     const [versionBusy, setVersionBusy] = useState(false);
+    const [autoProbe, setAutoProbe] = useState(false);
+    const [autoProbeBusy, setAutoProbeBusy] = useState(false);
     const [confirmationEpoch, setConfirmationEpoch] = useState(0);
     const [paths, setPaths] = useState<Record<AgentId, string>>({
         claudeCode: "",
@@ -98,6 +104,24 @@ export function AgentList({
             return true;
         },
     }));
+
+    // Read the auto-probe consent once. The stored value decides whether
+    // discovery and detail views may launch `--version` without a per-run click.
+    useEffect(() => {
+        let active = true;
+        getAutoVersionProbe().then(
+            (result) => {
+                if (active && result.kind === "desktop")
+                    setAutoProbe(result.preference.autoProbe);
+            },
+            () => {
+                // A failed read leaves auto-probe off; the manual button stays.
+            },
+        );
+        return () => {
+            active = false;
+        };
+    }, []);
 
     useEffect(() => {
         const current = ++generation.current;
@@ -148,6 +172,8 @@ export function AgentList({
         const current = ++generation.current;
         // CLI results describe a previously checked target. A new discovery
         // invalidates them even when it later fails or returns the same path.
+        probedRef.current.clear();
+        setAutoProbeBusy(false);
         setVersions({});
         setConfirmationEpoch((previous) => previous + 1);
         setState({ kind: "loading" });
@@ -176,6 +202,120 @@ export function AgentList({
             ? result
             : undefined;
     }
+
+    // Track which (id, entry, resolved) triples have been probed this session.
+    // The set is updated inside async callbacks, never during render.
+    const probedRef = useRef(new Set<string>());
+    // Cancellation flag for the scan auto-probe loop. Reset at effect start and
+    // flipped in cleanup so a newer scan stops the previous loop.
+    const scanCancelled = useRef(false);
+    function probeKey(
+        id: AgentId,
+        entryPath: string,
+        resolvedPath: string,
+    ): string {
+        return `${id}\0${entryPath}\0${resolvedPath}`;
+    }
+
+    /**
+     * Probe every found Agent sequentially after a scan. The single-probe gate
+     * in Rust accepts one process at a time, so probes never overlap. Each run
+     * is tied to an `AbortController`; a new scan or unmount cancels the rest.
+     *
+     * `setTimeout` defers the busy flag and the async loop so no `setState`
+     * runs synchronously inside the effect body.
+     */
+    useEffect(() => {
+        if (state.kind !== "desktop" || !autoProbe) return;
+        const items = state.items;
+        scanCancelled.current = false;
+        const timer = window.setTimeout(() => {
+            if (scanCancelled.current) return;
+            setAutoProbeBusy(true);
+            void (async () => {
+                try {
+                    for (const row of items) {
+                        if (scanCancelled.current) return;
+                        const entryPath = row.entryPath;
+                        const resolvedPath = row.resolvedPath;
+                        if (
+                            row.state !== "found" ||
+                            typeof entryPath !== "string" ||
+                            typeof resolvedPath !== "string"
+                        )
+                            continue;
+                        const key = probeKey(row.id, entryPath, resolvedPath);
+                        if (probedRef.current.has(key)) continue;
+                        probedRef.current.add(key);
+                        try {
+                            const result = await probeAgentVersion({
+                                id: row.id,
+                                entryPath,
+                                resolvedPath,
+                                confirmed: true,
+                            });
+                            // The state updater is safe after cancellation:
+                            // `refresh()` clears the map and the next scan
+                            // overwrites any transient stale entry.
+                            setVersions((previous) => ({
+                                ...previous,
+                                [result.id]: result,
+                            }));
+                        } catch {
+                            // Auto-probe failures stay silent: the manual
+                            // button remains and discovery metadata is shown.
+                        }
+                    }
+                } finally {
+                    if (!scanCancelled.current) setAutoProbeBusy(false);
+                }
+            })();
+        }, 0);
+        return () => {
+            // Cancel the in-flight loop when a newer scan starts or the
+            // component unmounts. The Rust side still reaps the direct child.
+            scanCancelled.current = true;
+            window.clearTimeout(timer);
+        };
+    }, [state, autoProbe]);
+
+    // Opening a detail page probes only when no cached version matches. This
+    // covers the case where the setting was enabled after the scan finished.
+    useEffect(() => {
+        if (page.kind !== "detail" || !autoProbe) return;
+        const row = (state.kind === "desktop" ? state.items : snapshot).find(
+            (item) => item.id === page.id,
+        );
+        if (!row) return;
+        const entryPath = row.entryPath;
+        const resolvedPath = row.resolvedPath;
+        if (
+            row.state !== "found" ||
+            typeof entryPath !== "string" ||
+            typeof resolvedPath !== "string"
+        )
+            return;
+        const key = probeKey(row.id, entryPath, resolvedPath);
+        if (probedRef.current.has(key)) return;
+        probedRef.current.add(key);
+        void (async () => {
+            try {
+                const result = await probeAgentVersion({
+                    id: row.id,
+                    entryPath,
+                    resolvedPath,
+                    confirmed: true,
+                });
+                if (mounted.current)
+                    setVersions((previous) => ({
+                        ...previous,
+                        [result.id]: result,
+                    }));
+            } catch {
+                // Silent; the manual button can still retry.
+            }
+        })();
+    }, [page, autoProbe, state, snapshot]);
 
     function items(): AgentObservation[] {
         return state.kind === "desktop" ? state.items : snapshot;
@@ -598,7 +738,10 @@ export function AgentList({
                         ])}
                         row={row}
                         enabled={
-                            !blocked && state.kind === "desktop" && pathMatches
+                            !blocked &&
+                            !autoProbeBusy &&
+                            state.kind === "desktop" &&
+                            pathMatches
                         }
                         hidden={hidden}
                         onBusyChange={(busy) => {

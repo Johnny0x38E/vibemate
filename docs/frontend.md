@@ -957,3 +957,16 @@ program may still read credentials, access the network, write files or launch
 other processes; the protection is not a sandbox. Native execution limits,
 official command sources and the verification scope are in
 [agent-version-probe.md](plans/agent-version-probe.md).
+
+### Automatic version probing
+
+`AgentVersionSettings` on the Settings General tab holds a single toggle
+(**自动读取 Agent 版本** / **Read Agent versions automatically**). The persisted
+boolean is one-time informed consent: when enabled, `AgentList` launches the
+fixed `--version` probe without a per-run click. After each discovery scan,
+found Agents are probed sequentially; opening a detail page probes only when
+no cached result matches the current path fingerprint. Each (entry, resolved)
+pair is probed at most once per session. `refresh()` clears the cache and
+`probedRef` set so the next scan re-probes. Automatic failures are silent;
+the manual button stays available. Results live in the same window-local
+`versions` map and are never written to disk.

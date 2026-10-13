@@ -248,14 +248,15 @@ const MIGRATIONS: &[Migration] = &[
         ALTER TABLE skill_v11 RENAME TO skill;",
     },
     Migration {
-        // Version 12 belongs to the parallel Agent auto-probe worktree
-        // (`agent_version_preference`), and both worktrees can open the same
-        // app-data database. This branch reserves the number with an empty step so
-        // version numbers stay consecutive and a database already at 12 still
-        // receives version 13. When those branches merge, the other worktree's
-        // v12 body replaces this placeholder and 13 keeps the capabilities column.
         version: 12,
-        sql: "",
+        // Singleton row for the Agent CLI auto-version-probe preference. The
+        // value is only informed consent to run `--version` without a per-run
+        // click; it never stores a version number. Auto-probe results stay in
+        // window memory (see `docs/plans/agent-version-probe.md`).
+        sql: "CREATE TABLE agent_version_preference (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            auto_probe INTEGER NOT NULL CHECK (auto_probe IN (0, 1))
+        ) STRICT;",
     },
     Migration {
         version: 13,

@@ -86,6 +86,13 @@
                 "desktop_required": "Use the vibemate desktop app to view local logs."
             }
         },
+        "agentVersion": {
+            "enable": "Read Agent versions automatically",
+            "preview": "Browser preview cannot read Agent versions.",
+            "readFailed": "The automatic version preference could not be read. Turn the option on again after restarting.",
+            "saveFailed": "The automatic version preference could not be saved. Your previous choice is unchanged; try again.",
+            "saveUnconfirmed": "The saved preference could not be confirmed. Reload it before making another change."
+        },
         "about": {
             "description": "A desktop configuration manager for coding agents.",
             "version": "Version",

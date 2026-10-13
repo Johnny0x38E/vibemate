@@ -84,6 +84,8 @@ pub fn run() {
             commands::preferences::save_locale_preference,
             commands::preferences::get_appearance_preference,
             commands::preferences::save_appearance_preference,
+            commands::preferences::get_auto_version_probe,
+            commands::preferences::save_auto_version_probe,
             commands::providers::list_provider_templates,
             commands::providers::list_providers,
             commands::providers::get_provider,

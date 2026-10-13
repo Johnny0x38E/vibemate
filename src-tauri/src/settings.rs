@@ -1,7 +1,8 @@
 //! Non-sensitive application preferences persisted in private SQLite storage.
 //!
-//! This module has no Tauri dependency. Only validated language preferences are
-//! stored here; credentials and agent configuration belong to separate modules.
+//! This module has no Tauri dependency. Validated language and Agent
+//! auto-version-probe preferences are stored here; credentials and agent
+//! configuration belong to separate modules.
 
 use crate::storage::Storage;
 use rusqlite::OptionalExtension;
@@ -95,7 +96,7 @@ pub fn load_locale_preference(storage: &Storage) -> Result<LocalePreference, Set
     }
 }
 
-/// Persist one validated choice and return it only after SQLite commits.
+/// Save a validated choice and return it only after SQLite commits.
 /// The single UPSERT is atomic; unrelated data is untouched. No credential data
 /// or browser storage is involved.
 ///
@@ -114,6 +115,78 @@ pub fn save_locale_preference(
             "INSERT INTO locale_preference (id, preference) VALUES (1, ?1)
              ON CONFLICT(id) DO UPDATE SET preference = excluded.preference",
             [preference.stored_value()],
+        )
+        .map_err(|_| SettingsError::WriteFailed)?;
+    Ok(preference)
+}
+
+/// Whether the user allowed Agent CLI `--version` probes to run without a
+/// per-run click. This is informed consent only: it never stores a version
+/// number, and probe results stay in window memory.
+///
+/// `rename_all = "camelCase"` matches the frontend wire format
+/// (`{ "autoProbe": boolean }`) to the Rust field name `auto_probe`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AutoVersionProbePreference {
+    /// `true` lets discovery and detail views trigger fixed `--version` probes.
+    pub auto_probe: bool,
+}
+
+impl Default for AutoVersionProbePreference {
+    /// Auto-probe is off until the user turns it on, matching the manual-only
+    /// default documented in `docs/plans/agent-version-probe.md`.
+    fn default() -> Self {
+        Self { auto_probe: false }
+    }
+}
+
+/// Read the saved auto-probe choice, or report `false` when no row exists.
+/// This read never writes defaults or replaces invalid data.
+///
+/// # Errors
+/// Returns `StorageUnavailable` for a poisoned lock or `ReadFailed` for a
+/// database failure. An unsupported stored value is `InvalidPreference`.
+pub fn load_auto_version_probe(
+    storage: &Storage,
+) -> Result<AutoVersionProbePreference, SettingsError> {
+    let connection = storage
+        .lock()
+        .map_err(|_| SettingsError::StorageUnavailable)?;
+    let stored: Option<i64> = connection
+        .query_row(
+            "SELECT auto_probe FROM agent_version_preference WHERE id = 1",
+            [],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|_| SettingsError::ReadFailed)?;
+    match stored {
+        Some(0) => Ok(AutoVersionProbePreference { auto_probe: false }),
+        Some(1) => Ok(AutoVersionProbePreference { auto_probe: true }),
+        Some(_) => Err(SettingsError::InvalidPreference),
+        None => Ok(AutoVersionProbePreference::default()),
+    }
+}
+
+/// Persist the auto-probe choice and return it only after SQLite commits.
+/// The single UPSERT is atomic; unrelated data is untouched.
+///
+/// # Errors
+/// Returns `StorageUnavailable` for a poisoned lock or `WriteFailed` when SQLite
+/// cannot commit the statement. It never reports an unsuccessful write as saved.
+pub fn save_auto_version_probe(
+    storage: &Storage,
+    preference: AutoVersionProbePreference,
+) -> Result<AutoVersionProbePreference, SettingsError> {
+    let connection = storage
+        .lock()
+        .map_err(|_| SettingsError::StorageUnavailable)?;
+    connection
+        .execute(
+            "INSERT INTO agent_version_preference (id, auto_probe) VALUES (1, ?1)
+             ON CONFLICT(id) DO UPDATE SET auto_probe = excluded.auto_probe",
+            [i64::from(preference.auto_probe)],
         )
         .map_err(|_| SettingsError::WriteFailed)?;
     Ok(preference)
@@ -328,5 +401,127 @@ mod tests {
         }
         let unknown = serde::de::value::StrDeserializer::<serde::de::value::Error>::new("fr");
         assert!(LocalePreference::deserialize(unknown).is_err());
+    }
+
+    #[test]
+    fn auto_version_probe_defaults_to_off_without_writing_a_row() {
+        let directory = TestDirectory::new();
+        let storage = Storage::open_in_directory(&directory.0).expect("open storage");
+        assert_eq!(
+            load_auto_version_probe(&storage),
+            Ok(AutoVersionProbePreference::default())
+        );
+        let count: u32 = storage
+            .lock()
+            .expect("lock")
+            .query_row("SELECT COUNT(*) FROM agent_version_preference", [], |row| {
+                row.get(0)
+            })
+            .expect("count rows");
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn auto_version_probe_saves_both_choices_and_reopens() {
+        let directory = TestDirectory::new();
+        for auto_probe in [true, false, true] {
+            let storage = Storage::open_in_directory(&directory.0).expect("open storage");
+            let preference = AutoVersionProbePreference { auto_probe };
+            assert_eq!(
+                save_auto_version_probe(&storage, preference),
+                Ok(preference)
+            );
+            drop(storage);
+            let reopened = Storage::open_in_directory(&directory.0).expect("reopen storage");
+            assert_eq!(load_auto_version_probe(&reopened), Ok(preference));
+            let count: u32 = reopened
+                .lock()
+                .expect("lock")
+                .query_row("SELECT COUNT(*) FROM agent_version_preference", [], |row| {
+                    row.get(0)
+                })
+                .expect("count rows");
+            assert_eq!(count, 1);
+        }
+    }
+
+    #[test]
+    fn auto_version_probe_failed_save_keeps_the_previous_value() {
+        let directory = TestDirectory::new();
+        let storage = Storage::open_in_directory(&directory.0).expect("open storage");
+        save_auto_version_probe(&storage, AutoVersionProbePreference { auto_probe: true })
+            .expect("save old value");
+        storage
+            .lock()
+            .expect("lock")
+            .pragma_update(None, "query_only", true)
+            .expect("make connection read-only");
+        assert_eq!(
+            save_auto_version_probe(&storage, AutoVersionProbePreference { auto_probe: false }),
+            Err(SettingsError::WriteFailed)
+        );
+        assert_eq!(
+            load_auto_version_probe(&storage),
+            Ok(AutoVersionProbePreference { auto_probe: true })
+        );
+    }
+
+    #[test]
+    fn auto_version_probe_invalid_stored_value_is_reported_not_overwritten() {
+        let directory = TestDirectory::new();
+        let storage = Storage::open_in_directory(&directory.0).expect("open storage");
+        let connection = storage.lock().expect("lock");
+        connection
+            .execute_batch(
+                "PRAGMA ignore_check_constraints = ON;
+                 INSERT INTO agent_version_preference (id, auto_probe) VALUES (1, 2)",
+            )
+            .expect("seed invalid row");
+        drop(connection);
+        assert_eq!(
+            load_auto_version_probe(&storage),
+            Err(SettingsError::InvalidPreference)
+        );
+    }
+
+    #[test]
+    fn auto_version_probe_schema_rejects_unknown_values_and_extra_rows() {
+        let directory = TestDirectory::new();
+        let storage = Storage::open_in_directory(&directory.0).expect("open storage");
+        let connection = storage.lock().expect("lock");
+        assert!(
+            connection
+                .execute(
+                    "INSERT INTO agent_version_preference (id, auto_probe) VALUES (1, 2)",
+                    []
+                )
+                .is_err()
+        );
+        assert!(
+            connection
+                .execute(
+                    "INSERT INTO agent_version_preference (id, auto_probe) VALUES (2, 1)",
+                    []
+                )
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn auto_version_probe_wire_format_uses_camel_case() {
+        // The frontend sends and reads `{ "autoProbe": boolean }`. Without
+        // `rename_all = "camelCase"` serde would use the Rust field name
+        // `auto_probe`, and every IPC call would fail to deserialize.
+        let enabled = AutoVersionProbePreference { auto_probe: true };
+        let json = serde_json::to_value(enabled).expect("serialize");
+        assert_eq!(json, serde_json::json!({ "autoProbe": true }));
+        let parsed: AutoVersionProbePreference = serde_json::from_value(json).expect("deserialize");
+        assert_eq!(parsed, enabled);
+
+        let disabled = AutoVersionProbePreference { auto_probe: false };
+        let json = serde_json::to_value(disabled).expect("serialize");
+        assert_eq!(json, serde_json::json!({ "autoProbe": false }));
+        let parsed: AutoVersionProbePreference = serde_json::from_value(json).expect("deserialize");
+        assert_eq!(parsed, disabled);
     }
 }

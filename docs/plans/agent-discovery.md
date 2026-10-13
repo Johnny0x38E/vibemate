@@ -17,7 +17,7 @@
 
 显式无效目录覆盖不会静默回退；Codex 的空 `CODEX_HOME` 按默认路径处理，非空覆盖要求已有目录。OpenCode 是候选目录观测：官方版本间目录覆盖含义不同，不将 `OPENCODE_CONFIG_DIR` 声称为唯一生效路径，也不检查文件/内联/远程/项目配置覆盖。Claude 的 `~/.claude.json`、各家的项目/profile/策略/CLI/会话覆盖，以及 Hermes 桌面包的独立路径均不在本次探测内。桌面环境可能不同于终端。
 
-官方资料与产品边界见 [agent-catalog.md](agent-catalog.md)、[Pi](../integrations/pi.md) 和 [Grok Build](../integrations/grok-build.md)。资料证明发现规则，不证明本机安装真实性、可执行性或有效配置。
+官方资料与产品边界见 [agent-catalog.md](agent-catalog.md)、[Claude Code](../integrations/claude-code.md)、[Pi](../integrations/pi.md) 和 [Grok Build](../integrations/grok-build.md)。资料证明发现规则，不证明本机安装真实性、可执行性或有效配置。
 
 ## 版本与安全边界
 

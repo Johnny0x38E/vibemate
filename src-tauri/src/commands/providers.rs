@@ -117,6 +117,28 @@ pub(crate) async fn get_provider_secret_status(
     crate::logging::provider_outcome("get_provider_secret_status", result)
 }
 
+/// Remove one provider instance, its saved models and its API key.
+/// The credential deletion and the database commit are ordered so a definite
+/// failure restores the key; `delete_outcome_unknown` means the caller must reload
+/// the list before claiming anything. No Agent file is touched.
+#[tauri::command]
+pub(crate) async fn delete_provider(
+    app: tauri::AppHandle,
+    request: providers::DeleteProviderRequest,
+) -> Result<providers::DeletedProvider, ProviderError> {
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        with_provider_storage(&app, |storage| {
+            with_credential_writes(&app, || {
+                providers::delete_provider(storage, &OsCredentialStore, request)
+            })
+        })
+    })
+    .await
+    .map_err(|_| ProviderError::OperationFailed)
+    .and_then(|result| result);
+    crate::logging::provider_outcome("delete_provider", result)
+}
+
 /// Replace a provider's API key (or set a missing one) and return the new status.
 /// The key goes to the OS credential store only. A task failure has an unknown
 /// outcome: the caller must re-read the status before acting.

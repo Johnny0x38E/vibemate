@@ -51,6 +51,8 @@ const MAX_LIST_ITEMS: usize = 16;
 /// Longest kept item of such a list, in bytes (the items are short ASCII words).
 const MAX_LIST_ITEM_LEN: usize = 64;
 
+const DEEPSEEK_TOOL_MODELS: &[&str] = &["deepseek-flash", "deepseek-v4-pro"];
+
 /// The response does not have the documented envelope.
 ///
 /// The variant has no payload, so the error can never echo text from the server.
@@ -81,6 +83,98 @@ impl std::fmt::Display for CatalogError {
 
 impl std::error::Error for CatalogError {}
 
+/// Whether an upstream directory explicitly declares one capability.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CapabilityState {
+    /// The directory did not provide enough valid evidence either way.
+    #[default]
+    Unknown,
+    /// A documented directory field explicitly supports the capability.
+    Supported,
+    /// A documented exhaustive field explicitly omits or disables the capability.
+    Unsupported,
+}
+
+/// Official catalog field supporting one capability state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CapabilitySource {
+    /// DeepSeek `input_modalities` from its model-list endpoint.
+    DeepseekModelInputModalities,
+    /// DeepSeek `effort.supported_levels` from its model-list endpoint.
+    DeepseekModelEffortLevels,
+    /// DeepSeek official model-features table for one exact model ID.
+    DeepseekModelFeatures,
+    /// OpenRouter `architecture.input_modalities` from its model-list endpoint.
+    OpenrouterModelInputModalities,
+    /// OpenRouter `supported_parameters` from its model-list endpoint.
+    OpenrouterModelSupportedParameters,
+    /// OpenRouter `reasoning` from its model-list endpoint.
+    OpenrouterModelReasoning,
+}
+
+/// One capability result and the field that supports it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CapabilityEvidence {
+    /// Support status. Unknown is not presented as supported.
+    #[serde(default)]
+    pub state: CapabilityState,
+    /// Present for a catalog declaration; absent when evidence is unknown.
+    pub source: Option<CapabilitySource>,
+}
+
+/// Capabilities displayed for a model. These describe catalog declarations, not
+/// a runtime test or a guarantee that every account route will behave identically.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ModelCapabilities {
+    /// Whether the upstream catalog declares a reasoning/thinking feature.
+    #[serde(default)]
+    pub thinking: CapabilityEvidence,
+    /// Whether the upstream catalog declares image input.
+    #[serde(default)]
+    pub image_input: CapabilityEvidence,
+    /// Whether the upstream catalog declares tool calls.
+    #[serde(default)]
+    pub tool_calls: CapabilityEvidence,
+}
+
+impl ModelCapabilities {
+    /// Return whether each declared state carries a matching source.
+    pub const fn has_valid_sources(self) -> bool {
+        evidence_has_valid_source(self.thinking)
+            && evidence_has_valid_source(self.image_input)
+            && evidence_has_valid_source(self.tool_calls)
+    }
+
+    /// Return an all-unknown value for manual models or unsupported directory fields.
+    pub const fn unknown() -> Self {
+        let evidence = CapabilityEvidence {
+            state: CapabilityState::Unknown,
+            source: None,
+        };
+        Self {
+            thinking: evidence,
+            image_input: evidence,
+            tool_calls: evidence,
+        }
+    }
+}
+
+/// Check that an unknown state has no source and a definitive state has one.
+const fn evidence_has_valid_source(item: CapabilityEvidence) -> bool {
+    matches!(
+        (item.state, item.source),
+        (CapabilityState::Unknown, None)
+            | (
+                CapabilityState::Supported | CapabilityState::Unsupported,
+                Some(_)
+            )
+    )
+}
+
 /// One model from a vendor list, already validated and normalized.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CatalogModel {
@@ -99,6 +193,8 @@ pub struct CatalogModel {
     /// Command Code routes serving the model, normalized without `/v1`
     /// (for example `/chat/completions`). `None` for other vendors or when absent.
     pub supported_endpoints: Option<Vec<String>>,
+    /// Field-level upstream evidence for thinking, image input and tool calls.
+    pub capabilities: ModelCapabilities,
 }
 
 /// One parsed response (one page for OpenRouter).
@@ -158,6 +254,91 @@ pub fn openrouter_page_url_with_limit(
     Ok(url)
 }
 
+/// Unknown evidence carries no claimed upstream source.
+fn unknown_capability() -> CapabilityEvidence {
+    CapabilityEvidence {
+        state: CapabilityState::Unknown,
+        source: None,
+    }
+}
+
+/// Build capability evidence for one explicitly documented state.
+fn evidence(supported: bool, source: CapabilitySource) -> CapabilityEvidence {
+    CapabilityEvidence {
+        state: if supported {
+            CapabilityState::Supported
+        } else {
+            CapabilityState::Unsupported
+        },
+        source: Some(source),
+    }
+}
+
+/// Map an exhaustive image modality list. Missing, null and malformed values are
+/// unknown; a valid empty list explicitly omits the image modality.
+fn modality_capability(value: Option<&Value>, source: CapabilitySource) -> CapabilityEvidence {
+    let Some(items) = value.and_then(Value::as_array) else {
+        return unknown_capability();
+    };
+    if items.iter().any(|item| item.as_str().is_none()) {
+        return unknown_capability();
+    }
+    evidence(
+        items.iter().any(|item| item.as_str() == Some("image")),
+        source,
+    )
+}
+
+/// A nonempty documented level list means the catalog explicitly offers thinking.
+fn capability_from_non_empty_strings(
+    value: Option<&Value>,
+    source: CapabilitySource,
+) -> CapabilityEvidence {
+    match value.and_then(Value::as_array) {
+        Some(items) if items.iter().all(|item| item.as_str().is_some()) => {
+            evidence(!items.is_empty(), source)
+        }
+        _ => unknown_capability(),
+    }
+}
+
+/// Match current DeepSeek tool-call evidence only to the exact documented IDs.
+fn deepseek_tool_capability(model_id: &str) -> CapabilityEvidence {
+    if DEEPSEEK_TOOL_MODELS.contains(&model_id) {
+        evidence(true, CapabilitySource::DeepseekModelFeatures)
+    } else {
+        unknown_capability()
+    }
+}
+
+/// OpenRouter's `reasoning` object describes request-time reasoning support.
+/// Omitted or malformed values remain unknown.
+fn reasoning_capability(value: Option<&Value>) -> CapabilityEvidence {
+    let Some(reasoning) = value.and_then(Value::as_object) else {
+        return unknown_capability();
+    };
+    if reasoning.get("mandatory") == Some(&Value::Bool(true)) {
+        return evidence(true, CapabilitySource::OpenrouterModelReasoning);
+    }
+    match reasoning.get("supported_efforts") {
+        Some(Value::Null) => evidence(true, CapabilitySource::OpenrouterModelReasoning),
+        Some(Value::Array(items)) if items.iter().all(|item| item.as_str().is_some()) => evidence(
+            !items.is_empty(),
+            CapabilitySource::OpenrouterModelReasoning,
+        ),
+        _ => unknown_capability(),
+    }
+}
+
+/// Return membership only for a valid string array; invalid fields stay unknown.
+fn list_contains(value: Option<&Value>, expected: &str) -> Option<bool> {
+    let items = value?.as_array()?;
+    if items.iter().any(|item| item.as_str().is_none()) {
+        return None;
+    }
+    Some(items.iter().any(|item| item.as_str() == Some(expected)))
+}
+
 /// Parse one response from the given vendor.
 pub fn parse_page(kind: ProviderKind, body: &[u8]) -> Result<CatalogPage, CatalogError> {
     match kind {
@@ -194,6 +375,22 @@ pub fn parse_deepseek(body: &[u8]) -> Result<CatalogPage, CatalogError> {
         model.max_output_tokens = positive_integer(entry.get("max_output_tokens"));
         model.input_modalities = string_list(entry.get("input_modalities"));
         model.output_modalities = string_list(entry.get("output_modalities"));
+        model.capabilities = ModelCapabilities {
+            thinking: capability_from_non_empty_strings(
+                entry
+                    .get("effort")
+                    .and_then(Value::as_object)
+                    .and_then(|effort| effort.get("supported_levels")),
+                CapabilitySource::DeepseekModelEffortLevels,
+            ),
+            image_input: modality_capability(
+                entry.get("input_modalities"),
+                CapabilitySource::DeepseekModelInputModalities,
+            ),
+            // DeepSeek documents tool calls in its per-model pricing/features table,
+            // not in the model list. Match only exact documented model IDs.
+            tool_calls: deepseek_tool_capability(&model.model_id),
+        };
     }))
 }
 
@@ -231,6 +428,23 @@ pub fn parse_openrouter_page(body: &[u8]) -> Result<CatalogPage, CatalogError> {
                 .and_then(Value::as_object)
                 .and_then(|object| object.get("max_completion_tokens")),
         );
+        let parameters = entry.get("supported_parameters");
+        model.capabilities = ModelCapabilities {
+            thinking: reasoning_capability(entry.get("reasoning")),
+            image_input: modality_capability(
+                architecture.and_then(|object| object.get("input_modalities")),
+                CapabilitySource::OpenrouterModelInputModalities,
+            ),
+            tool_calls: list_contains(parameters, "tools").map_or_else(
+                unknown_capability,
+                |supported| {
+                    evidence(
+                        supported,
+                        CapabilitySource::OpenrouterModelSupportedParameters,
+                    )
+                },
+            ),
+        };
     });
     page.has_more = has_more;
     page.total_count = Some(total_count);
@@ -403,6 +617,7 @@ fn parse_entries(
             input_modalities: None,
             output_modalities: None,
             supported_endpoints: None,
+            capabilities: ModelCapabilities::unknown(),
         };
         fill(entry, &mut model);
         models.push(model);

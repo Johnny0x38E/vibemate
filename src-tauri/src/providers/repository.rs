@@ -88,6 +88,74 @@ pub(super) fn commit_provider_update(
     enrich_selected_model_count(&connection, record).map_err(CommitFailure::NotCommitted)
 }
 
+pub(super) fn commit_provider_delete(
+    storage: &Storage,
+    request: &DeleteProviderRequest,
+) -> Result<DeletedProvider, CommitFailure<ProviderError>> {
+    let mut connection = storage
+        .lock()
+        .map_err(|_| CommitFailure::NotCommitted(ProviderError::StorageUnavailable))?;
+    let transaction = connection
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|_| CommitFailure::NotCommitted(ProviderError::WriteFailed))?;
+    let deleted =
+        delete_in_transaction(&transaction, request).map_err(CommitFailure::NotCommitted)?;
+    transaction
+        .commit()
+        .map_err(|_| CommitFailure::Uncertain(ProviderError::WriteFailed))?;
+    Ok(deleted)
+}
+
+/// Delete one instance inside the caller's transaction. The credential entry
+/// itself is removed by the service before this commit step runs.
+///
+/// The stored revision is rechecked here, so a stale confirmation cannot delete a
+/// configuration that changed after the dialog was opened.
+fn delete_in_transaction(
+    transaction: &rusqlite::Transaction<'_>,
+    request: &DeleteProviderRequest,
+) -> Result<DeletedProvider, ProviderError> {
+    let id = ProviderId::parse(&request.id).ok_or(ProviderError::InvalidRequest)?;
+    if request.expected_revision < 1 {
+        return Err(ProviderError::InvalidRequest);
+    }
+    let stored: Option<(String, i64)> = transaction
+        .query_row(
+            "SELECT display_name, revision FROM provider_instance WHERE id = ?1",
+            [id.as_str()],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()
+        .map_err(|_| ProviderError::ReadFailed)?;
+    let (display_name, revision) = stored.ok_or(ProviderError::NotFound)?;
+    if revision != request.expected_revision {
+        return Err(ProviderError::RevisionConflict);
+    }
+    let saved_models: i64 = transaction
+        .query_row(
+            "SELECT COUNT(*) FROM provider_model WHERE provider_id = ?1",
+            [id.as_str()],
+            |row| row.get(0),
+        )
+        .map_err(|_| ProviderError::ReadFailed)?;
+    // The foreign keys cascade to provider_model, provider_model_fetch and
+    // provider_credential, so this one row removes everything the provider owns.
+    let removed = transaction
+        .execute(
+            "DELETE FROM provider_instance WHERE id = ?1 AND revision = ?2",
+            params![id.as_str(), request.expected_revision],
+        )
+        .map_err(|_| ProviderError::WriteFailed)?;
+    if removed != 1 {
+        return Err(ProviderError::RevisionConflict);
+    }
+    Ok(DeletedProvider {
+        id,
+        display_name,
+        selected_model_count: u32::try_from(saved_models).map_err(|_| ProviderError::ReadFailed)?,
+    })
+}
+
 fn update_in_transaction(
     transaction: &rusqlite::Transaction<'_>,
     request: &UpdateProviderRequest,

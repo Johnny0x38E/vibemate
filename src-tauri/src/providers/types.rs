@@ -203,6 +203,10 @@ pub enum ProviderError {
     /// Replacing failed and the previous key could not be restored, so the store
     /// may already hold the new key. Refresh the key status before acting.
     SecretOutcomeUnknown,
+    /// Deleting failed in a way that could not be confirmed: the provider may or
+    /// may not still exist, and its key may or may not still be stored. Reload the
+    /// list before acting.
+    DeleteOutcomeUnknown,
 }
 
 impl std::fmt::Display for ProviderError {
@@ -229,6 +233,7 @@ impl std::fmt::Display for ProviderError {
             Self::CredentialStoreFailed => "The OS credential store reported an error.",
             Self::CreateOutcomeUnknown => "Whether the provider was saved is unknown.",
             Self::SecretOutcomeUnknown => "Whether the API key was replaced is unknown.",
+            Self::DeleteOutcomeUnknown => "Whether the provider was deleted is unknown.",
         })
     }
 }
@@ -408,4 +413,27 @@ pub struct ReplaceProviderSecretRequest {
     pub provider_id: String,
     /// The new key; validated with `credentials::validate_secret`.
     pub secret: Secret,
+}
+
+/// Remove one provider instance, its saved models and its API key.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DeleteProviderRequest {
+    /// The instance to delete.
+    pub id: String,
+    /// The `revision` the confirmation loaded; a different stored revision is a
+    /// conflict, so a stale confirmation cannot delete a newer configuration.
+    pub expected_revision: i64,
+}
+
+/// What a successful deletion removed, as returned to the frontend.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeletedProvider {
+    /// Stable identity of the removed instance.
+    pub id: ProviderId,
+    /// Label at the time of deletion, for the confirmation message.
+    pub display_name: String,
+    /// Saved models removed with the instance through the foreign-key cascade.
+    pub selected_model_count: u32,
 }

@@ -1,6 +1,7 @@
 //! Behavior tests for the parent module, kept separate from runtime code.
 
 mod browse;
+mod refresh;
 
 use std::fs;
 use std::path::PathBuf;

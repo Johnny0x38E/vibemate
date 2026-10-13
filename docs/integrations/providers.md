@@ -219,6 +219,44 @@ Base 为 `https://api.deepseek.com`；Anthropic 格式的 Base 为
   未设置时读 macOS/Windows 系统设置；Linux 只读环境变量。
 - 回环与私有网络地址继续允许：地址由用户配置、请求由用户触发，且只用 HTTPS。
 
+## 模型能力字段（P16）
+
+核实日期：2026-10-13。本节只记录官方页面当前声明的字段与 vibemate 的映射规则。
+能力来自目录声明，不是本次推理测试；路由声明不能当作图像、工具或推理能力证据。
+
+| 能力     | 图标     | DeepSeek                      | OpenRouter                      | Command Code |
+| -------- | -------- | ----------------------------- | ------------------------------- | ------------ |
+| 思考     | 思考气泡 | `effort.supported_levels`     | `reasoning` 对象                | 无字段       |
+| 图像输入 | 眼睛     | `input_modalities` 含 `image` | `architecture.input_modalities` | 无字段       |
+| 工具调用 | 工具     | 官方逐模型能力表              | `supported_parameters`          | 无字段       |
+
+三家都按字段分别记录“未知 / 明确支持 / 明确不支持”及来源：
+
+- **DeepSeek**（[Lists Models](https://api-docs.deepseek.com/api/list-models/)）：
+  `effort.supported_levels` 存在且为字符串数组时，非空即支持思考（文档说明 `none`
+  不在列表内）；`input_modalities` 是完整输入类型列表，含 `image` 即支持图像。
+  这两个字段缺失、为 null 或含畸形项时保持未知。工具调用不在模型目录里声明，
+  来自[官方定价页](https://api-docs.deepseek.com/quick_start/pricing/)的逐模型能力表；
+  当前只把它匹配到文档中确切列出的模型 ID（`deepseek-flash`、`deepseek-v4-pro`）。
+  旧别名仍被接受但由新模型提供服务，为避免把旧 ID 当作独立能力，保持未知。
+- **OpenRouter**（[List all models](https://openrouter.ai/docs/api/api-reference/models/list-all-models-and-their-properties)、
+  [推理说明](https://openrouter.ai/docs/guides/best-practices/reasoning-tokens)）：
+  `reasoning.mandatory: true` 或 `supported_efforts` 为 `null`（接受 gateway 全部努力值）
+  或非空数组均表示声明支持思考；`supported_efforts: []` 表示不支持。
+  `architecture.input_modalities` 含 `image` 表示图像输入。`supported_parameters`
+  是官方参数支持列表，也是官方推荐的服务端筛选字段；合法数组未含 `tools` 时记录
+  明确不支持，缺失、null 或含畸形项时为未知。
+- **Command Code**：`GET /models` 响应只有 ID、名称、上下文长度和
+  `supported_endpoints`，没有能力字段。官方模型页展示的文本/视觉/推理标签没有
+  对应的公开 API 字段，因此 vibemate 对 Command Code 模型保持未知，不按模型名推断。
+
+映射结果保存在 `provider_model.capabilities`（SQLite v13，JSON 文本），每项包含
+`state` 与 `source`；读取时拒绝“明确状态但没有来源”的行。界面只为“明确支持”绘制图标，
+未知与不支持都不显示图标，也不显示为“已支持”。手动模型与旧数据迁移后保持未知。
+Models 标签页的「刷新已保存模型」调用 `refresh_saved_provider_models`，只更新已保存行并
+保留别名、来源与勾选，不插入目录里的其他模型；只有完整目录会把曾经列出但本次未出现的
+已保存行标记为上游缺失，不完整目录只更新元数据。
+
 ## 第一条兼容路径与待核实事项
 
 首条路径仍选择 **DeepSeek → Pi 的 Chat Completions 配置**。

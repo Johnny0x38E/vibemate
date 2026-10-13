@@ -13,7 +13,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 /// The columns read for a `ProviderModel`, in `StoredModel::read` order.
 const MODEL_COLUMNS: &str = "provider_id, model_id, source, selected, alias, upstream_name, \
      context_window, max_output_tokens, input_modalities, output_modalities, \
-     supported_endpoints, created_at, updated_at, last_seen_at, missing_since";
+     supported_endpoints, capabilities, created_at, updated_at, last_seen_at, missing_since";
 
 /// List a provider's models, optionally only selected ones, either ordered by
 /// model ID (no query) or ranked by a fuzzy query (see `crate::model_search`).
@@ -212,6 +212,7 @@ pub(super) struct StoredModel {
     input_modalities: Option<String>,
     output_modalities: Option<String>,
     supported_endpoints: Option<String>,
+    capabilities: String,
     created_at: i64,
     updated_at: i64,
     last_seen_at: Option<i64>,
@@ -232,10 +233,11 @@ impl StoredModel {
             input_modalities: row.get(8)?,
             output_modalities: row.get(9)?,
             supported_endpoints: row.get(10)?,
-            created_at: row.get(11)?,
-            updated_at: row.get(12)?,
-            last_seen_at: row.get(13)?,
-            missing_since: row.get(14)?,
+            capabilities: row.get(11)?,
+            created_at: row.get(12)?,
+            updated_at: row.get(13)?,
+            last_seen_at: row.get(14)?,
+            missing_since: row.get(15)?,
         })
     }
 
@@ -253,6 +255,13 @@ impl StoredModel {
         }
         let supported_endpoints = json_list(self.supported_endpoints)?;
         let endpoints = supported_endpoints.as_deref();
+        // Capability states and sources must stay paired: an unknown state may not
+        // claim a source, and a definitive state must name one.
+        let capabilities: crate::model_catalog::ModelCapabilities =
+            serde_json::from_str(&self.capabilities).map_err(|_| ModelError::InvalidStoredModel)?;
+        if !capabilities.has_valid_sources() {
+            return Err(invalid);
+        }
         let route_support = route_support(provider.kind, endpoints);
         let resolved_protocol = resolved_protocol(provider.kind, provider.protocol, endpoints);
         let upstream_state = match (self.last_seen_at, self.missing_since) {
@@ -272,6 +281,7 @@ impl StoredModel {
             input_modalities: json_list(self.input_modalities)?,
             output_modalities: json_list(self.output_modalities)?,
             supported_endpoints,
+            capabilities,
             route_support,
             resolved_protocol,
             upstream_state,

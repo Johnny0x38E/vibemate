@@ -1,16 +1,17 @@
 //! Provider save orchestration across SQLite and OS credentials, including compensation.
 
 use super::repository::{
-    commit_provider_update, generate_provider_id, get_provider, insert_provider_with_reference,
-    read_selected_model_count, read_status, save_reference,
+    commit_provider_delete, commit_provider_update, generate_provider_id, get_provider,
+    insert_provider_with_reference, read_selected_model_count, read_status, save_reference,
 };
 use super::types::*;
 use super::validation::{parse_kind, validate_settings};
 use crate::credentials::{
-    CommitFailure, CredentialStore, ReplaceError, SaveNewError, Secret, replace_then_commit,
-    save_new_then_commit, validate_secret,
+    CommitFailure, CredentialStore, DeleteError, ReplaceError, SaveNewError, Secret,
+    delete_then_commit, replace_then_commit, save_new_then_commit, validate_secret,
 };
 use crate::storage::Storage;
+use rusqlite::OptionalExtension;
 
 /// Validate a new instance and its API key, save both, and return the instance.
 ///
@@ -176,6 +177,73 @@ pub fn update_provider_with_secret(
             restored: false, ..
         })
         | Err(ReplaceError::CommitUncertain { .. }) => Err(ProviderError::OperationFailed),
+    }
+}
+
+/// Remove one instance together with its saved models and its API key.
+///
+/// Steps:
+/// 1. Check the ID and revision and confirm in SQLite that the provider exists.
+///    An unknown or stale provider never reaches the credential store.
+/// 2. `delete_then_commit` reads the key as an in-memory backup and removes it.
+/// 3. Its commit step deletes the `provider_instance` row; the foreign keys
+///    cascade to the saved models, the fetch record and the credential reference.
+/// 4. If the transaction fails before `COMMIT`, the key is written back, so the
+///    provider stays usable and the SQLite error describes the whole outcome.
+/// 5. If `COMMIT` itself fails, the key is restored as well: either the provider
+///    still exists and needs it, or the entry is unreferenced and never read. The
+///    result is `DeleteOutcomeUnknown`, and the caller must reload the list.
+///
+/// Agent configuration files are not touched; only vibemate's own storage changes.
+///
+/// # Errors
+/// `InvalidRequest`, `NotFound`, `RevisionConflict`, `StorageUnavailable`,
+/// `ReadFailed`, `WriteFailed` (nothing was deleted; the key is back),
+/// credential-store codes (nothing was deleted), or `DeleteOutcomeUnknown`.
+pub fn delete_provider(
+    storage: &Storage,
+    store: &dyn CredentialStore,
+    request: DeleteProviderRequest,
+) -> Result<DeletedProvider, ProviderError> {
+    let id = ProviderId::parse(&request.id).ok_or(ProviderError::InvalidRequest)?;
+    if request.expected_revision < 1 {
+        return Err(ProviderError::InvalidRequest);
+    }
+    {
+        // Release the connection before the credential store, which may wait for
+        // a system prompt.
+        let connection = storage
+            .lock()
+            .map_err(|_| ProviderError::StorageUnavailable)?;
+        let revision: Option<i64> = connection
+            .query_row(
+                "SELECT revision FROM provider_instance WHERE id = ?1",
+                [id.as_str()],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|_| ProviderError::ReadFailed)?;
+        let revision = revision.ok_or(ProviderError::NotFound)?;
+        if revision != request.expected_revision {
+            return Err(ProviderError::RevisionConflict);
+        }
+    }
+    let reference = id.credential_reference();
+    let deleted = delete_then_commit(store, &reference, || {
+        commit_provider_delete(storage, &request)
+    });
+    match deleted {
+        Ok(value) => Ok(value),
+        Err(DeleteError::Credential(error)) => Err(error.into()),
+        // The key is back, so the SQLite error describes the whole outcome.
+        Err(DeleteError::CommitFailed {
+            source,
+            restored: true,
+        }) => Err(source),
+        Err(DeleteError::CommitFailed {
+            restored: false, ..
+        })
+        | Err(DeleteError::CommitUncertain { .. }) => Err(ProviderError::DeleteOutcomeUnknown),
     }
 }
 

@@ -11,15 +11,16 @@ mod validation;
 use crate::storage::Storage;
 pub use repository::{get_provider, list_providers};
 pub use service::{
-    create_provider, get_secret_status, replace_provider_secret, update_provider,
+    create_provider, delete_provider, get_secret_status, replace_provider_secret, update_provider,
     update_provider_with_secret,
 };
 pub use templates::{base_url_for_protocol, provider_templates};
 pub use types::{
-    CreateProviderRequest, ListProvidersRequest, MAX_BASE_URL_LEN, MAX_DISPLAY_NAME_CHARS,
-    MAX_PAGE_SIZE, ProviderError, ProviderId, ProviderKind, ProviderPage, ProviderProtocol,
-    ProviderRecord, ProviderSecretState, ProviderSecretStatus, ProviderSettings, ProviderTemplate,
-    ReplaceProviderSecretRequest, UpdateProviderRequest,
+    CreateProviderRequest, DeleteProviderRequest, DeletedProvider, ListProvidersRequest,
+    MAX_BASE_URL_LEN, MAX_DISPLAY_NAME_CHARS, MAX_PAGE_SIZE, ProviderError, ProviderId,
+    ProviderKind, ProviderPage, ProviderProtocol, ProviderRecord, ProviderSecretState,
+    ProviderSecretStatus, ProviderSettings, ProviderTemplate, ReplaceProviderSecretRequest,
+    UpdateProviderRequest,
 };
 pub use validation::{normalize_base_url, parse_kind, validate_display_name, validate_settings};
 
@@ -60,6 +61,30 @@ pub(crate) fn fail_commits_after_reference_writes(storage: &Storage) {
              BEGIN INSERT INTO commit_guard_child VALUES (1); END;",
         )
         .expect("commit guard");
+}
+
+/// Test support for provider deletion.
+///
+/// Make `COMMIT` fail after the provider row is deleted, so the credential
+/// compensation sees an uncertain outcome instead of a definite statement error.
+/// The deferred foreign key is checked only at `COMMIT`; see
+/// [`fail_commits_after_reference_writes`] for the same technique.
+#[cfg(test)]
+pub(crate) fn fail_commits_after_provider_delete(storage: &Storage) {
+    storage
+        .lock()
+        .expect("lock")
+        .execute_batch(
+            "CREATE TEMP TABLE delete_guard_parent (id INTEGER PRIMARY KEY);
+             CREATE TEMP TABLE delete_guard_child (
+                 parent INTEGER REFERENCES delete_guard_parent (id)
+                     DEFERRABLE INITIALLY DEFERRED
+             );
+             CREATE TEMP TRIGGER fail_commit_on_provider_delete
+                 AFTER DELETE ON provider_instance
+             BEGIN INSERT INTO delete_guard_child VALUES (1); END;",
+        )
+        .expect("delete commit guard");
 }
 
 #[cfg(test)]

@@ -2,6 +2,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
     createProvider,
+    deleteProvider,
     getProvider,
     listProviderTemplates,
     listProviders,
@@ -309,6 +310,7 @@ describe("provider desktop boundary", () => {
         "credential_store_failed",
         "create_outcome_unknown",
         "secret_outcome_unknown",
+        "delete_outcome_unknown",
     ])("retains the known safe error code %s", async (code) => {
         vi.mocked(invoke).mockRejectedValue(code);
         await expect(createProvider(createInput)).rejects.toMatchObject({
@@ -317,6 +319,45 @@ describe("provider desktop boundary", () => {
         await expect(
             listProviders({ after: null, limit: 10 }),
         ).rejects.toMatchObject({ code });
+    });
+
+    it("validates the delete acknowledgment and maps its safe failure codes", async () => {
+        vi.mocked(invoke).mockResolvedValueOnce({
+            id: ID,
+            displayName: "Personal",
+            selectedModelCount: 2,
+        });
+        expect(await deleteProvider({ id: ID, expectedRevision: 3 })).toEqual({
+            id: ID,
+            displayName: "Personal",
+            selectedModelCount: 2,
+        });
+        expect(invoke).toHaveBeenLastCalledWith("delete_provider", {
+            request: { id: ID, expectedRevision: 3 },
+        });
+        for (const response of [
+            { id: "f".repeat(32), displayName: "X", selectedModelCount: 0 },
+            { id: ID, displayName: "", selectedModelCount: 0 },
+            { id: ID, displayName: "X", selectedModelCount: -1 },
+            { id: ID, displayName: "X", selectedModelCount: 1.5 },
+            { id: ID, displayName: "X" },
+            { id: ID, displayName: "X", selectedModelCount: 0, extra: null },
+        ]) {
+            vi.mocked(invoke).mockResolvedValueOnce(response);
+            await expect(
+                deleteProvider({ id: ID, expectedRevision: 3 }),
+            ).rejects.toMatchObject({ code: "invalid_response" });
+        }
+        vi.mocked(invoke).mockRejectedValueOnce("delete_outcome_unknown");
+        await expect(
+            deleteProvider({ id: ID, expectedRevision: 3 }),
+        ).rejects.toMatchObject({ code: "delete_outcome_unknown" });
+        vi.mocked(isTauri).mockReturnValue(false);
+        vi.mocked(invoke).mockClear();
+        await expect(
+            deleteProvider({ id: ID, expectedRevision: 3 }),
+        ).rejects.toMatchObject({ code: "desktop_required" });
+        expect(invoke).not.toHaveBeenCalled();
     });
 
     it("drops unknown runtime diagnostics instead of forwarding them", async () => {

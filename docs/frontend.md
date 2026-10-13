@@ -639,7 +639,12 @@ The Models tab follows [models-tab-ux.md](plans/models-tab-ux.md). In brief: the
 default **Added** / 「已添加」 view lists persisted models, with a fixed list title
 (**Added** / **All**) above the scroll region. **Fetch models** opens **upstream**
 browse with lazy-loaded result pages via `browse_upstream_models_page` (optional
-fuzzy `query`; session catalog in Rust). Checkboxes are draft until **Save**;
+fuzzy `query`; session catalog in Rust). **Refresh saved models**, beside it,
+downloads the catalog and updates only rows already on the added list
+(`refresh_saved_provider_models`): aliases, sources and checkboxes stay, nothing
+is inserted or deleted, and only a complete catalog can mark a saved row as
+unavailable upstream. It is disabled while checkbox drafts or other model work is
+pending. Checkboxes are draft until **Save**;
 unchecking on the added list and saving removes rows from SQLite
 (`save_provider_model_selections`). Search applies to whichever view is active.
 Dirty drafts block leaving with an unsaved prompt (API tab switch, **Back**, or
@@ -651,8 +656,27 @@ Both lists offer **Add a model manually** as their first row. It explicitly save
 and selects one manual row through the existing Rust command; it does not stage an
 upstream checkbox draft, and pending checkbox drafts block creation until saved or
 discarded. The manual row is removed by unchecking it and using the normal
-selection **Save**. Route/capability metadata stays unverified; an alias is only a
-display label.
+selection **Save**. Route support still comes from the provider's own route
+declaration; an alias is only a display label. Capability icons are read-only and
+appear only when the vendor catalog declares that field as supported (see
+[provider-completion.md](plans/provider-completion.md)); a missing icon never
+claims that the model lacks the ability.
+
+The Providers list row has a destructive **Delete** action
+(`ProviderDeleteAction`) that opens a confirmation dialog naming the provider and
+its added-model count. Deletion removes the configuration, its saved models and
+its stored key; a stale confirmation fails without touching the credential store,
+a definite database failure restores the key, and an unknown outcome reloads the
+list. Agent configuration files are never read or written by this action.
+
+Each added row has an **Edit alias** action (`ModelAliasAction`) opening a small
+Base UI dialog around `ModelAliasEditor`. The editor reads a Rust content digest,
+saves through `update_provider_model_alias`, and refuses to write when the model
+changed since the read (`model_changed`) or when the outcome is unknown; both
+states require an explicit reload that replaces the local draft. The dialog traps
+focus, closes with Escape, and returns focus to the row action that opened it.
+Alias edits block competing model operations through the page's existing busy
+state and never change checkboxes or saved membership.
 
 Rust validates submitted values: field codes appear next to their field and other
 codes at form level. Successful creation clears the form and extends the saved

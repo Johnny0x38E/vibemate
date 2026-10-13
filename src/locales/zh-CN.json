@@ -139,7 +139,17 @@
             "label": "已保存的服务商配置",
             "selectedModels": "已添加模型 {{count}}",
             "edit": "编辑",
-            "editLabel": "编辑 {{name}}"
+            "editLabel": "编辑 {{name}}",
+            "deleteLabel": "删除「{{name}}」"
+        },
+        "delete": {
+            "open": "删除",
+            "title": "删除服务商",
+            "body_one": "删除「{{name}}」？该操作会删除这项配置、{{count}} 个已添加模型和保存的 API 密钥。不会修改 Agent 配置文件。",
+            "body_other": "删除「{{name}}」？该操作会删除这项配置、{{count}} 个已添加模型和保存的 API 密钥。不会修改 Agent 配置文件。",
+            "confirm": "删除服务商",
+            "cancel": "取消",
+            "done": "已删除「{{name}}」。"
         },
         "tabs": {
             "ariaLabel": "服务商配置分区",
@@ -154,6 +164,12 @@
         },
         "models": {
             "fetch": "获取模型",
+            "refreshSaved": "刷新已保存模型",
+            "refreshing": "正在刷新…",
+            "refreshNotice_one": "已从服务商目录刷新 {{count}} 个已保存模型。",
+            "refreshNotice_other": "已从服务商目录刷新 {{count}} 个已保存模型。",
+            "refreshPartial_one": "已刷新 {{count}} 个已保存模型，但服务商返回的目录不完整；未标记任何模型为不可用。",
+            "refreshPartial_other": "已刷新 {{count}} 个已保存模型，但服务商返回的目录不完整；未标记任何模型为不可用。",
             "fetching": "正在获取模型…",
             "cancelFetch": "取消",
             "needKey": "请先在 API 页填写 API 密钥，再获取模型。",
@@ -193,7 +209,7 @@
             "listLabel": "此服务商配置下的模型",
             "selectModel": "勾选 {{modelId}}",
             "deselectModel": "取消勾选 {{modelId}}",
-            "manualSource": "手动添加 · 能力来自你的填写",
+            "manualSource": "手动添加",
             "createPending": "请先完成 API 配置",
             "selectedSummary": "已添加 {{count}} 个",
             "selectedSummaryMany": "已添加 {{count}}+ 个",
@@ -214,7 +230,7 @@
             "errors": {
                 "storage_unavailable": "本地配置存储不可用，请重启 vibemate。",
                 "read_failed": "无法读取模型列表，请重试。",
-                "write_failed": "勾选状态未保存，请重试。",
+                "write_failed": "模型修改未保存，请重试。",
                 "operation_failed": "操作未能完成，请重试。",
                 "invalid_request": "请求无效，请刷新后重试。",
                 "not_found": "找不到这项服务商配置，请返回列表并刷新。",
@@ -224,6 +240,7 @@
                 "model_alias_invalid": "显示名称无效。",
                 "model_already_exists": "该模型 ID 已存在。",
                 "model_not_found": "找不到该模型，请刷新列表。",
+                "model_changed": "该模型已发生变更，请重新加载后再保存。",
                 "model_route_not_supported": "该模型没有 vibemate 可用的 API 路由。",
                 "secret_missing": "请先在上方填写 API 密钥，再勾选模型。",
                 "secret_invalid": "API 密钥无效。",
@@ -246,6 +263,19 @@
                 "invalid_response": "收到无法识别的响应，请重试。",
                 "desktop_required": "修改模型勾选需要在 vibemate 桌面应用中操作。"
             },
+            "capabilities": {
+                "thinking": "服务商目录声明支持思考能力",
+                "imageInput": "服务商目录声明支持图像输入",
+                "toolCalls": "服务商目录声明支持工具调用"
+            },
+            "aliasEditor": {
+                "title": "编辑 {{modelId}} 的别名",
+                "save": "保存别名",
+                "cancel": "取消",
+                "saved": "模型别名已保存。",
+                "reload": "重新加载已保存别名并放弃草稿",
+                "uncertain": "保存结果未知，请重新加载已保存的别名后再操作。"
+            },
             "manual": {
                 "title": "手动添加模型",
                 "modelId": "模型 ID",
@@ -254,8 +284,7 @@
                 "check": "检查已保存模型",
                 "uncertain": "保存结果未知。再次添加前，请先检查已保存模型；检查失败时可再次检查。",
                 "saved": "手动模型已保存。",
-                "draft": "添加手动模型前，请先保存或放弃勾选改动。",
-                "capabilityNote": "手动模型没有服务商路由声明。能力信息来自你的填写，而非上游目录。"
+                "draft": "添加手动模型前，请先保存或放弃勾选改动。"
             }
         },
         "fields": {
@@ -313,7 +342,8 @@
             "credential_store_access_denied": "无法访问系统凭据库，它可能已锁定或拒绝了访问，什么都没有更改。请解锁或允许访问后重试。",
             "credential_store_failed": "系统凭据库报告了错误，什么都没有更改。如果你在系统提示中拒绝了访问，请重试并选择允许。",
             "create_outcome_unknown": "无法确认这项配置是否已保存，系统凭据库中可能留有一个未被使用的密钥条目（vibemate 不会读取它）。请先刷新列表确认，再决定是否重新添加。",
-            "secret_outcome_unknown": "无法确认密钥是否已替换，系统凭据库中可能已经是新密钥。请刷新密钥状态；如不确定，请再次替换。"
+            "secret_outcome_unknown": "无法确认密钥是否已替换，系统凭据库中可能已经是新密钥。请刷新密钥状态；如不确定，请再次替换。",
+            "delete_outcome_unknown": "无法确认服务商是否已删除。请刷新列表后再重试。"
         }
     },
     "mcp": {

@@ -1,6 +1,7 @@
 //! Saved-model requests, records, and source states.
 //! Failure codes are `crate::model_error::ModelError`.
 
+use crate::model_catalog::ModelCapabilities;
 use crate::model_identity::RouteSupport;
 use crate::providers::ProviderProtocol;
 use serde::{Deserialize, Serialize};
@@ -65,6 +66,7 @@ pub struct ProviderModel {
     pub input_modalities: Option<Vec<String>>,
     pub output_modalities: Option<Vec<String>>,
     pub supported_endpoints: Option<Vec<String>>,
+    pub capabilities: ModelCapabilities,
     pub route_support: RouteSupport,
     /// Protocol to use for this model on the instance (P15). `None` when Command
     /// Code has no usable route declaration.
@@ -144,6 +146,8 @@ pub struct SaveProviderModelEntry {
     pub input_modalities: Option<Vec<String>>,
     pub output_modalities: Option<Vec<String>>,
     pub supported_endpoints: Option<Vec<String>>,
+    #[serde(default)]
+    pub capabilities: ModelCapabilities,
 }
 
 /// Atomically remove deselected models and upsert newly selected ones.

@@ -4,6 +4,7 @@ import {
     fireEvent,
     render,
     screen,
+    waitFor,
     within,
 } from "@testing-library/react";
 import { StrictMode, createRef, type Ref } from "react";
@@ -18,6 +19,7 @@ import {
 import { createAppI18n } from "../../i18n";
 import {
     createProvider,
+    deleteProvider,
     getProvider,
     listProviders,
     listProviderTemplates,
@@ -38,6 +40,7 @@ import { PROVIDER_PAGE_SIZE, ProvidersView } from "./ProvidersView";
 vi.mock(import("../../lib/desktop/providers"), async (importOriginal) => ({
     ...(await importOriginal()),
     createProvider: vi.fn(),
+    deleteProvider: vi.fn(),
     getProvider: vi.fn(),
     listProviders: vi.fn(),
     listProviderTemplates: vi.fn(),
@@ -45,6 +48,7 @@ vi.mock(import("../../lib/desktop/providers"), async (importOriginal) => ({
 }));
 const create = vi.mocked(createProvider);
 const update = vi.mocked(updateProvider);
+const remove = vi.mocked(deleteProvider);
 const read = vi.mocked(getProvider);
 const list = vi.mocked(listProviders);
 const readTemplates = vi.mocked(listProviderTemplates);
@@ -126,7 +130,7 @@ function deferred<T>() {
 
 afterEach(cleanup);
 beforeEach(() => {
-    for (const mock of [create, update, read, list, readTemplates])
+    for (const mock of [create, update, read, list, readTemplates, remove])
         mock.mockReset();
     listModels.mockReset().mockResolvedValue({
         kind: "desktop",
@@ -182,6 +186,74 @@ async function mount(
 function typeKey(label = "API key", value = SECRET): void {
     fireEvent.change(screen.getByLabelText(label), { target: { value } });
 }
+
+test("deletes a provider after confirmation and drops its row", async () => {
+    list.mockResolvedValue(
+        page(
+            [
+                row("a", { selectedModelCount: 3 }),
+                row("b", { displayName: "Second" }),
+            ],
+            null,
+            2,
+        ),
+    );
+    const first = row("a", { selectedModelCount: 3 });
+    remove.mockResolvedValue({
+        id: first.id,
+        displayName: "Work",
+        selectedModelCount: 3,
+    });
+    await mount();
+    await screen.findByText("Work");
+
+    act(() => {
+        fireEvent.click(screen.getByRole("button", { name: "Delete Work" }));
+    });
+    const dialog = await screen.findByRole("dialog", {
+        name: "Delete provider",
+    });
+    expect(within(dialog).getByText(/3 added models/)).toBeTruthy();
+    expect(within(dialog).getByText(/Agent configuration files/)).toBeTruthy();
+
+    act(() => {
+        fireEvent.click(
+            within(dialog).getByRole("button", { name: "Delete provider" }),
+        );
+    });
+    expect(remove).toHaveBeenCalledWith({
+        id: first.id,
+        expectedRevision: 1,
+    });
+    await waitFor(() => {
+        expect(screen.queryByText("Work")).toBeNull();
+    });
+    expect(screen.getByText("Second")).toBeTruthy();
+});
+
+test("a stale delete keeps the row and reloads the list", async () => {
+    list.mockResolvedValue(page([row("a")], null, 1));
+    remove.mockRejectedValue(new ProviderRequestError("revision_conflict"));
+    await mount();
+    await screen.findByText("Work");
+    const readsBefore = list.mock.calls.length;
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete Work" }));
+    const dialog = await screen.findByRole("dialog", {
+        name: "Delete provider",
+    });
+    act(() => {
+        fireEvent.click(
+            within(dialog).getByRole("button", { name: "Delete provider" }),
+        );
+    });
+    await screen.findByText(/changed elsewhere/);
+    expect(screen.getByText("Work")).toBeTruthy();
+    // The reload starts in an effect after the error render.
+    await waitFor(() => {
+        expect(list.mock.calls.length).toBeGreaterThan(readsBefore);
+    });
+});
 
 async function click(name: string | RegExp): Promise<void> {
     await act(async () => {
@@ -590,6 +662,11 @@ test("sidebar home respects cancelling unsaved model checkbox drafts", async () 
                     inputModalities: null,
                     outputModalities: null,
                     supportedEndpoints: null,
+                    capabilities: {
+                        thinking: { state: "unknown", source: null },
+                        imageInput: { state: "unknown", source: null },
+                        toolCalls: { state: "unknown", source: null },
+                    },
                     routeSupport: "not_applicable",
                     resolvedProtocol: "chat_completions",
                     upstreamState: "listed",

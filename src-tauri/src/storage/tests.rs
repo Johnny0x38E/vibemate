@@ -196,6 +196,116 @@ fn system_themes_migration_preserves_existing_preferences_and_supports_restart()
 }
 
 #[test]
+fn capability_metadata_migration_keeps_saved_models_unknown_by_default() {
+    let directory = TestDirectory::new("capability-upgrade");
+    let path = directory.path.join(DATABASE_FILE_NAME);
+    let old = Storage::open_file(&path, &MIGRATIONS[..11]).expect("v11 database");
+    old.lock()
+        .expect("lock")
+        .execute_batch(
+            "INSERT INTO provider_instance VALUES ('0123456789abcdef0123456789abcdef', \
+             'deepseek', 'Work', 'https://api.deepseek.com', 'chat_completions', 1, 1, 1); \
+             INSERT INTO provider_model(provider_id, model_id, source, selected, alias, \
+             created_at, updated_at, last_seen_at) VALUES \
+             ('0123456789abcdef0123456789abcdef', 'deepseek-flash', 'fetched', 1, 'Mine', 1, 1, 1);",
+        )
+        .expect("v11 row");
+    drop(old);
+
+    let upgraded = Storage::open_in_directory(&directory.path).expect("upgrade");
+    assert_eq!(
+        upgraded.schema_version().expect("version"),
+        latest_schema_version()
+    );
+    let capabilities: String = upgraded
+        .lock()
+        .expect("lock")
+        .query_row(
+            "SELECT capabilities FROM provider_model WHERE model_id = 'deepseek-flash'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("kept row");
+    let parsed: serde_json::Value = serde_json::from_str(&capabilities).expect("valid JSON");
+    assert_eq!(parsed["thinking"]["state"], "unknown");
+    assert_eq!(parsed["imageInput"]["state"], "unknown");
+    assert_eq!(parsed["toolCalls"]["state"], "unknown");
+    // A definitive state without a source is JSON-valid at the storage layer, but
+    // the model reader rejects it as `invalid_stored_model` instead of trusting it.
+    upgraded
+        .lock()
+        .expect("lock")
+        .execute(
+            "UPDATE provider_model SET capabilities = '{\"thinking\":{\"state\":\"supported\",\"source\":null},\"imageInput\":{\"state\":\"unknown\",\"source\":null},\"toolCalls\":{\"state\":\"unknown\",\"source\":null}}'",
+            [],
+        )
+        .expect("paired CHECK stays at JSON validity");
+    let read = crate::models::list_provider_models(
+        &upgraded,
+        &crate::models::ListProviderModelsRequest {
+            provider_id: "0123456789abcdef0123456789abcdef".to_owned(),
+            after: None,
+            limit: 10,
+            filter: "all".to_owned(),
+            query: None,
+        },
+    );
+    assert_eq!(read, Err(crate::models::ModelError::InvalidStoredModel));
+}
+
+#[test]
+fn capability_migration_runs_on_a_database_already_at_schema_12() {
+    let directory = TestDirectory::new("capability-shared-v12");
+    let path = directory.path.join(DATABASE_FILE_NAME);
+    let old = Storage::open_file(&path, &MIGRATIONS[..11]).expect("v11 database");
+    // Reproduce a database the parallel Agent auto-probe worktree already
+    // upgraded to 12: it holds that worktree's table and has no capabilities
+    // column. The capabilities migration must still run for it.
+    old.lock()
+        .expect("lock")
+        .execute_batch(
+            "INSERT INTO provider_instance VALUES ('0123456789abcdef0123456789abcdef', \
+             'deepseek', 'Work', 'https://api.deepseek.com', 'chat_completions', 1, 1, 1); \
+             INSERT INTO provider_model(provider_id, model_id, source, selected, \
+             created_at, updated_at) VALUES \
+             ('0123456789abcdef0123456789abcdef', 'deepseek-flash', 'fetched', 1, 1, 1); \
+             CREATE TABLE agent_version_preference (\
+                 id INTEGER PRIMARY KEY CHECK (id = 1),\
+                 enabled INTEGER NOT NULL CHECK (enabled IN (0, 1))\
+             ) STRICT; \
+             PRAGMA user_version = 12;",
+        )
+        .expect("v12 database from the parallel worktree");
+    drop(old);
+
+    let upgraded = Storage::open_in_directory(&directory.path).expect("upgrade");
+    assert_eq!(
+        upgraded.schema_version().expect("version"),
+        latest_schema_version()
+    );
+    let capabilities: String = upgraded
+        .lock()
+        .expect("lock")
+        .query_row(
+            "SELECT capabilities FROM provider_model WHERE model_id = 'deepseek-flash'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("capabilities column added");
+    let parsed: serde_json::Value = serde_json::from_str(&capabilities).expect("valid JSON");
+    assert_eq!(parsed["thinking"]["state"], "unknown");
+    // The other worktree's table survives the upgrade.
+    let version_rows: i64 = upgraded
+        .lock()
+        .expect("lock")
+        .query_row("SELECT COUNT(*) FROM agent_version_preference", [], |row| {
+            row.get(0)
+        })
+        .expect("other worktree's table");
+    assert_eq!(version_rows, 0);
+}
+
+#[test]
 fn raising_skill_limits_keeps_rows_and_accepts_larger_skills() {
     let directory = TestDirectory::new("skill-limits-upgrade");
     let path = directory.path.join(DATABASE_FILE_NAME);

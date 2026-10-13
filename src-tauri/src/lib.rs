@@ -91,7 +91,9 @@ pub fn run() {
             commands::providers::update_provider,
             commands::providers::get_provider_secret_status,
             commands::providers::replace_provider_secret,
+            commands::providers::delete_provider,
             commands::models::fetch_provider_models,
+            commands::models::refresh_saved_provider_models,
             commands::models::browse_upstream_models_page,
             commands::models::cancel_provider_model_fetch,
             commands::models::get_provider_model_fetch_status,
@@ -100,6 +102,8 @@ pub fn run() {
             commands::models::set_provider_models_selected,
             commands::models::add_manual_provider_model,
             commands::models::delete_manual_provider_model,
+            commands::models::get_provider_model_snapshot,
+            commands::models::update_provider_model_alias,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|_| {

@@ -38,6 +38,11 @@ const row: ProviderModel = {
     inputModalities: null,
     outputModalities: null,
     supportedEndpoints: null,
+    capabilities: {
+        thinking: { state: "unknown", source: null },
+        imageInput: { state: "unknown", source: null },
+        toolCalls: { state: "unknown", source: null },
+    },
     routeSupport: "unknown",
     resolvedProtocol: null,
     upstreamState: "never_listed",

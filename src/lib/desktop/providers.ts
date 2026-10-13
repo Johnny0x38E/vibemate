@@ -102,6 +102,21 @@ export interface UpdateProviderInput {
     extensions: Record<string, string>;
 }
 
+/** Confirmation input for removing one provider. */
+export interface DeleteProviderInput {
+    id: string;
+    /** The revision the confirmation loaded; a newer stored revision is a conflict. */
+    expectedRevision: number;
+}
+
+/** What a successful deletion removed, for the interface message. */
+export interface DeletedProvider {
+    id: string;
+    displayName: string;
+    /** Saved models removed with the instance. */
+    selectedModelCount: number;
+}
+
 /** Page request: `after` is `null` for the first page; `limit` is 1–100. */
 export interface ListProvidersInput {
     after: string | null;
@@ -139,6 +154,7 @@ const RUST_PROVIDER_ERROR_CODES = [
     "credential_store_failed",
     "create_outcome_unknown",
     "secret_outcome_unknown",
+    "delete_outcome_unknown",
 ] as const;
 
 /**
@@ -467,4 +483,44 @@ export async function updateProvider(
         throw invalidResponse();
     }
     return record;
+}
+
+/**
+ * Remove one provider, its saved models and its API key. Success requires an
+ * acknowledgment of the exact ID that was deleted. `revision_conflict` means the
+ * configuration changed after the confirmation was opened and nothing was
+ * deleted; `delete_outcome_unknown` means the list must be reloaded before any
+ * retry or success claim.
+ */
+export async function deleteProvider(
+    input: DeleteProviderInput,
+): Promise<DeletedProvider> {
+    if (!isTauri()) throw new ProviderRequestError("desktop_required");
+    const data: unknown = await callProviderCommand("delete_provider", {
+        request: {
+            id: input.id,
+            expectedRevision: input.expectedRevision,
+        },
+    });
+    if (
+        !isObject(data) ||
+        !hasExactKeys(data, ["id", "displayName", "selectedModelCount"])
+    ) {
+        throw invalidResponse();
+    }
+    const id = data["id"];
+    const displayName = data["displayName"];
+    const selectedModelCount = data["selectedModelCount"];
+    if (
+        typeof id !== "string" ||
+        id !== input.id ||
+        typeof displayName !== "string" ||
+        displayName.length === 0 ||
+        typeof selectedModelCount !== "number" ||
+        !Number.isSafeInteger(selectedModelCount) ||
+        selectedModelCount < 0
+    ) {
+        throw invalidResponse();
+    }
+    return { id, displayName, selectedModelCount };
 }

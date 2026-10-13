@@ -1,0 +1,59 @@
+.pageHeader {
+    margin-bottom: var(--page-content-gap);
+}
+
+.state {
+    color: var(--color-summary);
+    font-size: 0.6875rem;
+}
+
+.empty {
+    display: grid;
+    justify-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-lg) var(--space-md);
+    border: 1px dashed var(--color-border);
+    border-radius: var(--radius-card);
+    background: var(--color-surface);
+    text-align: center;
+}
+
+.illustration {
+    display: block;
+    width: 160px;
+    height: 120px;
+}
+
+.frame {
+    fill: var(--color-hover);
+    stroke: var(--color-border);
+    stroke-width: 1.5;
+}
+
+.dot,
+.bar {
+    fill: var(--color-border);
+}
+
+/* The dashed ring marks the place of future content without claiming any. */
+.accent {
+    fill: none;
+    stroke: var(--color-accent);
+    stroke-width: 1.5;
+    stroke-dasharray: 4 4;
+    opacity: 0.6;
+}
+
+.emptyTitle {
+    margin: 0;
+    font-size: 0.8125rem;
+    font-weight: 600;
+}
+
+.emptyDetail {
+    margin: 0;
+    color: var(--color-summary);
+    font-size: 0.75rem;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}

@@ -54,6 +54,7 @@ GitHub release notes are extracted from the matching version section only.
 - Shortened the multi-protocol preference hint (en/zh) by dropping the redundant
   “on this base URL” / 「同一 Base URL 上」 lead-in.
 - DeepSeek and OpenRouter templates allow all three evidence-backed protocols. Templates expose per-protocol suggested base URLs; the form follows a documented default when switching protocol (DeepSeek Anthropic → `https://api.deepseek.com/anthropic`). Different bases remain separate configurations.
+- The Overview home page no longer shows the planned-configuration relationship diagram or the reserved statistics area. Until real overview content exists, the page shows one placeholder empty state — a decorative blank-panel illustration with a short bilingual notice — and no data, keeping the rule that nothing on the page may imply a connected integration or a statistic. The unused locale keys for the diagram and statistics placeholder were removed.
 
 ### Added
 

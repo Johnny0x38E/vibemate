@@ -81,13 +81,17 @@ transitions span 160 px before scaling. The V has a slight downward optical
 offset of 6.8 px on the canvas. Other platforms retain their original master.
 See [brand assets](../../assets/brand/README.md) for files and regeneration.
 
-## Relationship home and honest states
+## Home overview and honest states
 
-Providers sit above the configuration application point, agents below it, with
-shared skills/MCP definitions alongside. This is a configuration relationship,
-not a running proxy. Planned screens remain labeled as planned. No diagram,
-node color or statistic may imply a connected integration, enabled agent,
-spending, quota or telemetry behavior before that behavior exists.
+The home destination showed a configuration relationship diagram (providers
+above the configuration application point, agents below, shared skills/MCP
+definitions alongside) and a reserved statistics area. Both were removed on
+2026-10-14: until real overview content exists, the page shows one placeholder
+empty state (a decorative illustration and a short bilingual notice) and no
+data at all. The honest-states rule is unchanged and applies to whatever lands
+here next: this is a configuration relationship, not a running proxy, and no
+diagram, node color or statistic may imply a connected integration, enabled
+agent, spending, quota or telemetry behavior before that behavior exists.
 
 ## Window behavior
 

@@ -23,16 +23,8 @@
         },
         "overview": {
             "state": "未接入 · 计划中",
-            "planned": "计划中",
-            "diagram": "服务商在上，Agent 在下，两侧为共享技能和 MCP 服务器定义",
-            "providers": "计划中的服务商",
-            "agents": "计划中的 Agent",
-            "applicationPoint": "配置应用关系",
-            "caption": "虚线仅表示计划中的关系，不表示已连接或已应用配置。",
-            "statistics": "统计展示区",
-            "reserved": "预留",
-            "statisticsEmpty": "统计功能尚未实现。",
-            "statisticsDetail": "尚未收集用量、配额或连接数量。"
+            "emptyTitle": "这里还没有内容",
+            "emptyDetail": "概览内容将在后续版本中提供。"
         }
     },
     "settings": {

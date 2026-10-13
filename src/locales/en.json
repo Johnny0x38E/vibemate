@@ -23,16 +23,8 @@
         },
         "overview": {
             "state": "Not connected · planned",
-            "planned": "Planned",
-            "diagram": "Providers above agents, with shared skills and MCP server definitions alongside",
-            "providers": "Planned providers",
-            "agents": "Planned agents",
-            "applicationPoint": "Configuration application",
-            "caption": "Dashed lines describe planned relationships, not connected or applied configuration.",
-            "statistics": "Statistics area",
-            "reserved": "Reserved",
-            "statisticsEmpty": "Statistics are not implemented.",
-            "statisticsDetail": "No usage, quota, or connection counts have been collected."
+            "emptyTitle": "Nothing here yet",
+            "emptyDetail": "Overview content will land here in a later update."
         }
     },
     "settings": {

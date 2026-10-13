@@ -17,6 +17,7 @@ GitHub release notes are extracted from the matching version section only.
 
 ### Changed
 
+- The MCP transport dropdown fills its create/edit control column, so its right edge lines up with the name, command, working-directory and URL inputs on the same card instead of stopping 11rem into the row. `FieldSelect` gains a `fill` size for that; settings, appearance, language and provider dropdowns keep their own width. Measured in the browser preview for both transports in a populated edit form: the trigger occupies the same 416 px box (x 1055–1471) as the text inputs, with no horizontal overflow at a 640 px window.
 - Removed the route and capability disclaimer from the manual model form.
 - Manual model rows are labelled **Added manually** / **手动添加** without the “capability from your entry” caption; capability evidence is recorded per field now, so a catalog refresh can replace an assumption with the provider's declaration.
 - UI scenarios no longer run once per locale when the locale only decides which strings the test queries. Those cases tested the same code path twice; the translation-resource check already enforces key, placeholder and plural parity, so one run in English is enough. Tests where language _is_ the behavior are kept: switching languages preserves input and applies the new translation, the system language resolves correctly, and a failed save keeps the previous choice. `src/AGENTS.md` states the rule. This affects App, Providers, MCP, Agent, Skill and Settings suites.

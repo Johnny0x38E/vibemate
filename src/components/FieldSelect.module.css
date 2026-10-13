@@ -12,6 +12,12 @@
     width: 15.5rem;
 }
 
+/* Fills a create/edit control column so the trigger's right edge lines up with
+   the text inputs on the same card (MCP transport). */
+.fieldFill {
+    width: 100%;
+}
+
 .field::after {
     content: "";
     position: absolute;

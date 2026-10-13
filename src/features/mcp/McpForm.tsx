@@ -348,6 +348,9 @@ export function McpForm({
                                         id={`${prefix}-transport`}
                                         value={transport}
                                         blocked={locked}
+                                        // Fill the control column so the dropdown's
+                                        // right edge matches the text inputs.
+                                        size="fill"
                                         options={[
                                             {
                                                 value: "stdio",

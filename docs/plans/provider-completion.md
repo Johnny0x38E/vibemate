@@ -60,10 +60,10 @@ Re-checked against the official pages on 2026-10-13 (see
 OpenRouter documents `reasoning`, `architecture.input_modalities` and
 `supported_parameters`; Command Code's `GET /models` carries no capability field.
 Parsing maps each vendor field to an unknown/supported/unsupported state with the
-field recorded as its source; `provider_model.capabilities` (schema v13; v12 is an
-empty placeholder reserved by the parallel Agent auto-probe worktree) stores
-that JSON, and model rows show the reasoning, image and tool icons only for
-supported states. Manual models and Command Code rows start unknown. Rust parser
+field recorded as its source; `provider_model.capabilities` (schema v13; v12 added
+the Agent auto-probe preference table) stores that JSON, and model rows show the
+reasoning, image and tool icons only for supported states. Manual models and
+Command Code rows start unknown. Rust parser
 tests cover missing, null, empty, malformed and valid omission; a repository test
 rejects a definitive state without a source. Full frontend and Rust checks pass.
 

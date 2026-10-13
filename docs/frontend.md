@@ -170,7 +170,7 @@ actual focus movement/restoration, Home/End, typeahead, Escape, Tab, outside
 clicks, both lock transitions, labels/icons, multiple fields and StrictMode. The
 Tab test supplies visible-button rectangles because jsdom has no layout; it does
 not establish real viewport placement. Dedicated screen-reader and Windows/Linux
-runtime verification remain pending.
+runtime verification are deferred to the release-time platform check.
 
 ## Internationalization foundation
 
@@ -320,7 +320,7 @@ The Rust tests use temporary databases and cover reopen, migration preservation,
 read/write failures, invalid values, SQL constraints, and poisoned locks. Boundary
 tests replace Tauri core APIs and cover preview, all choices, malformed responses,
 mismatched acknowledgments, and error sanitization. These tests alone do not prove
-real WebView IPC; Windows/Linux acceptance remains pending.
+real WebView IPC; Windows/Linux acceptance is deferred to the release-time platform check.
 
 ## Language selector component
 
@@ -899,9 +899,10 @@ only to visible secondary pages (Provider create/edit, MCP create/edit and Agent
 details). Lists, Settings, Overview and Skills keep their previous scrolling.
 
 Recorded isolated Linux Tauri checks covered no-secret stdio save/edit/restart
-without executing its test command. Real MCP credential-store and macOS/Windows
-acceptance remain pending, as does visual acceptance; passing checks do not
-establish layout or accessibility acceptance.
+without executing its test command. Real MCP credential-store, native and visual
+acceptance passed the maintainer review on 2026-10-13; Windows/Linux remain under
+the release-time platform check, and passing checks do not establish layout or
+accessibility acceptance.
 
 ## Read-only Agent discovery
 

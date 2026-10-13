@@ -6,18 +6,23 @@ Built with Rust, Tauri 2, React, and TypeScript. Licensed under MIT.
 ## Status
 
 The desktop app supports provider configuration with OS-stored API keys, model
-fetching and selection, manual model entries, and central stdio/HTTP MCP
-definitions, plus read-only Pi/Grok Build entry discovery with manual paths.
+fetching and selection, manual model entries, aliases and per-field capability
+evidence, and central stdio/HTTP MCP definitions, plus read-only six-Agent entry
+discovery (Claude Code, Codex, OpenCode, Pi, Grok Build, Hermes) with manual
+paths and an explicit-consent Agent CLI version read.
 Discovery does not execute Agents or read their configuration contents; versions
 and documented capabilities retain explicit evidence and uncertainty. It also
-includes bilingual preferences, themes and local logging.
-Agent deployment, skill management, MCP execution/deployment and inference
-verification remain planned. Saving an MCP definition never starts its server.
+includes bilingual preferences, themes, local logging, and a central skill
+library with system-picker local import from existing skill folders.
+Agent configuration deployment, skill installation/update/deployment, MCP
+deployment and inference verification remain planned. Saving an MCP definition
+never starts its server.
 
 The first release targets **Command Code, DeepSeek, and OpenRouter** with
-**Pi and Grok Build**. macOS, Windows, and Linux are the target platforms.
+**Claude Code, Pi, and Grok Build** configuration adapters in that order. macOS,
+Windows, and Linux are the target platforms.
 
-Provider names and logos are trademarks of their respective owners and are used only to identify the providers.
+Third-party names and logos are trademarks of their respective owners and are used only to identify them.
 
 ## Start developing
 

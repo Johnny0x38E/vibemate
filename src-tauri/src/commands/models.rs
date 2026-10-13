@@ -261,15 +261,16 @@ pub(crate) async fn get_provider_model_snapshot(
     .map_err(|_| ModelError::OperationFailed)?
 }
 
-/// Update only the alias when the model content still matches the supplied snapshot.
+/// Apply the model editor's fields (alias and capability declarations) at once
+/// when the model content still matches the supplied snapshot.
 #[tauri::command]
-pub(crate) async fn update_provider_model_alias(
+pub(crate) async fn update_provider_model_edit(
     app: tauri::AppHandle,
-    request: models::UpdateModelAliasRequest,
+    request: models::UpdateModelEditRequest,
 ) -> Result<models::ModelSnapshot, ModelError> {
     tauri::async_runtime::spawn_blocking(move || {
         with_model_storage(&app, |storage| {
-            models::update_model_alias(storage, &request, model_timestamp()?)
+            models::update_model_edit(storage, &request, model_timestamp()?)
         })
     })
     .await

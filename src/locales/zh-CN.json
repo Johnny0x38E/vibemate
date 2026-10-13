@@ -23,16 +23,8 @@
         },
         "overview": {
             "state": "未接入 · 计划中",
-            "planned": "计划中",
-            "diagram": "服务商在上，Agent 在下，两侧为共享技能和 MCP 服务器定义",
-            "providers": "计划中的服务商",
-            "agents": "计划中的 Agent",
-            "applicationPoint": "配置应用关系",
-            "caption": "虚线仅表示计划中的关系，不表示已连接或已应用配置。",
-            "statistics": "统计展示区",
-            "reserved": "预留",
-            "statisticsEmpty": "统计功能尚未实现。",
-            "statisticsDetail": "尚未收集用量、配额或连接数量。"
+            "emptyTitle": "这里还没有内容",
+            "emptyDetail": "概览内容将在后续版本中提供。"
         }
     },
     "settings": {
@@ -271,17 +263,20 @@
                 "desktop_required": "修改模型勾选需要在 vibemate 桌面应用中操作。"
             },
             "capabilities": {
-                "thinking": "服务商目录声明支持思考能力",
-                "imageInput": "服务商目录声明支持图像输入",
-                "toolCalls": "服务商目录声明支持工具调用"
+                "thinking": "思考",
+                "imageInput": "图像输入",
+                "toolCalls": "工具调用",
+                "catalog": "{{capability}} — 服务商目录声明",
+                "user": "{{capability}} — 用户声明"
             },
-            "aliasEditor": {
-                "title": "编辑 {{modelId}} 的别名",
-                "save": "保存别名",
+            "editor": {
+                "title": "编辑模型 {{modelId}}",
+                "save": "保存模型",
                 "cancel": "取消",
-                "saved": "模型别名已保存。",
-                "reload": "重新加载已保存别名并放弃草稿",
-                "uncertain": "保存结果未知，请重新加载已保存的别名后再操作。"
+                "saved": "模型已保存。",
+                "reload": "重新加载已保存的模型并放弃草稿",
+                "uncertain": "保存结果未知。请重新加载已保存的模型后再试。",
+                "restoreDefault": "恢复默认"
             },
             "manual": {
                 "title": "手动添加模型",

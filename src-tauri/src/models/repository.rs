@@ -4,6 +4,7 @@
 use super::types::*;
 use super::validation::{decode_cursor, encode_cursor};
 use super::{ModelError, parse_provider_id};
+use crate::model_catalog::CapabilityOverrides;
 use crate::model_identity::{is_valid_model_id, resolved_protocol, route_support};
 use crate::model_search::{SearchQuery, sort_ranked};
 use crate::providers::{ProviderId, ProviderKind, ProviderProtocol};
@@ -13,7 +14,8 @@ use rusqlite::{Connection, OptionalExtension, params};
 /// The columns read for a `ProviderModel`, in `StoredModel::read` order.
 const MODEL_COLUMNS: &str = "provider_id, model_id, source, selected, alias, upstream_name, \
      context_window, max_output_tokens, input_modalities, output_modalities, \
-     supported_endpoints, capabilities, created_at, updated_at, last_seen_at, missing_since";
+     supported_endpoints, capabilities, capability_overrides, created_at, updated_at, \
+     last_seen_at, missing_since";
 
 /// List a provider's models, optionally only selected ones, either ordered by
 /// model ID (no query) or ranked by a fuzzy query (see `crate::model_search`).
@@ -213,6 +215,7 @@ pub(super) struct StoredModel {
     output_modalities: Option<String>,
     supported_endpoints: Option<String>,
     capabilities: String,
+    capability_overrides: Option<String>,
     created_at: i64,
     updated_at: i64,
     last_seen_at: Option<i64>,
@@ -234,10 +237,11 @@ impl StoredModel {
             output_modalities: row.get(9)?,
             supported_endpoints: row.get(10)?,
             capabilities: row.get(11)?,
-            created_at: row.get(12)?,
-            updated_at: row.get(13)?,
-            last_seen_at: row.get(14)?,
-            missing_since: row.get(15)?,
+            capability_overrides: row.get(12)?,
+            created_at: row.get(13)?,
+            updated_at: row.get(14)?,
+            last_seen_at: row.get(15)?,
+            missing_since: row.get(16)?,
         })
     }
 
@@ -262,6 +266,16 @@ impl StoredModel {
         if !capabilities.has_valid_sources() {
             return Err(invalid);
         }
+        // `NULL` means no user declarations. A stored JSON value must parse into
+        // the strict override shape; anything else invalidates the whole row.
+        let capability_overrides = self
+            .capability_overrides
+            .map(|text| {
+                serde_json::from_str::<CapabilityOverrides>(&text)
+                    .map_err(|_| ModelError::InvalidStoredModel)
+            })
+            .transpose()?
+            .unwrap_or_default();
         let route_support = route_support(provider.kind, endpoints);
         let resolved_protocol = resolved_protocol(provider.kind, provider.protocol, endpoints);
         let upstream_state = match (self.last_seen_at, self.missing_since) {
@@ -282,6 +296,7 @@ impl StoredModel {
             output_modalities: json_list(self.output_modalities)?,
             supported_endpoints,
             capabilities,
+            capability_overrides,
             route_support,
             resolved_protocol,
             upstream_state,
@@ -291,6 +306,18 @@ impl StoredModel {
             updated_at_ms: self.updated_at,
         })
     }
+}
+
+/// Serialize capability declarations for storage: an empty set becomes NULL,
+/// the same "no declarations" form that fresh and migrated rows use.
+pub(super) fn stored_overrides(
+    overrides: &CapabilityOverrides,
+) -> Result<Option<String>, ModelError> {
+    if overrides.is_empty() {
+        return Ok(None);
+    }
+    let json = serde_json::to_string(overrides).map_err(|_| ModelError::WriteFailed)?;
+    Ok(Some(json))
 }
 
 /// Read a JSON string array column.

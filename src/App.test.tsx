@@ -447,9 +447,9 @@ test("a saved Chinese choice overrides an English system at startup", async () =
     renderDesktopStartup("en-US");
     expect(await screen.findByRole("main", { name: "配置概览" })).toBeDefined();
     expect(document.documentElement.lang).toBe("zh-CN");
-    expect(screen.getByRole("list", { name: "计划中的服务商" })).toBeDefined();
-    // Brand and provider names stay in their original form inside Chinese UI.
-    expect(screen.getByText("OpenRouter")).toBeDefined();
+    expect(screen.getByText("这里还没有内容")).toBeDefined();
+    // Brand and module names stay in their original form inside Chinese UI.
+    expect(screen.getByRole("button", { name: "Agent" })).toBeDefined();
     expect(
         screen.getByRole("button", { name: "vibemate · 配置概览" }),
     ).toBeDefined();

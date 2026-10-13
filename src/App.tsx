@@ -6,7 +6,7 @@ import { Icon } from "./components/Icon";
 import { NotificationProvider } from "./components/Notifications";
 import { TitlebarChrome } from "./components/TitlebarChrome";
 import { WindowDragRegion } from "./components/WindowDragRegion";
-import { RelationshipOverview } from "./features/overview/RelationshipOverview";
+import { OverviewView } from "./features/overview/OverviewView";
 import { AgentList } from "./features/agents/AgentList";
 import { McpView } from "./features/mcp/McpView";
 import { ProvidersView } from "./features/providers/ProvidersView";
@@ -161,7 +161,7 @@ export default function App({ languageSettings }: AppProps): JSX.Element {
                     dragClassName={styles["titlebarDrag"]}
                 />
                 <main className={styles["content"]} aria-label={pageLabel}>
-                    {page === "home" && <RelationshipOverview />}
+                    {page === "home" && <OverviewView />}
                     {/* Hide instead of remounting to preserve pending work and caches.
                     Sidebar re-entry asks the destination to return home safely. */}
                     {agentsVisited && (

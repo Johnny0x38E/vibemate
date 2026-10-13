@@ -8,7 +8,7 @@ import {
     getProviderModelFetchStatus,
     getProviderModelSnapshot,
     refreshSavedProviderModels,
-    updateProviderModelAlias,
+    updateProviderModelEdit,
     listProviderModels,
     ModelRequestError,
     setProviderModelsSelected,
@@ -33,6 +33,11 @@ const model: ProviderModel = {
         thinking: { state: "unknown", source: null },
         imageInput: { state: "unknown", source: null },
         toolCalls: { state: "unknown", source: null },
+    },
+    capabilityOverrides: {
+        thinking: null,
+        imageInput: null,
+        toolCalls: null,
     },
     routeSupport: "supported",
     resolvedProtocol: "chat_completions",
@@ -67,7 +72,7 @@ beforeEach(() => {
 });
 
 describe("model IPC boundary", () => {
-    it("reads model snapshots and saves or clears aliases with exact identity and version", async () => {
+    it("reads model snapshots with exact identity and version", async () => {
         const identity = { providerId: ID, modelId: model.modelId };
         const contentDigest = "a".repeat(64);
         vi.mocked(invoke).mockResolvedValueOnce({ model, contentDigest });
@@ -78,23 +83,128 @@ describe("model IPC boundary", () => {
         expect(invoke).toHaveBeenLastCalledWith("get_provider_model_snapshot", {
             request: identity,
         });
-        for (const alias of [" My model ", null]) {
-            const request = {
-                ...identity,
-                alias,
-                expectedDigest: contentDigest,
-            };
-            const response = {
-                model: { ...model, alias: alias?.trim() ?? null },
+    });
+
+    it("applies alias and capability declarations together and restores defaults", async () => {
+        const identity = { providerId: ID, modelId: model.modelId };
+        const contentDigest = "a".repeat(64);
+        const declarations = {
+            thinking: "supported",
+            imageInput: "unsupported",
+            toolCalls: null,
+        } as const;
+        const edit = {
+            ...identity,
+            alias: " My model ",
+            expectedDigest: contentDigest,
+            capabilityOverrides: declarations,
+        };
+        const response = {
+            model: {
+                ...model,
+                alias: "My model",
+                capabilityOverrides: declarations,
+            },
+            contentDigest: "b".repeat(64),
+        };
+        vi.mocked(invoke).mockResolvedValueOnce(response);
+        expect(await updateProviderModelEdit(edit)).toEqual(response);
+        expect(invoke).toHaveBeenLastCalledWith("update_provider_model_edit", {
+            request: edit,
+        });
+        // Restore default: an all-null declaration set clears every declaration.
+        const restore = {
+            ...identity,
+            alias: "My model",
+            expectedDigest: response.contentDigest,
+            capabilityOverrides: {
+                thinking: null,
+                imageInput: null,
+                toolCalls: null,
+            },
+        };
+        const restored = {
+            model: {
+                ...model,
+                alias: "My model",
+                capabilityOverrides: restore.capabilityOverrides,
+            },
+            contentDigest: "c".repeat(64),
+        };
+        vi.mocked(invoke).mockResolvedValueOnce(restored);
+        expect(await updateProviderModelEdit(restore)).toEqual(restored);
+        // Clearing the alias is the same edit path with a null label.
+        const clear = {
+            ...identity,
+            alias: null,
+            expectedDigest: restored.contentDigest,
+            capabilityOverrides: restore.capabilityOverrides,
+        };
+        const cleared = {
+            model: {
+                ...model,
+                alias: null,
+                capabilityOverrides: clear.capabilityOverrides,
+            },
+            contentDigest: "d".repeat(64),
+        };
+        vi.mocked(invoke).mockResolvedValueOnce(cleared);
+        expect(await updateProviderModelEdit(clear)).toEqual(cleared);
+        expect(invoke).toHaveBeenLastCalledWith("update_provider_model_edit", {
+            request: clear,
+        });
+    });
+
+    it("rejects mismatched edit acknowledgments and malformed declarations", async () => {
+        const identity = { providerId: ID, modelId: model.modelId };
+        const edit = {
+            ...identity,
+            alias: null,
+            expectedDigest: "a".repeat(64),
+            capabilityOverrides: {
+                thinking: "supported",
+                imageInput: null,
+                toolCalls: null,
+            },
+        } as const;
+        // Rust acknowledged a different declaration or label than requested.
+        for (const changed of [
+            {
+                ...model,
+                capabilityOverrides: {
+                    thinking: "unsupported",
+                    imageInput: null,
+                    toolCalls: null,
+                },
+            },
+            { ...model, alias: "Other" },
+        ]) {
+            vi.mocked(invoke).mockResolvedValueOnce({
+                model: changed,
                 contentDigest: "b".repeat(64),
-            };
-            vi.mocked(invoke).mockResolvedValueOnce(response);
-            expect(await updateProviderModelAlias(request)).toEqual(response);
-            expect(invoke).toHaveBeenLastCalledWith(
-                "update_provider_model_alias",
-                { request },
-            );
+            });
+            await expect(updateProviderModelEdit(edit)).rejects.toMatchObject({
+                code: "invalid_response",
+            });
         }
+        // Declaration shapes the boundary cannot interpret never reach the UI.
+        for (const capabilityOverrides of [
+            { thinking: "unknown", imageInput: null, toolCalls: null },
+            { thinking: true, imageInput: null, toolCalls: null },
+            { imageInput: null, toolCalls: null },
+        ]) {
+            vi.mocked(invoke).mockResolvedValueOnce({
+                model: { ...model, capabilityOverrides },
+                contentDigest: "b".repeat(64),
+            });
+            await expect(updateProviderModelEdit(edit)).rejects.toMatchObject({
+                code: "invalid_response",
+            });
+        }
+        vi.mocked(invoke).mockRejectedValueOnce("model_changed");
+        await expect(updateProviderModelEdit(edit)).rejects.toMatchObject({
+            code: "model_changed",
+        });
     });
 
     it("rejects malformed snapshots, wrong identities, and alias acknowledgments", async () => {
@@ -115,18 +225,20 @@ describe("model IPC boundary", () => {
         }
         vi.mocked(invoke).mockResolvedValueOnce({ model, contentDigest });
         await expect(
-            updateProviderModelAlias({
+            updateProviderModelEdit({
                 ...identity,
                 alias: "New",
                 expectedDigest: contentDigest,
+                capabilityOverrides: model.capabilityOverrides,
             }),
         ).rejects.toMatchObject({ code: "invalid_response" });
         vi.mocked(invoke).mockRejectedValueOnce("model_changed");
         await expect(
-            updateProviderModelAlias({
+            updateProviderModelEdit({
                 ...identity,
                 alias: null,
                 expectedDigest: contentDigest,
+                capabilityOverrides: model.capabilityOverrides,
             }),
         ).rejects.toMatchObject({ code: "model_changed" });
         vi.mocked(isTauri).mockReturnValue(false);
@@ -135,10 +247,11 @@ describe("model IPC boundary", () => {
             code: "desktop_required",
         });
         await expect(
-            updateProviderModelAlias({
+            updateProviderModelEdit({
                 ...identity,
                 alias: null,
                 expectedDigest: contentDigest,
+                capabilityOverrides: model.capabilityOverrides,
             }),
         ).rejects.toMatchObject({ code: "desktop_required" });
         expect(invoke).not.toHaveBeenCalled();
@@ -167,6 +280,11 @@ describe("model IPC boundary", () => {
                     providerId: ID,
                     modelId: "manual",
                     alias: null,
+                    capabilityOverrides: {
+                        thinking: null,
+                        imageInput: null,
+                        toolCalls: null,
+                    },
                 }),
             () =>
                 deleteManualProviderModel({
@@ -235,13 +353,23 @@ describe("model IPC boundary", () => {
             providerId: ID,
             modelId: "  manual/model  ",
             alias: " Mine ",
-        };
+            capabilityOverrides: {
+                thinking: "supported",
+                imageInput: null,
+                toolCalls: null,
+            },
+        } as const;
         const manual = {
             ...model,
             modelId: "manual/model",
             source: "manual",
             selected: true,
             alias: "Mine",
+            capabilityOverrides: {
+                thinking: "supported",
+                imageInput: null,
+                toolCalls: null,
+            },
         };
         vi.mocked(invoke).mockResolvedValueOnce(manual);
         expect(await addManualProviderModel(request)).toEqual(manual);
@@ -252,6 +380,7 @@ describe("model IPC boundary", () => {
             model,
             { ...manual, modelId: "other" },
             { ...manual, selected: false },
+            { ...manual, capabilityOverrides: model.capabilityOverrides },
         ]) {
             vi.mocked(invoke).mockResolvedValueOnce(response);
             await expect(addManualProviderModel(request)).rejects.toMatchObject(

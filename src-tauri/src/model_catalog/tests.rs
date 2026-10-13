@@ -584,3 +584,49 @@ fn urls_append_models_and_set_paging_through_the_url_crate() {
         "invalid_stored_provider"
     );
 }
+
+#[test]
+fn capability_overrides_parse_strictly_and_default_to_no_declarations() {
+    // Missing fields mean "no declaration"; the explicit null form used by the
+    // stored JSON means the same thing.
+    let parsed: CapabilityOverrides =
+        serde_json::from_str(r#"{"thinking":"supported","imageInput":"unsupported"}"#)
+            .expect("partial declarations");
+    assert_eq!(parsed.thinking, Some(CapabilityOverride::Supported));
+    assert_eq!(parsed.image_input, Some(CapabilityOverride::Unsupported));
+    assert_eq!(parsed.tool_calls, None);
+    assert!(!parsed.is_empty());
+    assert_eq!(
+        CapabilityOverride::Supported.as_state(),
+        CapabilityState::Supported
+    );
+    assert_eq!(
+        CapabilityOverride::Unsupported.as_state(),
+        CapabilityState::Unsupported
+    );
+
+    // "Restore default" clears everything back to no declarations.
+    assert_eq!(CapabilityOverrides::default(), CapabilityOverrides::none());
+    assert!(CapabilityOverrides::none().is_empty());
+    assert_eq!(
+        serde_json::to_string(&CapabilityOverrides::none()).expect("serialize"),
+        r#"{"thinking":null,"imageInput":null,"toolCalls":null}"#
+    );
+
+    // A declaration cannot be "unknown", carry a flag, or hide in an unknown
+    // field: those shapes are rejected, not silently mapped to "no declaration".
+    for broken in [
+        r#"{"thinking":"unknown"}"#,
+        r#"{"bogus":"supported"}"#,
+        r#"{"thinking":true}"#,
+        r#"{"thinking":["supported"]}"#,
+        r#""supported""#,
+        "null",
+        "5",
+    ] {
+        assert!(
+            serde_json::from_str::<CapabilityOverrides>(broken).is_err(),
+            "{broken}"
+        );
+    }
+}

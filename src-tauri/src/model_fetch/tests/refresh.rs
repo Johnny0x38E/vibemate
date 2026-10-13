@@ -73,6 +73,18 @@ fn refresh_updates_saved_rows_and_never_inserts_or_deletes() {
             "Old name",
             Some(5),
         );
+        // A user capability declaration on the same row: the refresh below must
+        // replace the catalog evidence without touching this declaration.
+        storage
+            .lock()
+            .unwrap()
+            .execute(
+                "UPDATE provider_model SET capability_overrides = \
+                 '{\"thinking\":\"unsupported\",\"imageInput\":null,\"toolCalls\":null}' \
+                 WHERE model_id = 'deepseek-flash'",
+                [],
+            )
+            .unwrap();
         insert_saved_model(
             &storage,
             "manual-never-listed",
@@ -119,6 +131,11 @@ fn refresh_updates_saved_rows_and_never_inserts_or_deletes() {
         assert_eq!(
             refreshed.capabilities.tool_calls.state,
             crate::model_catalog::CapabilityState::Supported
+        );
+        // The user's declaration for the same field survives untouched.
+        assert_eq!(
+            refreshed.capability_overrides.thinking,
+            Some(crate::model_catalog::CapabilityOverride::Unsupported)
         );
 
         let manual = model(&models, "manual-never-listed").unwrap();

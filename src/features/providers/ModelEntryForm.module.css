@@ -1,0 +1,71 @@
+/* One inline entry form: fields and actions on the first row, the three
+capability declarations side by side below, recovery feedback last. */
+
+.form {
+    display: grid;
+    gap: var(--space-sm);
+    width: 100%;
+}
+
+.top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.fields {
+    flex: 1 1 16rem;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-sm);
+}
+
+.actions {
+    display: flex;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.capabilities {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-md);
+}
+
+.capability {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.capabilityName {
+    font-size: 0.75rem;
+}
+
+.feedback {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.feedback p {
+    margin: 0;
+    font-size: 0.75rem;
+    line-height: 1.45;
+}
+
+.visuallyHidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    clip-path: inset(50%);
+}

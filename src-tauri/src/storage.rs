@@ -266,6 +266,17 @@ const MIGRATIONS: &[Migration] = &[
             DEFAULT '{\"thinking\":{\"state\":\"unknown\",\"source\":null},\"imageInput\":{\"state\":\"unknown\",\"source\":null},\"toolCalls\":{\"state\":\"unknown\",\"source\":null}}'
             CHECK(json_valid(capabilities));",
     },
+    Migration {
+        version: 14,
+        // Per-field user capability declarations (manual capability editing).
+        // `NULL` (the default for existing rows) means no declaration: the field
+        // follows the catalog evidence in `capabilities`. Declarations live in
+        // their own column so a catalog refresh can replace `capabilities`
+        // without touching what the user stated about this model.
+        sql: "ALTER TABLE provider_model ADD COLUMN capability_overrides TEXT
+            DEFAULT NULL
+            CHECK(capability_overrides IS NULL OR json_valid(capability_overrides));",
+    },
 ];
 
 /// Errors from opening or migrating the private database.

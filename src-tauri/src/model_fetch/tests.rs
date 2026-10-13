@@ -487,19 +487,35 @@ async fn merging_across_fetches_keeps_selected_and_manual_models() {
                 provider_id: PROVIDER.to_owned(),
                 model_id: id.to_owned(),
                 alias: alias.map(str::to_owned),
+                capability_overrides: crate::model_catalog::CapabilityOverrides::none(),
             },
             5,
         )
         .unwrap();
     }
 
-    // Fetch 1: x is listed and gets metadata, but stays manual with its alias.
+    // Fetch 1: x is listed and gets metadata, but stays manual with its alias
+    // and its user capability declaration.
+    storage
+        .lock()
+        .unwrap()
+        .execute(
+            "UPDATE provider_model SET capability_overrides = \
+             '{\"thinking\":\"supported\",\"imageInput\":null,\"toolCalls\":null}' \
+             WHERE model_id = 'x'",
+            [],
+        )
+        .unwrap();
     let first = fetch(&storage, &store, 100).await.unwrap();
     assert_eq!((first.listed, first.added, first.updated), (4, 3, 1));
     let models = all_models(&storage);
     let x = model(&models, "x").unwrap();
     assert_eq!(x.source, ModelSource::Manual);
     assert_eq!(x.alias.as_deref(), Some("Mine"));
+    assert_eq!(
+        x.capability_overrides.thinking,
+        Some(crate::model_catalog::CapabilityOverride::Supported)
+    );
     assert!(x.selected);
     assert_eq!(x.context_window, Some(1_000_000));
     assert_eq!(x.upstream_state, UpstreamState::Listed);

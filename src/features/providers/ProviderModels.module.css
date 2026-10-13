@@ -228,12 +228,18 @@ p.error {
 
 .item {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--space-sm);
     min-height: 44px;
     padding: 8px var(--space-md);
     border-bottom: 1px solid var(--color-border);
     box-sizing: border-box;
+}
+
+/* The inline model editor takes its own full-width row inside the item. */
+.itemEditor {
+    flex-basis: 100%;
 }
 
 .item:last-child {

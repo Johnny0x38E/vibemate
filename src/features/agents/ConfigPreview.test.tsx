@@ -78,6 +78,12 @@ function row(providerId: string, modelId: string): ProviderModel {
             imageInput: evidence,
             toolCalls: evidence,
         },
+        // No user declarations; the provider catalog stays the only source.
+        capabilityOverrides: {
+            thinking: null,
+            imageInput: null,
+            toolCalls: null,
+        },
         routeSupport: "supported",
         resolvedProtocol: "anthropic_messages",
         upstreamState: "listed",

@@ -7,7 +7,9 @@
 - Providers: Command Code, DeepSeek and OpenRouter.
 - Fixed Agent catalog and read-only detection: Claude Code, Codex, OpenCode, Pi,
   Grok Build and Nous Research Hermes Agent. All six read-only detectors are
-  implemented. Configuration deployment remains scoped to Pi/Grok Build.
+  implemented. Configuration deployment proceeds Claude Code first, then Pi and
+  Grok Build; the maintainer uses Pi during coding, so Pi is never the first
+  write target.
 - Shared skills with source/revision tracking and updates; shared MCP definitions
   and explicit per-Agent deployment.
 - Simplified Chinese/English UI with system detection and persistent choice.
@@ -51,15 +53,18 @@ acceptance; local or fixture-based checks do not establish other native platform
    See [agent-catalog.md](agent-catalog.md); no Agent execution is required for
    discovery. Genuine version-command tests require separate authorization for
    concrete targets; see [agent-version-probe.md](agent-version-probe.md).
-2. Build the minimal Pi configuration preview (P18), adding only the model
+2. Build the minimal Claude Code configuration preview (P18), adding only the model
    information and stale-plan checks it needs. Full P16 is not a prerequisite.
    Central models hold capability metadata and aliases; request settings and
    necessary capability overrides belong to the target Agent configuration.
    Verify the installed Agent version can express each setting. See
-   [model-parameters.md](model-parameters.md).
-3. Add safe writes and restore for Pi, then the independently verified Grok
-   adapter: precedence, diff, concurrent-change checks, private backups, atomic
-   replacement, preservation of unrelated fields and rollback.
+   [model-parameters.md](model-parameters.md). Verify Claude Code's official
+   settings format and record it in `docs/integrations/` before implementation.
+3. Add safe writes and restore for Claude Code first, then Pi (second adapter)
+   and the independently verified Grok adapter (third): precedence, diff,
+   concurrent-change checks, private backups, atomic replacement, preservation
+   of unrelated fields and rollback. The maintainer uses Pi during coding, so
+   Pi must not be the first configuration write target.
 4. Finish the skill workflow on top of the delivered local import (P25):
    source installation, update preview and per-Agent symlink deployment, with an
    explicit copy-sync fallback and protection of local changes.

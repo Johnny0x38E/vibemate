@@ -76,7 +76,7 @@ Pi 和 Grok Build；其余四种配置适配另行核实和规划。请求参数
 
 | Agent        | 官方资料                                                                                                                               | 本轮观测边界                                                           |
 | ------------ | -------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Claude Code  | [Setup](https://code.claude.com/docs/en/setup)、[Settings](https://code.claude.com/docs/en/settings)                                   | `claude`、POSIX 用户入口、用户 settings 路径；不读 `~/.claude.json`    |
+| Claude Code  | [Claude Code 契约](../integrations/claude-code.md)                                                                                     | `claude`、POSIX 用户入口、用户 settings 路径；不读 `~/.claude.json`    |
 | Codex        | [Config](https://developers.openai.com/codex/config-basic)、[source](https://github.com/openai/codex)                                  | `codex`、CODEX_HOME 默认/空覆盖/已有目录规则；不猜安装前缀             |
 | OpenCode     | [Config](https://opencode.ai/docs/config/)、[source](https://github.com/anomalyco/opencode)                                            | Anomaly CLI、POSIX 安装入口与候选配置路径；目录覆盖含义随版本不同      |
 | Pi           | [Pi 契约](../integrations/pi.md)                                                                                                       | 入口关联的 package metadata 与 PI_CODING_AGENT_DIR                     |

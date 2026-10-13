@@ -5,9 +5,10 @@
 ## 当前顺序与范围
 
 1. 六 Agent 固定目录与只读发现代码已交付；真实安装、原生运行与外观仍按待验项验收。
-2. 接着做 P18 最小 Pi 配置预览；P16 只按预览需要补模型信息，不是完整前置。
+2. 接着做 P18 最小 Claude Code 配置预览；P16 只按预览需要补模型信息，不是完整前置。
 3. 请求参数与必要能力覆盖属于目标 Agent 配置，不放在服务商模型页。
-4. 六种发现不等于六种配置注入；第一阶段配置适配仍为 Pi、Grok Build。
+4. 六种发现不等于六种配置注入；配置适配顺序为 Claude Code、Pi、Grok Build。维护者编码日常使用 Pi，Pi 不作为首个写入目标。
+5. 界面归属按关系基数划分：模型配置 1:1，操作在 Agent 模块；Skill/MCP 部署 1:N，操作在技能/MCP 模块。Agent 详情页只读汇总当前配置（模型/Skill/MCP 三个槽位，状态加跳转链接），不放注入操作。模型槽位与配置入口随 P18 交付；Skill/MCP 槽位随 P27/P32 各自添加，现在不留空壳。概览页另行重设计，暂不扩展。
 
 ## 执行约定
 
@@ -114,7 +115,7 @@ BR0–BR5 已完成；现行边界见 [backend-modularity.md](backend-modularity
 
 - [ ] **BR11：Agent 安装设计。** 核实首个 Agent 的安装/升级/卸载契约、目标平台/架构与现有安装来源；受管安装记录与发现/能力/配置分开。承接 P17；安装完成后只检测，不自动启动或应用配置。按实际首条路径拆小任务，保护用户已有安装与配置。
 
-## Agent 发现改造与 Pi 配置
+## Agent 发现改造与配置适配
 
 ### Task P17: 六种只读发现已交付，验收边界保持独立
 
@@ -122,7 +123,7 @@ BR0–BR5 已完成；现行边界见 [backend-modularity.md](backend-modularity
 
 完整前端、Rust fmt/Clippy/测试与锁定 macOS no-bundle 构建通过；真实安装、人工与其他平台验收仍见上方待验项，不因代码完成而勾选。
 
-检测规则见 [agent-discovery.md](agent-discovery.md)，范围见 [agent-catalog.md](agent-catalog.md)。自动发现不安装、不启动、不读取配置/密钥内容、不注入配置；配置部署仍限未来 Pi/Grok 适配任务。
+检测规则见 [agent-discovery.md](agent-discovery.md)，范围见 [agent-catalog.md](agent-catalog.md)。自动发现不安装、不启动、不读取配置/密钥内容、不注入配置；配置部署按 Claude Code、Pi、Grok Build 顺序实施。
 
 ### P17.o–P17.s：用户主动读取版本
 
@@ -134,36 +135,39 @@ P17.o–P17.s 实现与代码核验完成：固定 `--version`、路径重验、
 
 已补齐四家官方资产并通过完整前端检查、浅/深色浏览器加载与键盘详情检查；来源/条款见 [assets README](../../assets/agents/README.md)。Codex 使用 OpenAI 官方 Blossom，不宣称为独立 Codex 标志；Pi/Grok 资产未改变。Anthropic/OpenAI 标志不属于项目 MIT 授权，发布前仍需核对识别用途/品牌条款，不声称取得额外许可。
 
-### Task P18: 预览 Pi 模型配置
+### Task P18: 预览 Claude Code 模型配置
 
-**Description:** 在 Agent 配置流程选择 Provider/Model，按已核实 Pi 版本生成配置计划，展示脱敏差异，不写文件。先做最小模型配置预览；使用参数和必要的局部能力声明按 Pi 原生可表达的字段逐项增加，不放到服务商模型页。
+**Description:** 在 Agent 配置流程选择 Provider/Model，按已核实 Claude Code 版本生成配置计划，展示脱敏差异，不写文件。先做最小模型配置预览；使用参数和必要的局部能力声明按 Claude Code 原生可表达的字段逐项增加，不放到服务商模型页。Claude Code 为第一个配置适配目标：维护者编码日常使用 Pi，Pi 不作为首个写入目标；Pi 与 Grok Build 依次复用同一机制。
+
+Agent 详情页增加「当前配置」只读汇总区，首期只交付模型槽位与配置预览入口；Skill/MCP 槽位随 P27/P32 添加。槽位显示状态并链接到管理模块，注入操作不搬进 Agent 页。
 
 **Acceptance criteria:**
 
-- [ ] 按 P02 约定映射原生字段，保留无关配置；不支持的组合拒绝并说明。
+- [ ] 按已核实的 Claude Code 官方 Settings/Setup 约定映射原生字段，保留无关配置；不支持的组合拒绝并说明。
 - [ ] 展示变更文件、覆盖来源、重启要求、密钥写入方式与潜在明文存放。
 - [ ] 计划绑定原文件摘要、Provider revision 和模型 revision/稳定内容摘要；无模型 revision 时不能跳过过期检查，预览不读取后回传明文密钥。
 - [ ] 后续使用设置仅属于目标 Agent；能力覆盖标明用户声明，未知/不支持明确反馈，不修改中央能力或其他 Agent 设置。
+- [ ] Agent 详情的模型槽位显示只读状态（未配置/已写入/待重启）与配置入口，配置预览从该入口进入；不显示 Skill/MCP 为已支持。
 
 **Verification:**
 
-- [ ] 运行 Rust `pi_plan` 测试，覆盖格式保存、优先级、不兼容字段与脱敏。
-- [ ] 运行 ConfigPreview 测试、`check:frontend` 与 Rust fmt/Clippy。
-- [ ] Tauri 预览临时 Pi 样本，确认未发生写入。
+- [ ] 运行 Rust `claude_plan` 测试，覆盖格式保存、优先级、不兼容字段与脱敏。
+- [ ] 运行 ConfigPreview 与 Agent 详情汇总行为测试、`check:frontend` 与 Rust fmt/Clippy。
+- [ ] Tauri 预览临时 Claude Code 样本，确认未发生写入。
 
-**Dependencies:** P02,P12,P15,P17；仅补最小预览必需的模型信息与变化检查，不等待完整 P16。开始前核实 Pi 版本/配置规则并按实际文件拆批。
+**Dependencies:** P12,P15,P17；已核实 Claude Code 官方 Settings/Setup/Model/MCP/Skills 文档与本机 2.1.287 安装，证据见 `docs/integrations/claude-code.md`；未验证边界（三家 Provider 请求协议、非 macOS 平台、完整 key 集）在实施中补验。仅补最小预览必需的模型信息与变化检查，不等待完整 P16。
 
 **Files likely touched:**
 
-- `src-tauri/src/agents/pi.rs`
+- `src-tauri/src/agents/claude_code.rs`
 - `src-tauri/src/config_plan.rs`
 - `src/lib/desktop/agents.ts`
 - `src/features/agents/ConfigPreview.tsx`
-- `src/features/agents/ConfigPreview.test.tsx`
+- `src/features/agents/AgentPage.tsx`
 
 **Estimated scope:** M：5 个建议主文件；如需额外文件先按执行约定拆分。
 
-### Checkpoint C18（P17–P18；最小 Pi 预览）
+### Checkpoint C18（P17–P18；最小 Claude Code 预览）
 
 - [ ] P17 与 P18 最小预览已验收，所需模型信息、兼容检查、脱敏与过期保护已验证；P16 剩余目录扩展/别名任务在 C16 单独跟踪。
 - [ ] 使用设置随已支持字段逐项验收；尚未支持的选项不开放，不将预览通过当作写入或推理成功。
@@ -194,9 +198,9 @@ P17.o–P17.s 实现与代码核验完成：固定 `--version`、路径重验、
 
 **Estimated scope:** M：4 个建议主文件；如需额外文件先按执行约定拆分。
 
-### Task P20: 应用 Pi 模型配置
+### Task P20: 应用 Claude Code 模型配置
 
-**Description:** 让用户在确认预览后应用选择的模型与认证配置，满足原有启动方式。
+**Description:** 让用户在确认预览后应用选择的模型与认证配置，满足原有启动方式。Pi 作为第二个适配器在其后复用同一写入机制，单独拆任务卡。
 
 **Acceptance criteria:**
 
@@ -206,15 +210,15 @@ P17.o–P17.s 实现与代码核验完成：固定 `--version`、路径重验、
 
 **Verification:**
 
-- [ ] 运行 Rust `pi_apply`/`config_apply` 测试和 UI 重复提交/失败测试。
+- [ ] 运行 Rust `claude_apply`/`config_apply` 测试和 UI 重复提交/失败测试。
 - [ ] 运行 `check:frontend` 与 Rust fmt/Clippy。
-- [ ] 使用可恢复的测试配置，在真实 Tauri/Pi 中确认原生启动与模型选择。
+- [ ] 使用可恢复的测试配置，在真实 Tauri/Claude Code 中确认原生启动与模型选择。
 
 **Dependencies:** P11,P18,P19。
 
 **Files likely touched:**
 
-- `src-tauri/src/agents/pi.rs`
+- `src-tauri/src/agents/claude_code.rs`
 - `src-tauri/src/config_apply.rs`
 - `src/lib/desktop/agents.ts`
 - `src/features/agents/ConfigPreview.tsx`
@@ -222,7 +226,7 @@ P17.o–P17.s 实现与代码核验完成：固定 `--version`、路径重验、
 
 **Estimated scope:** M：5 个建议主文件；如需额外文件先按执行约定拆分。
 
-### Task P21: 回滚 Pi 配置
+### Task P21: 回滚 Claude Code 配置
 
 **Description:** 提供历史操作结果和恢复预览，将误操作恢复为备份版本。
 
@@ -243,7 +247,7 @@ P17.o–P17.s 实现与代码核验完成：固定 `--version`、路径重验、
 **Files likely touched:**
 
 - `src-tauri/src/config_apply.rs`
-- `src-tauri/src/agents/pi.rs`
+- `src-tauri/src/agents/claude_code.rs`
 - `src/lib/desktop/agents.ts`
 - `src/features/agents/RestoreView.tsx`
 - `src/features/agents/RestoreView.test.tsx`
@@ -254,17 +258,19 @@ P17.o–P17.s 实现与代码核验完成：固定 `--version`、路径重验、
 
 - [ ] P19–P21 均已勾选。
 
-## 阶段 E：Grok Build
+## 阶段 E：后续适配器
+
+Pi 为第二个配置适配器，复用 P19–P21 的预览/写入/回滚机制，在 Claude Code 完成后单独拆任务卡；维护者编码日常使用 Pi，实施时须保持现有配置不被破坏。Grok Build 为第三个适配器，卡片如下。
 
 ### Task P22: 预览 Grok Build 配置
 
-**Description:** 接入第二个 Agent 的原生映射，复用配置差异组件。
+**Description:** 接入第三个 Agent 的原生映射，复用配置差异组件。
 
 **Acceptance criteria:**
 
 - [ ] 按 P03 的准确版本与格式生成计划，保留其他字段并执行协议/参数校验。
 - [ ] 展示覆盖来源、密钥存放、生效/重启方式；未知版本或缺少接口明确报错。
-- [ ] 复用计划/脱敏机制而不复制 Pi 配置假设；预览不写文件。
+- [ ] 复用计划/脱敏机制而不复制首个适配器配置假设；预览不写文件。
 
 **Verification:**
 
@@ -286,7 +292,7 @@ P17.o–P17.s 实现与代码核验完成：固定 `--version`、路径重验、
 
 ### Task P23: 应用 Grok Build 配置
 
-**Description:** 让第二个 Agent 使用已有可靠写入与回滚机制，验证原有启动方式。
+**Description:** 让第三个 Agent 使用已有可靠写入与回滚机制，验证原有启动方式。
 
 **Acceptance criteria:**
 
@@ -344,6 +350,8 @@ P17.o–P17.s 实现与代码核验完成：固定 `--version`、路径重验、
 - [ ] P22–P24 均已勾选。
 
 ## 阶段 F：Skill
+
+Skill 部署目标顺序与配置适配一致（Claude Code、Pi、Grok Build）；Claude Code 的 Skill 目录与格式核实后单独拆任务卡，现有 Pi/Grok 卡片在各自顺序到位时按已核实格式执行。
 
 ### Task P25: 登记中央 Skill 来源
 
@@ -409,6 +417,7 @@ P17.o–P17.s 实现与代码核验完成：固定 `--version`、路径重验、
 - [ ] 预览新增/冲突与目标路径，symlink 优先；不可用时让用户选择 copy-sync。
 - [ ] 保留同名用户内容，记录所有权；禁用只撤销自己管理的目标。
 - [ ] 报告目标已同步的 revision，失败可恢复，不把部分部署显示为整体成功。
+- [ ] 在 Agent 详情汇总区添加 Skill 只读槽位（部署状态 + 跳转技能模块）；首个 Skill 部署任务即交付该槽位。
 
 **Verification:**
 
@@ -434,7 +443,7 @@ P17.o–P17.s 实现与代码核验完成：固定 `--version`、路径重验、
 
 ### Task P28: 向 Grok Build 部署 Skill
 
-**Description:** 按照已核实的第二个 Agent 目录与格式部署，复用所有权和恢复机制。
+**Description:** 按照已核实的第三个 Agent 目录与格式部署，复用所有权和恢复机制。
 
 **Acceptance criteria:**
 
@@ -521,6 +530,8 @@ P17.o–P17.s 实现与代码核验完成：固定 `--version`、路径重验、
 
 ## 阶段 G：MCP
 
+MCP 部署目标顺序与配置适配一致（Claude Code、Pi、Grok Build）；Claude Code 的 MCP 格式核实后单独拆任务卡。
+
 ### Task P31: 维护中央 MCP 定义（已完成）
 
 实现摘要与待验项见本文开头；现行字段和安全规则见 [mcp-central.md](mcp-central.md)。
@@ -535,6 +546,7 @@ P32/P33 仍需安全 Agent 写入与恢复，中央保存不代表服务器已�
 - [ ] 原生支持时按实际格式预览并应用，保留无关字段和已有 MCP 条目。
 - [ ] 凭据在 Rust 中解析，差异脱敏，写入/撤销/恢复复用安全机制。
 - [ ] 无原生支持时先决定桥接/范围；未实现所需能力前任务保持受阻，不以提示替代交付。
+- [ ] 在 Agent 详情汇总区添加 MCP 只读槽位（部署状态 + 跳转 MCP 模块）；首个 MCP 部署任务即交付该槽位。
 
 **Verification:**
 
@@ -556,11 +568,11 @@ P32/P33 仍需安全 Agent 写入与恢复，中央保存不代表服务器已�
 
 ### Task P33: 向 Grok Build 注入 MCP 配置
 
-**Description:** 按第二个 Agent 的真实格式实现 MCP 部署与恢复，验证其独立能力。
+**Description:** 按第三个 Agent 的真实格式实现 MCP 部署与恢复，验证其独立能力。
 
 **Acceptance criteria:**
 
-- [ ] 原生支持时独立映射传输与参数，不能照搬 Pi 配置或丢弃不支持字段。
+- [ ] 原生支持时独立映射传输与参数，不能照搬其他适配器配置或丢弃不支持字段。
 - [ ] 预览、应用、撤销与恢复保持原配置、所有权和凭据脱敏。
 - [ ] 无原生支持时保持待决，不能宣称 MCP 已完成；额外桥接需先拆计划。
 

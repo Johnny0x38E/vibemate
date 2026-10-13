@@ -1,6 +1,6 @@
 //! Local model selection and manual editing, each committed as one SQLite transaction.
 
-use super::repository::{lock, read_model, read_provider};
+use super::repository::{lock, read_model, read_provider, stored_overrides};
 use super::types::*;
 use super::{ModelError, parse_provider_id};
 use crate::model_catalog::ModelCapabilities;
@@ -101,8 +101,9 @@ pub fn add_manual_model(
     transaction
         .execute(
             "INSERT INTO provider_model
-                 (provider_id, model_id, source, selected, alias, capabilities, created_at, updated_at)
-             VALUES (?1, ?2, ?3, 1, ?4, ?5, ?6, ?6)",
+                 (provider_id, model_id, source, selected, alias, capabilities,
+                  capability_overrides, created_at, updated_at)
+             VALUES (?1, ?2, ?3, 1, ?4, ?5, ?6, ?7, ?7)",
             params![
                 provider_id.as_str(),
                 model_id,
@@ -110,6 +111,7 @@ pub fn add_manual_model(
                 alias,
                 serde_json::to_string(&ModelCapabilities::unknown())
                     .map_err(|_| ModelError::WriteFailed)?,
+                stored_overrides(&request.capability_overrides)?,
                 now_ms
             ],
         )

@@ -175,6 +175,63 @@ const fn evidence_has_valid_source(item: CapabilityEvidence) -> bool {
     )
 }
 
+/// One user declaration about a capability (manual capability editing).
+///
+/// A declaration is only ever "supported" or "unsupported". "Unknown" is not a
+/// declaration: leaving a field unset keeps the catalog result or unknown.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CapabilityOverride {
+    /// The user states that the model supports the capability.
+    Supported,
+    /// The user states that the model does not support the capability.
+    Unsupported,
+}
+
+impl CapabilityOverride {
+    /// The declared state as a catalog state, for display that mixes both kinds.
+    pub const fn as_state(self) -> CapabilityState {
+        match self {
+            Self::Supported => CapabilityState::Supported,
+            Self::Unsupported => CapabilityState::Unsupported,
+        }
+    }
+}
+
+/// User declarations for the three capabilities of one model.
+///
+/// A `None` field follows the catalog evidence; a `Some` field overrides it.
+/// "Restore default" in the editor clears the declarations to [`Self::none()`].
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CapabilityOverrides {
+    /// User declaration about reasoning/thinking, or `None` for the catalog result.
+    #[serde(default)]
+    pub thinking: Option<CapabilityOverride>,
+    /// User declaration about image input, or `None` for the catalog result.
+    #[serde(default)]
+    pub image_input: Option<CapabilityOverride>,
+    /// User declaration about tool calls, or `None` for the catalog result.
+    #[serde(default)]
+    pub tool_calls: Option<CapabilityOverride>,
+}
+
+impl CapabilityOverrides {
+    /// No declarations: every capability follows the catalog result or unknown.
+    pub const fn none() -> Self {
+        Self {
+            thinking: None,
+            image_input: None,
+            tool_calls: None,
+        }
+    }
+
+    /// Whether the user declared nothing at all.
+    pub const fn is_empty(self) -> bool {
+        self.thinking.is_none() && self.image_input.is_none() && self.tool_calls.is_none()
+    }
+}
+
 /// One model from a vendor list, already validated and normalized.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CatalogModel {

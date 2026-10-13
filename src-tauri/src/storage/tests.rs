@@ -306,6 +306,74 @@ fn capability_migration_runs_on_a_database_already_at_schema_12() {
 }
 
 #[test]
+fn capability_override_migration_keeps_rows_and_starts_without_declarations() {
+    let directory = TestDirectory::new("capability-overrides-upgrade");
+    let path = directory.path.join(DATABASE_FILE_NAME);
+    let old = Storage::open_file(&path, &MIGRATIONS[..13]).expect("v13 database");
+    old.lock()
+        .expect("lock")
+        .execute_batch(
+            "INSERT INTO provider_instance VALUES ('0123456789abcdef0123456789abcdef', \
+             'deepseek', 'Work', 'https://api.deepseek.com', 'chat_completions', 1, 1, 1); \
+             INSERT INTO provider_model(provider_id, model_id, source, selected, alias, \
+             created_at, updated_at, last_seen_at) VALUES \
+             ('0123456789abcdef0123456789abcdef', 'deepseek-flash', 'fetched', 1, 'Mine', 1, 1, 1);",
+        )
+        .expect("v13 rows");
+    drop(old);
+
+    let upgraded = Storage::open_in_directory(&directory.path).expect("upgrade");
+    assert_eq!(
+        upgraded.schema_version().expect("version"),
+        latest_schema_version()
+    );
+    // Existing rows keep their user labels and have no capability declarations.
+    let (alias, overrides): (String, Option<String>) = upgraded
+        .lock()
+        .expect("lock")
+        .query_row(
+            "SELECT alias, capability_overrides FROM provider_model \
+             WHERE model_id = 'deepseek-flash'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .expect("kept row");
+    assert_eq!(alias, "Mine");
+    assert_eq!(overrides, None);
+
+    // The CHECK constraint rejects broken JSON at the storage layer...
+    let broken = upgraded.lock().expect("lock").execute(
+        "UPDATE provider_model SET capability_overrides = 'not json' \
+         WHERE model_id = 'deepseek-flash'",
+        [],
+    );
+    assert!(broken.is_err());
+
+    // ...while JSON-valid text with an unexpected shape is the reader's problem:
+    // it rejects the row as `invalid_stored_model` instead of trusting it.
+    upgraded
+        .lock()
+        .expect("lock")
+        .execute(
+            "UPDATE provider_model SET capability_overrides = '{\"thinking\":\"sometimes\"}' \
+             WHERE model_id = 'deepseek-flash'",
+            [],
+        )
+        .expect("JSON-valid shape");
+    let read = crate::models::list_provider_models(
+        &upgraded,
+        &crate::models::ListProviderModelsRequest {
+            provider_id: "0123456789abcdef0123456789abcdef".to_owned(),
+            after: None,
+            limit: 10,
+            filter: "all".to_owned(),
+            query: None,
+        },
+    );
+    assert_eq!(read, Err(crate::models::ModelError::InvalidStoredModel));
+}
+
+#[test]
 fn raising_skill_limits_keeps_rows_and_accepts_larger_skills() {
     let directory = TestDirectory::new("skill-limits-upgrade");
     let path = directory.path.join(DATABASE_FILE_NAME);

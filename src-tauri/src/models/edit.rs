@@ -1,15 +1,17 @@
-//! Single-model snapshots and optimistic alias edits. No network or credential access.
+//! Single-model snapshots and optimistic model edits (alias and capability
+//! declarations). No network or credential access.
 //!
 //! A content digest detects changes even when two writes share a timestamp. The
-//! transaction reads and compares the current snapshot before touching the alias,
+//! transaction reads and compares the current snapshot before touching the row,
 //! so an editor cannot silently overwrite a newer model description.
 
 use rusqlite::{TransactionBehavior, params};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use super::repository::{lock, read_model, read_provider};
+use super::repository::{lock, read_model, read_provider, stored_overrides};
 use super::{ModelError, ProviderModel, parse_provider_id};
+use crate::model_catalog::CapabilityOverrides;
 use crate::model_identity::is_valid_model_id;
 use crate::providers::validate_display_name;
 use crate::storage::Storage;
@@ -34,10 +36,10 @@ pub struct ModelSnapshot {
     pub content_digest: String,
 }
 
-/// Change only the alias if the saved model still matches the editor's snapshot.
+/// Apply the model editor's fields at once: alias and capability declarations.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct UpdateModelAliasRequest {
+pub struct UpdateModelEditRequest {
     /// Provider instance owning the model.
     pub provider_id: String,
     /// Exact model ID; renaming the model identity is not supported.
@@ -46,6 +48,17 @@ pub struct UpdateModelAliasRequest {
     pub expected_digest: String,
     /// Display label; `None` clears it. Nonempty values use provider name validation.
     pub alias: Option<String>,
+    /// The complete set of user capability declarations. A `None` field follows
+    /// the catalog evidence; an all-`None` set is "restore default".
+    pub capability_overrides: CapabilityOverrides,
+}
+
+/// Whether a change token has the shape [`snapshot`] produces: 64 lowercase hex.
+fn is_digest(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 fn snapshot(model: ProviderModel) -> Result<ModelSnapshot, ModelError> {
@@ -85,29 +98,25 @@ pub fn get_model_snapshot(
     snapshot(model)
 }
 
-/// Persist or clear a display alias, preserving all other model metadata.
+/// Persist the model editor's fields (alias and capability declarations) at once,
+/// preserving all other model metadata.
 ///
 /// The immediate transaction serializes comparison and writing against other
-/// connections. An unchanged alias is a no-op, with the same returned digest.
+/// connections. Unchanged values are a no-op with the same returned digest. An
+/// all-empty declaration set stores no declarations, so "restore default" really
+/// returns the model to the catalog evidence or unknown.
 ///
 /// # Errors
 /// Returns `InvalidRequest` for bad identity/digest/time, `ModelAliasInvalid`
 /// for an invalid label, `ModelChanged` for stale content, missing-row errors,
 /// or storage errors. No write is committed on these errors.
-pub fn update_model_alias(
+pub fn update_model_edit(
     storage: &Storage,
-    request: &UpdateModelAliasRequest,
+    request: &UpdateModelEditRequest,
     now_ms: i64,
 ) -> Result<ModelSnapshot, ModelError> {
     let provider_id = parse_provider_id(&request.provider_id)?;
-    if !is_valid_model_id(&request.model_id)
-        || now_ms < 0
-        || request.expected_digest.len() != 64
-        || !request
-            .expected_digest
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-    {
+    if !is_valid_model_id(&request.model_id) || now_ms < 0 || !is_digest(&request.expected_digest) {
         return Err(ModelError::InvalidRequest);
     }
     let alias = request
@@ -128,14 +137,26 @@ pub fn update_model_alias(
     if current.content_digest != request.expected_digest {
         return Err(ModelError::ModelChanged);
     }
-    if current.model.alias == alias {
+    if current.model.alias == alias
+        && current.model.capability_overrides == request.capability_overrides
+    {
         return Ok(current);
     }
+    // An empty declaration set is stored as NULL, the same representation fresh
+    // and migrated rows use, so "no declarations" has one stored form.
+    let overrides = stored_overrides(&request.capability_overrides)?;
     transaction
         .execute(
-            "UPDATE provider_model SET alias = ?3, updated_at = max(updated_at, ?4)
+            "UPDATE provider_model SET alias = ?3, capability_overrides = ?4,
+             updated_at = max(updated_at, ?5)
              WHERE provider_id = ?1 AND model_id = ?2",
-            params![provider_id.as_str(), request.model_id, alias, now_ms],
+            params![
+                provider_id.as_str(),
+                request.model_id,
+                alias,
+                overrides,
+                now_ms
+            ],
         )
         .map_err(|_| ModelError::WriteFailed)?;
     let updated = snapshot(

@@ -81,6 +81,19 @@ export interface ModelCapabilities {
     toolCalls: CapabilityEvidence;
 }
 
+/** One user declaration about a capability. "unknown" is never a declaration. */
+export type CapabilityOverride = "supported" | "unsupported";
+
+/**
+ * The user's capability declarations for one model. A null field follows the
+ * catalog evidence in `capabilities`; an all-null set is "restore default".
+ */
+export interface CapabilityOverrides {
+    thinking: CapabilityOverride | null;
+    imageInput: CapabilityOverride | null;
+    toolCalls: CapabilityOverride | null;
+}
+
 /** Metadata is not proof that inference or a particular capability works. */
 export interface ProviderModel {
     providerId: string;
@@ -95,6 +108,7 @@ export interface ProviderModel {
     outputModalities: string[] | null;
     supportedEndpoints: string[] | null;
     capabilities: ModelCapabilities;
+    capabilityOverrides: CapabilityOverrides;
     routeSupport: "supported" | "unsupported" | "unknown" | "not_applicable";
     /** Protocol this instance would use (P15). Null when Command Code has no route. */
     resolvedProtocol: ProviderProtocol | null;
@@ -117,10 +131,13 @@ export interface ModelIdentity {
     modelId: string;
 }
 
-/** Null clears the alias; Rust validates and trims nonempty labels. */
-export interface UpdateModelAliasInput extends ModelIdentity {
+/** The model editor's fields, saved together behind one expected digest. */
+export interface UpdateModelEditInput extends ModelIdentity {
     expectedDigest: string;
+    /** Null clears the alias; Rust validates and trims nonempty labels. */
     alias: string | null;
+    /** The complete declaration set; an all-null set restores catalog defaults. */
+    capabilityOverrides: CapabilityOverrides;
 }
 
 /** Opaque cursor pagination, or ranked search with a total and no cursor. */
@@ -191,6 +208,8 @@ export interface AddManualModelInput {
     providerId: string;
     modelId: string;
     alias: string | null;
+    /** Capability declarations chosen in the create form; all-null means none. */
+    capabilityOverrides: CapabilityOverrides;
 }
 
 /** Only a manual row can be deleted. */
@@ -316,6 +335,21 @@ function modelCapabilities(value: unknown): ModelCapabilities {
     };
 }
 
+function capabilityOverride(value: unknown): CapabilityOverride | null {
+    return value === null
+        ? null
+        : choice<CapabilityOverride>(value, ["supported", "unsupported"]);
+}
+
+function modelCapabilityOverrides(value: unknown): CapabilityOverrides {
+    const data = object(value, ["thinking", "imageInput", "toolCalls"]);
+    return {
+        thinking: capabilityOverride(data["thinking"]),
+        imageInput: capabilityOverride(data["imageInput"]),
+        toolCalls: capabilityOverride(data["toolCalls"]),
+    };
+}
+
 function nullableProtocol(value: unknown): ProviderProtocol | null {
     if (value === null) return null;
     return choice(value, PROVIDER_PROTOCOLS);
@@ -334,6 +368,7 @@ const MODEL_KEYS = [
     "outputModalities",
     "supportedEndpoints",
     "capabilities",
+    "capabilityOverrides",
     "routeSupport",
     "resolvedProtocol",
     "upstreamState",
@@ -366,6 +401,9 @@ function validateModel(value: unknown, providerId: string): ProviderModel {
         outputModalities: stringList(data["outputModalities"]),
         supportedEndpoints: stringList(data["supportedEndpoints"]),
         capabilities: modelCapabilities(data["capabilities"]),
+        capabilityOverrides: modelCapabilityOverrides(
+            data["capabilityOverrides"],
+        ),
         routeSupport: choice(data["routeSupport"], [
             "supported",
             "unsupported",
@@ -463,16 +501,26 @@ export async function getProviderModelSnapshot(
     );
 }
 
-/** Change only an alias, rejecting stale content in Rust and mismatched IPC here. */
-export async function updateProviderModelAlias(
-    input: UpdateModelAliasInput,
+/**
+ * Apply the model editor's fields (alias and capability declarations) together,
+ * rejecting stale content in Rust and mismatched acknowledgments here.
+ */
+export async function updateProviderModelEdit(
+    input: UpdateModelEditInput,
 ): Promise<ModelSnapshot> {
     requireDesktop();
     const snapshot = validateSnapshot(
-        await call("update_provider_model_alias", { request: input }),
+        await call("update_provider_model_edit", { request: input }),
         input,
     );
-    if (snapshot.model.alias !== (input.alias?.trim() ?? null))
+    const overrides = snapshot.model.capabilityOverrides;
+    const expected = input.capabilityOverrides;
+    if (
+        snapshot.model.alias !== (input.alias?.trim() ?? null) ||
+        overrides.thinking !== expected.thinking ||
+        overrides.imageInput !== expected.imageInput ||
+        overrides.toolCalls !== expected.toolCalls
+    )
         throw invalidResponse();
     return snapshot;
 }
@@ -508,10 +556,15 @@ export async function addManualProviderModel(
         await call("add_manual_provider_model", { request: input }),
         input.providerId,
     );
+    const overrides = model.capabilityOverrides;
+    const expected = input.capabilityOverrides;
     if (
         model.modelId !== input.modelId.trim() ||
         model.source !== "manual" ||
-        !model.selected
+        !model.selected ||
+        overrides.thinking !== expected.thinking ||
+        overrides.imageInput !== expected.imageInput ||
+        overrides.toolCalls !== expected.toolCalls
     )
         throw invalidResponse();
     return model;

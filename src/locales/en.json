@@ -263,17 +263,20 @@
                 "desktop_required": "Model changes require the vibemate desktop app."
             },
             "capabilities": {
-                "thinking": "Thinking support declared by the provider catalog",
-                "imageInput": "Image input support declared by the provider catalog",
-                "toolCalls": "Tool-call support declared by the provider catalog"
+                "thinking": "Thinking",
+                "imageInput": "Image input",
+                "toolCalls": "Tool calls",
+                "catalog": "{{capability}} — declared by the provider catalog",
+                "user": "{{capability}} — declared by you"
             },
-            "aliasEditor": {
-                "title": "Edit alias for {{modelId}}",
-                "save": "Save alias",
+            "editor": {
+                "title": "Edit model {{modelId}}",
+                "save": "Save model",
                 "cancel": "Cancel",
-                "saved": "Model alias saved.",
-                "reload": "Reload saved alias and discard draft",
-                "uncertain": "The save result is unknown. Reload the saved alias before trying again."
+                "saved": "Model saved.",
+                "reload": "Reload saved model and discard draft",
+                "uncertain": "The save result is unknown. Reload the saved model before trying again.",
+                "restoreDefault": "Restore default"
             },
             "manual": {
                 "title": "Add a model manually",

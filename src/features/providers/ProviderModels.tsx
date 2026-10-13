@@ -23,9 +23,10 @@ import {
     type UpstreamBrowseModel,
 } from "../../lib/desktop/models";
 import { getProviderSecretStatus } from "../../lib/desktop/providerSecrets";
-import { ManualModelForm } from "./ManualModelForm";
-import { ModelAliasAction } from "./ModelAliasAction";
+import { IconButton } from "../../components/IconButton";
+import { ModelEntryForm } from "./ModelEntryForm";
 import { ModelCapabilityIcons } from "./ModelCapabilityIcons";
+import { NO_CAPABILITY_DECLARATIONS } from "./modelCapabilities";
 import { ModelCheckbox } from "../../components/ModelCheckbox";
 import buttons from "../../components/actionButtons.module.css";
 import editForm from "../../components/editForm.module.css";
@@ -247,7 +248,9 @@ export function ProviderModels({
     const [browseRunning, setBrowseRunning] = useState(false);
     const [serverBrowseRunning, setServerBrowseRunning] = useState(false);
     const [manualBusy, setManualBusy] = useState(false);
-    const [aliasBusy, setAliasBusy] = useState(false);
+    const [editBusy, setEditBusy] = useState(false);
+    // At most one inline model editor is open, on one saved row.
+    const [editingId, setEditingId] = useState<string | null>(null);
     const [refreshState, setRefreshState] = useState<RefreshState>({
         kind: "idle",
     });
@@ -689,14 +692,17 @@ export function ProviderModels({
                 })
               : null;
 
-    const sectionBusy =
-        aliasBusy ||
+    // Busy for every competing model operation. The open inline editor itself
+    // is excluded from `sharedBusy` so it never locks itself out, while
+    // `sectionBusy` still blocks everything else while the editor is open.
+    const sharedBusy =
         manualBusy ||
         refreshState.kind === "running" ||
         browseActive ||
         saveState.kind === "running" ||
         (viewMode === "selected" && list.kind === "loading") ||
         (viewMode === "upstream" && upstream.kind === "loading");
+    const sectionBusy = editBusy || editingId !== null || sharedBusy;
 
     useEffect(() => {
         onBusyChange?.(!hidden && sectionBusy);
@@ -749,6 +755,38 @@ export function ProviderModels({
         });
     }
 
+    // The inline model editor opens under one row at a time. The trigger element
+    // is remembered so focus returns to it after saving or cancelling.
+    const editTrigger = useRef<HTMLElement | null>(null);
+
+    function openEditor(modelId: string): void {
+        editTrigger.current =
+            document.activeElement instanceof HTMLElement
+                ? document.activeElement
+                : null;
+        setEditingId(modelId);
+    }
+
+    function closeEditor(): void {
+        setEditingId(null);
+        const trigger = editTrigger.current;
+        editTrigger.current = null;
+        if (trigger !== null) {
+            // A removed inline form cannot restore focus itself; give it back to
+            // the row action that opened the editor.
+            window.setTimeout(() => {
+                if (trigger.isConnected) trigger.focus();
+            }, 0);
+        }
+    }
+
+    // Hiding the section closes the inline editor; its unmounting also releases
+    // the busy guard the form reported. Adjusting state during render keeps the
+    // open editor a derivation of `hidden` instead of an effect round-trip.
+    if (hidden && editingId !== null) {
+        setEditingId(null);
+    }
+
     const listBody = (
         <>
             {!hidden && list.kind === "ready" && (
@@ -782,8 +820,9 @@ export function ProviderModels({
                                 {t("providers.models.manual.draft")}
                             </p>
                         )}
-                        <ManualModelForm
+                        <ModelEntryForm
                             key={providerId}
+                            mode="create"
                             providerId={providerId}
                             blocked={sectionBusy || dirty}
                             onSaved={manualSaved}
@@ -952,6 +991,9 @@ export function ProviderModels({
                                                 capabilities={
                                                     model.capabilities
                                                 }
+                                                capabilityOverrides={
+                                                    model.capabilityOverrides
+                                                }
                                             />
                                             {model.resolvedProtocol !== null &&
                                                 model.routeSupport ===
@@ -1018,36 +1060,62 @@ export function ProviderModels({
                                             )}
                                     </div>
                                     {!hidden && (
-                                        <ModelAliasAction
-                                            providerId={providerId}
-                                            model={model}
+                                        <IconButton
+                                            icon="edit"
+                                            label={t(
+                                                "providers.models.editor.title",
+                                                { modelId: model.modelId },
+                                            )}
                                             blocked={
                                                 sectionBusy ||
                                                 dirty ||
                                                 searchInput.trim() !==
                                                     debouncedQuery
                                             }
-                                            onBusyChange={setAliasBusy}
-                                            onReload={() => {
-                                                void loadSelectedList();
-                                            }}
-                                            onSaved={(updated) => {
-                                                setList((current) =>
-                                                    current.kind === "ready"
-                                                        ? {
-                                                              ...current,
-                                                              items: current.items.map(
-                                                                  (row) =>
-                                                                      row.modelId ===
-                                                                      updated.modelId
-                                                                          ? updated
-                                                                          : row,
-                                                              ),
-                                                          }
-                                                        : current,
-                                                );
+                                            onClick={() => {
+                                                openEditor(model.modelId);
                                             }}
                                         />
+                                    )}
+                                    {!hidden && editingId === model.modelId && (
+                                        <div className={styles["itemEditor"]}>
+                                            <ModelEntryForm
+                                                mode="edit"
+                                                providerId={providerId}
+                                                modelId={model.modelId}
+                                                blocked={
+                                                    sharedBusy ||
+                                                    dirty ||
+                                                    searchInput.trim() !==
+                                                        debouncedQuery
+                                                }
+                                                onBusyChange={setEditBusy}
+                                                onCancel={closeEditor}
+                                                onSaved={(updated) => {
+                                                    setList((current) =>
+                                                        current.kind === "ready"
+                                                            ? {
+                                                                  ...current,
+                                                                  items: current.items.map(
+                                                                      (row) =>
+                                                                          row.modelId ===
+                                                                          updated.modelId
+                                                                              ? updated
+                                                                              : row,
+                                                                  ),
+                                                              }
+                                                            : current,
+                                                    );
+                                                    closeEditor();
+                                                    notify({
+                                                        tone: "success",
+                                                        message: t(
+                                                            "providers.models.editor.saved",
+                                                        ),
+                                                    });
+                                                }}
+                                            />
+                                        </div>
                                     )}
                                 </li>
                             );
@@ -1122,9 +1190,16 @@ export function ProviderModels({
                                                     </span>
                                                 )}
                                             </span>
+                                            {/* Upstream browse rows are
+                                            catalog-only: a model that is not
+                                            saved yet cannot carry user
+                                            declarations. */}
                                             <ModelCapabilityIcons
                                                 capabilities={
                                                     model.capabilities
+                                                }
+                                                capabilityOverrides={
+                                                    NO_CAPABILITY_DECLARATIONS
                                                 }
                                             />
                                             {model.resolvedProtocol !== null &&
@@ -1268,7 +1343,8 @@ export function ProviderModels({
                         placeholder={t("providers.models.searchPlaceholder")}
                         aria-label={t("providers.models.searchPlaceholder")}
                         disabled={
-                            aliasBusy ||
+                            editBusy ||
+                            editingId !== null ||
                             manualBusy ||
                             list.kind === "preview" ||
                             keyMissing ||

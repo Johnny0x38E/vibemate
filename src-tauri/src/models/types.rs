@@ -1,7 +1,7 @@
 //! Saved-model requests, records, and source states.
 //! Failure codes are `crate::model_error::ModelError`.
 
-use crate::model_catalog::ModelCapabilities;
+use crate::model_catalog::{CapabilityOverrides, ModelCapabilities};
 use crate::model_identity::RouteSupport;
 use crate::providers::ProviderProtocol;
 use serde::{Deserialize, Serialize};
@@ -67,6 +67,8 @@ pub struct ProviderModel {
     pub output_modalities: Option<Vec<String>>,
     pub supported_endpoints: Option<Vec<String>>,
     pub capabilities: ModelCapabilities,
+    /// User capability declarations; `None` fields follow `capabilities`.
+    pub capability_overrides: CapabilityOverrides,
     pub route_support: RouteSupport,
     /// Protocol to use for this model on the instance (P15). `None` when Command
     /// Code has no usable route declaration.
@@ -125,6 +127,10 @@ pub struct AddManualModelRequest {
     pub provider_id: String,
     pub model_id: String,
     pub alias: Option<String>,
+    /// Capability declarations chosen in the create form. The field defaults to
+    /// "no declarations", so every capability follows the (empty) catalog result.
+    #[serde(default)]
+    pub capability_overrides: CapabilityOverrides,
 }
 
 /// Delete a model that was added by hand.

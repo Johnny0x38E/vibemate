@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use super::validation::MAX_CURSOR_LEN;
 use super::*;
+use crate::model_catalog::{CapabilityOverride, CapabilityOverrides};
 use crate::model_identity::RouteSupport;
 use crate::storage::Storage;
 use rusqlite::params;
@@ -92,6 +93,7 @@ fn add(
             provider_id: PROVIDER.to_owned(),
             model_id: model_id.to_owned(),
             alias: alias.map(str::to_owned),
+            capability_overrides: CapabilityOverrides::none(),
         },
         100,
     )
@@ -329,10 +331,47 @@ fn manual_models_are_validated_selected_and_unique() {
             provider_id: OTHER.to_owned(),
             model_id: "x".to_owned(),
             alias: None,
+            capability_overrides: CapabilityOverrides::none(),
         },
         100,
     );
     assert_eq!(missing_provider, Err(ModelError::NotFound));
+}
+
+#[test]
+fn manual_creation_can_start_with_capability_declarations() {
+    let directory = TestDirectory::new();
+    let storage = directory.open();
+    insert_provider(&storage, PROVIDER, "deepseek", "chat_completions");
+    let declarations = CapabilityOverrides {
+        thinking: Some(CapabilityOverride::Supported),
+        ..CapabilityOverrides::none()
+    };
+    let created = add_manual_model(
+        &storage,
+        &AddManualModelRequest {
+            provider_id: PROVIDER.to_owned(),
+            model_id: "deepseek-flash".to_owned(),
+            alias: Some("Mine".to_owned()),
+            capability_overrides: declarations,
+        },
+        100,
+    )
+    .unwrap();
+    assert_eq!(created.capability_overrides, declarations);
+    // Without declarations the stored column stays empty (NULL).
+    let plain = add(&storage, "other-model", None).unwrap();
+    assert_eq!(plain.capability_overrides, CapabilityOverrides::none());
+    let stored: Option<String> = storage
+        .lock()
+        .unwrap()
+        .query_row(
+            "SELECT capability_overrides FROM provider_model WHERE model_id = 'other-model'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(stored, None);
 }
 
 #[test]
@@ -754,4 +793,72 @@ fn models_serialize_with_camel_case_fields_and_snake_case_values() {
         ModelError::InvalidStoredModel.to_string(),
         "invalid_stored_model"
     );
+}
+
+#[test]
+fn stored_capability_overrides_are_read_and_validated() {
+    let directory = TestDirectory::new();
+    let storage = directory.open();
+    insert_provider(&storage, PROVIDER, "deepseek", "chat_completions");
+    insert_fetched(&storage, PROVIDER, "deepseek-flash", None);
+
+    // The migrated column default is NULL: no declarations, every capability
+    // follows the catalog evidence.
+    assert_eq!(
+        list(&storage, None, 10, "all").items[0].capability_overrides,
+        CapabilityOverrides::none()
+    );
+
+    storage
+        .lock()
+        .unwrap()
+        .execute(
+            "UPDATE provider_model SET capability_overrides = \
+             '{\"thinking\":\"supported\",\"imageInput\":\"unsupported\",\"toolCalls\":null}' \
+             WHERE model_id = 'deepseek-flash'",
+            [],
+        )
+        .unwrap();
+    assert_eq!(
+        list(&storage, None, 10, "all").items[0].capability_overrides,
+        CapabilityOverrides {
+            thinking: Some(CapabilityOverride::Supported),
+            image_input: Some(CapabilityOverride::Unsupported),
+            tool_calls: None,
+        }
+    );
+
+    // JSON-valid text with an unknown value or field is still a stored-data
+    // problem: the reader rejects the row instead of silently dropping it.
+    for broken in [
+        r#"{"thinking":"sometimes"}"#,
+        r#"{"bogus":"supported"}"#,
+        r#"{"thinking":true}"#,
+    ] {
+        storage
+            .lock()
+            .unwrap()
+            .execute(
+                &format!(
+                    "UPDATE provider_model SET capability_overrides = '{broken}' \
+                     WHERE model_id = 'deepseek-flash'"
+                ),
+                [],
+            )
+            .unwrap();
+        assert_eq!(
+            list_provider_models(
+                &storage,
+                &ListProviderModelsRequest {
+                    provider_id: PROVIDER.to_owned(),
+                    after: None,
+                    limit: 10,
+                    filter: "all".to_owned(),
+                    query: None,
+                },
+            ),
+            Err(ModelError::InvalidStoredModel),
+            "{broken}"
+        );
+    }
 }

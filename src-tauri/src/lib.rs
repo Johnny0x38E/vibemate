@@ -105,7 +105,7 @@ pub fn run() {
             commands::models::add_manual_provider_model,
             commands::models::delete_manual_provider_model,
             commands::models::get_provider_model_snapshot,
-            commands::models::update_provider_model_alias,
+            commands::models::update_provider_model_edit,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|_| {

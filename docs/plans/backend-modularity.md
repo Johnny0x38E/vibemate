@@ -80,8 +80,7 @@ commands/
 不要提前要求每个厂商实现获取、推理、额度、OAuth 等一整套统一 trait。
 现有数据库 CHECK/验证若限制品牌，增加厂商需配套迁移，并保留旧实例和模型。
 
-GitHub/Vercel 按独立云服务客户端规划。GitHub 已明确作为配置备份目标，
-Vercel 的首条操作仍待确定：
+GitHub/Vercel 按独立云服务客户端规划。GitHub 已明确作为配置备份目标；Vercel 用途待定，维护者 2026-10-13 决定列为后续功能、暂不排期。云服务客户端按以下边界规划：
 
 - 服务连接用自己的 account/connection ID、授权状态和资源类型，不能复用
   ProviderId、ProviderKind 或模型服务商实例表来存云服务账号。

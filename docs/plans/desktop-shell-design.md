@@ -4,9 +4,10 @@
 
 The maintainer closed the current basic appearance iteration on 2026-10-10.
 The sole task checklist is [todo.md](todo.md); completed shell/branding work is
-summarized there, not tracked again here. Provider/model management, central MCP
-and Pi/Grok read-only discovery are implemented. Six-Agent fixed discovery is the
-next change; configuration writes, skills and MCP deployment remain pending.
+summarized there, not tracked again here. Provider/model management, central MCP,
+local skill import, six-Agent discovery and version reading are implemented and
+accepted (2026-10-13). Agent configuration writes, skill
+installation/update/deployment and MCP deployment remain pending.
 
 The private sketch `docs/local/程序首页原型草图.png` supplied the original layout.
 An HTML layout preview was retired once it stopped matching the app; current

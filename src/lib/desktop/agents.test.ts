@@ -1,6 +1,13 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { beforeEach, expect, test, vi } from "vitest";
-import { discoverAgents, type AgentObservation } from "./agents";
+import {
+    PLAN_ERROR_CODES,
+    planClaudeCodeSettings,
+    type ClaudeCodePlan,
+    type ConfigChange,
+    discoverAgents,
+    type AgentObservation,
+} from "./agents";
 import { agentReport, automaticAgentPaths } from "../../test/agentDiscovery";
 vi.mock(import("@tauri-apps/api/core"));
 const pi: AgentObservation = {
@@ -220,4 +227,188 @@ test("rejects complete reports with duplicate, reordered or extra identities", a
             code: "invalid_response",
         });
     }
+});
+
+/** One valid plan shape; Rust owns these camelCase fields. */
+const plan: ClaudeCodePlan = {
+    agent: "claudeCode",
+    target: {
+        path: "/home/test/.claude/settings.json",
+        exists: true,
+        contentDigest:
+            "c2e7c5c20563a37b7b8d8e378fad52a60fa0a2c6e30b71f4b46521dfa7280409",
+        symlink: false,
+    },
+    source: {
+        providerId: "0123456789abcdef0123456789abcdef",
+        providerRevision: 3,
+        modelId: "deepseek-flash",
+        modelContentDigest:
+            "0f4f87db4567232a7f1756aa1534ec1314777b39c3bf5209f87cf9739321cddc",
+    },
+    changes: [
+        {
+            keyPath: "env.ANTHROPIC_BASE_URL",
+            before: null,
+            after: "https://api.deepseek.com/anthropic",
+            secret: false,
+        },
+        {
+            keyPath: "env.ANTHROPIC_AUTH_TOKEN",
+            before: null,
+            after: "••••••••",
+            secret: true,
+        },
+        {
+            keyPath: "env.ANTHROPIC_MODEL",
+            before: "opus",
+            after: "deepseek-flash",
+            secret: false,
+        },
+    ],
+    notices: [
+        { code: "credentialFromStore", detail: null },
+        { code: "overridesNotChecked", detail: null },
+        { code: "modelKeyOverridden", detail: "opus" },
+    ],
+    restartRequired: true,
+};
+const modelChange: ConfigChange = {
+    keyPath: "env.ANTHROPIC_MODEL",
+    before: "opus",
+    after: "deepseek-flash",
+    secret: false,
+};
+
+test("browser preview never requests or invents a plan", async () => {
+    vi.mocked(isTauri).mockReturnValue(false);
+    expect(
+        await planClaudeCodeSettings(
+            plan.source.providerId,
+            plan.source.modelId,
+        ),
+    ).toEqual({ kind: "preview" });
+    expect(invoke).not.toHaveBeenCalled();
+});
+
+test("sends only the selected identities and returns the validated plan", async () => {
+    vi.mocked(invoke).mockResolvedValue(plan);
+    expect(
+        await planClaudeCodeSettings(
+            plan.source.providerId,
+            plan.source.modelId,
+        ),
+    ).toEqual({ kind: "desktop", plan });
+    expect(invoke).toHaveBeenCalledExactlyOnceWith(
+        "plan_claude_code_settings",
+        {
+            providerId: plan.source.providerId,
+            modelId: plan.source.modelId,
+        },
+    );
+});
+
+test("accepts a plan for a settings file that does not exist yet", async () => {
+    const missing: ClaudeCodePlan = {
+        ...plan,
+        target: {
+            ...plan.target,
+            exists: false,
+            contentDigest: null,
+            symlink: false,
+        },
+        changes: plan.changes.map((change) => ({ ...change, before: null })),
+    };
+    vi.mocked(invoke).mockResolvedValue(missing);
+    expect(
+        await planClaudeCodeSettings(
+            plan.source.providerId,
+            plan.source.modelId,
+        ),
+    ).toEqual({ kind: "desktop", plan: missing });
+});
+
+test("preserves model IDs with separators as display data", async () => {
+    const slashed: ClaudeCodePlan = {
+        ...plan,
+        source: { ...plan.source, modelId: "deepseek/deepseek-flash:latest" },
+        changes: plan.changes.map((change) =>
+            change.keyPath === "env.ANTHROPIC_MODEL"
+                ? { ...change, after: "deepseek/deepseek-flash:latest" }
+                : change,
+        ),
+    };
+    vi.mocked(invoke).mockResolvedValue(slashed);
+    const result = await planClaudeCodeSettings(
+        plan.source.providerId,
+        plan.source.modelId,
+    );
+    expect(result.kind === "desktop" ? result.plan.source.modelId : null).toBe(
+        "deepseek/deepseek-flash:latest",
+    );
+});
+
+test.each(PLAN_ERROR_CODES)("returns the refusal code %s", async (code) => {
+    vi.mocked(invoke).mockRejectedValue(code);
+    await expect(
+        planClaudeCodeSettings(plan.source.providerId, plan.source.modelId),
+    ).rejects.toMatchObject({
+        code,
+        message: "Agent configuration preview failed.",
+    });
+});
+
+test.each([
+    "private-refusal",
+    "sk-synthetic-never-display",
+    new Error("private-runtime-error"),
+])("sanitizes unexpected failure %s", async (error) => {
+    vi.mocked(invoke).mockRejectedValue(error);
+    await expect(
+        planClaudeCodeSettings(plan.source.providerId, plan.source.modelId),
+    ).rejects.toMatchObject({ code: "operation_failed" });
+});
+
+test.each([
+    { ...plan, extra: "synthetic" },
+    { ...plan, agent: "codex" },
+    { ...plan, restartRequired: "yes" },
+    { ...plan, changes: [] },
+    { ...plan, notices: "none" },
+    { ...plan, target: { ...plan.target, contentDigest: null } },
+    { ...plan, target: { ...plan.target, exists: false } },
+    { ...plan, target: { ...plan.target, path: "relative/settings.json" } },
+    {
+        ...plan,
+        target: {
+            ...plan.target,
+            contentDigest: plan.source.modelContentDigest.toUpperCase(),
+        },
+    },
+    { ...plan, target: { ...plan.target, secret: plan.target.path } },
+    { ...plan, source: { ...plan.source, providerId: "not-a-provider-id" } },
+    { ...plan, source: { ...plan.source, providerRevision: 0 } },
+    { ...plan, source: { ...plan.source, modelContentDigest: "0".repeat(63) } },
+    { ...plan, source: { ...plan.source, modelId: "deepseek flash" } },
+    { ...plan, source: { ...plan.source, modelId: "" } },
+    { ...plan, changes: [{ ...modelChange, secret: true }] },
+    { ...plan, changes: [{ ...modelChange, after: "••••••••" }] },
+    { ...plan, changes: [{ ...modelChange, extra: true }] },
+    { ...plan, changes: [{ ...modelChange, keyPath: "" }] },
+    { ...plan, notices: [{ code: "unknownNotice", detail: null }] },
+    { ...plan, notices: [{ code: "providerLimited", detail: 7 }] },
+    { ...plan, notices: [{ code: "providerLimited" }] },
+    {
+        ...plan,
+        notices: [{ code: "providerLimited", detail: "x".repeat(300) }],
+    },
+])("rejects malformed or contradictory plan %#", async (response: unknown) => {
+    vi.mocked(invoke).mockResolvedValue(response);
+    await expect(
+        planClaudeCodeSettings(plan.source.providerId, plan.source.modelId),
+    ).rejects.toMatchObject({
+        name: "PlanRequestError",
+        code: "invalid_response",
+        message: "Agent configuration preview failed.",
+    });
 });

@@ -142,6 +142,8 @@ P17.o–P17.s 实现与代码核验完成：固定 `--version`、路径重验、
 
 Agent 详情页增加「当前配置」只读汇总区，首期只交付模型槽位与配置预览入口；Skill/MCP 槽位随 P27/P32 添加。槽位显示状态并链接到管理模块，注入操作不搬进 Agent 页。
 
+最小预览的映射决定与批次计划见 [p18-claude-code-link.md](p18-claude-code-link.md)；三家 Provider 的 Claude Code 接入证据见 [claude-code.md](../integrations/claude-code.md)。
+
 **Acceptance criteria:**
 
 - [ ] 按已核实的 Claude Code 官方 Settings/Setup 约定映射原生字段，保留无关配置；不支持的组合拒绝并说明。

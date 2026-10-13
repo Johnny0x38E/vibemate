@@ -15,6 +15,12 @@ export interface ProviderPageProps {
     backAriaLabel?: string;
     /** Read-only detail pages delegate scrolling to a single content wrapper. */
     scrollContent?: boolean;
+    /**
+     * Read-only summary for the title row (Agent status and version). It follows
+     * the title and keeps the header's single height, so it stays out of the
+     * scrollable body without becoming an action.
+     */
+    meta?: ReactNode;
     children: ReactNode;
 }
 
@@ -31,6 +37,7 @@ export function ProviderPage({
     backAriaLabel,
     children,
     scrollContent = false,
+    meta,
 }: ProviderPageProps): JSX.Element {
     const { t } = useTranslation();
     const heading = useRef<HTMLHeadingElement>(null);
@@ -59,6 +66,9 @@ export function ProviderPage({
                         >
                             {title}
                         </h1>
+                        {meta !== undefined && (
+                            <div className={styles["meta"]}>{meta}</div>
+                        )}
                         <div className={styles["actions"]}>{actions}</div>
                     </div>
                     {scrollContent ? (

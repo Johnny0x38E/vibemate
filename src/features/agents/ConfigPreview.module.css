@@ -1,0 +1,111 @@
+/*
+ * Model-configuration card for the Claude Code detail page.
+ *
+ * The card surface, the field rows and the fact layout come from the shared
+ * `DetailPanel`, so this module owns only what is specific to the feature: the
+ * action row under the fields, and the planned-change list with its notices.
+ * Hierarchy follows the rest of the app: muted summary text for the previous
+ * value, 500 weight for the planned one, borders instead of extra containers.
+ */
+
+.actions {
+    display: flex;
+    justify-content: flex-end;
+    /* Matches the fact-row rhythm above while keeping its own divider. */
+    padding: 10px 0 4px;
+}
+
+/*
+ * Fact rows end-align their text; a dropdown is a block, so it would sit at the
+ * start of the value column instead. This keeps it on the same right edge as the
+ * other facts, next to its label.
+ */
+.selectValue {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.summary {
+    display: grid;
+    gap: 4px;
+    padding-bottom: var(--space-sm);
+}
+
+.path {
+    color: var(--color-text);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.fileState {
+    color: var(--color-summary);
+    font-size: 0.75rem;
+    line-height: 1.4;
+}
+
+.note {
+    margin-top: 2px;
+    padding-inline-start: var(--space-sm);
+    border-inline-start: 2px solid var(--color-border);
+    color: var(--color-summary);
+    font-size: 0.75rem;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.changes {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.change {
+    display: grid;
+    gap: 2px;
+    padding: 8px 0;
+    /* One divider per change, so the list reads as rows without a table. */
+    border-top: 1px solid var(--color-border);
+}
+
+.key {
+    color: var(--color-summary);
+    font-size: 0.75rem;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+
+.transition {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px;
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.before {
+    color: var(--color-summary);
+    text-decoration: line-through;
+}
+
+.arrow {
+    color: var(--color-summary);
+}
+
+.after {
+    font-weight: 500;
+}
+
+.notices {
+    display: grid;
+    gap: 4px;
+    margin: var(--space-sm) 0 0;
+    padding-inline-start: 1.1em;
+    color: var(--color-summary);
+    font-size: 0.75rem;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}

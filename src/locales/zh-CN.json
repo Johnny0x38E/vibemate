@@ -478,8 +478,7 @@
         },
         "detail": {
             "notFound": "在已检查的位置未发现入口。可在下方指定绝对入口路径，或更新 PATH 后重新发现。",
-            "reportLabel": "{{name}} 发现报告",
-            "configFilesHeading": "配置文件",
+            "detailsHeading": "发现与配置",
             "manualPathTitle": "手动指定入口",
             "applyPath": "重新发现",
             "labels": {
@@ -549,7 +548,46 @@
             "invalid_response": "桌面返回的发现报告无效，请点击「发现」或「重新发现」重试。"
         },
         "count_one": "已发现 {{count}} 个 Agent",
-        "count_other": "已发现 {{count}} 个 Agent"
+        "count_other": "已发现 {{count}} 个 Agent",
+        "modelConfig": {
+            "title": "模型配置",
+            "previewMode": "浏览器预览无法读写配置文件，请在 vibemate 桌面应用的 Agent 页面查看。",
+            "loading": "正在读取…",
+            "noProviders": "还没有保存的服务商配置，请先在服务商模块添加。",
+            "noModels": "该服务商还没有已添加的模型，请先在其「模型」标签页添加。",
+            "providerLabel": "服务商",
+            "modelLabel": "模型",
+            "preview": "生成预览",
+            "previewing": "正在生成预览…",
+            "planHeading": "计划改动",
+            "fileStateExists": "已存在，其他键保持不变",
+            "fileStateNew": "尚不存在，将会新建",
+            "fileStateSymlink": "已存在，且是符号链接，请先确认其指向",
+            "restartRequired": "需要重新启动 Claude Code 会话后这些设置才会生效。",
+            "secretValue": "系统凭据存储中的 API 密钥，以明文写入",
+            "emptyValue": "（空）",
+            "notices": {
+                "credentialFromStore": "API 密钥不会进入这个窗口。应用改动时，vibemate 会从系统凭据存储读取它，并以明文写入该配置文件。",
+                "overridesNotChecked": "本预览没有读取托管设置、项目设置和 shell 环境变量，它们都可能覆盖这个文件。",
+                "modelKeyOverridden": "文件里已有的 model 设置（{{value}}）会被环境变量覆盖。",
+                "providerLimited": "厂商只保证该路径对 Anthropic 一等厂商的模型可用。"
+            },
+            "errors": {
+                "invalid_request": "请求无效。",
+                "gateway_unverified": "该服务商没有已核实的 Claude Code 接入方式，未生成计划。",
+                "base_url_unverified": "该配置没有使用其服务商已核实的网关地址，未生成计划。",
+                "target_path_invalid": "配置文件路径不可用。",
+                "target_unreadable": "配置文件无法读取，或不是 JSON 对象。未做任何改动。",
+                "target_too_large": "配置文件超过预览读取上限，未读取。",
+                "target_conflict": "配置文件里需要改动的键存着其他类型的值，未覆盖。",
+                "storage_unavailable": "本地配置库不可用，请重启 vibemate。",
+                "provider_not_found": "该服务商配置已不存在。",
+                "model_not_found": "该服务商已没有这个保存的模型。",
+                "location_unavailable": "无法定位 Claude Code 的配置目录。",
+                "operation_failed": "预览生成失败，请重试。",
+                "invalid_response": "桌面应用返回了意外的计划。"
+            }
+        }
     },
     "skills": {
         "title": "技能",

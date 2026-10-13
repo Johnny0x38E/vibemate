@@ -30,6 +30,7 @@ import { AgentIcon } from "./AgentIcon";
 import { IconButton } from "../../components/IconButton";
 import { AgentPage } from "./AgentPage";
 import { AgentVersionPanel } from "./AgentVersionPanel";
+import { ConfigPreview } from "./ConfigPreview";
 import {
     probeAgentVersion,
     type AgentVersionResult,
@@ -407,17 +408,38 @@ export function AgentList({
         );
     }
 
-    function report(row: AgentObservation): JSX.Element {
+    /**
+     * Status and version for the title row. They are the facts a user checks
+     * first, and keeping them here leaves the card below for paths and controls.
+     */
+    function detailMeta(row: AgentObservation): JSX.Element {
         const reported = cliVersion(row);
         return (
             <>
-                <DetailFact
-                    label={t("agents.detail.labels.status")}
-                    value={factBadge(
+                <span className={styles["metaPair"]}>
+                    <span>{t("agents.detail.labels.status")}</span>
+                    {factBadge(
                         discoveryLabel(row),
                         t(`agents.sources.${row.source}`),
                     )}
-                />
+                </span>
+                <span className={styles["metaPair"]}>
+                    <span>{t("agents.detail.labels.version")}</span>
+                    {factBadge(
+                        reported?.version ?? row.version ?? t("agents.unknown"),
+                        reported === undefined
+                            ? t(`agents.evidence.${row.versionEvidence}`)
+                            : t("agents.versionProbe.evidence"),
+                    )}
+                </span>
+            </>
+        );
+    }
+
+    /** Everything the detail card shows: where the entry points and what exists. */
+    function details(row: AgentObservation): JSX.Element {
+        return (
+            <>
                 {row.entryPath !== null && (
                     <DetailFact
                         label={t("agents.detail.labels.entry")}
@@ -431,22 +453,6 @@ export function AgentList({
                             value={row.resolvedPath}
                         />
                     )}
-                <DetailFact
-                    label={t("agents.detail.labels.version")}
-                    value={factBadge(
-                        reported?.version ?? row.version ?? t("agents.unknown"),
-                        reported === undefined
-                            ? t(`agents.evidence.${row.versionEvidence}`)
-                            : t("agents.versionProbe.evidence"),
-                    )}
-                />
-            </>
-        );
-    }
-
-    function configFiles(row: AgentObservation): JSX.Element {
-        return (
-            <>
                 <DetailFact
                     label={t("agents.detail.labels.configDirectory")}
                     value={`${row.configDirectory ?? t("agents.unknown")} · ${t(`agents.directories.${row.directorySource}`)}`}
@@ -656,6 +662,11 @@ export function AgentList({
                     returnToList(id);
                 }}
                 backBlocked={blocked}
+                meta={
+                    state.kind === "desktop" && row !== undefined
+                        ? detailMeta(row)
+                        : undefined
+                }
             >
                 {statusLine("detail")}
                 {state.kind === "error" && (
@@ -669,93 +680,81 @@ export function AgentList({
                     </p>
                 ) : null}
                 <section className={styles["detailGroup"]} data-layout="page">
-                    {row !== undefined && (
-                        <>
-                            <DetailPanel
-                                label={t("agents.detail.reportLabel", {
-                                    name,
-                                })}
-                            >
-                                {report(row)}
-                            </DetailPanel>
-                            <DetailPanel
-                                label={t("agents.detail.configFilesHeading")}
-                            >
-                                {configFiles(row)}
-                            </DetailPanel>
-                        </>
-                    )}
-                    <form
-                        className={[
-                            detailForm["card"],
-                            styles["pathForm"],
-                        ].join(" ")}
-                        aria-label={t("agents.detail.manualPathTitle")}
-                        onSubmit={(event) => {
-                            event.preventDefault();
-                            void refresh();
-                        }}
-                    >
-                        <label
-                            className={detailForm["label"]}
-                            htmlFor={`agent-entry-path-${id}`}
+                    {/* A configuration card leads the page where an adapter
+                        exists; the remaining facts, the manual entry path and
+                        the version read share one card below it. */}
+                    {id === "claudeCode" && <ConfigPreview />}
+                    <DetailPanel label={t("agents.detail.detailsHeading")}>
+                        {row !== undefined && details(row)}
+                        <form
+                            className={detailForm["row"]}
+                            aria-label={t("agents.detail.manualPathTitle")}
+                            onSubmit={(event) => {
+                                event.preventDefault();
+                                void refresh();
+                            }}
                         >
-                            {t("agents.pathLabel", { name })}
-                        </label>
-                        <div className={styles["pathControls"]}>
-                            <input
-                                id={`agent-entry-path-${id}`}
-                                className={[
-                                    editForm["input"],
-                                    styles["pathInput"],
-                                ].join(" ")}
-                                value={pathValue}
-                                readOnly={blocked}
-                                spellCheck={false}
-                                autoComplete="off"
-                                placeholder={t("agents.pathPlaceholder")}
-                                onChange={(event) => {
-                                    setPaths({
-                                        ...paths,
-                                        [id]: event.currentTarget.value,
-                                    });
-                                }}
-                            />
-                            <IconButton
-                                type="submit"
-                                icon="refresh"
-                                label={t("agents.detail.applyPath")}
-                                blocked={blocked}
-                            />
-                        </div>
-                    </form>
-                    <AgentVersionPanel
-                        key={JSON.stringify([
-                            confirmationEpoch,
-                            id,
-                            row?.entryPath,
-                            row?.resolvedPath,
-                        ])}
-                        row={row}
-                        enabled={
-                            !blocked &&
-                            !autoProbeBusy &&
-                            state.kind === "desktop" &&
-                            pathMatches
-                        }
-                        hidden={hidden}
-                        onBusyChange={(busy) => {
-                            pending.current = busy;
-                            if (mounted.current) setVersionBusy(busy);
-                        }}
-                        onResult={(result) => {
-                            if (mounted.current && !hidden)
-                                setVersions((previous) => ({
-                                    ...previous,
-                                    [result.id]: result,
-                                }));
-                        }}
-                    />
+                            <label
+                                className={detailForm["label"]}
+                                htmlFor={`agent-entry-path-${id}`}
+                            >
+                                {t("agents.pathLabel", { name })}
+                            </label>
+                            <span className={styles["pathField"]}>
+                                <input
+                                    id={`agent-entry-path-${id}`}
+                                    className={[
+                                        editForm["input"],
+                                        styles["pathInput"],
+                                    ].join(" ")}
+                                    value={pathValue}
+                                    readOnly={blocked}
+                                    spellCheck={false}
+                                    autoComplete="off"
+                                    placeholder={t("agents.pathPlaceholder")}
+                                    onChange={(event) => {
+                                        setPaths({
+                                            ...paths,
+                                            [id]: event.currentTarget.value,
+                                        });
+                                    }}
+                                />
+                                <IconButton
+                                    type="submit"
+                                    icon="refresh"
+                                    label={t("agents.detail.applyPath")}
+                                    blocked={blocked}
+                                />
+                            </span>
+                        </form>
+                        <AgentVersionPanel
+                            key={JSON.stringify([
+                                confirmationEpoch,
+                                id,
+                                row?.entryPath,
+                                row?.resolvedPath,
+                            ])}
+                            row={row}
+                            enabled={
+                                !blocked &&
+                                !autoProbeBusy &&
+                                state.kind === "desktop" &&
+                                pathMatches
+                            }
+                            hidden={hidden}
+                            onBusyChange={(busy) => {
+                                pending.current = busy;
+                                if (mounted.current) setVersionBusy(busy);
+                            }}
+                            onResult={(result) => {
+                                if (mounted.current && !hidden)
+                                    setVersions((previous) => ({
+                                        ...previous,
+                                        [result.id]: result,
+                                    }));
+                            }}
+                        />
+                    </DetailPanel>
                 </section>
             </AgentPage>
         );

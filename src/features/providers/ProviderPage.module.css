@@ -51,6 +51,24 @@
     overflow: hidden;
 }
 
+/*
+ * Read-only summary in the title row (Agent status and version). The title grows
+ * to fill the row, so this sits next to the trailing actions; it never wraps and
+ * truncates rather than pushing the header past its fixed height.
+ */
+.meta {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    /* Wider than a label/value pair so the two facts stay separate. */
+    gap: var(--space-md);
+    max-width: 50%;
+    overflow: hidden;
+    color: var(--color-summary);
+    font-size: 0.75rem;
+    white-space: nowrap;
+}
+
 .actions {
     display: flex;
     flex-shrink: 0;

@@ -1,5 +1,5 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { hasExactKeys, isObject } from "./providers";
+import { hasExactKeys, isObject, isProviderId } from "./providers";
 
 /** Fixed catalog order; detection does not imply configuration deployment support. */
 export const AGENT_IDS = [
@@ -72,21 +72,25 @@ function choice<T extends string>(value: unknown, choices: readonly T[]): T {
     for (const item of choices) if (value === item) return item;
     return invalid();
 }
-function path(value: unknown): string | null {
-    if (value === null) return null;
-    if (
-        typeof value !== "string" ||
-        new TextEncoder().encode(value).length > 4096 ||
-        Array.from(value).some((char) => {
+/** Absolute, bounded, control-free path text; shared by both validators. */
+function isSafePath(value: unknown): value is string {
+    return (
+        typeof value === "string" &&
+        new TextEncoder().encode(value).length <= 4096 &&
+        !Array.from(value).some((char) => {
             const point = char.codePointAt(0);
             return (
                 point !== undefined &&
                 (point < 32 || (point >= 127 && point <= 159))
             );
-        }) ||
-        !/^(\/|[A-Za-z]:[\\/]|\\\\[^\\]+\\)/u.test(value)
-    )
-        return invalid();
+        }) &&
+        /^(\/|[A-Za-z]:[\\/]|\\\\[^\\]+\\)/u.test(value)
+    );
+}
+
+function path(value: unknown): string | null {
+    if (value === null) return null;
+    if (!isSafePath(value)) return invalid();
     return value;
 }
 function observation(value: unknown, id: AgentId): AgentObservation {
@@ -217,4 +221,257 @@ export async function discoverAgents(
         kind: "desktop",
         items: AGENT_IDS.map((id, index) => observation(value[index], id)),
     };
+}
+
+/**
+ * Credential placeholder Rust substitutes for every secret value. The plan
+ * never carries a real credential; a mismatch here means the two sides disagree
+ * about the contract and the plan is rejected instead of rendered.
+ */
+const SECRET_PLACEHOLDER = "••••••••";
+/** Longest path, value or notice text the interface will render. */
+const MAX_TEXT_BYTES = 4096;
+/** One key-level change in the target file, already sanitized by Rust. */
+export interface ConfigChange {
+    keyPath: string;
+    before: string | null;
+    after: string;
+    secret: boolean;
+}
+/** Settings file a plan would change, with its change token. */
+export interface PlanTargetFile {
+    path: string;
+    exists: boolean;
+    contentDigest: string | null;
+    symlink: boolean;
+}
+/** Provider and model revisions the plan was built from. */
+export interface PlanSource {
+    providerId: string;
+    providerRevision: number;
+    modelId: string;
+    modelContentDigest: string;
+}
+/** Notice kinds Rust attaches to a plan; the interface owns the wording. */
+export const PLAN_NOTICE_CODES = [
+    "credentialFromStore",
+    "overridesNotChecked",
+    "modelKeyOverridden",
+    "providerLimited",
+] as const;
+export type PlanNoticeCode = (typeof PLAN_NOTICE_CODES)[number];
+/** Something the user must know before applying a plan. */
+export interface PlanNotice {
+    code: PlanNoticeCode;
+    detail: string | null;
+}
+/** Read-only Claude Code configuration plan; applying it is a later task. */
+export interface ClaudeCodePlan {
+    agent: "claudeCode";
+    target: PlanTargetFile;
+    source: PlanSource;
+    changes: ConfigChange[];
+    notices: PlanNotice[];
+    restartRequired: boolean;
+}
+/** Safe codes emitted by Rust's `PlanError`. */
+export const PLAN_ERROR_CODES = [
+    "invalid_request",
+    "gateway_unverified",
+    "base_url_unverified",
+    "target_path_invalid",
+    "target_unreadable",
+    "target_too_large",
+    "target_conflict",
+    "storage_unavailable",
+    "provider_not_found",
+    "model_not_found",
+    "location_unavailable",
+    "operation_failed",
+] as const;
+/** Rust failures plus errors detected at this IPC boundary. */
+export type PlanErrorCode =
+    (typeof PLAN_ERROR_CODES)[number] | "invalid_response";
+/** A sanitized refusal; the plan behind it never reaches the interface. */
+export class PlanRequestError extends Error {
+    readonly code: PlanErrorCode;
+
+    /** Construct a safe error without keeping its original payload or cause. */
+    constructor(code: PlanErrorCode) {
+        super("Agent configuration preview failed.");
+        this.name = "PlanRequestError";
+        this.code = code;
+    }
+}
+/** Honest browser preview or one validated read-only plan. */
+export type ClaudeCodePlanResult =
+    { kind: "preview" } | { kind: "desktop"; plan: ClaudeCodePlan };
+
+/** Reject a plan payload; the plan error type stays separate from discovery's. */
+function planInvalid(): never {
+    throw new PlanRequestError("invalid_response");
+}
+
+function boundedText(value: unknown, max = MAX_TEXT_BYTES): string {
+    if (
+        typeof value !== "string" ||
+        new TextEncoder().encode(value).length > max ||
+        Array.from(value).some((char) => {
+            const point = char.codePointAt(0);
+            return (
+                point !== undefined &&
+                ((point < 32 && point !== 9 && point !== 10) ||
+                    (point >= 127 && point <= 159))
+            );
+        })
+    )
+        return planInvalid();
+    return value;
+}
+
+function digest(value: unknown): string {
+    if (typeof value !== "string" || !/^[0-9a-f]{64}$/u.test(value))
+        return planInvalid();
+    return value;
+}
+
+/** Model IDs match Rust's rules: bounded, no whitespace and no control characters. */
+function modelId(value: unknown): string {
+    if (
+        typeof value !== "string" ||
+        Array.from(value).length === 0 ||
+        Array.from(value).length > 256 ||
+        /\s/u.test(value)
+    )
+        return planInvalid();
+    return boundedText(value, 1024);
+}
+
+function change(value: unknown): ConfigChange {
+    if (
+        !isObject(value) ||
+        !hasExactKeys(value, ["keyPath", "before", "after", "secret"])
+    )
+        return planInvalid();
+    const keyPath = boundedText(value["keyPath"], 256);
+    if (keyPath.length === 0 || /\s/u.test(keyPath)) return planInvalid();
+    const before =
+        value["before"] === null ? null : boundedText(value["before"]);
+    const after = boundedText(value["after"]);
+    const secret = value["secret"];
+    if (typeof secret !== "boolean") return planInvalid();
+    if (secret !== (after === SECRET_PLACEHOLDER)) return planInvalid();
+    return { keyPath, before, after, secret };
+}
+
+function notice(value: unknown): PlanNotice {
+    if (!isObject(value) || !hasExactKeys(value, ["code", "detail"]))
+        return planInvalid();
+    const code = PLAN_NOTICE_CODES.find((known) => known === value["code"]);
+    if (code === undefined) return planInvalid();
+    const detail =
+        value["detail"] === null ? null : boundedText(value["detail"], 256);
+    return { code, detail };
+}
+
+function targetFile(value: unknown): PlanTargetFile {
+    if (
+        !isObject(value) ||
+        !hasExactKeys(value, ["path", "exists", "contentDigest", "symlink"])
+    )
+        return planInvalid();
+    if (!isSafePath(value["path"])) return planInvalid();
+    const targetPath = value["path"];
+    const exists = value["exists"];
+    const symlink = value["symlink"];
+    if (typeof exists !== "boolean" || typeof symlink !== "boolean")
+        return planInvalid();
+    const contentDigest =
+        value["contentDigest"] === null ? null : digest(value["contentDigest"]);
+    // Rust reports a digest exactly when the file exists on disk.
+    if (exists !== (contentDigest !== null)) return planInvalid();
+    return { path: targetPath, exists, contentDigest, symlink };
+}
+
+function planSource(value: unknown): PlanSource {
+    if (
+        !isObject(value) ||
+        !hasExactKeys(value, [
+            "providerId",
+            "providerRevision",
+            "modelId",
+            "modelContentDigest",
+        ])
+    )
+        return planInvalid();
+    const providerRevision = value["providerRevision"];
+    if (
+        !isProviderId(value["providerId"]) ||
+        typeof providerRevision !== "number" ||
+        !Number.isSafeInteger(providerRevision) ||
+        providerRevision < 1
+    )
+        return planInvalid();
+    return {
+        providerId: value["providerId"],
+        providerRevision,
+        modelId: modelId(value["modelId"]),
+        modelContentDigest: digest(value["modelContentDigest"]),
+    };
+}
+
+function claudeCodePlan(value: unknown): ClaudeCodePlan {
+    if (
+        !isObject(value) ||
+        !hasExactKeys(value, [
+            "agent",
+            "target",
+            "source",
+            "changes",
+            "notices",
+            "restartRequired",
+        ]) ||
+        value["agent"] !== "claudeCode" ||
+        typeof value["restartRequired"] !== "boolean"
+    )
+        return planInvalid();
+    const changes = value["changes"];
+    const notices = value["notices"];
+    if (!Array.isArray(changes) || changes.length === 0) return planInvalid();
+    if (!Array.isArray(notices)) return planInvalid();
+    return {
+        agent: "claudeCode",
+        target: targetFile(value["target"]),
+        source: planSource(value["source"]),
+        changes: changes.map(change),
+        notices: notices.map(notice),
+        restartRequired: value["restartRequired"],
+    };
+}
+
+/**
+ * Preview the Claude Code settings a Provider/model link would write.
+ *
+ * Rust reads the settings file and returns a sanitized plan: nothing is written,
+ * no credential value crosses this boundary and no request is sent. Browser
+ * preview does not issue IPC and does not invent a plan.
+ */
+export async function planClaudeCodeSettings(
+    providerId: string,
+    modelId: string,
+): Promise<ClaudeCodePlanResult> {
+    if (!isTauri()) return { kind: "preview" };
+    let value: unknown;
+    try {
+        value = await invoke<unknown>("plan_claude_code_settings", {
+            providerId,
+            modelId,
+        });
+    } catch (error: unknown) {
+        throw new PlanRequestError(
+            PLAN_ERROR_CODES.find((code) => code === error) ??
+                "operation_failed",
+        );
+    }
+    return { kind: "desktop", plan: claudeCodePlan(value) };
 }

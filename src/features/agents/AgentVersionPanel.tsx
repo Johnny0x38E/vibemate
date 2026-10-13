@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type JSX } from "react";
 import { useTranslation } from "react-i18next";
-import { DetailFact, DetailPanel } from "../../components/DetailForm";
+import { DetailFact } from "../../components/DetailForm";
 import buttons from "../../components/actionButtons.module.css";
 import { type AgentObservation } from "../../lib/desktop/agents";
 import {
@@ -19,6 +19,8 @@ type ProbeState =
 /** User-triggered inline version probe; never probes on mount.
  * The parent owns window-local results and the shared navigation/scan busy guard.
  * Remount this panel when a discovery generation or its selected target changes.
+ * It contributes one row to the Agent detail card; the reported value is shown
+ * in the title row, so this only offers the action and its failures.
  */
 export function AgentVersionPanel({
     row,
@@ -90,7 +92,7 @@ export function AgentVersionPanel({
         }
     }
     return (
-        <DetailPanel label={t("agents.versionProbe.title")}>
+        <>
             <DetailFact
                 label={t("agents.versionProbe.title")}
                 value={
@@ -113,6 +115,6 @@ export function AgentVersionPanel({
                     {t(`agents.versionProbe.errors.${state.code}`)}
                 </p>
             )}
-        </DetailPanel>
+        </>
     );
 }

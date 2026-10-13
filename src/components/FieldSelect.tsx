@@ -23,10 +23,11 @@ export interface FieldSelectProps {
     /** Native disabled state for settings controls that use `disabled` while busy. */
     disabled?: boolean;
     /**
-     * Trigger width. Default is the narrow settings control; `wide` fits longer
-     * protocol labels without widening language/appearance rows.
+     * Trigger width. `default` is the narrow settings control, `wide` fits
+     * longer protocol labels, and `full` fills the value column of a field row
+     * (long provider model IDs).
      */
-    size?: "default" | "wide";
+    size?: "default" | "wide" | "full";
     "aria-describedby"?: string | undefined;
     "aria-invalid"?: boolean | undefined;
     /** Optional test hook (for example provider kind). */
@@ -53,10 +54,15 @@ export function FieldSelect({
     const [open, setOpen] = useState(false);
     const locked = blocked || disabled;
     const selected = options.find((entry) => entry.value === value);
-    const fieldClass =
+    const sizeClass =
         size === "wide"
-            ? [styles["field"], styles["fieldWide"]].join(" ")
-            : styles["field"];
+            ? styles["fieldWide"]
+            : size === "full"
+              ? styles["fieldFull"]
+              : undefined;
+    const fieldClass = [styles["field"], sizeClass]
+        .filter((value): value is string => value !== undefined)
+        .join(" ");
 
     // A save can lock an already-open field. Reset during this component's render
     // so the portal closes immediately and cannot reappear when the save ends.

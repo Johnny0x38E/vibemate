@@ -12,6 +12,13 @@
     width: 15.5rem;
 }
 
+/* Fills the value column of a field row. Used where names are long enough to
+   truncate in the default width, such as provider model IDs. */
+.fieldFull {
+    width: 100%;
+    min-width: 0;
+}
+
 .field::after {
     content: "";
     position: absolute;

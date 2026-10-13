@@ -1,10 +1,18 @@
-//! Thin Agent IPC: static discovery and a separately confirmed version launch.
-//! No storage or credential access. The launched CLI can have its own side effects.
+//! Thin Agent IPC: static discovery, a separately confirmed version launch, and
+//! the read-only Claude Code configuration preview.
+//!
+//! Discovery and preview read the filesystem; the version launch is the only
+//! operation that runs another program, and it is not a sandbox.
 
+use super::state::with_plan_storage;
 use crate::agents::{
-    self, AgentObservation, AgentVersionResult, DiscoveryEnvironment, DiscoveryError,
-    DiscoveryInput, VersionProbeError, VersionProbeGate, VersionProbeInput,
+    self, AgentObservation, AgentVersionResult, ClaudeCodePlanInput, DirectorySource,
+    DiscoveryEnvironment, DiscoveryError, DiscoveryInput, ModelFacts, ProviderFacts,
+    VersionProbeError, VersionProbeGate, VersionProbeInput,
 };
+use crate::config_plan::{ConfigPlan, PlanError};
+use crate::models::{GetModelSnapshotRequest, ModelError};
+use crate::providers::ProviderError;
 use tauri::Manager;
 
 fn environment(app: &tauri::AppHandle) -> Result<DiscoveryEnvironment, ()> {
@@ -47,4 +55,86 @@ pub(crate) async fn probe_agent_version(
 ) -> Result<AgentVersionResult, VersionProbeError> {
     let environment = environment(&app).map_err(|_| VersionProbeError::OperationFailed)?;
     agents::probe_agent_version(environment, input, gate.inner()).await
+}
+
+/// Preview the Claude Code settings a Provider/model link would write.
+///
+/// Read-only: the user settings file is read for its change token, never
+/// written, and no credential value is read. The plan binds the settings file,
+/// the Provider revision and the model content digest, so an edit to any of the
+/// three makes the plan stale before it could be applied.
+#[tauri::command]
+pub(crate) async fn plan_claude_code_settings(
+    app: tauri::AppHandle,
+    provider_id: String,
+    model_id: String,
+) -> Result<ConfigPlan, PlanError> {
+    let environment = environment(&app).map_err(|()| PlanError::LocationUnavailable)?;
+    let (config_root, directory_source) = agents::claude_config_root(&environment);
+    if directory_source == DirectorySource::Unavailable {
+        return Err(PlanError::LocationUnavailable);
+    }
+    let config_root = config_root.ok_or(PlanError::LocationUnavailable)?;
+    // Reject a malformed identity before any storage access.
+    let provider =
+        crate::models::parse_provider_id(&provider_id).map_err(|_| PlanError::InvalidRequest)?;
+
+    tauri::async_runtime::spawn_blocking(move || {
+        with_plan_storage(&app, |storage| {
+            // Two reads, each bound into the plan by its own change token. An
+            // edit between them cannot be applied silently: the apply step
+            // rechecks both the Provider revision and the model digest.
+            let record = crate::providers::get_provider(storage, provider.as_str())
+                .map_err(provider_failure)?;
+            let snapshot = crate::models::get_model_snapshot(
+                storage,
+                &GetModelSnapshotRequest {
+                    provider_id: provider.as_str().to_owned(),
+                    model_id,
+                },
+            )
+            .map_err(model_failure)?;
+            let input = ClaudeCodePlanInput {
+                config_root,
+                provider: ProviderFacts {
+                    id: record.id.as_str().to_owned(),
+                    kind: record.kind,
+                    base_url: record.base_url,
+                    revision: record.revision,
+                },
+                model: ModelFacts {
+                    id: snapshot.model.model_id,
+                    content_digest: snapshot.content_digest,
+                },
+            };
+            agents::plan_claude_code_settings(&input)
+        })
+    })
+    .await
+    .map_err(|_| PlanError::OperationFailed)?
+}
+
+/// Map a Provider read failure onto the preview's error namespace.
+fn provider_failure(error: ProviderError) -> PlanError {
+    match error {
+        ProviderError::NotFound => PlanError::ProviderNotFound,
+        ProviderError::InvalidRequest => PlanError::InvalidRequest,
+        ProviderError::StorageUnavailable
+        | ProviderError::ReadFailed
+        | ProviderError::WriteFailed => PlanError::StorageUnavailable,
+        _ => PlanError::OperationFailed,
+    }
+}
+
+/// Map a model read failure onto the preview's error namespace.
+fn model_failure(error: ModelError) -> PlanError {
+    match error {
+        ModelError::NotFound => PlanError::ProviderNotFound,
+        ModelError::ModelNotFound => PlanError::ModelNotFound,
+        ModelError::InvalidRequest | ModelError::ModelIdInvalid => PlanError::InvalidRequest,
+        ModelError::StorageUnavailable | ModelError::ReadFailed | ModelError::WriteFailed => {
+            PlanError::StorageUnavailable
+        }
+        _ => PlanError::OperationFailed,
+    }
 }

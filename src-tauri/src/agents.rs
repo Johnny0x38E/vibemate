@@ -2,14 +2,21 @@
 //! Discovery never executes entries. Version execution is bounded, not sandboxed;
 //! the launched program can have side effects outside vibemate's control.
 
+mod claude_code;
 mod discovery;
 mod version_probe;
+pub use claude_code::{
+    ClaudeCodePlanInput, GatewayStatus, ModelFacts, ProviderFacts, gateway_status,
+    plan_claude_code_settings,
+};
 pub use version_probe::{
     AgentVersionResult, VersionProbeError, VersionProbeGate, VersionProbeInput, probe_agent_version,
 };
 #[cfg(test)]
 mod tests;
 
+/// Claude Code settings root, shared by discovery and the configuration preview.
+pub(crate) use discovery::claude_config_root;
 pub use discovery::discover_agents;
 use serde::{Deserialize, Serialize};
 use std::{ffi::OsString, path::PathBuf};

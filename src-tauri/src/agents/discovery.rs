@@ -24,6 +24,8 @@ fn manual_path(value: Option<&str>) -> Result<Option<PathBuf>, DiscoveryError> {
         .transpose()
 }
 
+/// Resolve an Agent configuration root from an explicit override, then the
+/// documented default below the platform home.
 fn config_directory(
     home: &Path,
     override_path: Option<&OsString>,
@@ -47,6 +49,21 @@ fn config_directory(
             }
         }
     }
+}
+
+/// Claude Code's user configuration root: `CLAUDE_CONFIG_DIR` when set and
+/// usable, then `<home>/.claude`.
+///
+/// Detection and the configuration preview resolve the root through this one
+/// function, so an override is accepted or rejected identically in both.
+pub(crate) fn claude_config_root(
+    environment: &DiscoveryEnvironment,
+) -> (Option<PathBuf>, DirectorySource) {
+    config_directory(
+        &environment.home,
+        environment.claude_directory.as_ref(),
+        ".claude",
+    )
 }
 
 fn file_state(path: &Path) -> FileState {
@@ -212,11 +229,7 @@ fn observe(
     environment: &DiscoveryEnvironment,
 ) -> AgentObservation {
     let (directory, directory_source) = match id {
-        AgentId::ClaudeCode => config_directory(
-            &environment.home,
-            environment.claude_directory.as_ref(),
-            ".claude",
-        ),
+        AgentId::ClaudeCode => claude_config_root(environment),
         AgentId::Codex => {
             // Codex ignores an empty CODEX_HOME, but rejects an explicit directory
             // that does not exist. Keep that distinction without reading config.

@@ -26,8 +26,8 @@ invalidated when returning home.
 - `src/main.tsx` locates the HTML root and mounts React in StrictMode, with
   `LocaleStartup` withholding the App until its language preference is ready.
 - `src/App.tsx` composes the desktop shell: the collapsible sidebar, the
-  relationship home, `ProvidersView` (mounted on the first visit, then kept
-  mounted while hidden to retain caches and pending work), central MCP
+  home overview (`OverviewView`), `ProvidersView` (mounted on the first visit, then
+  kept mounted while hidden to retain caches and pending work), central MCP
   management, read-only Agent discovery, `SkillLibrary`, and `SettingsView`
   (mounted while hidden). Sidebar width is fixed; only the collapse button
   changes layout. `src/App.css` holds shared design variables and scaffold styles.
@@ -653,14 +653,17 @@ keys remain unchanged: "added" names saved list membership, while checkbox actio
 still use selection terminology.
 
 Both lists offer **Add a model manually** as their first row. It explicitly saves
-and selects one manual row through the existing Rust command; it does not stage an
+and selects one manual row through the existing Rust command (alias and
+capability declarations included); it does not stage an
 upstream checkbox draft, and pending checkbox drafts block creation until saved or
 discarded. The manual row is removed by unchecking it and using the normal
 selection **Save**. Route support still comes from the provider's own route
-declaration; an alias is only a display label. Capability icons are read-only and
-appear only when the vendor catalog declares that field as supported (see
+declaration; an alias is only a display label. Capability icons show a capability
+only when it is effectively supported, from either the vendor catalog's evidence
+or the user's own declaration (see
 [provider-completion.md](plans/provider-completion.md)); a missing icon never
-claims that the model lacks the ability.
+claims that the model lacks the ability. Every icon names its source (catalog or
+user declaration) in its accessible label.
 
 The Providers list row has a destructive **Delete** action
 (`ProviderDeleteAction`) that opens a confirmation dialog naming the provider and
@@ -669,14 +672,28 @@ its stored key; a stale confirmation fails without touching the credential store
 a definite database failure restores the key, and an unknown outcome reloads the
 list. Agent configuration files are never read or written by this action.
 
-Each added row has an **Edit alias** action (`ModelAliasAction`) opening a small
-Base UI dialog around `ModelAliasEditor`. The editor reads a Rust content digest,
-saves through `update_provider_model_alias`, and refuses to write when the model
-changed since the read (`model_changed`) or when the outcome is unknown; both
-states require an explicit reload that replaces the local draft. The dialog traps
-focus, closes with Escape, and returns focus to the row action that opened it.
-Alias edits block competing model operations through the page's existing busy
-state and never change checkboxes or saved membership.
+Each added row has an **Edit model** action that expands an inline editor under
+the row; **Add a model manually** expands the same `ModelEntryForm` in create
+mode. In both modes the first row holds Model ID (read-only when editing; model
+identities are never renamed) and the alias field, with the actions aligned on
+the right; the second row holds the three capability checkboxes (thinking, image
+input, tool calls) side by side, using the shared `ModelCheckbox` style.
+Creation saves a manual row through `add_manual_provider_model` and can declare
+capabilities immediately; editing updates alias and declarations through
+`update_provider_model_edit`, behind a Rust content digest with `model_changed`
+on stale content. Every checkbox interaction is a user declaration ("supported"
+or "not supported") that overrides the catalog evidence in both directions;
+untouched fields keep the catalog result or unknown, and **Restore default**
+clears all three declarations and disables itself when nothing is declared.
+Declarations live in their own stored field, so a catalog refresh replaces
+catalog evidence without touching them. An unknown write outcome is never
+reported as saved: creation verifies by exact model ID (**Check saved models**),
+editing requires an explicit reload that replaces the local draft. Escape
+collapses an open inline editor from its text fields, and focus returns to the row
+action that opened it; hiding the section closes the editor. The open editor
+blocks competing model operations through the page's busy state and never
+changes checkboxes or saved membership. The form carries no per-capability hint
+text or source/state labels; the row icons name the source.
 
 Rust validates submitted values: field codes appear next to their field and other
 codes at form level. Successful creation clears the form and extends the saved

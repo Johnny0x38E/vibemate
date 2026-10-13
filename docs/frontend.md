@@ -35,12 +35,12 @@ invalidated when returning home.
   [Provider configurations](#provider-configurations). `SettingsView` uses
   General/About tabs, and tab switches or leaving Settings keep preference
   controls mounted so pending saves and input survive.
-- `src/components/FieldSelect.tsx` is the shared single-choice dropdown
-  (`size="wide"` serves longer protocol labels and the create-form provider kind
-  control; `size="fill"` stretches the trigger to the create/edit control column,
-  used by the MCP transport so its right edge lines up with the card's text
-  inputs). Settings and provider forms use it instead of a native `<select>`;
-  CSS Modules and existing theme tokens still own its appearance.
+- `src/components/FieldSelect.tsx` is the shared single-choice dropdown.
+  Create/edit rows (MCP transport, provider protocol, create-form provider kind)
+  use `size="fill"`, which stretches the trigger to the control column so its
+  right edge lines up with the card's text inputs; settings rows keep the
+  default narrow width. Settings and provider forms use it instead of a native
+  `<select>`; CSS Modules and existing theme tokens still own its appearance.
 - `src/components/IconButton.tsx` provides auxiliary form actions with an
   accessible name and a Base UI tooltip on hover or keyboard focus. Tooltips are
   portaled to avoid card clipping and support Escape dismissal. Blocked actions

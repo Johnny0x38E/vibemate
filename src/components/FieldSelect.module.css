@@ -1,5 +1,5 @@
-/* Narrow dropdown used by settings rows and by create/edit rows. The chevron
-   sits over the trigger padding; the trigger itself fills this box. */
+/* Default dropdown box, used by the narrow settings rows. The chevron sits over
+   the trigger padding; the trigger itself fills this box. */
 .field {
     position: relative;
     width: 11rem;
@@ -7,13 +7,8 @@
     min-width: 0;
 }
 
-/* Longer labels such as "OpenAI Chat Completions" on the provider protocol field. */
-.fieldWide {
-    width: 15.5rem;
-}
-
 /* Fills a create/edit control column so the trigger's right edge lines up with
-   the text inputs on the same card (MCP transport). */
+   the text inputs on the same card (MCP transport, provider protocol/kind). */
 .fieldFill {
     width: 100%;
 }

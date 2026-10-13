@@ -706,7 +706,7 @@ export function ProviderForm({
                                     <FieldSelect
                                         id={`${id}-kind`}
                                         value={createKind}
-                                        size="wide"
+                                        size="fill"
                                         blocked={saveBlocked}
                                         options={templates.map((entry) => ({
                                             value: entry.kind,
@@ -775,7 +775,7 @@ export function ProviderForm({
                             <FieldSelect
                                 id={`${id}-protocol`}
                                 value={fields.protocol}
-                                size="wide"
+                                size="fill"
                                 blocked={saveBlocked}
                                 aria-invalid={fieldError === "protocol"}
                                 aria-describedby={describedBy(

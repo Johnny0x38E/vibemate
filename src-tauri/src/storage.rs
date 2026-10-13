@@ -247,6 +247,17 @@ const MIGRATIONS: &[Migration] = &[
         DROP TABLE skill;
         ALTER TABLE skill_v11 RENAME TO skill;",
     },
+    Migration {
+        version: 12,
+        // Singleton row for the Agent CLI auto-version-probe preference. The
+        // value is only informed consent to run `--version` without a per-run
+        // click; it never stores a version number. Auto-probe results stay in
+        // window memory (see `docs/plans/agent-version-probe.md`).
+        sql: "CREATE TABLE agent_version_preference (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            auto_probe INTEGER NOT NULL CHECK (auto_probe IN (0, 1))
+        ) STRICT;",
+    },
 ];
 
 /// Errors from opening or migrating the private database.

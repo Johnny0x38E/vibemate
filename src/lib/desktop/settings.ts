@@ -25,7 +25,7 @@ export class SettingsRequestError extends Error {
 
     /** Create a safe failure without retaining the original runtime error. */
     constructor(code: SettingsErrorCode) {
-        super("Language preference request failed.");
+        super("Settings preference request failed.");
         this.name = "SettingsRequestError";
         this.code = code;
     }
@@ -82,6 +82,68 @@ export async function saveLocalePreference(
         throw sanitizeError(error);
     }
     if (!isLocalePreference(data) || data !== preference) {
+        throw new SettingsRequestError("invalid_response");
+    }
+    return data;
+}
+
+/** Persisted consent to auto-run Agent CLI `--version`; never stores a version. */
+export interface AutoVersionProbePreference {
+    autoProbe: boolean;
+}
+
+/** Preview has no persisted preference and must not claim desktop success. */
+export type AutoVersionProbeResult =
+    | { kind: "preview" }
+    | { kind: "desktop"; preference: AutoVersionProbePreference };
+
+function isAutoVersionProbePreference(
+    value: unknown,
+): value is AutoVersionProbePreference {
+    return (
+        typeof value === "object" &&
+        value !== null &&
+        "autoProbe" in value &&
+        typeof value.autoProbe === "boolean"
+    );
+}
+
+/**
+ * Read the auto-probe consent through Rust, or identify browser preview.
+ * Rejects malformed responses and exposes only safe error codes.
+ */
+export async function getAutoVersionProbe(): Promise<AutoVersionProbeResult> {
+    if (!isTauri()) return { kind: "preview" };
+    let data: unknown;
+    try {
+        data = await invoke<unknown>("get_auto_version_probe");
+    } catch (error: unknown) {
+        throw sanitizeError(error);
+    }
+    if (!isAutoVersionProbePreference(data)) {
+        throw new SettingsRequestError("invalid_response");
+    }
+    return { kind: "desktop", preference: data };
+}
+
+/**
+ * Save the auto-probe consent through Rust. Preview is rejected. An unknown
+ * write outcome requires reloading before claiming which value is persisted.
+ */
+export async function saveAutoVersionProbe(
+    preference: AutoVersionProbePreference,
+): Promise<AutoVersionProbePreference> {
+    if (!isTauri()) throw new SettingsRequestError("desktop_required");
+    let data: unknown;
+    try {
+        data = await invoke<unknown>("save_auto_version_probe", { preference });
+    } catch (error: unknown) {
+        throw sanitizeError(error);
+    }
+    if (
+        !isAutoVersionProbePreference(data) ||
+        data.autoProbe !== preference.autoProbe
+    ) {
         throw new SettingsRequestError("invalid_response");
     }
     return data;

@@ -1,7 +1,7 @@
 //! Language and appearance preference IPC commands.
 
 use crate::appearance::{self, AppearancePreference};
-use crate::settings::{self, LocalePreference, SettingsError};
+use crate::settings::{self, AutoVersionProbePreference, LocalePreference, SettingsError};
 use crate::storage::StorageStatus;
 use tauri::Manager;
 
@@ -92,4 +92,47 @@ pub(crate) async fn save_appearance_preference(
     .map_err(|_| SettingsError::OperationFailed)
     .and_then(|result| result);
     crate::logging::settings_outcome("save_appearance_preference", result)
+}
+
+/// Read the auto-version-probe consent without writing a default row.
+/// Database work uses the blocking pool; only safe settings error codes escape.
+#[tauri::command]
+pub(crate) async fn get_auto_version_probe(
+    app: tauri::AppHandle,
+) -> Result<AutoVersionProbePreference, SettingsError> {
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let status = app
+            .try_state::<StorageStatus>()
+            .ok_or(SettingsError::StorageUnavailable)?;
+        let storage = status
+            .storage()
+            .map_err(|_| SettingsError::StorageUnavailable)?;
+        settings::load_auto_version_probe(storage)
+    })
+    .await
+    .map_err(|_| SettingsError::OperationFailed)
+    .and_then(|result| result);
+    crate::logging::settings_outcome("get_auto_version_probe", result)
+}
+
+/// Save the auto-version-probe consent, returning the committed choice.
+/// A task failure has an unknown outcome and requires a read before another save.
+#[tauri::command]
+pub(crate) async fn save_auto_version_probe(
+    app: tauri::AppHandle,
+    preference: AutoVersionProbePreference,
+) -> Result<AutoVersionProbePreference, SettingsError> {
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let status = app
+            .try_state::<StorageStatus>()
+            .ok_or(SettingsError::StorageUnavailable)?;
+        let storage = status
+            .storage()
+            .map_err(|_| SettingsError::StorageUnavailable)?;
+        settings::save_auto_version_probe(storage, preference)
+    })
+    .await
+    .map_err(|_| SettingsError::OperationFailed)
+    .and_then(|result| result);
+    crate::logging::settings_outcome("save_auto_version_probe", result)
 }

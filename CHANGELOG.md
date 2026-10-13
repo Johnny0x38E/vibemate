@@ -8,6 +8,7 @@ GitHub release notes are extracted from the matching version section only.
 
 ### Added
 
+- Optional automatic Agent CLI version reading. A settings toggle (**自动读取 Agent 版本** / **Read Agent versions automatically**) grants one-time informed consent to run the fixed `--version` command without a per-run click. When enabled, found Agents are probed sequentially after each discovery scan and when opening a detail page without a cached result. Each (entry, resolved) path fingerprint is probed at most once per session; refreshing a scan clears the cache. Results stay in window memory and are never persisted. The manual **Read version** button remains available when the toggle is off or an automatic probe fails.
 - The provider list states how many configurations are stored above the list, matching the MCP and skill lists. Each page read carries the stored total from Rust, so the count stays correct while paging, and a just-created configuration is counted from the moment its row appears.
 
 ### Changed

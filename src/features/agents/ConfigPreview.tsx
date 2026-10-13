@@ -292,7 +292,7 @@ export function ConfigPreview(): JSX.Element {
                                     id="agent-model-provider"
                                     value={providerId}
                                     options={providerOptions}
-                                    size="wide"
+                                    size="fill"
                                     blocked={preview.kind === "loading"}
                                     onChange={(value) => {
                                         setProviderId(value);

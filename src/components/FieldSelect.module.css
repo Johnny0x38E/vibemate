@@ -7,10 +7,18 @@
     min-width: 0;
 }
 
-/* Fills a create/edit control column so the trigger's right edge lines up with
-   the text inputs on the same card (MCP transport, provider protocol/kind). */
+/* Wider fixed trigger for the Agent detail provider picker. */
+.fieldWide {
+    width: 15.5rem;
+}
+
+/* Fills the parent column of a field row: either so the trigger's right edge
+   lines up with the card's text inputs (MCP transport, provider protocol/kind)
+   or because a long value would truncate at the default width (provider model
+   IDs in the Claude Code preview). */
 .fieldFill {
     width: 100%;
+    min-width: 0;
 }
 
 .field::after {

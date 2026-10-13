@@ -37,9 +37,10 @@ invalidated when returning home.
   controls mounted so pending saves and input survive.
 - `src/components/FieldSelect.tsx` is the shared single-choice dropdown.
   Create/edit rows (MCP transport, provider protocol, create-form provider kind)
-  use `size="fill"`, which stretches the trigger to the control column so its
-  right edge lines up with the card's text inputs; settings rows keep the
-  default narrow width. Settings and provider forms use it instead of a native
+  and the Agent detail model picker use `size="fill"`, which stretches the
+  trigger to its column so its right edge lines up with the card's controls;
+  settings rows and the Agent detail provider picker keep a fixed narrower width
+  (`default` and `wide`). Settings and provider forms use it instead of a native
   `<select>`; CSS Modules and existing theme tokens still own its appearance.
 - `src/components/IconButton.tsx` provides auxiliary form actions with an
   accessible name and a Base UI tooltip on hover or keyboard focus. Tooltips are

@@ -5,6 +5,8 @@ import { ProviderPage } from "../providers/ProviderPage";
 /** Read-only Agent details with the shared title and top Back control. */
 export interface AgentPageProps {
     title: ReactNode;
+    /** Status and version summary shown at the end of the title row. */
+    meta?: ReactNode;
     onBack: () => void;
     backBlocked?: boolean;
     children: ReactNode;
@@ -13,6 +15,7 @@ export interface AgentPageProps {
 /** Agent details share the secondary-page shell while retaining their own Back label. */
 export function AgentPage({
     title,
+    meta,
     onBack,
     backBlocked = false,
     children,
@@ -21,6 +24,7 @@ export function AgentPage({
     return (
         <ProviderPage
             title={title}
+            meta={meta}
             onBack={onBack}
             backBlocked={backBlocked}
             backAriaLabel={t("agents.backLabel")}

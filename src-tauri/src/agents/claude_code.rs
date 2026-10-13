@@ -1,0 +1,238 @@
+//! Claude Code configuration preview.
+//!
+//! Maps a saved Provider instance and model to the gateway variables Claude Code
+//! documents, following the vendor instructions recorded in
+//! `docs/integrations/claude-code.md`. Only combinations with official
+//! instructions are planned; anything else is refused with a reason instead of
+//! being guessed. This module never writes a file, never reads a credential
+//! value and never sends a request.
+
+use serde::Serialize;
+use serde_json::{Map, Value};
+use std::path::PathBuf;
+
+use super::AgentId;
+use crate::config_plan::{
+    ConfigPlan, NoticeCode, PlanError, PlanNotice, PlanSource, PlannedValue, PlannedWrite,
+    planned_changes, read_target_document,
+};
+use crate::model_identity::is_valid_model_id;
+use crate::providers::ProviderKind;
+
+/// The settings filename Claude Code reads from the user configuration root.
+const SETTINGS_FILE: &str = "settings.json";
+
+/// How confidently vibemate can point Claude Code at a Provider.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GatewayStatus {
+    /// Official instructions exist for this Provider.
+    Verified,
+    /// Official instructions exist and state a limitation.
+    VerifiedWithLimits,
+    /// No official instructions were found; no plan is built.
+    Unverified,
+}
+
+/// Vendor gateway facts for one Provider kind.
+struct Gateway {
+    /// Address written to `ANTHROPIC_BASE_URL`.
+    base_url: &'static str,
+    /// Key the credential is written to.
+    credential_key: &'static str,
+    /// Addresses vibemate treats as an unmodified instance of this Provider.
+    vendor_bases: &'static [&'static str],
+    /// Further keys the vendor requires, with their literal values.
+    extra_writes: &'static [(&'static str, &'static str)],
+    /// Notices that always apply to this Provider.
+    notices: &'static [NoticeCode],
+    /// Combination status shown in the interface.
+    status: GatewayStatus,
+}
+
+/// Vendor gateway facts, or `None` when no official instructions were found.
+///
+/// Command Code publishes an Anthropic-schema route but no Claude Code setup, so
+/// it stays unplanned rather than being presented as supported.
+fn gateway(kind: ProviderKind) -> Option<Gateway> {
+    match kind {
+        ProviderKind::DeepSeek => Some(Gateway {
+            base_url: "https://api.deepseek.com/anthropic",
+            credential_key: "env.ANTHROPIC_AUTH_TOKEN",
+            // Both DeepSeek addresses are documented vendor defaults; an instance
+            // using either one is still the vendor's own endpoint.
+            vendor_bases: &[
+                "https://api.deepseek.com",
+                "https://api.deepseek.com/anthropic",
+            ],
+            extra_writes: &[],
+            notices: &[],
+            status: GatewayStatus::Verified,
+        }),
+        ProviderKind::OpenRouter => Some(Gateway {
+            // The Claude Code gateway base differs from the `/api/v1` base used
+            // for vibemate's own requests; both end at the same messages route.
+            base_url: "https://openrouter.ai/api",
+            credential_key: "env.ANTHROPIC_AUTH_TOKEN",
+            vendor_bases: &["https://openrouter.ai/api/v1"],
+            // The vendor requires an explicitly empty API key so Claude Code
+            // cannot fall back to authenticating against Anthropic directly.
+            extra_writes: &[("env.ANTHROPIC_API_KEY", "")],
+            notices: &[NoticeCode::ProviderLimited],
+            status: GatewayStatus::VerifiedWithLimits,
+        }),
+        ProviderKind::CommandCode => None,
+    }
+}
+
+/// Combination status for the interface; also used before a plan is requested.
+pub fn gateway_status(kind: ProviderKind) -> GatewayStatus {
+    gateway(kind)
+        .map(|gateway| gateway.status)
+        .unwrap_or(GatewayStatus::Unverified)
+}
+
+/// Facts the preview needs about the selected Provider instance.
+pub struct ProviderFacts {
+    /// Stored Provider instance ID; already validated when it was stored.
+    pub id: String,
+    /// Provider kind that selects the vendor instructions.
+    pub kind: ProviderKind,
+    /// Stored instance base URL, used only to refuse an unverified address.
+    pub base_url: String,
+    /// Stored `revision`, the plan's concurrency token.
+    pub revision: i64,
+}
+
+/// Facts about the selected model.
+pub struct ModelFacts {
+    /// Upstream model ID, written to `ANTHROPIC_MODEL`.
+    pub id: String,
+    /// SHA-256 of the stored model record.
+    pub content_digest: String,
+}
+
+/// One Claude Code preview request.
+///
+/// `config_root` is the resolved user settings directory (`CLAUDE_CONFIG_DIR` or
+/// `<home>/.claude`), so tests never touch a real home directory.
+pub struct ClaudeCodePlanInput {
+    /// User settings root Claude Code reads.
+    pub config_root: PathBuf,
+    /// Selected Provider instance.
+    pub provider: ProviderFacts,
+    /// Selected model.
+    pub model: ModelFacts,
+}
+
+/// Build a read-only plan for pointing Claude Code at the selected model.
+///
+/// # Errors
+/// Returns `GatewayUnverified` for a Provider without official Claude Code
+/// instructions, `BaseUrlUnverified` when the instance address is not one the
+/// vendor documents, `InvalidRequest` for a malformed revision, model ID or
+/// digest, and the [`read_target_document`] errors for the settings file.
+pub fn plan_claude_code_settings(input: &ClaudeCodePlanInput) -> Result<ConfigPlan, PlanError> {
+    build(input).map(|(plan, _document)| plan)
+}
+
+/// Build the plan together with the document it would produce.
+///
+/// The merged document stays out of [`ConfigPlan`] on purpose: it holds the
+/// user's whole settings file, including credentials of other tools, and must
+/// not travel to the interface. The write step (P19) rebuilds it from the file.
+fn build(input: &ClaudeCodePlanInput) -> Result<(ConfigPlan, Map<String, Value>), PlanError> {
+    let gateway = gateway(input.provider.kind).ok_or(PlanError::GatewayUnverified)?;
+    if !gateway
+        .vendor_bases
+        .contains(&input.provider.base_url.as_str())
+    {
+        return Err(PlanError::BaseUrlUnverified);
+    }
+    if input.provider.revision < 1
+        || !is_valid_model_id(&input.model.id)
+        || !is_digest(&input.model.content_digest)
+    {
+        return Err(PlanError::InvalidRequest);
+    }
+
+    let read = read_target_document(&input.config_root.join(SETTINGS_FILE))?;
+    let target = read.target;
+    let mut document = read.document;
+    // Read before writing: the notice explains that the planned environment
+    // variable takes precedence over this file-level default.
+    let previous_model_key = document.get("model").map(display_value);
+
+    let mut writes = vec![
+        PlannedWrite {
+            key_path: "env.ANTHROPIC_BASE_URL",
+            value: PlannedValue::Literal(gateway.base_url.to_owned()),
+        },
+        PlannedWrite {
+            key_path: gateway.credential_key,
+            value: PlannedValue::Credential,
+        },
+        PlannedWrite {
+            key_path: "env.ANTHROPIC_MODEL",
+            value: PlannedValue::Literal(input.model.id.clone()),
+        },
+    ];
+    writes.extend(
+        gateway
+            .extra_writes
+            .iter()
+            .map(|(key_path, value)| PlannedWrite {
+                key_path,
+                value: PlannedValue::Literal((*value).to_owned()),
+            }),
+    );
+    let changes = planned_changes(&mut document, &writes)?;
+
+    let mut notices = vec![
+        PlanNotice::code(NoticeCode::CredentialFromStore),
+        PlanNotice::code(NoticeCode::OverridesNotChecked),
+    ];
+    if let Some(previous) = previous_model_key {
+        notices.push(PlanNotice::with_detail(
+            NoticeCode::ModelKeyOverridden,
+            previous,
+        ));
+    }
+    notices.extend(gateway.notices.iter().copied().map(PlanNotice::code));
+
+    let plan = ConfigPlan {
+        agent: AgentId::ClaudeCode,
+        target,
+        source: PlanSource {
+            provider_id: input.provider.id.clone(),
+            provider_revision: input.provider.revision,
+            model_id: input.model.id.clone(),
+            model_content_digest: input.model.content_digest.clone(),
+        },
+        changes,
+        notices,
+        // The planned keys live in the `env` block, which a running session
+        // cannot pick up; `model` is read at session start as well.
+        restart_required: true,
+    };
+    Ok((plan, document))
+}
+
+/// Whether the text is a lowercase SHA-256 token, the model digest format.
+fn is_digest(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .chars()
+            .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
+}
+
+/// Render a JSON value as short display text.
+fn display_value(value: &Value) -> String {
+    match value {
+        Value::String(text) => text.clone(),
+        other => other.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests;

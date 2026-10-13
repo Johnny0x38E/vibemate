@@ -3,6 +3,7 @@
 pub mod agents;
 pub mod appearance;
 mod commands;
+pub mod config_plan;
 pub mod credentials;
 mod log_access;
 mod logging;
@@ -67,6 +68,7 @@ pub fn run() {
             commands::app::get_app_info,
             commands::agents::discover_agents,
             commands::agents::probe_agent_version,
+            commands::agents::plan_claude_code_settings,
             commands::mcp::list_mcp_definitions,
             commands::mcp::get_mcp_definition,
             commands::mcp::save_mcp_definition,

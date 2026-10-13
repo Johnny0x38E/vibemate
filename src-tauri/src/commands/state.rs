@@ -76,6 +76,23 @@ pub(super) fn with_provider_storage<T>(
     operation(storage)
 }
 
+/// Resolve startup storage while preserving the preview's safe error codes.
+///
+/// The Agent configuration preview reads the database and the user settings
+/// file; both are blocking, so callers run this on the blocking pool.
+pub(super) fn with_plan_storage<T>(
+    app: &tauri::AppHandle,
+    operation: impl FnOnce(&Storage) -> Result<T, crate::config_plan::PlanError>,
+) -> Result<T, crate::config_plan::PlanError> {
+    let status = app
+        .try_state::<StorageStatus>()
+        .ok_or(crate::config_plan::PlanError::StorageUnavailable)?;
+    let storage = status
+        .storage()
+        .map_err(|_| crate::config_plan::PlanError::StorageUnavailable)?;
+    operation(storage)
+}
+
 /// Resolve startup storage while preserving safe MCP error codes.
 pub(super) fn with_mcp_storage<T>(
     app: &tauri::AppHandle,

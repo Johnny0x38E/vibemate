@@ -187,34 +187,36 @@
     overflow-wrap: anywhere;
 }
 
-.pathForm {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 26rem);
+/* One fact in the title row: a muted label with its badge right after it. */
+.metaPair {
+    display: inline-flex;
     align-items: center;
-    gap: var(--space-sm) var(--space-lg);
-    margin-top: 0;
-    padding: var(--space-sm) var(--space-md);
+    gap: 4px;
 }
 
-.pathControls {
+/* The manual entry path keeps the detail card's value column, so the input and
+   its refresh button end on the same right edge as the facts above (and the
+   model dropdown stays the same length). */
+.pathField {
     display: flex;
-    min-height: var(--form-row-min-height);
+    flex: 0 1 min(65%, 28rem);
     min-width: 0;
     align-items: center;
     gap: var(--space-sm);
     /* IconButton owns its square size; do not override it with text-button rules. */
+    min-height: var(--form-row-min-height);
 }
 
 /* The shared edit input is width 100%. This field shares a row with the
    refresh button, so flex sizing has to win over that width. */
-.pathControls .pathInput {
+.pathField .pathInput {
     flex: 1 1 0;
     width: 0;
     min-width: 0;
 }
 
 /* A scan locks the path. The text cursor stays so it still reads as a path field. */
-.pathControls .pathInput:read-only {
+.pathField .pathInput:read-only {
     cursor: text;
 }
 

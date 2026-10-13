@@ -478,8 +478,7 @@
         },
         "detail": {
             "notFound": "No entry was found in the checked locations. Specify an absolute entry path below or rediscover after updating PATH.",
-            "reportLabel": "Discovery report for {{name}}",
-            "configFilesHeading": "Configuration files",
+            "detailsHeading": "Discovery and configuration",
             "manualPathTitle": "Manual entry path",
             "applyPath": "Rediscover",
             "labels": {
@@ -549,7 +548,46 @@
             "invalid_response": "The desktop returned an invalid discovery report. Select Discover to retry."
         },
         "count_one": "{{count}} agent discovered",
-        "count_other": "{{count}} agents discovered"
+        "count_other": "{{count}} agents discovered",
+        "modelConfig": {
+            "title": "Model configuration",
+            "previewMode": "The browser preview cannot read or write configuration files. Open the Agents page in the vibemate desktop app.",
+            "loading": "Reading…",
+            "noProviders": "No provider configuration is saved yet. Add one in the Providers module first.",
+            "noModels": "This provider has no added model yet. Add one on its Models tab first.",
+            "providerLabel": "Provider",
+            "modelLabel": "Model",
+            "preview": "Preview changes",
+            "previewing": "Building the preview…",
+            "planHeading": "Planned changes",
+            "fileStateExists": "Exists; other keys stay unchanged",
+            "fileStateNew": "Does not exist yet; it would be created",
+            "fileStateSymlink": "Exists as a symbolic link; review its target first",
+            "restartRequired": "Start a new Claude Code session for these settings to take effect.",
+            "secretValue": "The API key from OS credential storage, written as plain text",
+            "emptyValue": "(empty)",
+            "notices": {
+                "credentialFromStore": "The API key stays out of this window. When the change is applied, vibemate reads it from OS credential storage and writes it into the settings file as plain text.",
+                "overridesNotChecked": "Managed settings, project settings and shell environment variables were not read. They can override this file.",
+                "modelKeyOverridden": "The existing \"model\" setting ({{value}}) is overridden by the environment variable.",
+                "providerLimited": "The vendor guarantees this route only for Anthropic first-party models."
+            },
+            "errors": {
+                "invalid_request": "The request is not valid.",
+                "gateway_unverified": "Claude Code has no verified setup for this provider, so no plan was built.",
+                "base_url_unverified": "This configuration does not use the verified gateway address for its provider, so no plan was built.",
+                "target_path_invalid": "The settings file path cannot be used.",
+                "target_unreadable": "The settings file could not be read or is not a JSON object. Nothing was changed.",
+                "target_too_large": "The settings file is larger than the preview limit and was not read.",
+                "target_conflict": "The settings file holds a value of the wrong type where this change has to go. Nothing was overwritten.",
+                "storage_unavailable": "Local configuration storage is unavailable. Restart vibemate.",
+                "provider_not_found": "That provider configuration is no longer saved.",
+                "model_not_found": "That provider no longer has this saved model.",
+                "location_unavailable": "The Claude Code settings directory could not be located.",
+                "operation_failed": "The preview could not be built. Try again.",
+                "invalid_response": "The desktop app returned an unexpected plan."
+            }
+        }
     },
     "skills": {
         "title": "Skills",

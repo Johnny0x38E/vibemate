@@ -23,11 +23,13 @@ export interface FieldSelectProps {
     /** Native disabled state for settings controls that use `disabled` while busy. */
     disabled?: boolean;
     /**
-     * Trigger width. Default is the narrow settings control; `fill` stretches the
-     * trigger to a create/edit control column so its right edge lines up with the
-     * card's text inputs (MCP transport, provider protocol and provider kind).
+     * Trigger width. Default is the narrow settings control; `wide` is the wider
+     * fixed trigger used by the Agent detail provider picker, and `fill` stretches
+     * the trigger to the parent column, where the row's other controls are full
+     * width (MCP transport, provider protocol and provider kind) or a long value
+     * would truncate (provider model IDs in the Claude Code preview).
      */
-    size?: "default" | "fill";
+    size?: "default" | "wide" | "fill";
     "aria-describedby"?: string | undefined;
     "aria-invalid"?: boolean | undefined;
     /** Optional test hook (for example provider kind). */
@@ -56,10 +58,16 @@ export function FieldSelect({
     const selected = options.find((entry) => entry.value === value);
     // The size class only changes the trigger width; `.field` always supplies the
     // positioning context for the chevron overlay.
+    const sizeClass =
+        size === "wide"
+            ? styles["fieldWide"]
+            : size === "fill"
+              ? styles["fieldFill"]
+              : undefined;
     const fieldClass =
-        size === "fill"
-            ? [styles["field"], styles["fieldFill"]].join(" ")
-            : styles["field"];
+        sizeClass === undefined
+            ? styles["field"]
+            : [styles["field"], sizeClass].join(" ");
 
     // A save can lock an already-open field. Reset during this component's render
     // so the portal closes immediately and cannot reappear when the save ends.

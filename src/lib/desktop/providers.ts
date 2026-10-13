@@ -235,7 +235,8 @@ function isProviderProtocol(value: unknown): value is ProviderProtocol {
     return PROVIDER_PROTOCOLS.some((protocol) => protocol === value);
 }
 
-function isProviderId(value: unknown): value is string {
+/** Stable provider identity format; shared with the Agent preview boundary. */
+export function isProviderId(value: unknown): value is string {
     return typeof value === "string" && /^[0-9a-f]{32}$/.test(value);
 }
 

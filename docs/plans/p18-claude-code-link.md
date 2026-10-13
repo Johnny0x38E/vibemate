@@ -58,7 +58,39 @@ helper。将来若改成引用式，先验证这些点再改计划映射。
 
 实例地址被用户改成厂商默认之外的地址时同样拒绝，理由为无法核实该地址的网关行为。
 
-## 过期检查约定
+## 使用设置的归属（2026-10-13 分类）
+
+Claude Code 的 `model-config` 与 `settings-reference` 页已核实下列键的语义。规律是：**能力事实放模型层，
+写哪个键与写什么值放 Agent 层**，同一件事在不同 Agent 里的键名、单位和语义都不同（Codex 用
+`model_context_window`/`model_max_output_tokens`，Pi 把窗口写在模型定义里，Grok Build 的
+`context_window` 只是元数据）。
+
+| 键                                                                                      | 类别                                              | 归属与默认值                                                        |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------- |
+| `ANTHROPIC_BASE_URL`、`ANTHROPIC_AUTH_TOKEN`、`ANTHROPIC_MODEL`                         | 链接身份                                          | Agent 绑定；厂商已核实地址、OS 凭据、所选模型 ID                    |
+| `ANTHROPIC_DEFAULT_OPUS/SONNET/HAIKU_MODEL`、`CLAUDE_CODE_SUBAGENT_MODEL`               | 类别 → 模型策略（Claude Code 按用途与表面取模型） | Agent 绑定；默认可全部指向所选模型，允许逐类指定                    |
+| `CLAUDE_CODE_MAX_CONTEXT_TOKENS`                                                        | 模型事实在 Agent 侧的声明                         | Agent 绑定；**派生**自模型目录 `context_window`，缺失则不写         |
+| `CLAUDE_CODE_AUTO_COMPACT_WINDOW`                                                       | Agent 策略值（压缩阈值）                          | Agent 绑定；派生自窗口的比例（官方样本 786432 = 0.75 × 1M），可覆盖 |
+| `CLAUDE_CODE_EFFORT_LEVEL`                                                              | 使用设置（档位）                                  | Agent 绑定；**可选档位来自模型声明**，选定值属于用户                |
+| `API_TIMEOUT_MS`、`BASH_DEFAULT_TIMEOUT_MS`、`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` | Agent 自身行为（超时、遥测）                      | 不映射；链接流程不静默改用户的超时与隐私选择                        |
+
+四条已核实的细节，映射时必须处理：
+
+1. `max` 档位只在环境变量通道有效，`effortLevel` 与 `modelSettings` 两个设置键不接受它（另有独立的
+   `ultracode` 键）。通道选择限制可选值。
+2. 不支持的档位不会报错：Claude Code 降级到不高于该值的最高支持档。预览必须提示实际生效档位。
+3. 类别键会盖过 `ANTHROPIC_MODEL`：只改 `ANTHROPIC_MODEL` 会让子代理、技能等表面继续用旧模型。
+4. `[1m]` 是 Claude Code 自己的窗口约定（网关或自定义 ID 带 `[1m]` 时按 1M 假定），
+   `CLAUDE_CODE_MAX_CONTEXT_TOKENS` 的生效方式随 ID 形状变化，不能只写数字。
+
+据此，首版预览（只映射三个链接键）在维护者那份可用配置上会产生「一半新、一半旧」的状态。下一批要
+么把类别键一起映射，要么在预览里把它们明确列为覆盖来源；顺序建议先做类别映射，再做窗口声明与自动
+压缩，档位最后（受通道约束）。
+
+三个 Agent 都把**选定的档位按模型**保存，只是形状不同：Claude Code 用 `modelSettings`，Pi 用
+`settings.json` 的 `modelThinkingLevels`（键是 `provider/model`），Grok Build 用
+`[[model.<alias>.reasoning_efforts]]` 数组表。这印证了使用值按 (Agent × 模型) 存，而不是按 Agent
+存一个全局值；模型侧的「有哪些档位可选」则由模型行声明。
 
 计划绑定三个变化令牌，任一变化都必须重新预览：目标设置文件的 SHA-256（文件不存在时明确标注）、
 Provider `revision`、模型的内容摘要。模型行没有 `revision`，复用 `models/alias.rs` 已有的

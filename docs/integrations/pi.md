@@ -51,6 +51,17 @@ OpenRouter 可使用自己的 thinking 格式和 routing 设置。Claude 使用
 级别；不把努力级别强行转换为 token 数量。采样顺序为模型默认、所选 Pi 推理级别
 覆盖、请求级参数，后者优先。兼容开关只针对已确认的差异使用。
 
+推理档位在 Pi 里分成两处，观察维护者本机配置可得（2026-10-13）：
+
+| 位置            | 字段                                                                   | 作用                                           |
+| --------------- | ---------------------------------------------------------------------- | ---------------------------------------------- |
+| 模型定义        | `reasoning`（布尔）、`thinkingLevelMap`（Pi 档位 → 厂商值）            | 声明该模型是否推理、Pi 档位怎么落到厂商字段    |
+| 模型定义        | `samplingParamsByThinkingLevel`                                        | 按 Pi 档位覆盖采样参数，用 Pi 档位键而非厂商值 |
+| `settings.json` | `defaultThinkingLevel`、`modelThinkingLevels`（键是 `provider/model`） | 保存**每个模型选定的档位**                     |
+
+也就是说 Pi 自己就把「能力声明」与「选定值」分开存：前者在模型定义，后者在 settings。
+`thinkingLevelMap` 允许只映射部分档位（维护者的映像是只写了 `max`）。
+
 认证优先级由官方 models 文档与 [Providers](https://pi.dev/docs/latest/providers)
 说明：运行时 `--api-key` → `auth.json` → `models.json` 的 `apiKey` → Provider
 环境变量/云端凭据。扩展可定义不同认证。`/logout` 仅移除存储凭据，不能解除其他

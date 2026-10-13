@@ -167,6 +167,45 @@ DeepSeek 的配方除基地址与 `ANTHROPIC_AUTH_TOKEN` 外还设置 `ANTHROPIC
 `CLAUDE_CODE_EFFORT_LEVEL=max` 与 `CLAUDE_CODE_AUTO_COMPACT_WINDOW`。`[1m]` 变体和这些伴随变量
 是否适用于其他模型未核实；首版只映射基地址、凭据与模型名。
 
+### DeepSeek 官方推荐配置与维护者实测（2026-10-13）
+
+DeepSeek 的 Integrate with Claude Code 页推荐的变量（原文见该页 "Migrate from Existing
+Installation to DeepSeek"）共九项：`ANTHROPIC_BASE_URL`、`ANTHROPIC_AUTH_TOKEN`、
+`ANTHROPIC_MODEL=deepseek-flash[1m]`、`ANTHROPIC_DEFAULT_OPUS_MODEL=deepseek-flash[1m]`、
+`ANTHROPIC_DEFAULT_SONNET_MODEL=deepseek-flash[1m]`、`ANTHROPIC_DEFAULT_HAIKU_MODEL=deepseek-flash`、
+`CLAUDE_CODE_SUBAGENT_MODEL=deepseek-flash`、`CLAUDE_CODE_EFFORT_LEVEL=max`、
+`CLAUDE_CODE_AUTO_COMPACT_WINDOW=786432`。注意厂商对类别模型是分开写的：Opus/Sonnet 类用 1M 变体，
+Haiku 与子代理用普通 `deepseek-flash`。
+
+维护者本机 `~/.claude/settings.json` 的 `env` 块在官方九项之外还设置了四项（凭据已隐去），整套可用：
+
+```json
+{
+    "ANTHROPIC_BASE_URL": "https://api.deepseek.com/anthropic",
+    "ANTHROPIC_AUTH_TOKEN": "<DeepSeek API Key>",
+    "ANTHROPIC_MODEL": "deepseek-flash[1m]",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "deepseek-flash[1m]",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "deepseek-flash[1m]",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "deepseek-flash",
+    "CLAUDE_CODE_SUBAGENT_MODEL": "deepseek-flash",
+    "CLAUDE_CODE_EFFORT_LEVEL": "max",
+    "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "786432",
+    "CLAUDE_CODE_MAX_CONTEXT_TOKENS": "1048576",
+    "API_TIMEOUT_MS": "600000",
+    "BASH_DEFAULT_TIMEOUT_MS": "300000",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
+}
+```
+
+官方页没有列出这四项，但它们在 Claude Code 文档里存在：`CLAUDE_CODE_MAX_CONTEXT_TOKENS` 用来
+按网关 ID 校正假定窗口，`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` 在设置参考的遥测一节。
+`API_TIMEOUT_MS` 与 `BASH_DEFAULT_TIMEOUT_MS` 我在设置与设置参考两页都没找到，来源未核实。
+
+这是目前唯一的真实可用样本，也是唯一一条真实链路记录。它能证明这条链路可用，但不能说明哪些键必需、
+哪些只是调优：官方九项是厂商推荐，多出的四项是维护者补充。vibemate 自身仍未发出过网关请求。
+
+各键的类别与归属见 [p18-claude-code-link.md](../plans/p18-claude-code-link.md) 的「使用设置的归属」一节。
+
 OpenRouter 的页面补充两点：Claude Code 只保证与 Anthropic 一等厂商的模型配合使用；曾用 Anthropic
 账号登录过时必须先 `/logout`，否则缓存的登录与网关凭据冲突，表现为 `openrouter/auto` 之类的
 模型找不到错误（macOS 上该缓存存放在钥匙串的 `Claude Code-credentials` 条目）。

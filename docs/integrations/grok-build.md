@@ -60,6 +60,26 @@ Token → `XAI_API_KEY`。支持浏览器/设备认证与外部认证命令，�
 预览、权限、脱敏与私有备份策略。认证文件（如 `auth.json`、`mcp_credentials.json`）
 未在本次读取；未验证本机权限或 Windows ACL，不能承诺固定权限。
 
+### 努力档位与凭据写入约定（2026-10-13）
+
+官方参考里努力档位分两处：`[models].default_reasoning_effort` 给出默认模型的默认档位；模型块内用
+`supports_reasoning_effort`（布尔）声明是否支持，再由 `reasoning_effort` 取值。可选档位写成数组表
+`[[model.<alias>.reasoning_efforts]]`，每项一个 `value`，其中一项可标 `default = true`。参考页没有
+列全可选值；维护者配置里出现的是 `medium`、`high`、`xhigh`、`max`。
+
+**凭据注入走配置文件，不写环境变量**：适配 Grok Build 时把密钥写入其私有配置的 `api_key`。认证顺序
+是 `api_key` → `env_key` → 活动会话 Token → `XAI_API_KEY`，所以写入 `api_key` 会**接管**已有的
+`env_key`——不是补充。适配时保留原有 `env_key` 行（不是 vibemate 拥有的字段），界面显示生效来源已
+变为 `api_key`，并明示明文落盘与私有备份。维护者会在适配时自行清理本机环境变量，vibemate 不管理
+环境变量。
+
+凭据按模型条目存放：同一把密钥会分布在每个 `[model.<alias>]` 上，链接 N 个模型就是 N 份，轮换要改
+N 处。「只写选中条目」还是「写全部相关条目」需要先定。`api_key` 在用户级 `config.toml` 里是否有效、
+以及 Grok Build 对该文件权限有无要求，尚未核实。
+
+维护者配置里 `api_backend` 有三个条目写成 `chat_comptetions`（官方值域是 `chat_completions`）。
+客户端是否校验、这些条目是否因此失效未核实；适配器不能依赖客户端报错来发现写错的值。
+
 ## Skill 与 MCP 启停
 
 [Skill 文档](https://docs.x.ai/build/features/skills-plugins-marketplaces)支持含

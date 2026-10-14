@@ -1,0 +1,30 @@
+.marks {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: var(--space-sm);
+    vertical-align: middle;
+}
+
+.mark {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    color: var(--color-summary);
+    font-size: 0.6875rem;
+    line-height: 1;
+}
+
+.icon {
+    width: 15px;
+    height: 15px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.label {
+    font-variant-numeric: tabular-nums;
+}

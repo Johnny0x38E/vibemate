@@ -173,7 +173,7 @@ describe("ProviderModels", () => {
             name: "Edit model deepseek-chat",
         });
         const field = within(editor).getByRole<HTMLInputElement>("textbox", {
-            name: "Alias (optional)",
+            name: "Alias",
         });
         await waitFor(() => {
             expect(field.readOnly).toBe(false);
@@ -182,7 +182,7 @@ describe("ProviderModels", () => {
         fireEvent.click(checkbox);
         expect(checkbox.getAttribute("aria-checked")).toBe("true");
         fireEvent.change(field, { target: { value: "Work model" } });
-        fireEvent.click(screen.getByRole("button", { name: "Save model" }));
+        fireEvent.click(screen.getByRole("button", { name: "Save" }));
         await screen.findByText("Work model");
         await waitFor(() => {
             expect(document.activeElement).toBe(edit);
@@ -204,7 +204,7 @@ describe("ProviderModels", () => {
         });
         const reopenedField = within(reopened).getByRole<HTMLInputElement>(
             "textbox",
-            { name: "Alias (optional)" },
+            { name: "Alias" },
         );
         await waitFor(() => {
             expect(reopenedField.readOnly).toBe(false);
@@ -252,12 +252,12 @@ describe("ProviderModels", () => {
             name: "Edit model deepseek-chat",
         });
         const alias = within(editor).getByRole<HTMLInputElement>("textbox", {
-            name: "Alias (optional)",
+            name: "Alias",
         });
         await waitFor(() => {
             expect(alias.readOnly).toBe(false);
         });
-        fireEvent.click(screen.getByRole("button", { name: "Save model" }));
+        fireEvent.click(screen.getByRole("button", { name: "Save" }));
         rerenderHidden(true);
         await act(async () => {
             finish?.({
@@ -286,6 +286,8 @@ describe("ProviderModels", () => {
         list.mockResolvedValue(
             desktopPage([
                 model({
+                    contextWindow: 1_048_576,
+                    maxOutputTokens: 393_216,
                     capabilities: {
                         thinking: {
                             state: "supported",
@@ -303,7 +305,7 @@ describe("ProviderModels", () => {
         await renderModels(false, "en");
         await screen.findByRole("checkbox", { name: "Deselect deepseek-chat" });
         const capability = screen.getByRole("img", {
-            name: "Thinking — declared by the provider catalog",
+            name: "Reasoning — declared by the provider catalog",
         });
         expect(capability).toBeTruthy();
         expect(
@@ -316,6 +318,12 @@ describe("ProviderModels", () => {
                 name: "Tool calls — declared by the provider catalog",
             }),
         ).toBeNull();
+        expect(
+            screen.getByRole("img", { name: "Context window 1M" }),
+        ).toBeTruthy();
+        expect(
+            screen.getByRole("img", { name: "Maximum output 500K" }),
+        ).toBeTruthy();
     });
 
     test("user declarations hide catalog support and add icons over unknown", async () => {
@@ -342,7 +350,7 @@ describe("ProviderModels", () => {
         await screen.findByRole("checkbox", { name: "Deselect deepseek-chat" });
         expect(
             screen.queryByRole("img", {
-                name: "Thinking — declared by the provider catalog",
+                name: "Reasoning — declared by the provider catalog",
             }),
         ).toBeNull();
         expect(
@@ -365,9 +373,7 @@ describe("ProviderModels", () => {
             name: "Deselect deepseek-chat",
         });
         const readsBefore = list.mock.calls.length;
-        fireEvent.click(
-            screen.getByRole("button", { name: "Refresh saved models" }),
-        );
+        fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
         await waitFor(() => {
             expect(refreshSavedProviderModels).toHaveBeenCalledWith(ID);
         });
@@ -387,7 +393,7 @@ describe("ProviderModels", () => {
             }),
         );
         const refreshButton = screen.getByRole("button", {
-            name: "Refresh saved models",
+            name: "Refresh",
         });
         expect(refreshButton.getAttribute("aria-disabled")).toBe("true");
         fireEvent.click(refreshButton);
@@ -484,7 +490,7 @@ test("manual addition from upstream browse is saved and visible in added models"
     fireEvent.change(screen.getByLabelText("Model ID"), {
         target: { value: "vendor/manual" },
     });
-    fireEvent.change(screen.getByLabelText("Alias (optional)"), {
+    fireEvent.change(screen.getByLabelText("Alias"), {
         target: { value: "Work" },
     });
     await waitFor(() => {
@@ -540,7 +546,7 @@ test("manual creation updates the selected row and count without a provider requ
     fireEvent.change(screen.getByLabelText("Model ID"), {
         target: { value: "vendor/manual" },
     });
-    fireEvent.change(screen.getByLabelText("Alias (optional)"), {
+    fireEvent.change(screen.getByLabelText("Alias"), {
         target: { value: "Work" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Add and save" }));
@@ -583,7 +589,7 @@ test("pending checkbox drafts block manual creation", async () => {
     const addButton = screen.getByRole("button", {
         name: "Add a model manually",
     });
-    expect(addButton.hasAttribute("disabled")).toBe(true);
+    expect(addButton.getAttribute("aria-disabled")).toBe("true");
     fireEvent.click(addButton);
     expect(addManual).not.toHaveBeenCalled();
     expect(screen.getByText(/Save or discard checkbox changes/)).toBeDefined();

@@ -21,8 +21,11 @@ export function EditFormRow({
     /** When set, a string label becomes a `<label>` for this control id. */
     htmlFor?: string;
     children: ReactNode;
-    /** Extra row class, for example a section that grows past one control. */
-    className?: string;
+    /**
+     * Extra row class, for example a section that grows past one control.
+     * Admits `undefined` because CSS-module lookups can miss.
+     */
+    className?: string | undefined;
 }): JSX.Element {
     const rowClassName = [styles["row"], styles["rowUniform"]];
     if (className !== undefined && className !== "") {

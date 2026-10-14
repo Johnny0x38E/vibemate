@@ -5,6 +5,7 @@ import {
     render,
     screen,
     waitFor,
+    within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StrictMode } from "react";
@@ -140,11 +141,11 @@ test("creates a manual row with declarations and clears the form", async () => {
     fireEvent.change(field("Model ID"), {
         target: { value: " vendor/model " },
     });
-    fireEvent.change(field("Alias (optional)"), {
+    fireEvent.change(field("Alias"), {
         target: { value: "Work" },
     });
-    fireEvent.click(checkbox("Thinking"));
-    expect(checked("Thinking")).toBe(true);
+    fireEvent.click(checkbox("Reasoning"));
+    expect(checked("Reasoning")).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Add and save" }));
     await waitFor(() => {
         expect(saved).toHaveBeenCalledWith(row);
@@ -164,33 +165,59 @@ test("creates a manual row with declarations and clears the form", async () => {
     });
     // The form resets for the next creation, declarations included.
     expect(field("Model ID").value).toBe("");
-    expect(field("Alias (optional)").value).toBe("");
-    expect(checked("Thinking")).toBe(false);
+    expect(field("Alias").value).toBe("");
+    expect(checked("Reasoning")).toBe(false);
 });
 
-test("saves limits and thinking effort, and rejects a zero limit", async () => {
+test("saves preset limits and reasoning levels only after reasoning is checked", async () => {
+    const user = userEvent.setup();
     await setupCreate();
+    expect(screen.getAllByText("Not set").length).toBeGreaterThan(0);
+    expect(screen.queryByText("providers.models.parameters.unset")).toBeNull();
     fireEvent.change(field("Model ID"), { target: { value: "vendor/model" } });
-    fireEvent.change(field("Context window"), { target: { value: "128000" } });
-    fireEvent.change(field("Maximum output"), { target: { value: "0" } });
-    fireEvent.click(screen.getByRole("button", { name: "Add and save" }));
-    expect(add).not.toHaveBeenCalled();
-    expect(screen.getByRole("alert").textContent).toContain(
-        "positive whole number",
-    );
-    fireEvent.change(field("Maximum output"), { target: { value: "8192" } });
-    fireEvent.click(screen.getByRole("radio", { name: "Specific levels" }));
-    fireEvent.click(checkbox("high"));
-    fireEvent.click(checkbox("max"));
+    expect(
+        screen.queryByRole("combobox", { name: "Reasoning effort" }),
+    ).toBeNull();
+    fireEvent.click(checkbox("Reasoning"));
+    const effort = screen.getByRole("combobox", { name: "Reasoning effort" });
+    await user.click(effort);
+    const choices = [
+        "none",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+    ];
+    const list = await screen.findByRole("listbox");
+    expect(
+        within(list)
+            .getAllByRole("option")
+            .map((option) => option.getAttribute("data-value")),
+    ).toEqual(choices);
+    await user.click(within(list).getByRole("option", { name: "none" }));
+    expect(effort.getAttribute("aria-expanded")).toBe("true");
+    await user.click(within(list).getByRole("option", { name: "max" }));
+    expect(screen.getByRole("button", { name: "Remove none" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Remove none" }));
+    expect(screen.queryByRole("button", { name: "Remove none" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Remove max" })).toBeTruthy();
+    fireEvent.change(screen.getByRole("slider", { name: "Context window" }), {
+        target: { value: "2" },
+    });
+    fireEvent.change(screen.getByRole("slider", { name: "Maximum output" }), {
+        target: { value: "5" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Add and save" }));
     await waitFor(() => {
         expect(add).toHaveBeenCalledWith(
             expect.objectContaining({
-                contextWindow: 128000,
-                maxOutputTokens: 8192,
+                contextWindow: 128 * 1024,
+                maxOutputTokens: 1024 * 1024,
                 thinkingEffort: {
                     kind: "listed",
-                    levels: ["max", "high"],
+                    levels: ["max"],
                     defaultLevel: null,
                 },
             }),
@@ -201,7 +228,7 @@ test("saves limits and thinking effort, and rejects a zero limit", async () => {
 test("normalizes an empty optional alias without guessing model validation", async () => {
     await setupCreate();
     fireEvent.change(field("Model ID"), { target: { value: "vendor/model" } });
-    fireEvent.change(field("Alias (optional)"), { target: { value: "  " } });
+    fireEvent.change(field("Alias"), { target: { value: "  " } });
     fireEvent.click(screen.getByRole("button", { name: "Add and save" }));
     await waitFor(() => {
         expect(add).toHaveBeenCalledWith(
@@ -288,7 +315,7 @@ test("blocked state makes no write even on form submission", async () => {
 
 test("loads the saved row, focuses the alias and saves exactly that snapshot", async () => {
     const { saved } = await setupEdit();
-    const alias = field("Alias (optional)");
+    const alias = field("Alias");
     await waitFor(() => {
         expect(alias.readOnly).toBe(false);
     });
@@ -296,7 +323,8 @@ test("loads the saved row, focuses the alias and saves exactly that snapshot", a
     await waitFor(() => {
         expect(document.activeElement).toBe(alias);
     });
-    expect(field("Model ID").readOnly).toBe(true);
+    expect(screen.getByText("vendor/model")).toBeTruthy();
+    expect(screen.queryByRole("textbox", { name: "Model ID" })).toBeNull();
     fireEvent.change(alias, { target: { value: "My model" } });
     const next: ModelSnapshot = {
         contentDigest: "b".repeat(64),
@@ -341,10 +369,10 @@ test("every checkbox interaction declares and restore default clears the declara
     get.mockResolvedValue(declared);
     const { saved } = await setupEdit();
     await waitFor(() => {
-        expect(field("Alias (optional)").readOnly).toBe(false);
+        expect(field("Alias").readOnly).toBe(false);
     });
     // Catalog support shows as checked; nothing is user-declared yet.
-    expect(checked("Thinking")).toBe(true);
+    expect(checked("Reasoning")).toBe(true);
     expect(
         screen.getByRole<HTMLButtonElement>("button", {
             name: "Restore default",
@@ -360,7 +388,7 @@ test("every checkbox interaction declares and restore default clears the declara
         ...declared,
         contentDigest: "b".repeat(64),
     });
-    fireEvent.click(screen.getByRole("button", { name: "Save model" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => {
         expect(update).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -374,9 +402,9 @@ test("every checkbox interaction declares and restore default clears the declara
     });
     // Restore default removes the declarations again: the catalog state comes
     // back and the action disables itself until something is declared.
-    fireEvent.click(checkbox("Thinking"));
+    fireEvent.click(checkbox("Reasoning"));
     fireEvent.click(screen.getByRole("button", { name: "Restore default" }));
-    expect(checked("Thinking")).toBe(true);
+    expect(checked("Reasoning")).toBe(true);
     expect(
         screen.getByRole<HTMLButtonElement>("button", {
             name: "Restore default",
@@ -388,18 +416,18 @@ test("every checkbox interaction declares and restore default clears the declara
 test("a stale snapshot requires a reload and the reloaded draft saves", async () => {
     const { saved } = await setupEdit();
     await waitFor(() => {
-        expect(field("Alias (optional)").readOnly).toBe(false);
+        expect(field("Alias").readOnly).toBe(false);
     });
-    fireEvent.change(field("Alias (optional)"), {
+    fireEvent.change(field("Alias"), {
         target: { value: "My draft" },
     });
     update.mockRejectedValueOnce(new ModelRequestError("model_changed"));
-    fireEvent.click(screen.getByRole("button", { name: "Save model" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
     expect((await screen.findByRole("alert")).textContent).toContain("changed");
     expect(
         screen
             .getByRole<HTMLButtonElement>("button", {
-                name: "Save model",
+                name: "Save",
             })
             .getAttribute("aria-disabled"),
     ).toBe("true");
@@ -414,17 +442,17 @@ test("a stale snapshot requires a reload and the reloaded draft saves", async ()
         }),
     );
     await waitFor(() => {
-        expect(field("Alias (optional)").readOnly).toBe(false);
+        expect(field("Alias").readOnly).toBe(false);
     });
-    expect(field("Alias (optional)").value).toBe("Other window");
-    fireEvent.change(field("Alias (optional)"), {
+    expect(field("Alias").value).toBe("Other window");
+    fireEvent.change(field("Alias"), {
         target: { value: "Confirmed" },
     });
     update.mockResolvedValue({
         ...next,
         model: { ...next.model, alias: "Confirmed" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Save model" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => {
         expect(update).toHaveBeenLastCalledWith(
             expect.objectContaining({
@@ -439,10 +467,10 @@ test("a stale snapshot requires a reload and the reloaded draft saves", async ()
 test("unknown writes stay blocked through failed recovery reads", async () => {
     await setupEdit();
     await waitFor(() => {
-        expect(field("Alias (optional)").readOnly).toBe(false);
+        expect(field("Alias").readOnly).toBe(false);
     });
     update.mockRejectedValueOnce(new ModelRequestError("invalid_response"));
-    fireEvent.click(screen.getByRole("button", { name: "Save model" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
     expect((await screen.findByRole("alert")).textContent).toContain(
         "save result is unknown",
     );
@@ -461,7 +489,7 @@ test("unknown writes stay blocked through failed recovery reads", async () => {
     // and only another reload can revive it.
     expect(
         screen
-            .getByRole("button", { name: "Save model" })
+            .getByRole("button", { name: "Save" })
             .getAttribute("aria-disabled"),
     ).toBe("true");
     expect(
@@ -475,33 +503,35 @@ test("unknown writes stay blocked through failed recovery reads", async () => {
 test("invalid aliases preserve the draft and language changes preserve input", async () => {
     const { i18n } = await setupEdit();
     await waitFor(() => {
-        expect(field("Alias (optional)").readOnly).toBe(false);
+        expect(field("Alias").readOnly).toBe(false);
     });
-    fireEvent.change(field("Alias (optional)"), {
+    fireEvent.change(field("Alias"), {
         target: { value: "Invalid draft" },
     });
     update.mockRejectedValueOnce(new ModelRequestError("model_alias_invalid"));
-    fireEvent.click(screen.getByRole("button", { name: "Save model" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
     expect((await screen.findByRole("alert")).textContent).toContain(
         "display name is not valid",
     );
-    expect(field("Alias (optional)").value).toBe("Invalid draft");
+    expect(field("Alias").value).toBe("Invalid draft");
     await act(async () => {
         await i18n.changeLanguage("zh-CN");
     });
-    const zhAlias = screen.getByLabelText<HTMLInputElement>("别名（可选）");
+    const zhAlias = screen.getByLabelText<HTMLInputElement>("别名");
+    expect(zhAlias.placeholder).toBe("可选");
     expect(zhAlias.value).toBe("Invalid draft");
     expect(
         screen
-            .getByRole<HTMLButtonElement>("button", { name: "保存模型" })
+            .getByRole<HTMLButtonElement>("button", { name: "保存" })
             .getAttribute("aria-disabled"),
     ).toBe("false");
+    expect(screen.getAllByText("未设置").length).toBeGreaterThan(0);
 });
 
 test("Escape cancels an edit but never while a save is in flight", async () => {
     const { cancel } = await setupEdit();
     await waitFor(() => {
-        expect(field("Alias (optional)").readOnly).toBe(false);
+        expect(field("Alias").readOnly).toBe(false);
     });
     let finish: ((value: ModelSnapshot) => void) | undefined;
     update.mockImplementation(
@@ -510,21 +540,21 @@ test("Escape cancels an edit but never while a save is in flight", async () => {
                 finish = resolve;
             }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Save model" }));
-    fireEvent.keyDown(field("Alias (optional)"), { key: "Escape" });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.keyDown(field("Alias"), { key: "Escape" });
     expect(cancel).not.toHaveBeenCalled();
     await act(async () => {
         finish?.({ model: row, contentDigest: "b".repeat(64) });
         await Promise.resolve();
     });
-    fireEvent.keyDown(field("Alias (optional)"), { key: "Escape" });
+    fireEvent.keyDown(field("Alias"), { key: "Escape" });
     expect(cancel).toHaveBeenCalledTimes(1);
 });
 
 test("ignores a save reply after the form unmounts", async () => {
     const { saved, unmount } = await setupEdit();
     await waitFor(() => {
-        expect(field("Alias (optional)").readOnly).toBe(false);
+        expect(field("Alias").readOnly).toBe(false);
     });
     let finish: ((value: ModelSnapshot) => void) | undefined;
     update.mockImplementation(
@@ -533,7 +563,7 @@ test("ignores a save reply after the form unmounts", async () => {
                 finish = resolve;
             }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Save model" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
     unmount();
     await act(async () => {
         finish?.({ model: row, contentDigest: "b".repeat(64) });

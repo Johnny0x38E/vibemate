@@ -258,7 +258,7 @@ Base 为 `https://api.deepseek.com`；Anthropic 格式的 Base 为
 映射结果保存在 `provider_model.capabilities`（SQLite v13，JSON 文本），每项包含
 `state` 与 `source`；读取时拒绝“明确状态但没有来源”的行。界面只为“明确支持”绘制图标，
 未知与不支持都不显示图标，也不显示为“已支持”。手动模型与旧数据迁移后保持未知。
-Models 标签页的「刷新已保存模型」调用 `refresh_saved_provider_models`，只更新已保存行并
+Models 标签页的「刷新」调用 `refresh_saved_provider_models`，只更新已保存行并
 保留别名、来源与勾选，不插入目录里的其他模型；只有完整目录会把曾经列出但本次未出现的
 已保存行标记为上游缺失，不完整目录只更新元数据。
 

@@ -133,16 +133,6 @@ p.error {
     border-bottom: 1px solid var(--color-border);
 }
 
-.manualAction {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--space-sm);
-    min-height: 44px;
-    padding: 8px var(--space-md);
-    border-bottom: 1px solid var(--color-border);
-}
-
 .manualRow > summary {
     display: flex;
     align-items: center;
@@ -200,7 +190,8 @@ p.error {
 }
 
 .manualDraft {
-    margin-bottom: var(--space-sm);
+    margin: 0;
+    padding: 8px var(--space-md);
 }
 
 .list {

@@ -1,0 +1,92 @@
+.slider {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+}
+
+.range {
+    width: 100%;
+    height: 18px;
+    margin: 0;
+    appearance: none;
+    background: transparent;
+    cursor: pointer;
+}
+
+.range:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+
+.range:focus-visible::-webkit-slider-thumb,
+.range:focus-visible::-moz-range-thumb {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+}
+
+.range::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 999px;
+    background: linear-gradient(
+        to right,
+        var(--color-accent) var(--slider-fill, 0%),
+        var(--color-border) var(--slider-fill, 0%)
+    );
+}
+
+.range::-webkit-slider-thumb {
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    margin-top: -6px;
+    border: 2px solid var(--color-surface);
+    border-radius: 50%;
+    background: var(--color-accent);
+    box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+.range::-moz-range-track {
+    height: 4px;
+    border: 0;
+    border-radius: 999px;
+    background: linear-gradient(
+        to right,
+        var(--color-accent) var(--slider-fill, 0%),
+        var(--color-border) var(--slider-fill, 0%)
+    );
+}
+
+.range::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--color-surface);
+    border-radius: 50%;
+    background: var(--color-accent);
+    box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+.ticks {
+    display: grid;
+    grid-template-columns: repeat(var(--tick-columns, 6), minmax(0, 1fr));
+}
+
+.tick {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--color-summary);
+    font: inherit;
+    font-size: 0.6875rem;
+    line-height: 1.4;
+    text-align: center;
+}
+
+.tickCurrent {
+    color: var(--color-text);
+    font-weight: 600;
+}
+
+button.tick:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+}

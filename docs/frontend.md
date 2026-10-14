@@ -642,7 +642,7 @@ The Models tab follows [models-tab-ux.md](plans/models-tab-ux.md). In brief: the
 default **Added** / 「已添加」 view lists persisted models, with a fixed list title
 (**Added** / **All**) above the scroll region. **Fetch models** opens **upstream**
 browse with lazy-loaded result pages via `browse_upstream_models_page` (optional
-fuzzy `query`; session catalog in Rust). **Refresh saved models**, beside it,
+fuzzy `query`; session catalog in Rust). **Refresh** / 「刷新」, beside it,
 downloads the catalog and updates only rows already on the added list
 (`refresh_saved_provider_models`): aliases, sources and checkboxes stay, nothing
 is inserted or deleted, and only a complete catalog can mark a saved row as
@@ -655,7 +655,7 @@ re-clicking the active Providers menu). Internal `selected` fields and translati
 keys remain unchanged: "added" names saved list membership, while checkbox actions
 still use selection terminology.
 
-Both lists offer **Add a model manually** as their first row. It explicitly saves
+Both lists offer **Add a model manually** as a plus icon on the right of the models toolbar. It explicitly saves
 and selects one manual row through the existing Rust command (alias and
 capability declarations included); it does not stage an
 upstream checkbox draft, and pending checkbox drafts block creation until saved or

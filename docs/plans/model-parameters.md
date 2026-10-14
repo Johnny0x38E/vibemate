@@ -94,7 +94,7 @@ Agent 引用检查不在此列。
 选用的思考档位仍属于目标 Agent，不在这个对话框里设置。思考档位保存的是模型声明的
 可选档与默认档（DeepSeek `effort.supported_levels`/`default_level`，OpenRouter
 `reasoning.supported_efforts`/`default_effort`）。词表为 2026-10-14 核实的
-`max`/`xhigh`/`high`/`medium`/`low`/`minimal`/`none`；未知档位不写入。SQLite v15
+`max`/`xhigh`/`high`/`medium`/`low`/`minimal`/`none`；未知档位不写入。对话框里推理强度只在勾选推理后出现，用多选下拉选择 `none` 到 `max`，不设默认档。上下文窗口和最大输出共用 64K、128K、200K、500K、1M 滑动条（按 1024 进位，对不上的目录值落到最近一档），列表用图标标出该档。SQLite v15
 增加 `thinking_effort`。编辑界面改为对话框。
 
 ## P18：以 Claude Code 配置预览为下一主线

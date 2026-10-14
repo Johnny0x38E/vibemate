@@ -96,7 +96,8 @@
 .list {
     max-height: min(20rem, var(--available-height));
     margin: 0;
-    padding: 4px 0;
+    /* Inset so a highlighted or selected row does not meet the popup edges. */
+    padding: 4px;
     overflow-y: auto;
     overscroll-behavior: contain;
     outline: 0;
@@ -107,6 +108,7 @@
     align-items: center;
     gap: var(--space-sm);
     padding: 8px 10px;
+    border-radius: 4px;
     cursor: pointer;
 }
 

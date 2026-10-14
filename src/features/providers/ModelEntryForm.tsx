@@ -1,5 +1,6 @@
 import { Dialog } from "@base-ui/react/dialog";
 import {
+    useCallback,
     useEffect,
     useId,
     useRef,
@@ -25,8 +26,10 @@ import {
     type ThinkingEffort,
 } from "../../lib/desktop/models";
 import { EditFormRow } from "../../components/EditFormRow";
-import { FieldSelect } from "../../components/FieldSelect";
 import { ModelCheckbox } from "../../components/ModelCheckbox";
+import { EFFORT_CHOICES, EffortLevelSelect } from "./EffortLevelSelect";
+import { TokenStopSlider } from "./TokenStopSlider";
+import { nearestTokenStop } from "./tokenStops";
 import {
     capabilityDeclaration,
     effectiveCapabilityState,
@@ -71,70 +74,29 @@ type Phase =
     | "uncertain" // unknown write outcome
     | "conflict"; // edit: stale snapshot, or a read that could not be recovered
 
-type EffortMode = "unset" | "any" | "listed";
-
-interface EffortDraft {
-    mode: EffortMode;
-    levels: EffortLevel[];
-    defaultLevel: EffortLevel | "";
-}
-
-const EMPTY_EFFORT: EffortDraft = {
-    mode: "unset",
-    levels: [],
-    defaultLevel: "",
-};
-
 const CAPABILITY_NAMES: readonly ModelCapabilityName[] = [
     "thinking",
     "imageInput",
     "toolCalls",
 ];
 
-const EFFORT_MODES: readonly EffortMode[] = ["unset", "any", "listed"];
-
-/**
- * Accept a blank field as "no limit", or a positive whole number that fits a
- * JavaScript safe integer. Anything else is rejected before it reaches Rust.
- */
-function parseTokenCount(text: string): number | null | "invalid" {
-    const trimmed = text.trim();
-    if (trimmed === "") return null;
-    if (!/^[1-9][0-9]{0,15}$/.test(trimmed)) return "invalid";
-    const value = Number(trimmed);
-    if (!Number.isSafeInteger(value) || value <= 0) return "invalid";
-    return value;
+/** Levels to show. "Any gateway level" arrives as every choice selected. */
+function levelsFromEffort(effort: ThinkingEffort | null): EffortLevel[] {
+    if (effort === null) return [];
+    if (effort.kind === "any") return [...EFFORT_CHOICES];
+    return EFFORT_CHOICES.filter((level) => effort.levels.includes(level));
 }
 
-function effortDraft(effort: ThinkingEffort | null): EffortDraft {
-    if (effort === null) return EMPTY_EFFORT;
-    if (effort.kind === "any") {
-        return {
-            mode: "any",
-            levels: [],
-            defaultLevel: effort.defaultLevel ?? "",
-        };
-    }
+function effortPayload(
+    thinkingChecked: boolean,
+    levels: readonly EffortLevel[],
+): ThinkingEffort | null {
+    if (!thinkingChecked || levels.length === 0) return null;
     return {
-        mode: "listed",
-        levels: effort.levels,
-        defaultLevel: effort.defaultLevel ?? "",
+        kind: "listed",
+        levels: EFFORT_LEVELS.filter((level) => levels.includes(level)),
+        defaultLevel: null,
     };
-}
-
-function effortPayload(draft: EffortDraft): ThinkingEffort | null {
-    if (draft.mode === "unset") return null;
-    const defaultLevel = draft.defaultLevel === "" ? null : draft.defaultLevel;
-    if (draft.mode === "any") return { kind: "any", defaultLevel };
-    const levels = EFFORT_LEVELS.filter((level) =>
-        draft.levels.includes(level),
-    );
-    const kept =
-        defaultLevel !== null &&
-        (defaultLevel === "none" || levels.includes(defaultLevel))
-            ? defaultLevel
-            : null;
-    return { kind: "listed", levels, defaultLevel: kept };
 }
 
 /**
@@ -162,15 +124,20 @@ export function ModelEntryForm(props: ModelEntryFormProps): JSX.Element {
     const id = useId();
     const modelInput = useRef<HTMLInputElement>(null);
     const aliasInput = useRef<HTMLInputElement>(null);
+    // While the reasoning menu is open, Escape closes that menu rather than the dialog.
+    const effortMenuOpen = useRef(false);
+    const reportEffortMenu = useCallback((open: boolean) => {
+        effortMenuOpen.current = open;
+    }, []);
     // One counter owns every read and write reply: it is bumped when an edit
     // (re)loads its snapshot and on unmount, so late replies are never applied.
     const generation = useRef(0);
     const pending = useRef(false);
     const [modelId, setModelId] = useState(editedId ?? "");
     const [alias, setAlias] = useState("");
-    const [contextWindow, setContextWindow] = useState("");
-    const [maxOutput, setMaxOutput] = useState("");
-    const [effort, setEffort] = useState<EffortDraft>(EMPTY_EFFORT);
+    const [contextWindow, setContextWindow] = useState<number | null>(null);
+    const [maxOutput, setMaxOutput] = useState<number | null>(null);
+    const [levels, setLevels] = useState<EffortLevel[]>([]);
     const [overrides, setOverrides] = useState<CapabilityOverrides>(
         NO_CAPABILITY_DECLARATIONS,
     );
@@ -188,8 +155,12 @@ export function ModelEntryForm(props: ModelEntryFormProps): JSX.Element {
     const idError =
         error === "model_id_invalid" || error === "model_already_exists";
     const aliasError = error === "model_alias_invalid";
-    const parameterError = error === "model_parameters_invalid";
     const canDismiss = !busy && !uncertain && phase !== "conflict";
+    const thinkingChecked =
+        effectiveCapabilityState(
+            evidence.thinking,
+            capabilityDeclaration(overrides, "thinking"),
+        ) === "supported";
 
     // Edit mode reads its snapshot (values plus change token) on every mount and
     // explicit reload. Creation needs no read. The "loading" phase is entered by
@@ -203,17 +174,9 @@ export function ModelEntryForm(props: ModelEntryFormProps): JSX.Element {
                 if (current !== generation.current) return;
                 setModelId(loaded.model.modelId);
                 setAlias(loaded.model.alias ?? "");
-                setContextWindow(
-                    loaded.model.contextWindow === null
-                        ? ""
-                        : String(loaded.model.contextWindow),
-                );
-                setMaxOutput(
-                    loaded.model.maxOutputTokens === null
-                        ? ""
-                        : String(loaded.model.maxOutputTokens),
-                );
-                setEffort(effortDraft(loaded.model.thinkingEffort));
+                setContextWindow(nearestTokenStop(loaded.model.contextWindow));
+                setMaxOutput(nearestTokenStop(loaded.model.maxOutputTokens));
+                setLevels(levelsFromEffort(loaded.model.thinkingEffort));
                 setOverrides(loaded.model.capabilityOverrides);
                 setEvidence(loaded.model.capabilities);
                 setDigest(loaded.contentDigest);
@@ -253,9 +216,11 @@ export function ModelEntryForm(props: ModelEntryFormProps): JSX.Element {
 
     // Escape closes the dialog from any field. A write in flight, an unknown
     // outcome, or a stale snapshot keeps the dialog open so the draft is not lost.
+    // An open reasoning menu consumes the first Escape; the ref is set by that menu.
     useEffect(() => {
         function onKey(event: KeyboardEvent): void {
-            if (event.key !== "Escape" || !canDismiss) return;
+            if (event.key !== "Escape" || !canDismiss || effortMenuOpen.current)
+                return;
             event.preventDefault();
             onDismiss();
         }
@@ -277,6 +242,7 @@ export function ModelEntryForm(props: ModelEntryFormProps): JSX.Element {
             imageInput: name === "imageInput" ? value : current.imageInput,
             toolCalls: name === "toolCalls" ? value : current.toolCalls,
         }));
+        if (name === "thinking" && value === "unsupported") setLevels([]);
         setError(null);
     }
 
@@ -286,59 +252,26 @@ export function ModelEntryForm(props: ModelEntryFormProps): JSX.Element {
         if (!editing) {
             setModelId("");
             setAlias("");
-            setContextWindow("");
-            setMaxOutput("");
-            setEffort(EMPTY_EFFORT);
+            setContextWindow(null);
+            setMaxOutput(null);
+            setLevels([]);
             setOverrides(NO_CAPABILITY_DECLARATIONS);
         }
         onSaved(model);
     }
 
-    function setEffortMode(mode: EffortMode): void {
-        setEffort((current) =>
-            mode === current.mode
-                ? current
-                : {
-                      mode,
-                      levels: mode === "listed" ? current.levels : [],
-                      defaultLevel:
-                          mode === "unset" ? "" : current.defaultLevel,
-                  },
-        );
-        setError(null);
-    }
-
-    function toggleLevel(level: EffortLevel, checked: boolean): void {
-        setEffort((current) => {
-            const levels = checked
-                ? EFFORT_LEVELS.filter(
-                      (item) => item === level || current.levels.includes(item),
-                  )
-                : current.levels.filter((item) => item !== level);
-            const defaultLevel =
-                current.defaultLevel !== "" &&
-                current.defaultLevel !== "none" &&
-                !levels.includes(current.defaultLevel)
-                    ? ""
-                    : current.defaultLevel;
-            return { ...current, mode: "listed", levels, defaultLevel };
-        });
+    function setEffortLevels(next: readonly EffortLevel[]): void {
+        setLevels(EFFORT_CHOICES.filter((level) => next.includes(level)));
         setError(null);
     }
 
     async function submit(): Promise<void> {
         if (locked || pending.current) return;
-        const context = parseTokenCount(contextWindow);
-        const output = parseTokenCount(maxOutput);
-        if (context === "invalid" || output === "invalid") {
-            setError("model_parameters_invalid");
-            return;
-        }
         pending.current = true;
         const current = generation.current;
         setPhase("saving");
         setError(null);
-        const thinking = effortPayload(effort);
+        const thinking = effortPayload(thinkingChecked, levels);
         try {
             const model = editing
                 ? (
@@ -349,8 +282,8 @@ export function ModelEntryForm(props: ModelEntryFormProps): JSX.Element {
                           expectedDigest: digest ?? "",
                           alias: alias.trim() === "" ? null : alias,
                           capabilityOverrides: overrides,
-                          contextWindow: context,
-                          maxOutputTokens: output,
+                          contextWindow,
+                          maxOutputTokens: maxOutput,
                           thinkingEffort: thinking,
                       })
                   ).model
@@ -359,8 +292,8 @@ export function ModelEntryForm(props: ModelEntryFormProps): JSX.Element {
                       modelId,
                       alias: alias.trim() === "" ? null : alias,
                       capabilityOverrides: overrides,
-                      contextWindow: context,
-                      maxOutputTokens: output,
+                      contextWindow,
+                      maxOutputTokens: maxOutput,
                       thinkingEffort: thinking,
                   });
             if (current !== generation.current) return;
@@ -429,15 +362,6 @@ export function ModelEntryForm(props: ModelEntryFormProps): JSX.Element {
         }
     }
 
-    const defaultChoices =
-        effort.mode === "any"
-            ? EFFORT_LEVELS
-            : EFFORT_LEVELS.filter(
-                  (level) =>
-                      effort.levels.includes(level) ||
-                      (level === "none" && effort.defaultLevel === "none"),
-              );
-
     return (
         <Dialog.Root
             open
@@ -476,30 +400,43 @@ export function ModelEntryForm(props: ModelEntryFormProps): JSX.Element {
                             void submit();
                         }}
                     >
+                        {editing ? (
+                            <EditFormRow
+                                className={styles["dialogRow"]}
+                                label={t("providers.models.manual.modelId")}
+                            >
+                                <p className={styles["modelIdText"]}>
+                                    {modelId}
+                                </p>
+                            </EditFormRow>
+                        ) : (
+                            <EditFormRow
+                                className={styles["dialogRow"]}
+                                label={t("providers.models.manual.modelId")}
+                                htmlFor={`${id}-model`}
+                            >
+                                <input
+                                    ref={modelInput}
+                                    className={editForm["input"]}
+                                    id={`${id}-model`}
+                                    value={modelId}
+                                    readOnly={locked}
+                                    aria-disabled={locked}
+                                    aria-invalid={idError}
+                                    aria-describedby={
+                                        idError ? `${id}-error` : undefined
+                                    }
+                                    autoComplete="off"
+                                    spellCheck={false}
+                                    onChange={(event) => {
+                                        setModelId(event.currentTarget.value);
+                                        setError(null);
+                                    }}
+                                />
+                            </EditFormRow>
+                        )}
                         <EditFormRow
-                            label={t("providers.models.manual.modelId")}
-                            htmlFor={`${id}-model`}
-                        >
-                            <input
-                                ref={modelInput}
-                                className={editForm["input"]}
-                                id={`${id}-model`}
-                                value={modelId}
-                                readOnly={editing || locked}
-                                aria-disabled={editing || locked}
-                                aria-invalid={idError}
-                                aria-describedby={
-                                    idError ? `${id}-error` : undefined
-                                }
-                                autoComplete="off"
-                                spellCheck={false}
-                                onChange={(event) => {
-                                    setModelId(event.currentTarget.value);
-                                    setError(null);
-                                }}
-                            />
-                        </EditFormRow>
-                        <EditFormRow
+                            className={styles["dialogRow"]}
                             label={t("providers.models.manual.alias")}
                             htmlFor={`${id}-alias`}
                         >
@@ -507,6 +444,9 @@ export function ModelEntryForm(props: ModelEntryFormProps): JSX.Element {
                                 ref={aliasInput}
                                 className={editForm["input"]}
                                 id={`${id}-alias`}
+                                placeholder={t(
+                                    "providers.models.manual.aliasPlaceholder",
+                                )}
                                 value={alias}
                                 readOnly={locked}
                                 aria-disabled={locked}
@@ -522,195 +462,97 @@ export function ModelEntryForm(props: ModelEntryFormProps): JSX.Element {
                             />
                         </EditFormRow>
                         <EditFormRow
+                            className={styles["dialogRow"]}
                             label={t(
                                 "providers.models.parameters.contextWindow",
                             )}
                             htmlFor={`${id}-context`}
                         >
-                            <input
-                                className={editForm["input"]}
+                            <TokenStopSlider
                                 id={`${id}-context`}
-                                inputMode="numeric"
                                 value={contextWindow}
-                                readOnly={locked}
-                                aria-disabled={locked}
-                                aria-invalid={parameterError}
-                                aria-describedby={
-                                    parameterError ? `${id}-error` : undefined
-                                }
-                                autoComplete="off"
-                                spellCheck={false}
-                                onChange={(event) => {
-                                    setContextWindow(event.currentTarget.value);
-                                    setError(null);
-                                }}
+                                disabled={locked}
+                                onChange={setContextWindow}
                             />
                         </EditFormRow>
                         <EditFormRow
+                            className={styles["dialogRow"]}
                             label={t("providers.models.parameters.maxOutput")}
                             htmlFor={`${id}-output`}
                         >
-                            <input
-                                className={editForm["input"]}
+                            <TokenStopSlider
                                 id={`${id}-output`}
-                                inputMode="numeric"
                                 value={maxOutput}
-                                readOnly={locked}
-                                aria-disabled={locked}
-                                aria-invalid={parameterError}
-                                aria-describedby={
-                                    parameterError ? `${id}-error` : undefined
-                                }
-                                autoComplete="off"
-                                spellCheck={false}
-                                onChange={(event) => {
-                                    setMaxOutput(event.currentTarget.value);
-                                    setError(null);
-                                }}
+                                disabled={locked}
+                                onChange={setMaxOutput}
                             />
                         </EditFormRow>
-                        <fieldset
-                            className={styles["effort"]}
-                            disabled={locked}
+                        <EditFormRow
+                            className={styles["dialogRow"]}
+                            label={t(
+                                "providers.models.parameters.capabilities",
+                            )}
                         >
-                            <legend className={styles["legend"]}>
-                                {t("providers.models.parameters.effort")}
-                            </legend>
-                            <div className={styles["modes"]}>
-                                {EFFORT_MODES.map((mode) => (
-                                    <label
-                                        key={mode}
-                                        className={styles["mode"]}
-                                    >
-                                        <input
-                                            type="radio"
-                                            name={`${id}-effort`}
-                                            checked={effort.mode === mode}
-                                            onChange={() => {
-                                                setEffortMode(mode);
-                                            }}
-                                        />
-                                        {t(
-                                            `providers.models.parameters.effort${
-                                                mode === "unset"
-                                                    ? "Unset"
-                                                    : mode === "any"
-                                                      ? "Any"
-                                                      : "Listed"
-                                            }`,
-                                        )}
-                                    </label>
-                                ))}
-                            </div>
-                            {effort.mode === "listed" && (
-                                <div className={styles["levels"]}>
-                                    {EFFORT_LEVELS.map((level) => (
-                                        <label
-                                            key={level}
-                                            className={styles["level"]}
+                            <div className={styles["capabilities"]}>
+                                {CAPABILITY_NAMES.map((name) => {
+                                    const declaration = capabilityDeclaration(
+                                        overrides,
+                                        name,
+                                    );
+                                    return (
+                                        <div
+                                            key={name}
+                                            className={styles["capability"]}
                                         >
                                             <ModelCheckbox
-                                                checked={effort.levels.includes(
-                                                    level,
-                                                )}
+                                                checked={
+                                                    effectiveCapabilityState(
+                                                        evidence[name],
+                                                        declaration,
+                                                    ) === "supported"
+                                                }
                                                 disabled={locked}
-                                                ariaLabel={level}
+                                                ariaLabel={t(
+                                                    `providers.models.capabilities.${name}`,
+                                                )}
                                                 onCheckedChange={(next) => {
-                                                    toggleLevel(level, next);
+                                                    declare(
+                                                        name,
+                                                        next
+                                                            ? "supported"
+                                                            : "unsupported",
+                                                    );
                                                 }}
                                             />
-                                            <span>{level}</span>
-                                        </label>
-                                    ))}
-                                </div>
-                            )}
-                            {effort.mode !== "unset" && (
-                                <EditFormRow
-                                    label={t(
-                                        "providers.models.parameters.defaultLevel",
-                                    )}
-                                    htmlFor={`${id}-default`}
-                                >
-                                    <FieldSelect
-                                        id={`${id}-default`}
-                                        size="fill"
-                                        value={effort.defaultLevel}
-                                        blocked={locked}
-                                        options={[
-                                            {
-                                                value: "",
-                                                label: t(
-                                                    "providers.models.parameters.defaultUnset",
-                                                ),
-                                            },
-                                            ...defaultChoices.map((level) => ({
-                                                value: level,
-                                                label: level,
-                                            })),
-                                        ]}
-                                        onChange={(value) => {
-                                            const defaultLevel =
-                                                value === ""
-                                                    ? ""
-                                                    : EFFORT_LEVELS.find(
-                                                          (level) =>
-                                                              level === value,
-                                                      );
-                                            if (defaultLevel === undefined) {
-                                                return;
-                                            }
-                                            setEffort((current) => ({
-                                                ...current,
-                                                defaultLevel,
-                                            }));
-                                            setError(null);
-                                        }}
-                                    />
-                                </EditFormRow>
-                            )}
-                        </fieldset>
-                        <div className={styles["capabilities"]}>
-                            {CAPABILITY_NAMES.map((name) => {
-                                const declaration = capabilityDeclaration(
-                                    overrides,
-                                    name,
-                                );
-                                return (
-                                    <div
-                                        key={name}
-                                        className={styles["capability"]}
-                                    >
-                                        <ModelCheckbox
-                                            checked={
-                                                effectiveCapabilityState(
-                                                    evidence[name],
-                                                    declaration,
-                                                ) === "supported"
-                                            }
-                                            disabled={locked}
-                                            ariaLabel={t(
-                                                `providers.models.capabilities.${name}`,
-                                            )}
-                                            onCheckedChange={(next) => {
-                                                declare(
-                                                    name,
-                                                    next
-                                                        ? "supported"
-                                                        : "unsupported",
-                                                );
-                                            }}
-                                        />
-                                        <span
-                                            className={styles["capabilityName"]}
-                                        >
-                                            {t(
-                                                `providers.models.capabilities.${name}`,
-                                            )}
-                                        </span>
-                                    </div>
-                                );
-                            })}
-                        </div>
+                                            <span
+                                                className={
+                                                    styles["capabilityName"]
+                                                }
+                                            >
+                                                {t(
+                                                    `providers.models.capabilities.${name}`,
+                                                )}
+                                            </span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </EditFormRow>
+                        {thinkingChecked && (
+                            <EditFormRow
+                                className={styles["dialogRow"]}
+                                label={t("providers.models.parameters.effort")}
+                                htmlFor={`${id}-effort`}
+                            >
+                                <EffortLevelSelect
+                                    id={`${id}-effort`}
+                                    value={levels}
+                                    disabled={locked}
+                                    onChange={setEffortLevels}
+                                    onOpenChange={reportEffortMenu}
+                                />
+                            </EditFormRow>
+                        )}
                         <div className={styles["actions"]}>
                             <button
                                 className={buttons["secondary"]}
@@ -721,13 +563,15 @@ export function ModelEntryForm(props: ModelEntryFormProps): JSX.Element {
                                 }
                                 onClick={() => {
                                     setOverrides(NO_CAPABILITY_DECLARATIONS);
+                                    if (evidence.thinking.state !== "supported")
+                                        setLevels([]);
                                     setError(null);
                                 }}
                             >
                                 {t("providers.models.editor.restoreDefault")}
                             </button>
                             <button
-                                className={buttons["secondary"]}
+                                className={buttons["primary"]}
                                 type="submit"
                                 aria-disabled={locked}
                             >

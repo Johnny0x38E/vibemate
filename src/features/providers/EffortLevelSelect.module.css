@@ -1,0 +1,207 @@
+/* Reasoning-effort menu. The trigger fills the dialog's value column.
+   The menu is portaled to the body, so it needs a layer above the model dialog. */
+
+.field {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
+    min-height: 36px;
+    padding: 4px 28px 4px 6px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    background: var(--color-background);
+}
+
+.field:has(.trigger:focus-visible) {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+}
+
+.field[data-disabled="true"] {
+    cursor: not-allowed;
+}
+
+.field::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    right: 10px;
+    z-index: 2;
+    width: 6px;
+    height: 6px;
+    border-right: 1.5px solid var(--color-summary);
+    border-bottom: 1.5px solid var(--color-summary);
+    transform: translateY(-65%) rotate(45deg);
+    pointer-events: none;
+}
+
+.trigger {
+    /* Cover the field so the menu anchor does not shrink when tags are added.
+       Tags sit above this button and keep their own clicks. */
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    margin: 0;
+    padding: 0 28px 0 10px;
+    border: 0;
+    color: var(--color-text);
+    background: transparent;
+    font: inherit;
+    font-size: 0.8125rem;
+    text-align: start;
+    cursor: pointer;
+}
+
+.trigger:focus-visible {
+    outline: none;
+}
+
+.trigger[aria-disabled="true"] {
+    cursor: not-allowed;
+}
+
+.placeholder {
+    color: var(--color-summary);
+}
+
+.chip {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    max-width: 100%;
+    height: 24px;
+    padding: 0 2px 0 8px;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    color: var(--color-text);
+    background: var(--color-hover);
+    font-size: 0.8125rem;
+    line-height: 1;
+    white-space: nowrap;
+    /* Let a click on the tag body reach the trigger underneath, which opens
+       the menu, exactly as a click on the field chrome does. */
+    pointer-events: none;
+}
+
+.field[data-disabled="true"] .chip {
+    color: var(--color-summary);
+}
+
+.remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 4px;
+    color: var(--color-summary);
+    background: transparent;
+    font: inherit;
+    font-size: 0.875rem;
+    line-height: 1;
+    cursor: pointer;
+    /* The chip body lets clicks through to the trigger; this control keeps its own. */
+    pointer-events: auto;
+}
+
+.remove:hover:not(:disabled) {
+    color: var(--color-text);
+    background: var(--color-background);
+}
+
+.remove:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 1px;
+}
+
+.remove:disabled {
+    cursor: not-allowed;
+}
+
+.positioner {
+    z-index: calc(var(--layer-dialog) + 1);
+    width: var(--anchor-width);
+    max-width: var(--available-width);
+}
+
+.positioner[data-anchor-hidden] {
+    visibility: hidden;
+}
+
+.popup {
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    color: var(--color-text);
+    background: var(--color-background);
+    box-shadow: 0 8px 24px rgb(0 0 0 / 12%);
+    font: inherit;
+    font-size: 0.8125rem;
+}
+
+.list {
+    max-height: min(20rem, var(--available-height));
+    margin: 0;
+    /* Inset so a highlighted or selected row does not meet the popup edges. */
+    padding: 4px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    outline: 0;
+}
+
+.option {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: 8px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.option[data-highlighted] {
+    background: var(--color-hover);
+}
+
+.option[data-selected] {
+    background: var(--color-selected);
+}
+
+.mark {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    border: 1px solid var(--color-border);
+    border-radius: 3px;
+    color: var(--color-on-accent);
+    background: var(--color-background);
+}
+
+.check {
+    width: 10px;
+    height: 10px;
+    opacity: 0;
+}
+
+.option[data-selected] .mark {
+    border-color: var(--color-accent);
+    background: var(--color-accent);
+}
+
+.option[data-selected] .check {
+    opacity: 1;
+}

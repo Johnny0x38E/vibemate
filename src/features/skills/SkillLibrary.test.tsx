@@ -179,9 +179,7 @@ test("local import asks for a folder and imports everything in it", async () => 
     list.mockResolvedValueOnce(page([row]));
     list.mockResolvedValueOnce(page([row, second]));
     await setup();
-    fireEvent.click(
-        await screen.findByRole("button", { name: "Local import" }),
-    );
+    fireEvent.click(await screen.findByRole("button", { name: "Import" }));
     await waitFor(() => {
         expect(pick).toHaveBeenCalledWith("Choose a skill folder");
     });
@@ -197,9 +195,7 @@ test("local import asks for a folder and imports everything in it", async () => 
 test("closing the picker changes nothing", async () => {
     pick.mockResolvedValue({ kind: "cancelled" });
     await setup();
-    fireEvent.click(
-        await screen.findByRole("button", { name: "Local import" }),
-    );
+    fireEvent.click(await screen.findByRole("button", { name: "Import" }));
     await waitFor(() => {
         expect(pick).toHaveBeenCalledTimes(1);
     });
@@ -217,9 +213,7 @@ test("refused folders are named with their reason", async () => {
         ],
     });
     await setup();
-    fireEvent.click(
-        await screen.findByRole("button", { name: "Local import" }),
-    );
+    fireEvent.click(await screen.findByRole("button", { name: "Import" }));
     expect(await screen.findByText("Imported 1 skill.")).toBeDefined();
     expect(screen.getByText("2 folders were skipped:")).toBeDefined();
     expect(
@@ -240,9 +234,7 @@ test("a folder with no skills is explained and reported", async () => {
         skipped: [{ folder: "empty", code: "manifest_missing" }],
     });
     await setup();
-    fireEvent.click(
-        await screen.findByRole("button", { name: "Local import" }),
-    );
+    fireEvent.click(await screen.findByRole("button", { name: "Import" }));
     expect(await screen.findByText("Nothing was imported.")).toBeDefined();
     expect(
         screen.getByText("empty: The folder has no SKILL.md file."),
@@ -254,9 +246,7 @@ test("a folder with no skills is explained and reported", async () => {
 test("import failures are translated and unknown outcomes require a reload", async () => {
     await setup();
     pick.mockRejectedValue(new SkillRequestError("no_skills_found"));
-    fireEvent.click(
-        await screen.findByRole("button", { name: "Local import" }),
-    );
+    fireEvent.click(await screen.findByRole("button", { name: "Import" }));
     expect(
         await screen.findByText(
             "That folder holds no skill: no SKILL.md was found in it or in its subfolders.",
@@ -267,7 +257,7 @@ test("import failures are translated and unknown outcomes require a reload", asy
     // The second attempt reaches the import step again.
     pick.mockResolvedValue({ kind: "selected", path: "/tmp/sources/demo" });
     create.mockRejectedValue(new SkillRequestError("outcome_unknown"));
-    fireEvent.click(screen.getByRole("button", { name: "Local import" }));
+    fireEvent.click(screen.getByRole("button", { name: "Import" }));
     expect(
         await screen.findByText(
             "The result is unknown. Reload the list before another change.",
@@ -403,7 +393,7 @@ test("the Chinese page shows the same states and controls", async () => {
     expect(
         await screen.findByRole("heading", { level: 1, name: "技能" }),
     ).toBeDefined();
-    expect(screen.getByRole("button", { name: "本地导入" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "导入" })).toBeDefined();
     // The list arrives asynchronously; wait for the first row before reading it.
     expect(
         await screen.findByRole("heading", { name: "demo-skill" }),

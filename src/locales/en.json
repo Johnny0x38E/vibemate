@@ -163,7 +163,7 @@
         },
         "models": {
             "fetch": "Fetch models",
-            "refreshSaved": "Refresh saved models",
+            "refreshSaved": "Refresh",
             "refreshing": "Refreshing…",
             "refreshNotice_one": "Refreshed {{count}} saved model from the provider catalog.",
             "refreshNotice_other": "Refreshed {{count}} saved models from the provider catalog.",
@@ -237,7 +237,7 @@
                 "invalid_stored_model": "A saved model entry is not recognized. Nothing was changed.",
                 "model_id_invalid": "The model ID is not valid.",
                 "model_alias_invalid": "The display name is not valid.",
-                "model_parameters_invalid": "Enter a positive whole number for each limit, and choose a valid thinking-effort combination.",
+                "model_parameters_invalid": "Enter a positive whole number for each limit, and choose a valid reasoning-effort combination.",
                 "model_already_exists": "This model ID is already saved.",
                 "model_not_found": "This model was not found. Refresh the list.",
                 "model_changed": "This model changed since you opened it. Reload before saving.",
@@ -266,15 +266,17 @@
             "parameters": {
                 "contextWindow": "Context window",
                 "maxOutput": "Maximum output",
-                "effort": "Thinking effort",
-                "effortUnset": "Not set",
-                "effortAny": "All gateway levels",
-                "effortListed": "Specific levels",
-                "defaultLevel": "Default level",
-                "defaultUnset": "No default"
+                "effort": "Reasoning effort",
+                "capabilities": "Capabilities",
+                "unset": "Not set",
+                "removeLevel": "Remove {{level}}"
+            },
+            "limits": {
+                "contextWindow": "Context window {{size}}",
+                "maxOutput": "Maximum output {{size}}"
             },
             "capabilities": {
-                "thinking": "Thinking",
+                "thinking": "Reasoning",
                 "imageInput": "Image input",
                 "toolCalls": "Tool calls",
                 "catalog": "{{capability}} — declared by the provider catalog",
@@ -282,7 +284,7 @@
             },
             "editor": {
                 "title": "Edit model {{modelId}}",
-                "save": "Save model",
+                "save": "Save",
                 "cancel": "Cancel",
                 "saved": "Model saved.",
                 "reload": "Reload saved model and discard draft",
@@ -292,7 +294,8 @@
             "manual": {
                 "title": "Add a model manually",
                 "modelId": "Model ID",
-                "alias": "Alias (optional)",
+                "alias": "Alias",
+                "aliasPlaceholder": "Optional",
                 "add": "Add and save",
                 "check": "Check saved models",
                 "uncertain": "The save result is unknown. Check saved models before adding again. If the check fails, try checking again.",
@@ -608,7 +611,7 @@
     },
     "skills": {
         "title": "Skills",
-        "localImport": "Local import",
+        "localImport": "Import",
         "pickTitle": "Choose a skill folder",
         "picking": "Choosing…",
         "importing": "Importing…",

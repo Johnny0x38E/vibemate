@@ -26,6 +26,7 @@ import { getProviderSecretStatus } from "../../lib/desktop/providerSecrets";
 import { IconButton } from "../../components/IconButton";
 import { ModelEntryForm } from "./ModelEntryForm";
 import { ModelCapabilityIcons } from "./ModelCapabilityIcons";
+import { ModelLimitMarks } from "./ModelLimitMarks";
 import { NO_CAPABILITY_DECLARATIONS } from "./modelCapabilities";
 import { ModelCheckbox } from "../../components/ModelCheckbox";
 import buttons from "../../components/actionButtons.module.css";
@@ -788,31 +789,15 @@ export function ProviderModels({
 
     const listBody = (
         <>
-            {!hidden && list.kind === "ready" && (
-                <div className={styles["manualAction"]}>
-                    {dirty && (
-                        <p
-                            className={[editForm["hint"], styles["manualDraft"]]
-                                .filter(Boolean)
-                                .join(" ")}
-                            role="status"
-                        >
-                            {t("providers.models.manual.draft")}
-                        </p>
+            {!hidden && list.kind === "ready" && dirty && (
+                <p
+                    className={[editForm["hint"], styles["manualDraft"]].join(
+                        " ",
                     )}
-                    <button
-                        type="button"
-                        className={buttons["secondary"]}
-                        disabled={sectionBusy || dirty}
-                        onClick={() => {
-                            if (sectionBusy || dirty) return;
-                            rememberTrigger();
-                            setEditor({ kind: "create" });
-                        }}
-                    >
-                        {t("providers.models.manual.title")}
-                    </button>
-                </div>
+                    role="status"
+                >
+                    {t("providers.models.manual.draft")}
+                </p>
             )}
             {viewMode === "selected" &&
                 list.kind === "loading" &&
@@ -970,6 +955,14 @@ export function ProviderModels({
                                                     </span>
                                                 )}
                                             </span>
+                                            <ModelLimitMarks
+                                                contextWindow={
+                                                    model.contextWindow
+                                                }
+                                                maxOutputTokens={
+                                                    model.maxOutputTokens
+                                                }
+                                            />
                                             <ModelCapabilityIcons
                                                 capabilities={
                                                     model.capabilities
@@ -1137,6 +1130,14 @@ export function ProviderModels({
                                             catalog-only: a model that is not
                                             saved yet cannot carry user
                                             declarations. */}
+                                            <ModelLimitMarks
+                                                contextWindow={
+                                                    model.contextWindow
+                                                }
+                                                maxOutputTokens={
+                                                    model.maxOutputTokens
+                                                }
+                                            />
                                             <ModelCapabilityIcons
                                                 capabilities={
                                                     model.capabilities
@@ -1407,6 +1408,17 @@ export function ProviderModels({
                                 {t("providers.models.backToSelected")}
                             </button>
                         </>
+                    )}
+                    {!hidden && list.kind === "ready" && (
+                        <IconButton
+                            icon="plus"
+                            label={t("providers.models.manual.title")}
+                            blocked={sectionBusy || dirty}
+                            onClick={() => {
+                                rememberTrigger();
+                                setEditor({ kind: "create" });
+                            }}
+                        />
                     )}
                     {layout !== "tabPanel" && saveButton}
                 </div>

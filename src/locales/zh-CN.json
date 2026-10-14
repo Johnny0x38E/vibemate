@@ -163,7 +163,7 @@
         },
         "models": {
             "fetch": "获取模型",
-            "refreshSaved": "刷新已保存模型",
+            "refreshSaved": "刷新",
             "refreshing": "正在刷新…",
             "refreshNotice_one": "已从服务商目录刷新 {{count}} 个已保存模型。",
             "refreshNotice_other": "已从服务商目录刷新 {{count}} 个已保存模型。",
@@ -237,7 +237,7 @@
                 "invalid_stored_model": "无法识别已保存的模型条目，未作修改。",
                 "model_id_invalid": "模型 ID 无效。",
                 "model_alias_invalid": "显示名称无效。",
-                "model_parameters_invalid": "上下文窗口和最大输出需要是正整数，思考档位也需要是有效组合。",
+                "model_parameters_invalid": "上下文窗口和最大输出需要是正整数，推理档位也需要是有效组合。",
                 "model_already_exists": "该模型 ID 已存在。",
                 "model_not_found": "找不到该模型，请刷新列表。",
                 "model_changed": "该模型已发生变更，请重新加载后再保存。",
@@ -266,15 +266,17 @@
             "parameters": {
                 "contextWindow": "上下文窗口",
                 "maxOutput": "最大输出",
-                "effort": "思考强度",
-                "effortUnset": "未设置",
-                "effortAny": "全部档位",
-                "effortListed": "指定档位",
-                "defaultLevel": "默认档位",
-                "defaultUnset": "无默认"
+                "effort": "推理强度",
+                "capabilities": "能力",
+                "unset": "未设置",
+                "removeLevel": "移除 {{level}}"
+            },
+            "limits": {
+                "contextWindow": "上下文窗口 {{size}}",
+                "maxOutput": "最大输出 {{size}}"
             },
             "capabilities": {
-                "thinking": "思考",
+                "thinking": "推理",
                 "imageInput": "图像输入",
                 "toolCalls": "工具调用",
                 "catalog": "{{capability}} — 服务商目录声明",
@@ -282,7 +284,7 @@
             },
             "editor": {
                 "title": "编辑模型 {{modelId}}",
-                "save": "保存模型",
+                "save": "保存",
                 "cancel": "取消",
                 "saved": "模型已保存。",
                 "reload": "重新加载已保存的模型并放弃草稿",
@@ -292,7 +294,8 @@
             "manual": {
                 "title": "手动添加模型",
                 "modelId": "模型 ID",
-                "alias": "别名（可选）",
+                "alias": "别名",
+                "aliasPlaceholder": "可选",
                 "add": "添加并保存",
                 "check": "检查已保存模型",
                 "uncertain": "保存结果未知。再次添加前，请先检查已保存模型；检查失败时可再次检查。",
@@ -608,7 +611,7 @@
     },
     "skills": {
         "title": "技能",
-        "localImport": "本地导入",
+        "localImport": "导入",
         "pickTitle": "选择技能文件夹",
         "picking": "正在选择…",
         "importing": "正在导入…",

@@ -1,7 +1,7 @@
 //! Non-secret fetch/browse requests and results, plus the internal prepared credential.
 
 use crate::credentials::Secret;
-use crate::model_catalog::{IncompleteReason, ModelCapabilities};
+use crate::model_catalog::{IncompleteReason, ModelCapabilities, ThinkingEffort};
 use crate::model_identity::RouteSupport;
 use crate::providers::{ProviderId, ProviderKind, ProviderProtocol};
 use serde::{Deserialize, Serialize};
@@ -93,6 +93,7 @@ pub struct UpstreamBrowseModel {
     pub output_modalities: Option<Vec<String>>,
     pub supported_endpoints: Option<Vec<String>>,
     pub capabilities: ModelCapabilities,
+    pub thinking_effort: Option<ThinkingEffort>,
     pub route_support: RouteSupport,
     /// Protocol this instance would use for the model (P15).
     pub resolved_protocol: Option<crate::providers::ProviderProtocol>,

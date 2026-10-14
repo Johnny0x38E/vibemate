@@ -22,7 +22,7 @@
 模型并返回 SHA-256 摘要，只有摘要未变才写入别名与能力声明，过期编辑返回
 `model_changed` 并要求重新加载（[provider-completion.md](provider-completion.md)）。
 模型行仍没有请求参数，也没有供配置预览绑定的模型 revision，预览过期检查留在 P18。
-SQLite 最新迁移为 v14（v11 为技能上限重建，v12 为 Agent 自动探测偏好表，v13 为能力列，v14 为用户能力声明列）；新增持久化时追加迁移，
+SQLite 最新迁移为 v15（v14 为用户能力声明列，v15 为思考档位 `thinking_effort`）；新增持久化时追加迁移，
 不改写旧 SQL。
 
 能力上限和请求设置不是同一字段。例如 Pi 模型定义中的 `maxTokens` 描述模型上限，
@@ -88,10 +88,14 @@ P16 保留目录能力解析、来源记录、持久化和只读显示，以及�
 仍未完成，拆分与验收要求见 [provider-completion.md](provider-completion.md)；P35 的
 Agent 引用检查不在此列。
 
-维护者 2026-10-14 要求补充模型参数（上下文窗口、思考强度、最大输出等），与行内
-融合表单一起统一验收（本轮未实施）。思考强度的归属与旧决策存在张力：思考选项
-与请求输出限制本属目标 Agent 配置，实施前须维护者明确是模型元数据、Agent 请求
-设置还是两者，清单与验收要求见 [todo.md](todo.md) Task P40。
+维护者 2026-10-14 确认：上下文窗口、最大输出和思考档位是获取模型与手动模型共用的
+模型元数据。目录里该字段有值时覆盖已保存值；之后的手动编辑再写成新的最终态；
+目录没有该字段时保留已保存值。这三项不是能力声明，目录刷新可以覆盖它们。每次请求
+选用的思考档位仍属于目标 Agent，不在这个对话框里设置。思考档位保存的是模型声明的
+可选档与默认档（DeepSeek `effort.supported_levels`/`default_level`，OpenRouter
+`reasoning.supported_efforts`/`default_effort`）。词表为 2026-10-14 核实的
+`max`/`xhigh`/`high`/`medium`/`low`/`minimal`/`none`；未知档位不写入。SQLite v15
+增加 `thinking_effort`。编辑界面改为对话框。
 
 ## P18：以 Claude Code 配置预览为下一主线
 

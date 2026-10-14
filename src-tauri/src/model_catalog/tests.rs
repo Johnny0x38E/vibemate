@@ -213,6 +213,10 @@ fn deepseek_documented_example_parses() {
                 image_input: evidence(true, CapabilitySource::DeepseekModelInputModalities),
                 tool_calls: evidence(true, CapabilitySource::DeepseekModelFeatures),
             },
+            thinking_effort: Some(ThinkingEffort::Listed {
+                levels: vec![EffortLevel::Max, EffortLevel::High, EffortLevel::Low],
+                default_level: Some(EffortLevel::High),
+            }),
         }
     );
     assert_eq!(page.models[1].model_id, "deepseek-v4-pro");
@@ -248,6 +252,7 @@ fn openrouter_page_maps_nested_fields_and_paging_links() {
                 // `["temperature"]` is a valid exhaustive list that omits tools.
                 tool_calls: evidence(false, CapabilitySource::OpenrouterModelSupportedParameters),
             },
+            thinking_effort: None,
         }
     );
     let last = parse_openrouter_page(&openrouter_body(&["a"], None, 1)).unwrap();
@@ -427,6 +432,67 @@ fn capability_parser_keeps_unknown_distinct_from_explicit_non_support() {
             .state,
         CapabilityState::Unknown
     );
+}
+
+#[test]
+fn thinking_effort_keeps_a_stated_list_and_ignores_a_malformed_one() {
+    let deepseek = parse_deepseek(DEEPSEEK_EXAMPLE.as_bytes()).unwrap();
+    assert_eq!(
+        deepseek.models[0].thinking_effort,
+        Some(ThinkingEffort::Listed {
+            levels: vec![EffortLevel::Max, EffortLevel::High, EffortLevel::Low],
+            default_level: Some(EffortLevel::High),
+        })
+    );
+    // The second documented model omits `effort`, so it states nothing.
+    assert_eq!(deepseek.models[1].thinking_effort, None);
+
+    let any = parse_openrouter_page(
+        br#"{"data":[{"id":"m","reasoning":{"supported_efforts":null,"default_effort":"medium"}}],"links":{"next":null},"total_count":1}"#,
+    )
+    .unwrap();
+    assert_eq!(
+        any.models[0].thinking_effort,
+        Some(ThinkingEffort::Any {
+            default_level: Some(EffortLevel::Medium),
+        })
+    );
+
+    let listed = parse_openrouter_page(
+        br#"{"data":[{"id":"m","reasoning":{"supported_efforts":["low","high"],"default_effort":"none"}}],"links":{"next":null},"total_count":1}"#,
+    )
+    .unwrap();
+    assert_eq!(
+        listed.models[0].thinking_effort,
+        Some(ThinkingEffort::Listed {
+            levels: vec![EffortLevel::High, EffortLevel::Low],
+            default_level: Some(EffortLevel::Off),
+        })
+    );
+
+    let empty = parse_openrouter_page(
+        br#"{"data":[{"id":"m","reasoning":{"supported_efforts":[]}}],"links":{"next":null},"total_count":1}"#,
+    )
+    .unwrap();
+    assert_eq!(
+        empty.models[0].thinking_effort,
+        Some(ThinkingEffort::Listed {
+            levels: Vec::new(),
+            default_level: None,
+        })
+    );
+
+    // An unknown token is not a statement, so a later refresh will not overwrite.
+    let malformed = parse_openrouter_page(
+        br#"{"data":[{"id":"m","reasoning":{"supported_efforts":["low","ultra"]}}],"links":{"next":null},"total_count":1}"#,
+    )
+    .unwrap();
+    assert_eq!(malformed.models[0].thinking_effort, None);
+    let omitted = parse_openrouter_page(
+        br#"{"data":[{"id":"m","reasoning":{"mandatory":true}}],"links":{"next":null},"total_count":1}"#,
+    )
+    .unwrap();
+    assert_eq!(omitted.models[0].thinking_effort, None);
 }
 
 #[test]

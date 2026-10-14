@@ -17,6 +17,7 @@ const RUST_MODEL_ERROR_CODES = [
     "invalid_stored_model",
     "model_id_invalid",
     "model_alias_invalid",
+    "model_parameters_invalid",
     "model_already_exists",
     "model_not_found",
     "model_changed",
@@ -81,6 +82,36 @@ export interface ModelCapabilities {
     toolCalls: CapabilityEvidence;
 }
 
+/**
+ * Thinking-effort tokens verified against OpenRouter's gateway and DeepSeek's
+ * model list (2026-10-14). `none` turns thinking off.
+ */
+export const EFFORT_LEVELS = [
+    "max",
+    "xhigh",
+    "high",
+    "medium",
+    "low",
+    "minimal",
+    "none",
+] as const;
+
+/** One documented thinking-effort token. */
+export type EffortLevel = (typeof EFFORT_LEVELS)[number];
+
+/**
+ * The model's stated thinking-effort options. `null` on a row means no statement.
+ * A catalog refresh replaces it only when the catalog states one; a manual save
+ * always writes the submitted value, including a clear.
+ */
+export type ThinkingEffort =
+    | { kind: "any"; defaultLevel: EffortLevel | null }
+    | {
+          kind: "listed";
+          levels: EffortLevel[];
+          defaultLevel: EffortLevel | null;
+      };
+
 /** One user declaration about a capability. "unknown" is never a declaration. */
 export type CapabilityOverride = "supported" | "unsupported";
 
@@ -109,6 +140,8 @@ export interface ProviderModel {
     supportedEndpoints: string[] | null;
     capabilities: ModelCapabilities;
     capabilityOverrides: CapabilityOverrides;
+    /** Stated thinking-effort options, or `null` when nobody has set them. */
+    thinkingEffort: ThinkingEffort | null;
     routeSupport: "supported" | "unsupported" | "unknown" | "not_applicable";
     /** Protocol this instance would use (P15). Null when Command Code has no route. */
     resolvedProtocol: ProviderProtocol | null;
@@ -138,6 +171,12 @@ export interface UpdateModelEditInput extends ModelIdentity {
     alias: string | null;
     /** The complete declaration set; an all-null set restores catalog defaults. */
     capabilityOverrides: CapabilityOverrides;
+    /** Final context window. `null` clears a stored limit. */
+    contextWindow: number | null;
+    /** Final maximum output. `null` clears a stored limit. */
+    maxOutputTokens: number | null;
+    /** Final thinking-effort statement. `null` clears a stored statement. */
+    thinkingEffort: ThinkingEffort | null;
 }
 
 /** Opaque cursor pagination, or ranked search with a total and no cursor. */
@@ -173,6 +212,8 @@ export interface SaveProviderModelEntry {
     outputModalities: string[] | null;
     supportedEndpoints: string[] | null;
     capabilities: ModelCapabilities;
+    /** Catalog effort statement. `null` does not clear a stored value. */
+    thinkingEffort: ThinkingEffort | null;
 }
 
 /** Remove unchecked rows and upsert newly checked ones in one transaction. */
@@ -192,6 +233,7 @@ export interface UpstreamBrowseModel {
     outputModalities: string[] | null;
     supportedEndpoints: string[] | null;
     capabilities: ModelCapabilities;
+    thinkingEffort: ThinkingEffort | null;
     routeSupport: ProviderModel["routeSupport"];
     resolvedProtocol: ProviderProtocol | null;
 }
@@ -210,6 +252,9 @@ export interface AddManualModelInput {
     alias: string | null;
     /** Capability declarations chosen in the create form; all-null means none. */
     capabilityOverrides: CapabilityOverrides;
+    contextWindow: number | null;
+    maxOutputTokens: number | null;
+    thinkingEffort: ThinkingEffort | null;
 }
 
 /** Only a manual row can be deleted. */
@@ -285,6 +330,70 @@ function nullableString(value: unknown): string | null {
 
 function nullableInteger(value: unknown): number | null {
     return value === null ? null : integer(value);
+}
+
+/** A stored token limit: absent, or a positive safe integer. Zero is not a limit. */
+function positiveLimit(value: unknown): number | null {
+    const number = nullableInteger(value);
+    if (number === 0) throw invalidResponse();
+    return number;
+}
+
+function effortLevel(value: unknown): EffortLevel {
+    return choice(value, EFFORT_LEVELS);
+}
+
+function thinkingEffort(value: unknown): ThinkingEffort | null {
+    if (value === null) return null;
+    if (!isObject(value) || typeof value["kind"] !== "string") {
+        throw invalidResponse();
+    }
+    const defaultLevel =
+        value["defaultLevel"] === null
+            ? null
+            : effortLevel(value["defaultLevel"]);
+    if (value["kind"] === "any") {
+        if (!hasExactKeys(value, ["kind", "defaultLevel"])) {
+            throw invalidResponse();
+        }
+        return { kind: "any", defaultLevel };
+    }
+    if (value["kind"] !== "listed") throw invalidResponse();
+    if (!hasExactKeys(value, ["kind", "levels", "defaultLevel"])) {
+        throw invalidResponse();
+    }
+    if (!Array.isArray(value["levels"])) throw invalidResponse();
+    const levels = value["levels"].map((entry: unknown) => effortLevel(entry));
+    if (new Set(levels).size !== levels.length) throw invalidResponse();
+    if (
+        defaultLevel !== null &&
+        defaultLevel !== "none" &&
+        !levels.includes(defaultLevel)
+    ) {
+        throw invalidResponse();
+    }
+    return { kind: "listed", levels, defaultLevel };
+}
+
+/** Compare effort statements after putting lists into the documented order. */
+function sameThinkingEffort(
+    left: ThinkingEffort | null,
+    right: ThinkingEffort | null,
+): boolean {
+    if (left === null || right === null) return left === right;
+    if (left.kind === "any" && right.kind === "any") {
+        return left.defaultLevel === right.defaultLevel;
+    }
+    if (left.kind !== "listed" || right.kind !== "listed") return false;
+    const ordered = (levels: readonly EffortLevel[]) =>
+        EFFORT_LEVELS.filter((level) => levels.includes(level));
+    const leftLevels = ordered(left.levels);
+    const rightLevels = ordered(right.levels);
+    return (
+        leftLevels.length === rightLevels.length &&
+        leftLevels.every((level, index) => level === rightLevels[index]) &&
+        left.defaultLevel === right.defaultLevel
+    );
 }
 
 function stringList(value: unknown): string[] | null {
@@ -369,6 +478,7 @@ const MODEL_KEYS = [
     "supportedEndpoints",
     "capabilities",
     "capabilityOverrides",
+    "thinkingEffort",
     "routeSupport",
     "resolvedProtocol",
     "upstreamState",
@@ -395,8 +505,8 @@ function validateModel(value: unknown, providerId: string): ProviderModel {
         selected: boolean(data["selected"]),
         alias: nullableString(data["alias"]),
         upstreamName: nullableString(data["upstreamName"]),
-        contextWindow: nullableInteger(data["contextWindow"]),
-        maxOutputTokens: nullableInteger(data["maxOutputTokens"]),
+        contextWindow: positiveLimit(data["contextWindow"]),
+        maxOutputTokens: positiveLimit(data["maxOutputTokens"]),
         inputModalities: stringList(data["inputModalities"]),
         outputModalities: stringList(data["outputModalities"]),
         supportedEndpoints: stringList(data["supportedEndpoints"]),
@@ -404,6 +514,7 @@ function validateModel(value: unknown, providerId: string): ProviderModel {
         capabilityOverrides: modelCapabilityOverrides(
             data["capabilityOverrides"],
         ),
+        thinkingEffort: thinkingEffort(data["thinkingEffort"]),
         routeSupport: choice(data["routeSupport"], [
             "supported",
             "unsupported",
@@ -519,7 +630,10 @@ export async function updateProviderModelEdit(
         snapshot.model.alias !== (input.alias?.trim() ?? null) ||
         overrides.thinking !== expected.thinking ||
         overrides.imageInput !== expected.imageInput ||
-        overrides.toolCalls !== expected.toolCalls
+        overrides.toolCalls !== expected.toolCalls ||
+        snapshot.model.contextWindow !== input.contextWindow ||
+        snapshot.model.maxOutputTokens !== input.maxOutputTokens ||
+        !sameThinkingEffort(snapshot.model.thinkingEffort, input.thinkingEffort)
     )
         throw invalidResponse();
     return snapshot;
@@ -564,7 +678,10 @@ export async function addManualProviderModel(
         !model.selected ||
         overrides.thinking !== expected.thinking ||
         overrides.imageInput !== expected.imageInput ||
-        overrides.toolCalls !== expected.toolCalls
+        overrides.toolCalls !== expected.toolCalls ||
+        model.contextWindow !== input.contextWindow ||
+        model.maxOutputTokens !== input.maxOutputTokens ||
+        !sameThinkingEffort(model.thinkingEffort, input.thinkingEffort)
     )
         throw invalidResponse();
     return model;
@@ -618,6 +735,7 @@ export async function browseUpstreamModelsPage(input: {
             "outputModalities",
             "supportedEndpoints",
             "capabilities",
+            "thinkingEffort",
             "routeSupport",
             "resolvedProtocol",
         ]);
@@ -626,12 +744,13 @@ export async function browseUpstreamModelsPage(input: {
         return {
             modelId: row["modelId"],
             upstreamName: nullableString(row["upstreamName"]),
-            contextWindow: nullableInteger(row["contextWindow"]),
-            maxOutputTokens: nullableInteger(row["maxOutputTokens"]),
+            contextWindow: positiveLimit(row["contextWindow"]),
+            maxOutputTokens: positiveLimit(row["maxOutputTokens"]),
             inputModalities: stringList(row["inputModalities"]),
             outputModalities: stringList(row["outputModalities"]),
             supportedEndpoints: stringList(row["supportedEndpoints"]),
             capabilities: modelCapabilities(row["capabilities"]),
+            thinkingEffort: thinkingEffort(row["thinkingEffort"]),
             routeSupport: choice(row["routeSupport"], [
                 "supported",
                 "unsupported",

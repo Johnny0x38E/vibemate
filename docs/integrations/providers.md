@@ -250,6 +250,11 @@ Base 为 `https://api.deepseek.com`；Anthropic 格式的 Base 为
   `supported_endpoints`，没有能力字段。官方模型页展示的文本/视觉/推理标签没有
   对应的公开 API 字段，因此 vibemate 对 Command Code 模型保持未知，不按模型名推断。
 
+思考档位另存在 `provider_model.thinking_effort`（SQLite v15）。DeepSeek 写入
+`effort.supported_levels` 与 `default_level`；OpenRouter `supported_efforts: null`
+记为接受全部网关档位，数组记为显式列表，并保留合法的 `default_effort`。字段缺失或
+含未知档位时不覆盖已保存值。上下文窗口和最大输出同样只在目录给出正整数时覆盖。
+
 映射结果保存在 `provider_model.capabilities`（SQLite v13，JSON 文本），每项包含
 `state` 与 `source`；读取时拒绝“明确状态但没有来源”的行。界面只为“明确支持”绘制图标，
 未知与不支持都不显示图标，也不显示为“已支持”。手动模型与旧数据迁移后保持未知。

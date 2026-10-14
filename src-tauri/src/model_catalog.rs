@@ -25,7 +25,7 @@
 
 use std::collections::HashSet;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use url::Url;
 
@@ -232,6 +232,181 @@ impl CapabilityOverrides {
     }
 }
 
+/// A thinking-effort token verified against current provider docs (2026-10-14).
+///
+/// OpenRouter's gateway accepts `max`, `xhigh`, `high`, `medium`, `low`,
+/// `minimal` and `none`. DeepSeek's model list publishes a subset of those
+/// (`low`, `high`, `max` in the documented example) and keeps `none` out of
+/// `supported_levels` because `none` turns thinking off. Tokens outside this
+/// set are not guessed into a level.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EffortLevel {
+    /// Largest reasoning allocation.
+    #[serde(rename = "max")]
+    Max,
+    /// Same allocation band as `max` on the OpenRouter gateway.
+    #[serde(rename = "xhigh")]
+    XHigh,
+    /// Large reasoning allocation.
+    #[serde(rename = "high")]
+    High,
+    /// Moderate reasoning allocation.
+    #[serde(rename = "medium")]
+    Medium,
+    /// Smaller reasoning allocation.
+    #[serde(rename = "low")]
+    Low,
+    /// Smallest reasoning allocation above off.
+    #[serde(rename = "minimal")]
+    Minimal,
+    /// Thinking off. DeepSeek omits this from `supported_levels`.
+    #[serde(rename = "none")]
+    Off,
+}
+
+impl EffortLevel {
+    /// Display order: highest effort first, then off. Matches OpenRouter's
+    /// documented `supported_efforts` order.
+    pub const ALL: [Self; 7] = [
+        Self::Max,
+        Self::XHigh,
+        Self::High,
+        Self::Medium,
+        Self::Low,
+        Self::Minimal,
+        Self::Off,
+    ];
+
+    /// Parse one documented token.
+    pub fn parse(value: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|level| level.as_str() == value)
+    }
+
+    /// The token stored and shown for this level.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Max => "max",
+            Self::XHigh => "xhigh",
+            Self::High => "high",
+            Self::Medium => "medium",
+            Self::Low => "low",
+            Self::Minimal => "minimal",
+            Self::Off => "none",
+        }
+    }
+}
+
+/// The model's stated thinking-effort options. This is model metadata, not the
+/// effort a particular Agent request will send.
+///
+/// `None` on a row means nobody has stated a value. A catalog refresh replaces
+/// the stored value only when the catalog states one. A manual save always
+/// writes the submitted value, including clearing it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
+pub enum ThinkingEffort {
+    /// OpenRouter `supported_efforts: null`: every gateway effort is accepted.
+    #[serde(rename_all = "camelCase")]
+    Any {
+        /// Catalog or editor default, when one was stated.
+        #[serde(default)]
+        default_level: Option<EffortLevel>,
+    },
+    /// An explicit list. An empty list is a real statement that no level is offered.
+    #[serde(rename_all = "camelCase")]
+    Listed {
+        /// Levels in [`EffortLevel::ALL`] order, without duplicates.
+        levels: Vec<EffortLevel>,
+        /// Default among `levels`, or `none` even when `none` is not listed.
+        #[serde(default)]
+        default_level: Option<EffortLevel>,
+    },
+}
+
+impl ThinkingEffort {
+    /// Put levels into display order and reject duplicates or a default the list
+    /// cannot support. `none` may be the default without appearing in the list.
+    pub fn canonical(self) -> Option<Self> {
+        match self {
+            Self::Any { default_level } => Some(Self::Any { default_level }),
+            Self::Listed {
+                levels,
+                default_level,
+            } => {
+                if levels.len() > EffortLevel::ALL.len() {
+                    return None;
+                }
+                let mut seen = [false; EffortLevel::ALL.len()];
+                for level in &levels {
+                    let index = level.index();
+                    if seen[index] {
+                        return None;
+                    }
+                    seen[index] = true;
+                }
+                let default_ok = match default_level {
+                    None | Some(EffortLevel::Off) => true,
+                    Some(level) => levels.contains(&level),
+                };
+                if !default_ok {
+                    return None;
+                }
+                let levels = EffortLevel::ALL
+                    .into_iter()
+                    .filter(|level| levels.contains(level))
+                    .collect();
+                Some(Self::Listed {
+                    levels,
+                    default_level,
+                })
+            }
+        }
+    }
+}
+
+/// Serialize a stated effort for SQLite. `None` stays SQL NULL.
+pub fn encode_thinking_effort(
+    effort: Option<&ThinkingEffort>,
+) -> Result<Option<String>, serde_json::Error> {
+    effort.map(serde_json::to_string).transpose()
+}
+
+/// Read a stored effort.
+///
+/// `Some(None)` is an absent statement. `None` means the stored text is not a
+/// usable statement, so the caller should reject the row.
+pub fn decode_thinking_effort(text: Option<&str>) -> Option<Option<ThinkingEffort>> {
+    let Some(text) = text else {
+        return Some(None);
+    };
+    let effort: ThinkingEffort = serde_json::from_str(text).ok()?;
+    effort.canonical().map(Some)
+}
+
+/// A positive token count, or `Some(None)` when the field is cleared.
+/// `None` means the number is present but not a usable limit.
+pub fn accepted_limit(value: Option<i64>) -> Option<Option<i64>> {
+    match value {
+        Some(number) if number > 0 => Some(Some(number)),
+        None => Some(None),
+        Some(_) => None,
+    }
+}
+
+impl EffortLevel {
+    const fn index(self) -> usize {
+        match self {
+            Self::Max => 0,
+            Self::XHigh => 1,
+            Self::High => 2,
+            Self::Medium => 3,
+            Self::Low => 4,
+            Self::Minimal => 5,
+            Self::Off => 6,
+        }
+    }
+}
+
 /// One model from a vendor list, already validated and normalized.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CatalogModel {
@@ -252,6 +427,9 @@ pub struct CatalogModel {
     pub supported_endpoints: Option<Vec<String>>,
     /// Field-level upstream evidence for thinking, image input and tool calls.
     pub capabilities: ModelCapabilities,
+    /// Stated thinking-effort options. `None` means the catalog did not state any,
+    /// which is different from an empty list or "any gateway level".
+    pub thinking_effort: Option<ThinkingEffort>,
 }
 
 /// One parsed response (one page for OpenRouter).
@@ -368,6 +546,82 @@ fn deepseek_tool_capability(model_id: &str) -> CapabilityEvidence {
     }
 }
 
+/// A documented effort token, or `None` when the field is absent, null, or not
+/// one of [`EffortLevel::ALL`]. A bad token drops only the default; the caller
+/// still keeps a valid level list.
+fn stated_level(value: Option<&Value>) -> Option<EffortLevel> {
+    EffortLevel::parse(value?.as_str()?)
+}
+
+/// Parse a level array. One unknown token, a duplicate, or a non-array makes the
+/// whole list unusable so a refresh does not overwrite a saved value with a guess.
+fn parse_level_list(value: &Value) -> Option<Vec<EffortLevel>> {
+    let items = value.as_array()?;
+    if items.len() > EffortLevel::ALL.len() {
+        return None;
+    }
+    let mut levels = Vec::with_capacity(items.len());
+    for item in items {
+        let level = EffortLevel::parse(item.as_str()?)?;
+        if levels.contains(&level) {
+            return None;
+        }
+        levels.push(level);
+    }
+    Some(levels)
+}
+
+/// DeepSeek `effort`: a string array of `supported_levels` plus an optional
+/// `default_level` that the docs say is one of those levels. A missing object
+/// states nothing. A default outside the list (other than `none`) drops the
+/// whole statement.
+fn deepseek_thinking_effort(value: Option<&Value>) -> Option<ThinkingEffort> {
+    let effort = value?.as_object()?;
+    let levels = parse_level_list(effort.get("supported_levels")?)?;
+    let default_level = match effort.get("default_level") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(text)) => {
+            let level = EffortLevel::parse(text)?;
+            if level != EffortLevel::Off && !levels.contains(&level) {
+                return None;
+            }
+            Some(level)
+        }
+        Some(_) => return None,
+    };
+    ThinkingEffort::Listed {
+        levels,
+        default_level,
+    }
+    .canonical()
+}
+
+/// OpenRouter `reasoning.supported_efforts`: omitted states nothing, `null`
+/// accepts every gateway level, and an array is that explicit list.
+/// `default_effort` is kept when it is `none` or a member of the list.
+fn openrouter_thinking_effort(value: Option<&Value>) -> Option<ThinkingEffort> {
+    let reasoning = value?.as_object()?;
+    let raw = reasoning.get("supported_efforts")?;
+    let default_level = stated_level(reasoning.get("default_effort"));
+    match raw {
+        Value::Null => Some(ThinkingEffort::Any { default_level }),
+        Value::Array(_) => {
+            let levels = parse_level_list(raw)?;
+            let default_level = match default_level {
+                Some(EffortLevel::Off) => Some(EffortLevel::Off),
+                Some(level) if levels.contains(&level) => Some(level),
+                _ => None,
+            };
+            ThinkingEffort::Listed {
+                levels,
+                default_level,
+            }
+            .canonical()
+        }
+        _ => None,
+    }
+}
+
 /// OpenRouter's `reasoning` object describes request-time reasoning support.
 /// Omitted or malformed values remain unknown.
 fn reasoning_capability(value: Option<&Value>) -> CapabilityEvidence {
@@ -432,6 +686,7 @@ pub fn parse_deepseek(body: &[u8]) -> Result<CatalogPage, CatalogError> {
         model.max_output_tokens = positive_integer(entry.get("max_output_tokens"));
         model.input_modalities = string_list(entry.get("input_modalities"));
         model.output_modalities = string_list(entry.get("output_modalities"));
+        model.thinking_effort = deepseek_thinking_effort(entry.get("effort"));
         model.capabilities = ModelCapabilities {
             thinking: capability_from_non_empty_strings(
                 entry
@@ -485,6 +740,7 @@ pub fn parse_openrouter_page(body: &[u8]) -> Result<CatalogPage, CatalogError> {
                 .and_then(Value::as_object)
                 .and_then(|object| object.get("max_completion_tokens")),
         );
+        model.thinking_effort = openrouter_thinking_effort(entry.get("reasoning"));
         let parameters = entry.get("supported_parameters");
         model.capabilities = ModelCapabilities {
             thinking: reasoning_capability(entry.get("reasoning")),
@@ -675,6 +931,7 @@ fn parse_entries(
             output_modalities: None,
             supported_endpoints: None,
             capabilities: ModelCapabilities::unknown(),
+            thinking_effort: None,
         };
         fill(entry, &mut model);
         models.push(model);

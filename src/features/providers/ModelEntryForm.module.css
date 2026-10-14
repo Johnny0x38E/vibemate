@@ -1,52 +1,59 @@
-/* One inline entry form: fields and actions on the first row, the three
-capability declarations side by side below, recovery feedback last. */
+/* Model entry dialog. The backdrop and popup match the delete confirmation
+   so a second dialog uses the same stacking and surface. */
+
+.backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 2;
+    background: rgb(0 0 0 / 35%);
+}
+
+.popup {
+    position: fixed;
+    inset: 50% auto auto 50%;
+    z-index: 3;
+    width: min(36rem, calc(100vw - 32px));
+    max-height: calc(100vh - 32px);
+    overflow: auto;
+    transform: translate(-50%, -50%);
+    padding: var(--space-md);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    background: var(--color-surface);
+    box-shadow: 0 16px 56px rgb(0 0 0 / 24%);
+}
+
+.title {
+    margin: 0 0 var(--space-sm);
+    color: var(--color-text);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
 
 .form {
     display: grid;
     gap: var(--space-sm);
-    width: 100%;
 }
 
-.top {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--space-sm);
-}
-
-.fields {
-    flex: 1 1 16rem;
-    min-width: 0;
+.effort {
+    margin: 0;
+    padding: 0;
+    border: 0;
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--space-sm);
 }
 
-.actions {
-    display: flex;
-    flex-shrink: 0;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--space-sm);
+.legend {
+    padding: 0;
+    color: var(--color-text);
+    font-size: 0.8125rem;
 }
 
-.capabilities {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--space-md);
-}
-
-.capability {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-}
-
-.capabilityName {
-    font-size: 0.75rem;
-}
-
+.modes,
+.levels,
+.capabilities,
+.actions,
 .feedback {
     display: flex;
     flex-wrap: wrap;
@@ -54,18 +61,22 @@ capability declarations side by side below, recovery feedback last. */
     gap: var(--space-sm);
 }
 
+.mode,
+.level,
+.capability {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    color: var(--color-text);
+    font-size: 0.75rem;
+}
+
+.actions {
+    justify-content: flex-end;
+}
+
 .feedback p {
     margin: 0;
     font-size: 0.75rem;
     line-height: 1.45;
-}
-
-.visuallyHidden {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    clip-path: inset(50%);
 }

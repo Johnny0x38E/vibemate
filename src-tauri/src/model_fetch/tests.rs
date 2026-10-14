@@ -488,6 +488,9 @@ async fn merging_across_fetches_keeps_selected_and_manual_models() {
                 model_id: id.to_owned(),
                 alias: alias.map(str::to_owned),
                 capability_overrides: crate::model_catalog::CapabilityOverrides::none(),
+                context_window: None,
+                max_output_tokens: None,
+                thinking_effort: None,
             },
             5,
         )

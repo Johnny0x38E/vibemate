@@ -32,6 +32,8 @@ pub enum ModelError {
     ModelIdInvalid,
     /// The alias is empty after trimming, too long, or has control characters.
     ModelAliasInvalid,
+    /// A context window, output limit, or thinking-effort value is not usable.
+    ModelParametersInvalid,
     /// The provider already has a model with this ID.
     ModelAlreadyExists,
     /// A requested model does not exist (the list may have changed).
@@ -93,6 +95,7 @@ impl ModelError {
             Self::InvalidStoredModel => "invalid_stored_model",
             Self::ModelIdInvalid => "model_id_invalid",
             Self::ModelAliasInvalid => "model_alias_invalid",
+            Self::ModelParametersInvalid => "model_parameters_invalid",
             Self::ModelAlreadyExists => "model_already_exists",
             Self::ModelNotFound => "model_not_found",
             Self::ModelChanged => "model_changed",

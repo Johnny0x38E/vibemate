@@ -237,6 +237,7 @@
                 "invalid_stored_model": "A saved model entry is not recognized. Nothing was changed.",
                 "model_id_invalid": "The model ID is not valid.",
                 "model_alias_invalid": "The display name is not valid.",
+                "model_parameters_invalid": "Enter a positive whole number for each limit, and choose a valid thinking-effort combination.",
                 "model_already_exists": "This model ID is already saved.",
                 "model_not_found": "This model was not found. Refresh the list.",
                 "model_changed": "This model changed since you opened it. Reload before saving.",
@@ -261,6 +262,16 @@
                 "response_too_large": "The provider response was too large.",
                 "invalid_response": "The app returned an unrecognized response. Try again.",
                 "desktop_required": "Model changes require the vibemate desktop app."
+            },
+            "parameters": {
+                "contextWindow": "Context window",
+                "maxOutput": "Maximum output",
+                "effort": "Thinking effort",
+                "effortUnset": "Not set",
+                "effortAny": "All gateway levels",
+                "effortListed": "Specific levels",
+                "defaultLevel": "Default level",
+                "defaultUnset": "No default"
             },
             "capabilities": {
                 "thinking": "Thinking",

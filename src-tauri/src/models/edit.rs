@@ -9,9 +9,11 @@ use rusqlite::{TransactionBehavior, params};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use super::repository::{lock, read_model, read_provider, stored_overrides};
+use super::repository::{
+    lock, prepare_model_parameters, read_model, read_provider, stored_overrides,
+};
 use super::{ModelError, ProviderModel, parse_provider_id};
-use crate::model_catalog::CapabilityOverrides;
+use crate::model_catalog::{CapabilityOverrides, ThinkingEffort, encode_thinking_effort};
 use crate::model_identity::is_valid_model_id;
 use crate::providers::validate_display_name;
 use crate::storage::Storage;
@@ -51,6 +53,12 @@ pub struct UpdateModelEditRequest {
     /// The complete set of user capability declarations. A `None` field follows
     /// the catalog evidence; an all-`None` set is "restore default".
     pub capability_overrides: CapabilityOverrides,
+    /// Final context window. `None` clears a previously stored limit.
+    pub context_window: Option<i64>,
+    /// Final maximum output. `None` clears a previously stored limit.
+    pub max_output_tokens: Option<i64>,
+    /// Final thinking-effort statement. `None` clears a previously stored one.
+    pub thinking_effort: Option<ThinkingEffort>,
 }
 
 /// Whether a change token has the shape [`snapshot`] produces: 64 lowercase hex.
@@ -98,8 +106,12 @@ pub fn get_model_snapshot(
     snapshot(model)
 }
 
-/// Persist the model editor's fields (alias and capability declarations) at once,
-/// preserving all other model metadata.
+/// Persist the model editor's fields at once: alias, capability declarations,
+/// context window, maximum output and thinking effort.
+///
+/// The three limit fields are the row's final state. Unlike a catalog refresh,
+/// a manual save writes them even when the submitted value is empty, which clears
+/// a limit the catalog had filled in. Every other column stays as it was.
 ///
 /// The immediate transaction serializes comparison and writing against other
 /// connections. Unchanged values are a no-op with the same returned digest. An
@@ -124,6 +136,14 @@ pub fn update_model_edit(
         .as_deref()
         .map(|value| validate_display_name(value).map_err(|_| ModelError::ModelAliasInvalid))
         .transpose()?;
+    let prepared = prepare_model_parameters(
+        request.context_window,
+        request.max_output_tokens,
+        request.thinking_effort.clone(),
+    )?;
+    let context_window = prepared.context_window;
+    let max_output_tokens = prepared.max_output_tokens;
+    let thinking_effort = prepared.thinking_effort;
     let mut connection = lock(storage)?;
     let transaction = connection
         .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -137,8 +157,13 @@ pub fn update_model_edit(
     if current.content_digest != request.expected_digest {
         return Err(ModelError::ModelChanged);
     }
+    let current_effort = encode_thinking_effort(current.model.thinking_effort.as_ref())
+        .map_err(|_| ModelError::InvalidStoredModel)?;
     if current.model.alias == alias
         && current.model.capability_overrides == request.capability_overrides
+        && current.model.context_window == context_window
+        && current.model.max_output_tokens == max_output_tokens
+        && current_effort == thinking_effort
     {
         return Ok(current);
     }
@@ -148,13 +173,17 @@ pub fn update_model_edit(
     transaction
         .execute(
             "UPDATE provider_model SET alias = ?3, capability_overrides = ?4,
-             updated_at = max(updated_at, ?5)
+             context_window = ?5, max_output_tokens = ?6, thinking_effort = ?7,
+             updated_at = max(updated_at, ?8)
              WHERE provider_id = ?1 AND model_id = ?2",
             params![
                 provider_id.as_str(),
                 request.model_id,
                 alias,
                 overrides,
+                context_window,
+                max_output_tokens,
+                thinking_effort,
                 now_ms
             ],
         )

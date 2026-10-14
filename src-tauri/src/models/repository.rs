@@ -4,7 +4,10 @@
 use super::types::*;
 use super::validation::{decode_cursor, encode_cursor};
 use super::{ModelError, parse_provider_id};
-use crate::model_catalog::CapabilityOverrides;
+use crate::model_catalog::{
+    CapabilityOverrides, ThinkingEffort, accepted_limit, decode_thinking_effort,
+    encode_thinking_effort,
+};
 use crate::model_identity::{is_valid_model_id, resolved_protocol, route_support};
 use crate::model_search::{SearchQuery, sort_ranked};
 use crate::providers::{ProviderId, ProviderKind, ProviderProtocol};
@@ -14,7 +17,8 @@ use rusqlite::{Connection, OptionalExtension, params};
 /// The columns read for a `ProviderModel`, in `StoredModel::read` order.
 const MODEL_COLUMNS: &str = "provider_id, model_id, source, selected, alias, upstream_name, \
      context_window, max_output_tokens, input_modalities, output_modalities, \
-     supported_endpoints, capabilities, capability_overrides, created_at, updated_at, \
+     supported_endpoints, capabilities, capability_overrides, thinking_effort, \
+     created_at, updated_at, \
      last_seen_at, missing_since";
 
 /// List a provider's models, optionally only selected ones, either ordered by
@@ -216,6 +220,7 @@ pub(super) struct StoredModel {
     supported_endpoints: Option<String>,
     capabilities: String,
     capability_overrides: Option<String>,
+    thinking_effort: Option<String>,
     created_at: i64,
     updated_at: i64,
     last_seen_at: Option<i64>,
@@ -238,10 +243,11 @@ impl StoredModel {
             supported_endpoints: row.get(10)?,
             capabilities: row.get(11)?,
             capability_overrides: row.get(12)?,
-            created_at: row.get(13)?,
-            updated_at: row.get(14)?,
-            last_seen_at: row.get(15)?,
-            missing_since: row.get(16)?,
+            thinking_effort: row.get(13)?,
+            created_at: row.get(14)?,
+            updated_at: row.get(15)?,
+            last_seen_at: row.get(16)?,
+            missing_since: row.get(17)?,
         })
     }
 
@@ -276,6 +282,8 @@ impl StoredModel {
             })
             .transpose()?
             .unwrap_or_default();
+        let thinking_effort = decode_thinking_effort(self.thinking_effort.as_deref())
+            .ok_or(ModelError::InvalidStoredModel)?;
         let route_support = route_support(provider.kind, endpoints);
         let resolved_protocol = resolved_protocol(provider.kind, provider.protocol, endpoints);
         let upstream_state = match (self.last_seen_at, self.missing_since) {
@@ -297,6 +305,7 @@ impl StoredModel {
             supported_endpoints,
             capabilities,
             capability_overrides,
+            thinking_effort,
             route_support,
             resolved_protocol,
             upstream_state,
@@ -306,6 +315,40 @@ impl StoredModel {
             updated_at_ms: self.updated_at,
         })
     }
+}
+
+/// Limits and effort text ready to bind in a manual save.
+pub(super) struct PreparedParameters {
+    pub(super) context_window: Option<i64>,
+    pub(super) max_output_tokens: Option<i64>,
+    pub(super) thinking_effort: Option<String>,
+}
+
+/// Check limits and canonicalize a thinking-effort statement for a manual save.
+pub(super) fn prepare_model_parameters(
+    context_window: Option<i64>,
+    max_output_tokens: Option<i64>,
+    thinking_effort: Option<ThinkingEffort>,
+) -> Result<PreparedParameters, ModelError> {
+    let context_window =
+        accepted_limit(context_window).ok_or(ModelError::ModelParametersInvalid)?;
+    let max_output_tokens =
+        accepted_limit(max_output_tokens).ok_or(ModelError::ModelParametersInvalid)?;
+    let thinking_effort = match thinking_effort {
+        None => None,
+        Some(effort) => Some(
+            effort
+                .canonical()
+                .ok_or(ModelError::ModelParametersInvalid)?,
+        ),
+    };
+    let thinking_effort =
+        encode_thinking_effort(thinking_effort.as_ref()).map_err(|_| ModelError::WriteFailed)?;
+    Ok(PreparedParameters {
+        context_window,
+        max_output_tokens,
+        thinking_effort,
+    })
 }
 
 /// Serialize capability declarations for storage: an empty set becomes NULL,

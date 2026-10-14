@@ -2,7 +2,7 @@
 //! protection and persistence.
 
 use super::*;
-use crate::model_catalog::{CapabilityOverride, CapabilityOverrides};
+use crate::model_catalog::{CapabilityOverride, CapabilityOverrides, EffortLevel, ThinkingEffort};
 use crate::storage::Storage;
 use rusqlite::params;
 use std::path::PathBuf;
@@ -82,6 +82,9 @@ fn edit_request(
         expected_digest: snapshot.content_digest.clone(),
         alias: alias.map(str::to_owned),
         capability_overrides,
+        context_window: snapshot.model.context_window,
+        max_output_tokens: snapshot.model.max_output_tokens,
+        thinking_effort: snapshot.model.thinking_effort.clone(),
     }
 }
 
@@ -329,4 +332,52 @@ fn model_edits_reject_invalid_input_without_writing() {
         ),
         Err(ModelError::ModelNotFound)
     );
+}
+
+#[test]
+fn a_manual_save_replaces_limits_and_a_clear_removes_them() {
+    let directory = TestDirectory::new();
+    let storage = directory.open();
+    seed(&storage, "fetched");
+    let original = get(&storage);
+    assert_eq!(original.model.context_window, Some(10_000));
+    assert_eq!(original.model.max_output_tokens, Some(1_000));
+
+    let mut request = edit_request(&original, Some("Original"), CapabilityOverrides::none());
+    request.context_window = Some(128_000);
+    request.max_output_tokens = Some(8_192);
+    request.thinking_effort = Some(ThinkingEffort::Listed {
+        levels: vec![EffortLevel::Low, EffortLevel::Max],
+        default_level: Some(EffortLevel::Max),
+    });
+    let saved = update_model_edit(&storage, &request, 30).unwrap();
+    assert_eq!(saved.model.context_window, Some(128_000));
+    assert_eq!(saved.model.max_output_tokens, Some(8_192));
+    assert_eq!(
+        saved.model.thinking_effort,
+        Some(ThinkingEffort::Listed {
+            levels: vec![EffortLevel::Max, EffortLevel::Low],
+            default_level: Some(EffortLevel::Max),
+        })
+    );
+    drop(storage);
+    let storage = directory.open();
+    assert_eq!(get(&storage), saved);
+
+    let mut clear = edit_request(&saved, Some("Original"), CapabilityOverrides::none());
+    clear.context_window = None;
+    clear.max_output_tokens = None;
+    clear.thinking_effort = None;
+    let cleared = update_model_edit(&storage, &clear, 40).unwrap();
+    assert_eq!(cleared.model.context_window, None);
+    assert_eq!(cleared.model.max_output_tokens, None);
+    assert_eq!(cleared.model.thinking_effort, None);
+
+    let mut invalid = edit_request(&cleared, Some("Original"), CapabilityOverrides::none());
+    invalid.context_window = Some(0);
+    assert_eq!(
+        update_model_edit(&storage, &invalid, 50),
+        Err(ModelError::ModelParametersInvalid)
+    );
+    assert_eq!(get(&storage).model.context_window, None);
 }

@@ -53,6 +53,7 @@ const row: ProviderModel = {
         toolCalls: { state: "unknown", source: null },
     },
     capabilityOverrides: { thinking: null, imageInput: null, toolCalls: null },
+    thinkingEffort: null,
     routeSupport: "unknown",
     resolvedProtocol: null,
     upstreamState: "never_listed",
@@ -73,6 +74,7 @@ async function setupCreate(locale: "en" | "zh-CN" = "en", blocked = false) {
                     providerId={ID}
                     blocked={blocked}
                     onSaved={saved}
+                    onDismiss={vi.fn()}
                     onBusyChange={vi.fn()}
                 />
             </I18nextProvider>
@@ -94,7 +96,7 @@ async function setupEdit(locale: "en" | "zh-CN" = "en") {
                     blocked={false}
                     modelId={row.modelId}
                     onSaved={saved}
-                    onCancel={cancel}
+                    onDismiss={cancel}
                     onBusyChange={vi.fn()}
                 />
             </I18nextProvider>
@@ -156,11 +158,44 @@ test("creates a manual row with declarations and clears the form", async () => {
             imageInput: null,
             toolCalls: null,
         },
+        contextWindow: null,
+        maxOutputTokens: null,
+        thinkingEffort: null,
     });
     // The form resets for the next creation, declarations included.
     expect(field("Model ID").value).toBe("");
     expect(field("Alias (optional)").value).toBe("");
     expect(checked("Thinking")).toBe(false);
+});
+
+test("saves limits and thinking effort, and rejects a zero limit", async () => {
+    await setupCreate();
+    fireEvent.change(field("Model ID"), { target: { value: "vendor/model" } });
+    fireEvent.change(field("Context window"), { target: { value: "128000" } });
+    fireEvent.change(field("Maximum output"), { target: { value: "0" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add and save" }));
+    expect(add).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert").textContent).toContain(
+        "positive whole number",
+    );
+    fireEvent.change(field("Maximum output"), { target: { value: "8192" } });
+    fireEvent.click(screen.getByRole("radio", { name: "Specific levels" }));
+    fireEvent.click(checkbox("high"));
+    fireEvent.click(checkbox("max"));
+    fireEvent.click(screen.getByRole("button", { name: "Add and save" }));
+    await waitFor(() => {
+        expect(add).toHaveBeenCalledWith(
+            expect.objectContaining({
+                contextWindow: 128000,
+                maxOutputTokens: 8192,
+                thinkingEffort: {
+                    kind: "listed",
+                    levels: ["max", "high"],
+                    defaultLevel: null,
+                },
+            }),
+        );
+    });
 });
 
 test("normalizes an empty optional alias without guessing model validation", async () => {
@@ -282,6 +317,9 @@ test("loads the saved row, focuses the alias and saves exactly that snapshot", a
             imageInput: null,
             toolCalls: null,
         },
+        contextWindow: null,
+        maxOutputTokens: null,
+        thinkingEffort: null,
     });
 });
 

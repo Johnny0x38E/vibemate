@@ -39,6 +39,7 @@ const model: ProviderModel = {
         imageInput: null,
         toolCalls: null,
     },
+    thinkingEffort: null,
     routeSupport: "supported",
     resolvedProtocol: "chat_completions",
     upstreamState: "listed",
@@ -52,6 +53,11 @@ const input = {
     after: null,
     limit: 50,
     filter: "all",
+} as const;
+const limits = {
+    contextWindow: model.contextWindow,
+    maxOutputTokens: model.maxOutputTokens,
+    thinkingEffort: null,
 } as const;
 const page = { items: [model], nextCursor: null, totalMatches: null };
 const summary = {
@@ -98,6 +104,7 @@ describe("model IPC boundary", () => {
             alias: " My model ",
             expectedDigest: contentDigest,
             capabilityOverrides: declarations,
+            ...limits,
         };
         const response = {
             model: {
@@ -122,6 +129,7 @@ describe("model IPC boundary", () => {
                 imageInput: null,
                 toolCalls: null,
             },
+            ...limits,
         };
         const restored = {
             model: {
@@ -139,6 +147,7 @@ describe("model IPC boundary", () => {
             alias: null,
             expectedDigest: restored.contentDigest,
             capabilityOverrides: restore.capabilityOverrides,
+            ...limits,
         };
         const cleared = {
             model: {
@@ -166,6 +175,7 @@ describe("model IPC boundary", () => {
                 imageInput: null,
                 toolCalls: null,
             },
+            ...limits,
         } as const;
         // Rust acknowledged a different declaration or label than requested.
         for (const changed of [
@@ -230,6 +240,7 @@ describe("model IPC boundary", () => {
                 alias: "New",
                 expectedDigest: contentDigest,
                 capabilityOverrides: model.capabilityOverrides,
+                ...limits,
             }),
         ).rejects.toMatchObject({ code: "invalid_response" });
         vi.mocked(invoke).mockRejectedValueOnce("model_changed");
@@ -239,6 +250,7 @@ describe("model IPC boundary", () => {
                 alias: null,
                 expectedDigest: contentDigest,
                 capabilityOverrides: model.capabilityOverrides,
+                ...limits,
             }),
         ).rejects.toMatchObject({ code: "model_changed" });
         vi.mocked(isTauri).mockReturnValue(false);
@@ -252,6 +264,7 @@ describe("model IPC boundary", () => {
                 alias: null,
                 expectedDigest: contentDigest,
                 capabilityOverrides: model.capabilityOverrides,
+                ...limits,
             }),
         ).rejects.toMatchObject({ code: "desktop_required" });
         expect(invoke).not.toHaveBeenCalled();
@@ -285,6 +298,9 @@ describe("model IPC boundary", () => {
                         imageInput: null,
                         toolCalls: null,
                     },
+                    contextWindow: null,
+                    maxOutputTokens: null,
+                    thinkingEffort: null,
                 }),
             () =>
                 deleteManualProviderModel({
@@ -358,6 +374,9 @@ describe("model IPC boundary", () => {
                 imageInput: null,
                 toolCalls: null,
             },
+            contextWindow: model.contextWindow,
+            maxOutputTokens: null,
+            thinkingEffort: null,
         } as const;
         const manual = {
             ...model,

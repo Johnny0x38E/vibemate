@@ -79,6 +79,7 @@ function model(overrides: Partial<ProviderModel> = {}): ProviderModel {
             imageInput: null,
             toolCalls: null,
         },
+        thinkingEffort: null,
         routeSupport: "not_applicable",
         resolvedProtocol: "chat_completions",
         upstreamState: "listed",
@@ -417,6 +418,7 @@ describe("ProviderModels", () => {
                         imageInput: { state: "unknown", source: null },
                         toolCalls: { state: "unknown", source: null },
                     },
+                    thinkingEffort: null,
                     routeSupport: "not_applicable",
                     resolvedProtocol: "chat_completions",
                 },
@@ -477,12 +479,12 @@ test("manual addition from upstream browse is saved and visible in added models"
     fireEvent.click(fetchButton);
     await screen.findByRole("button", { name: "View added models" });
     fireEvent.click(
-        screen.getByText("Add a model manually", { selector: "summary" }),
+        screen.getByRole("button", { name: "Add a model manually" }),
     );
-    fireEvent.change(screen.getByPlaceholderText("Model ID"), {
+    fireEvent.change(screen.getByLabelText("Model ID"), {
         target: { value: "vendor/manual" },
     });
-    fireEvent.change(screen.getByPlaceholderText("Alias (optional)"), {
+    fireEvent.change(screen.getByLabelText("Alias (optional)"), {
         target: { value: "Work" },
     });
     await waitFor(() => {
@@ -503,12 +505,13 @@ test("manual addition from upstream browse is saved and visible in added models"
                 imageInput: null,
                 toolCalls: null,
             },
+            contextWindow: null,
+            maxOutputTokens: null,
+            thinkingEffort: null,
         });
     });
     await waitFor(() => {
-        expect(
-            screen.getByPlaceholderText("Model ID").getAttribute("value"),
-        ).toBe("");
+        expect(screen.queryByRole("dialog")).toBeNull();
     });
     list.mockResolvedValue(desktopPage([manual]));
     fireEvent.click(screen.getByRole("button", { name: "View added models" }));
@@ -532,9 +535,7 @@ test("manual creation updates the selected row and count without a provider requ
         </I18nextProvider>,
     );
     fireEvent.click(
-        await screen.findByText("Add a model manually", {
-            selector: "summary",
-        }),
+        await screen.findByRole("button", { name: "Add a model manually" }),
     );
     fireEvent.change(screen.getByLabelText("Model ID"), {
         target: { value: "vendor/manual" },
@@ -579,10 +580,11 @@ test("pending checkbox drafts block manual creation", async () => {
     fireEvent.click(
         await screen.findByRole("checkbox", { name: "Deselect deepseek-chat" }),
     );
-    fireEvent.click(
-        screen.getByText("Add a model manually", { selector: "summary" }),
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Add and save" }));
+    const addButton = screen.getByRole("button", {
+        name: "Add a model manually",
+    });
+    expect(addButton.hasAttribute("disabled")).toBe(true);
+    fireEvent.click(addButton);
     expect(addManual).not.toHaveBeenCalled();
     expect(screen.getByText(/Save or discard checkbox changes/)).toBeDefined();
 });
@@ -598,15 +600,18 @@ test("manual writes block browsing and late hidden replies do not add rows", asy
     );
     const view = await renderModels();
     fireEvent.click(
-        await screen.findByText("Add a model manually", {
-            selector: "summary",
-        }),
+        await screen.findByRole("button", { name: "Add a model manually" }),
     );
     fireEvent.change(screen.getByLabelText("Model ID"), {
         target: { value: "vendor/manual" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Add and save" }));
-    fireEvent.click(screen.getByRole("button", { name: "Fetch models" }));
+    const fetchButton = screen.getByRole("button", {
+        name: "Fetch models",
+        hidden: true,
+    });
+    expect(fetchButton.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(fetchButton);
     expect(browse).not.toHaveBeenCalled();
     view.rerenderHidden(true);
     await act(async () => {

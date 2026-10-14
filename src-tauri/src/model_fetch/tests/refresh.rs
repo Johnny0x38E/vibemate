@@ -245,3 +245,90 @@ fn incomplete_refresh_never_marks_absence_and_stale_provider_writes_nothing() {
         assert_eq!(row.updated_at_ms, 1);
     });
 }
+
+#[test]
+fn refresh_overwrites_stated_limits_and_keeps_unstated_ones() {
+    use crate::model_catalog::{
+        Catalog, CatalogModel, EffortLevel, ModelCapabilities, ThinkingEffort,
+    };
+    use crate::providers::{ProviderKind, ProviderProtocol};
+
+    let directory = TestDirectory::new();
+    let storage = directory.open();
+    insert_provider(
+        &storage,
+        "deepseek",
+        "chat_completions",
+        "https://example.test",
+    );
+    insert_saved_model(&storage, "kept", "manual", Some("Mine"), "Old", Some(5));
+    insert_saved_model(&storage, "replaced", "fetched", None, "Old", Some(5));
+    storage
+        .lock()
+        .unwrap()
+        .execute(
+            "UPDATE provider_model SET max_output_tokens = 50,
+             thinking_effort = '{\"kind\":\"listed\",\"levels\":[\"low\"],\"defaultLevel\":null}'
+             WHERE model_id = 'kept'",
+            [],
+        )
+        .unwrap();
+
+    let blank = |model_id: &str| CatalogModel {
+        model_id: model_id.to_owned(),
+        upstream_name: Some("Catalog".to_owned()),
+        context_window: None,
+        max_output_tokens: None,
+        input_modalities: None,
+        output_modalities: None,
+        supported_endpoints: None,
+        capabilities: ModelCapabilities::unknown(),
+        thinking_effort: None,
+    };
+    let mut replaced = blank("replaced");
+    replaced.context_window = Some(2_000);
+    replaced.max_output_tokens = Some(800);
+    replaced.thinking_effort = Some(ThinkingEffort::Listed {
+        levels: vec![EffortLevel::High],
+        default_level: Some(EffortLevel::High),
+    });
+    let catalog = Catalog {
+        models: vec![blank("kept"), replaced],
+        skipped_invalid: 0,
+        duplicates: 0,
+        incomplete: None,
+    };
+    let snapshot = ProviderSnapshot {
+        provider_id: parse_provider_id(PROVIDER).unwrap(),
+        kind: ProviderKind::DeepSeek,
+        protocol: ProviderProtocol::ChatCompletions,
+        base_url: "https://example.test".to_owned(),
+        revision: 1,
+    };
+    refresh_saved_models(&storage, &snapshot, &catalog, 50).unwrap();
+
+    let models = all_models(&storage);
+    let kept = model(&models, "kept").unwrap();
+    // The catalog omitted every limit, so the saved final state stays.
+    assert_eq!(kept.context_window, Some(100));
+    assert_eq!(kept.max_output_tokens, Some(50));
+    assert_eq!(
+        kept.thinking_effort,
+        Some(ThinkingEffort::Listed {
+            levels: vec![EffortLevel::Low],
+            default_level: None,
+        })
+    );
+    assert_eq!(kept.alias.as_deref(), Some("Mine"));
+
+    let replaced = model(&models, "replaced").unwrap();
+    assert_eq!(replaced.context_window, Some(2_000));
+    assert_eq!(replaced.max_output_tokens, Some(800));
+    assert_eq!(
+        replaced.thinking_effort,
+        Some(ThinkingEffort::Listed {
+            levels: vec![EffortLevel::High],
+            default_level: Some(EffortLevel::High),
+        })
+    );
+}

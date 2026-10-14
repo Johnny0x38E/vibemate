@@ -672,6 +672,7 @@ test("sidebar home respects cancelling unsaved model checkbox drafts", async () 
                         imageInput: null,
                         toolCalls: null,
                     },
+                    thinkingEffort: null,
                     routeSupport: "not_applicable",
                     resolvedProtocol: "chat_completions",
                     upstreamState: "listed",

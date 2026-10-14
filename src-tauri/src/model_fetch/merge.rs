@@ -3,7 +3,7 @@
 
 use super::repository::lock;
 use super::types::{ModelFetchSummary, ProviderSnapshot};
-use crate::model_catalog::Catalog;
+use crate::model_catalog::{Catalog, encode_thinking_effort};
 use crate::model_error::ModelError;
 use crate::storage::Storage;
 use rusqlite::{OptionalExtension, TransactionBehavior, params};
@@ -100,15 +100,21 @@ pub fn merge_catalog(
         let endpoints = json(&model.supported_endpoints)?;
         let capabilities =
             serde_json::to_string(&model.capabilities).map_err(|_| ModelError::WriteFailed)?;
+        let effort = encode_thinking_effort(model.thinking_effort.as_ref())
+            .map_err(|_| ModelError::WriteFailed)?;
         if existing.contains_key(&model.model_id) {
+            // Omitted catalog limits keep a value the user already saved.
             transaction
                 .execute(
                     "UPDATE provider_model SET
-                         upstream_name = ?3, context_window = ?4, max_output_tokens = ?5,
+                         upstream_name = ?3,
+                         context_window = COALESCE(?4, context_window),
+                         max_output_tokens = COALESCE(?5, max_output_tokens),
                          input_modalities = ?6, output_modalities = ?7,
                          supported_endpoints = ?8, capabilities = ?9,
-                         last_seen_at = ?10, missing_since = NULL,
-                         updated_at = max(updated_at, ?10)
+                         thinking_effort = COALESCE(?10, thinking_effort),
+                         last_seen_at = ?11, missing_since = NULL,
+                         updated_at = max(updated_at, ?11)
                      WHERE provider_id = ?1 AND model_id = ?2",
                     params![
                         provider_id,
@@ -120,6 +126,7 @@ pub fn merge_catalog(
                         output,
                         endpoints,
                         capabilities,
+                        effort,
                         now_ms
                     ],
                 )
@@ -131,8 +138,9 @@ pub fn merge_catalog(
                     "INSERT INTO provider_model
                          (provider_id, model_id, source, selected, upstream_name, context_window,
                           max_output_tokens, input_modalities, output_modalities,
-                          supported_endpoints, capabilities, created_at, updated_at, last_seen_at)
-                     VALUES (?1, ?2, 'fetched', 0, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10, ?10)",
+                          supported_endpoints, capabilities, thinking_effort,
+                          created_at, updated_at, last_seen_at)
+                     VALUES (?1, ?2, 'fetched', 0, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?11, ?11)",
                     params![
                         provider_id,
                         model.model_id,
@@ -143,6 +151,7 @@ pub fn merge_catalog(
                         output,
                         endpoints,
                         capabilities,
+                        effort,
                         now_ms
                     ],
                 )

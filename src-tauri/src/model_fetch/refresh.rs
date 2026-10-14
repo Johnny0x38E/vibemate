@@ -5,7 +5,10 @@
 //! modalities, routing and capability evidence can be updated from the provider's
 //! current catalog without turning the Models tab into a full catalog mirror.
 //! `source`, `selected` and `alias` are preserved: a manual row stays manual, and
-//! a user's display alias is never overwritten.
+//! a user's display alias is never overwritten. Context window, maximum output
+//! and thinking effort are the row's final state: a refresh replaces one only
+//! when this catalog states a value, and leaves a manual value in place when the
+//! catalog omits that field.
 //!
 //! Only a complete catalog can establish absence: when the whole list was seen, a
 //! saved row that is missing from it gets `missing_since`. An incomplete fetch
@@ -17,7 +20,7 @@
 
 use super::repository::lock;
 use super::types::{ModelRefreshSummary, ProviderSnapshot};
-use crate::model_catalog::Catalog;
+use crate::model_catalog::{Catalog, encode_thinking_effort};
 use crate::model_error::ModelError;
 use crate::storage::Storage;
 use rusqlite::{OptionalExtension, TransactionBehavior, params};
@@ -110,16 +113,23 @@ pub fn refresh_saved_models(
         let endpoints = json(&model.supported_endpoints)?;
         let capabilities =
             serde_json::to_string(&model.capabilities).map_err(|_| ModelError::WriteFailed)?;
+        let effort = encode_thinking_effort(model.thinking_effort.as_ref())
+            .map_err(|_| ModelError::WriteFailed)?;
         // `source`, `selected` and `alias` are deliberately absent from this
         // statement: a refresh must not change membership or user labels.
+        // Limit columns use COALESCE so an omitted catalog field keeps the
+        // value already stored, including one the user typed.
         transaction
             .execute(
                 "UPDATE provider_model SET
-                     upstream_name = ?3, context_window = ?4, max_output_tokens = ?5,
+                     upstream_name = ?3,
+                     context_window = COALESCE(?4, context_window),
+                     max_output_tokens = COALESCE(?5, max_output_tokens),
                      input_modalities = ?6, output_modalities = ?7,
                      supported_endpoints = ?8, capabilities = ?9,
-                     last_seen_at = ?10, missing_since = NULL,
-                     updated_at = max(updated_at, ?10)
+                     thinking_effort = COALESCE(?10, thinking_effort),
+                     last_seen_at = ?11, missing_since = NULL,
+                     updated_at = max(updated_at, ?11)
                  WHERE provider_id = ?1 AND model_id = ?2",
                 params![
                     provider_id,
@@ -131,6 +141,7 @@ pub fn refresh_saved_models(
                     output,
                     endpoints,
                     capabilities,
+                    effort,
                     now_ms
                 ],
             )

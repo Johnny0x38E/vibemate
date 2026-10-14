@@ -1,7 +1,7 @@
 //! Saved-model requests, records, and source states.
 //! Failure codes are `crate::model_error::ModelError`.
 
-use crate::model_catalog::{CapabilityOverrides, ModelCapabilities};
+use crate::model_catalog::{CapabilityOverrides, ModelCapabilities, ThinkingEffort};
 use crate::model_identity::RouteSupport;
 use crate::providers::ProviderProtocol;
 use serde::{Deserialize, Serialize};
@@ -69,6 +69,8 @@ pub struct ProviderModel {
     pub capabilities: ModelCapabilities,
     /// User capability declarations; `None` fields follow `capabilities`.
     pub capability_overrides: CapabilityOverrides,
+    /// Stated thinking-effort options. `None` means no statement yet.
+    pub thinking_effort: Option<ThinkingEffort>,
     pub route_support: RouteSupport,
     /// Protocol to use for this model on the instance (P15). `None` when Command
     /// Code has no usable route declaration.
@@ -131,6 +133,12 @@ pub struct AddManualModelRequest {
     /// "no declarations", so every capability follows the (empty) catalog result.
     #[serde(default)]
     pub capability_overrides: CapabilityOverrides,
+    /// Context window in tokens. `None` stores no limit.
+    pub context_window: Option<i64>,
+    /// Maximum output in tokens. `None` stores no limit.
+    pub max_output_tokens: Option<i64>,
+    /// Thinking-effort statement. `None` stores no statement.
+    pub thinking_effort: Option<ThinkingEffort>,
 }
 
 /// Delete a model that was added by hand.
@@ -154,6 +162,9 @@ pub struct SaveProviderModelEntry {
     pub supported_endpoints: Option<Vec<String>>,
     #[serde(default)]
     pub capabilities: ModelCapabilities,
+    /// Thinking-effort statement from the catalog page. `None` does not clear a
+    /// value already stored on an existing row.
+    pub thinking_effort: Option<ThinkingEffort>,
 }
 
 /// Atomically remove deselected models and upsert newly selected ones.

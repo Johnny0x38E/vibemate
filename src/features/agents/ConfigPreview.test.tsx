@@ -84,6 +84,7 @@ function row(providerId: string, modelId: string): ProviderModel {
             imageInput: null,
             toolCalls: null,
         },
+        thinkingEffort: null,
         routeSupport: "supported",
         resolvedProtocol: "anthropic_messages",
         upstreamState: "listed",

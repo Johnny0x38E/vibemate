@@ -1,9 +1,11 @@
 //! Local model selection and manual editing, each committed as one SQLite transaction.
 
-use super::repository::{lock, read_model, read_provider, stored_overrides};
+use super::repository::{
+    lock, prepare_model_parameters, read_model, read_provider, stored_overrides,
+};
 use super::types::*;
 use super::{ModelError, parse_provider_id};
-use crate::model_catalog::ModelCapabilities;
+use crate::model_catalog::{ModelCapabilities, accepted_limit, encode_thinking_effort};
 use crate::model_identity::{RouteSupport, is_valid_model_id, route_support};
 use crate::providers::validate_display_name;
 use crate::storage::Storage;
@@ -89,6 +91,14 @@ pub fn add_manual_model(
         .as_deref()
         .map(|alias| validate_display_name(alias).map_err(|_| ModelError::ModelAliasInvalid))
         .transpose()?;
+    let prepared = prepare_model_parameters(
+        request.context_window,
+        request.max_output_tokens,
+        request.thinking_effort.clone(),
+    )?;
+    let context_window = prepared.context_window;
+    let max_output_tokens = prepared.max_output_tokens;
+    let thinking_effort = prepared.thinking_effort;
 
     let mut connection = lock(storage)?;
     let transaction = connection
@@ -101,14 +111,18 @@ pub fn add_manual_model(
     transaction
         .execute(
             "INSERT INTO provider_model
-                 (provider_id, model_id, source, selected, alias, capabilities,
+                 (provider_id, model_id, source, selected, alias, context_window,
+                  max_output_tokens, thinking_effort, capabilities,
                   capability_overrides, created_at, updated_at)
-             VALUES (?1, ?2, ?3, 1, ?4, ?5, ?6, ?7, ?7)",
+             VALUES (?1, ?2, ?3, 1, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10)",
             params![
                 provider_id.as_str(),
                 model_id,
                 ModelSource::Manual.as_str(),
                 alias,
+                context_window,
+                max_output_tokens,
+                thinking_effort,
                 serde_json::to_string(&ModelCapabilities::unknown())
                     .map_err(|_| ModelError::WriteFailed)?,
                 stored_overrides(&request.capability_overrides)?,
@@ -222,28 +236,47 @@ pub fn save_provider_model_selections(
         let output = json_column(&entry.output_modalities)?;
         let capabilities =
             serde_json::to_string(&entry.capabilities).map_err(|_| ModelError::WriteFailed)?;
+        // A missing catalog field must not wipe a limit the user already saved.
+        let context_window =
+            accepted_limit(entry.context_window).ok_or(ModelError::ModelParametersInvalid)?;
+        let max_output_tokens =
+            accepted_limit(entry.max_output_tokens).ok_or(ModelError::ModelParametersInvalid)?;
+        let thinking_effort = match entry.thinking_effort.clone() {
+            None => None,
+            Some(effort) => Some(
+                effort
+                    .canonical()
+                    .ok_or(ModelError::ModelParametersInvalid)?,
+            ),
+        };
+        let thinking_effort = encode_thinking_effort(thinking_effort.as_ref())
+            .map_err(|_| ModelError::WriteFailed)?;
         let existing = read_model(&transaction, &provider_id, &entry.model_id)?;
         if let Some(stored) = existing {
             if stored.source == ModelSource::Manual.as_str() {
                 transaction
                     .execute(
                         "UPDATE provider_model SET
-                             selected = 1, upstream_name = ?3, context_window = ?4,
-                             max_output_tokens = ?5, input_modalities = ?6,
+                             selected = 1, upstream_name = ?3,
+                             context_window = COALESCE(?4, context_window),
+                             max_output_tokens = COALESCE(?5, max_output_tokens),
+                             input_modalities = ?6,
                              output_modalities = ?7, supported_endpoints = ?8, capabilities = ?9,
-                             last_seen_at = ?10, missing_since = NULL,
-                             updated_at = max(updated_at, ?10)
+                             thinking_effort = COALESCE(?10, thinking_effort),
+                             last_seen_at = ?11, missing_since = NULL,
+                             updated_at = max(updated_at, ?11)
                          WHERE provider_id = ?1 AND model_id = ?2",
                         params![
                             provider_id.as_str(),
                             entry.model_id,
                             entry.upstream_name,
-                            entry.context_window,
-                            entry.max_output_tokens,
+                            context_window,
+                            max_output_tokens,
                             input,
                             output,
                             endpoints,
                             capabilities,
+                            thinking_effort,
                             now_ms
                         ],
                     )
@@ -252,22 +285,26 @@ pub fn save_provider_model_selections(
                 transaction
                     .execute(
                         "UPDATE provider_model SET
-                             selected = 1, upstream_name = ?3, context_window = ?4,
-                             max_output_tokens = ?5, input_modalities = ?6,
+                             selected = 1, upstream_name = ?3,
+                             context_window = COALESCE(?4, context_window),
+                             max_output_tokens = COALESCE(?5, max_output_tokens),
+                             input_modalities = ?6,
                              output_modalities = ?7, supported_endpoints = ?8, capabilities = ?9,
-                             last_seen_at = ?10, missing_since = NULL,
-                             updated_at = max(updated_at, ?10)
+                             thinking_effort = COALESCE(?10, thinking_effort),
+                             last_seen_at = ?11, missing_since = NULL,
+                             updated_at = max(updated_at, ?11)
                          WHERE provider_id = ?1 AND model_id = ?2",
                         params![
                             provider_id.as_str(),
                             entry.model_id,
                             entry.upstream_name,
-                            entry.context_window,
-                            entry.max_output_tokens,
+                            context_window,
+                            max_output_tokens,
                             input,
                             output,
                             endpoints,
                             capabilities,
+                            thinking_effort,
                             now_ms
                         ],
                     )
@@ -279,18 +316,20 @@ pub fn save_provider_model_selections(
                     "INSERT INTO provider_model
                          (provider_id, model_id, source, selected, upstream_name, context_window,
                           max_output_tokens, input_modalities, output_modalities,
-                          supported_endpoints, capabilities, created_at, updated_at, last_seen_at)
-                     VALUES (?1, ?2, 'fetched', 1, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10, ?10)",
+                          supported_endpoints, capabilities, thinking_effort,
+                          created_at, updated_at, last_seen_at)
+                     VALUES (?1, ?2, 'fetched', 1, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?11, ?11)",
                     params![
                         provider_id.as_str(),
                         entry.model_id,
                         entry.upstream_name,
-                        entry.context_window,
-                        entry.max_output_tokens,
+                        context_window,
+                        max_output_tokens,
                         input,
                         output,
                         endpoints,
                         capabilities,
+                        thinking_effort,
                         now_ms
                     ],
                 )

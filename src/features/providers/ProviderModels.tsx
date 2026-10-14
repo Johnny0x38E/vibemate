@@ -250,7 +250,9 @@ export function ProviderModels({
     const [manualBusy, setManualBusy] = useState(false);
     const [editBusy, setEditBusy] = useState(false);
     // At most one inline model editor is open, on one saved row.
-    const [editingId, setEditingId] = useState<string | null>(null);
+    const [editor, setEditor] = useState<
+        { kind: "create" } | { kind: "edit"; modelId: string } | null
+    >(null);
     const [refreshState, setRefreshState] = useState<RefreshState>({
         kind: "idle",
     });
@@ -605,6 +607,7 @@ export function ProviderModels({
                     imageInput: { state: "unknown", source: null },
                     toolCalls: { state: "unknown", source: null },
                 },
+                thinkingEffort: row?.thinkingEffort ?? null,
             });
         }
         try {
@@ -702,7 +705,7 @@ export function ProviderModels({
         saveState.kind === "running" ||
         (viewMode === "selected" && list.kind === "loading") ||
         (viewMode === "upstream" && upstream.kind === "loading");
-    const sectionBusy = editBusy || editingId !== null || sharedBusy;
+    const sectionBusy = editBusy || editor !== null || sharedBusy;
 
     useEffect(() => {
         onBusyChange?.(!hidden && sectionBusy);
@@ -753,83 +756,63 @@ export function ProviderModels({
             tone: "success",
             message: t("providers.models.manual.saved"),
         });
+        setEditor(null);
     }
 
-    // The inline model editor opens under one row at a time. The trigger element
-    // is remembered so focus returns to it after saving or cancelling.
+    // The model dialog remembers the control that opened it so focus can return
+    // there after saving or cancelling.
     const editTrigger = useRef<HTMLElement | null>(null);
 
-    function openEditor(modelId: string): void {
+    function rememberTrigger(): void {
         editTrigger.current =
             document.activeElement instanceof HTMLElement
                 ? document.activeElement
                 : null;
-        setEditingId(modelId);
+    }
+
+    function openEditor(modelId: string): void {
+        rememberTrigger();
+        setEditor({ kind: "edit", modelId });
     }
 
     function closeEditor(): void {
-        setEditingId(null);
-        const trigger = editTrigger.current;
-        editTrigger.current = null;
-        if (trigger !== null) {
-            // A removed inline form cannot restore focus itself; give it back to
-            // the row action that opened the editor.
-            window.setTimeout(() => {
-                if (trigger.isConnected) trigger.focus();
-            }, 0);
-        }
+        setEditor(null);
     }
 
-    // Hiding the section closes the inline editor; its unmounting also releases
+    // Hiding the section closes the model dialog; its unmounting also releases
     // the busy guard the form reported. Adjusting state during render keeps the
     // open editor a derivation of `hidden` instead of an effect round-trip.
-    if (hidden && editingId !== null) {
-        setEditingId(null);
+    if (hidden && editor !== null) {
+        setEditor(null);
     }
 
     const listBody = (
         <>
             {!hidden && list.kind === "ready" && (
-                <details className={styles["manualRow"]}>
-                    <summary>
-                        <span
-                            className={styles["manualToggleIcon"]}
-                            aria-hidden="true"
+                <div className={styles["manualAction"]}>
+                    {dirty && (
+                        <p
+                            className={[editForm["hint"], styles["manualDraft"]]
+                                .filter(Boolean)
+                                .join(" ")}
+                            role="status"
                         >
-                            <svg viewBox="0 0 24 24">
-                                <path d="M5 12h14" />
-                                <path
-                                    className={styles["manualPlusStroke"]}
-                                    d="M12 5v14"
-                                />
-                            </svg>
-                        </span>
+                            {t("providers.models.manual.draft")}
+                        </p>
+                    )}
+                    <button
+                        type="button"
+                        className={buttons["secondary"]}
+                        disabled={sectionBusy || dirty}
+                        onClick={() => {
+                            if (sectionBusy || dirty) return;
+                            rememberTrigger();
+                            setEditor({ kind: "create" });
+                        }}
+                    >
                         {t("providers.models.manual.title")}
-                    </summary>
-                    <div className={styles["manualContent"]}>
-                        {dirty && (
-                            <p
-                                className={[
-                                    editForm["hint"],
-                                    styles["manualDraft"],
-                                ]
-                                    .filter(Boolean)
-                                    .join(" ")}
-                                role="status"
-                            >
-                                {t("providers.models.manual.draft")}
-                            </p>
-                        )}
-                        <ModelEntryForm
-                            key={providerId}
-                            mode="create"
-                            providerId={providerId}
-                            blocked={sectionBusy || dirty}
-                            onSaved={manualSaved}
-                            onBusyChange={setManualBusy}
-                        />
-                    </div>
-                </details>
+                    </button>
+                </div>
             )}
             {viewMode === "selected" &&
                 list.kind === "loading" &&
@@ -1077,46 +1060,6 @@ export function ProviderModels({
                                             }}
                                         />
                                     )}
-                                    {!hidden && editingId === model.modelId && (
-                                        <div className={styles["itemEditor"]}>
-                                            <ModelEntryForm
-                                                mode="edit"
-                                                providerId={providerId}
-                                                modelId={model.modelId}
-                                                blocked={
-                                                    sharedBusy ||
-                                                    dirty ||
-                                                    searchInput.trim() !==
-                                                        debouncedQuery
-                                                }
-                                                onBusyChange={setEditBusy}
-                                                onCancel={closeEditor}
-                                                onSaved={(updated) => {
-                                                    setList((current) =>
-                                                        current.kind === "ready"
-                                                            ? {
-                                                                  ...current,
-                                                                  items: current.items.map(
-                                                                      (row) =>
-                                                                          row.modelId ===
-                                                                          updated.modelId
-                                                                              ? updated
-                                                                              : row,
-                                                                  ),
-                                                              }
-                                                            : current,
-                                                    );
-                                                    closeEditor();
-                                                    notify({
-                                                        tone: "success",
-                                                        message: t(
-                                                            "providers.models.editor.saved",
-                                                        ),
-                                                    });
-                                                }}
-                                            />
-                                        </div>
-                                    )}
                                 </li>
                             );
                         })}
@@ -1344,7 +1287,7 @@ export function ProviderModels({
                         aria-label={t("providers.models.searchPlaceholder")}
                         disabled={
                             editBusy ||
-                            editingId !== null ||
+                            editor !== null ||
                             manualBusy ||
                             list.kind === "preview" ||
                             keyMissing ||
@@ -1506,6 +1449,53 @@ export function ProviderModels({
                 <SecondaryPageActions active={!hidden}>
                     {saveButton}
                 </SecondaryPageActions>
+            )}
+            {editor?.kind === "create" && (
+                <ModelEntryForm
+                    key={`${providerId}-create`}
+                    mode="create"
+                    providerId={providerId}
+                    blocked={sharedBusy || dirty}
+                    onSaved={manualSaved}
+                    onDismiss={closeEditor}
+                    onBusyChange={setManualBusy}
+                    returnFocus={editTrigger}
+                />
+            )}
+            {editor?.kind === "edit" && (
+                <ModelEntryForm
+                    key={editor.modelId}
+                    mode="edit"
+                    providerId={providerId}
+                    modelId={editor.modelId}
+                    blocked={
+                        sharedBusy ||
+                        dirty ||
+                        searchInput.trim() !== debouncedQuery
+                    }
+                    onBusyChange={setEditBusy}
+                    onDismiss={closeEditor}
+                    returnFocus={editTrigger}
+                    onSaved={(updated) => {
+                        setList((current) =>
+                            current.kind === "ready"
+                                ? {
+                                      ...current,
+                                      items: current.items.map((row) =>
+                                          row.modelId === updated.modelId
+                                              ? updated
+                                              : row,
+                                      ),
+                                  }
+                                : current,
+                        );
+                        closeEditor();
+                        notify({
+                            tone: "success",
+                            message: t("providers.models.editor.saved"),
+                        });
+                    }}
+                />
             )}
         </section>
     );

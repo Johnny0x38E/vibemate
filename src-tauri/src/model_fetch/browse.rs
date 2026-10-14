@@ -162,6 +162,7 @@ fn upstream_browse_model(model: &CatalogModel, snapshot: &ProviderSnapshot) -> U
         output_modalities: model.output_modalities.clone(),
         supported_endpoints: model.supported_endpoints.clone(),
         capabilities: model.capabilities,
+        thinking_effort: model.thinking_effort.clone(),
         route_support: route_support(snapshot.kind, endpoints),
         resolved_protocol: resolved_protocol(snapshot.kind, snapshot.protocol, endpoints),
     }

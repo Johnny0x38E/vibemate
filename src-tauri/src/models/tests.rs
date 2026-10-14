@@ -94,6 +94,9 @@ fn add(
             model_id: model_id.to_owned(),
             alias: alias.map(str::to_owned),
             capability_overrides: CapabilityOverrides::none(),
+            context_window: None,
+            max_output_tokens: None,
+            thinking_effort: None,
         },
         100,
     )
@@ -139,6 +142,7 @@ fn save_selections_deletes_removed_rows_and_inserts_new_ones() {
                 output_modalities: None,
                 supported_endpoints: None,
                 capabilities: crate::model_catalog::ModelCapabilities::unknown(),
+                thinking_effort: None,
             }],
         },
         300,
@@ -332,6 +336,9 @@ fn manual_models_are_validated_selected_and_unique() {
             model_id: "x".to_owned(),
             alias: None,
             capability_overrides: CapabilityOverrides::none(),
+            context_window: None,
+            max_output_tokens: None,
+            thinking_effort: None,
         },
         100,
     );
@@ -354,6 +361,9 @@ fn manual_creation_can_start_with_capability_declarations() {
             model_id: "deepseek-flash".to_owned(),
             alias: Some("Mine".to_owned()),
             capability_overrides: declarations,
+            context_window: None,
+            max_output_tokens: None,
+            thinking_effort: None,
         },
         100,
     )

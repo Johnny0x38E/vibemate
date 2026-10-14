@@ -277,6 +277,17 @@ const MIGRATIONS: &[Migration] = &[
             DEFAULT NULL
             CHECK(capability_overrides IS NULL OR json_valid(capability_overrides));",
     },
+    Migration {
+        version: 15,
+        // The model's stated thinking-effort options (an explicit level list, or
+        // every gateway level). NULL means no statement. Context and output
+        // limits already have columns; a catalog refresh overwrites any of the
+        // three only when the catalog states a value, and a manual save writes
+        // the submitted final state, including a clear.
+        sql: "ALTER TABLE provider_model ADD COLUMN thinking_effort TEXT
+            DEFAULT NULL
+            CHECK(thinking_effort IS NULL OR json_valid(thinking_effort));",
+    },
 ];
 
 /// Errors from opening or migrating the private database.

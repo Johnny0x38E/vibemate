@@ -109,8 +109,8 @@
     overflow-wrap: anywhere;
 }
 
-.item > button {
-    flex-shrink: 0;
+.rowActions {
+    align-self: center;
 }
 
 .more {
@@ -118,7 +118,7 @@
 }
 
 @media (max-width: 520px) {
-    .item > button {
+    .rowActions {
         align-self: flex-start;
     }
 

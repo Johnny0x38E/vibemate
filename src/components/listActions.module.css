@@ -1,0 +1,12 @@
+/*
+ * One gap for icon actions that sit together on a list row or list toolbar.
+ * Content beside the group keeps its own spacing.
+ */
+
+.group {
+    display: flex;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}

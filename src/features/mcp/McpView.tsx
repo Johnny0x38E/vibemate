@@ -10,9 +10,10 @@ import {
 } from "react";
 import type { ModuleNavigationHandle } from "../../components/moduleNavigation";
 import { useTranslation } from "react-i18next";
-import { IconButton } from "../../components/IconButton";
-import dialog from "./McpDeleteDialog.module.css";
 import { Icon } from "../../components/Icon";
+import { IconButton } from "../../components/IconButton";
+import listActions from "../../components/listActions.module.css";
+import dialog from "./McpDeleteDialog.module.css";
 import { PageModuleHeader } from "../../components/PageModuleHeader";
 import { useNotify } from "../../components/Notifications";
 import {
@@ -525,17 +526,13 @@ export function McpView({
                                                 </span>
                                                 <div
                                                     className={
-                                                        styles["actions"]
+                                                        listActions["group"]
                                                     }
                                                 >
-                                                    <button
-                                                        className={[
-                                                            buttons["text"],
-                                                            buttons["withIcon"],
-                                                        ].join(" ")}
-                                                        type="button"
-                                                        aria-disabled={blocked}
-                                                        aria-label={t(
+                                                    <IconButton
+                                                        icon="edit"
+                                                        blocked={blocked}
+                                                        label={t(
                                                             "mcp.editLabel",
                                                             {
                                                                 name: record.displayName,
@@ -546,18 +543,15 @@ export function McpView({
                                                                 record.id,
                                                             );
                                                         }}
-                                                    >
-                                                        <Icon name="edit" />
-                                                        {t("mcp.list.edit")}
-                                                    </button>
-                                                    <button
-                                                        className={[
-                                                            buttons["text"],
-                                                            buttons["withIcon"],
-                                                        ].join(" ")}
-                                                        type="button"
-                                                        aria-disabled={blocked}
-                                                        aria-label={t(
+                                                    />
+                                                    <IconButton
+                                                        icon={
+                                                            record.enabled
+                                                                ? "disable"
+                                                                : "enable"
+                                                        }
+                                                        blocked={blocked}
+                                                        label={t(
                                                             record.enabled
                                                                 ? "mcp.toggleDisable"
                                                                 : "mcp.toggleEnable",
@@ -571,20 +565,7 @@ export function McpView({
                                                                 false,
                                                             );
                                                         }}
-                                                    >
-                                                        <Icon
-                                                            name={
-                                                                record.enabled
-                                                                    ? "disable"
-                                                                    : "enable"
-                                                            }
-                                                        />
-                                                        {t(
-                                                            record.enabled
-                                                                ? "mcp.disable"
-                                                                : "mcp.enable",
-                                                        )}
-                                                    </button>
+                                                    />
                                                     <IconButton
                                                         icon="trash"
                                                         destructive
@@ -612,25 +593,19 @@ export function McpView({
                                                         }}
                                                     />
                                                     {record.cleanupPending && (
-                                                        <button
-                                                            className={
-                                                                buttons[
-                                                                    "secondary"
-                                                                ]
-                                                            }
-                                                            type="button"
-                                                            aria-disabled={
-                                                                blocked
-                                                            }
+                                                        <IconButton
+                                                            icon="refresh"
+                                                            blocked={blocked}
+                                                            label={t(
+                                                                "mcp.cleanup",
+                                                            )}
                                                             onClick={() => {
                                                                 void mutate(
                                                                     record,
                                                                     true,
                                                                 );
                                                             }}
-                                                        >
-                                                            {t("mcp.cleanup")}
-                                                        </button>
+                                                        />
                                                     )}
                                                 </div>
                                             </div>

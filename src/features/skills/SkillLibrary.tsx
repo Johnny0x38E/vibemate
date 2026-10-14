@@ -10,6 +10,7 @@ import {
 import type { ModuleNavigationHandle } from "../../components/moduleNavigation";
 import { useTranslation } from "react-i18next";
 import { Icon } from "../../components/Icon";
+import { IconButton } from "../../components/IconButton";
 import { PageModuleHeader } from "../../components/PageModuleHeader";
 import { useNotify } from "../../components/Notifications";
 import {
@@ -475,24 +476,17 @@ export function SkillLibrary({
                                                 </p>
                                             </div>
                                             <div className={styles["trailing"]}>
-                                                <button
-                                                    className={[
-                                                        buttons["text"],
-                                                        buttons["withIcon"],
-                                                    ].join(" ")}
-                                                    type="button"
-                                                    aria-disabled={blocked}
-                                                    aria-label={t(
+                                                <IconButton
+                                                    icon="edit"
+                                                    blocked={blocked}
+                                                    label={t(
                                                         "skills.detailsLabel",
                                                         { name: record.name },
                                                     )}
                                                     onClick={() => {
                                                         void openDetail(record);
                                                     }}
-                                                >
-                                                    <Icon name="edit" />
-                                                    {t("skills.details")}
-                                                </button>
+                                                />
                                             </div>
                                         </li>
                                     ))}

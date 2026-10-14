@@ -10,6 +10,8 @@ import {
 import type { ModuleNavigationHandle } from "../../components/moduleNavigation";
 import { useTranslation } from "react-i18next";
 import { Icon } from "../../components/Icon";
+import { IconButton } from "../../components/IconButton";
+import listActions from "../../components/listActions.module.css";
 import { PageModuleHeader } from "../../components/PageModuleHeader";
 import { useNotify } from "../../components/Notifications";
 import {
@@ -655,46 +657,39 @@ export function ProvidersView({
                                             </div>
                                         </div>
                                     </div>
-                                    <button
+                                    <div
                                         className={[
-                                            buttons["text"],
-                                            buttons["withIcon"],
-                                        ]
-                                            .filter(
-                                                (value): value is string =>
-                                                    value !== undefined,
-                                            )
-                                            .join(" ")}
-                                        type="button"
-                                        data-provider-id={record.id}
-                                        aria-disabled={editBlocked}
-                                        aria-label={t(
-                                            "providers.list.editLabel",
-                                            {
-                                                name: record.displayName,
-                                            },
-                                        )}
-                                        onClick={() => {
-                                            if (!editBlocked)
-                                                open({ kind: "edit", record });
-                                        }}
+                                            listActions["group"],
+                                            styles["rowActions"],
+                                        ].join(" ")}
                                     >
-                                        {/* Decorative; aria-label names the row. */}
-                                        <Icon name="edit" />
-                                        {t("providers.list.edit")}
-                                    </button>
-                                    <ProviderDeleteAction
-                                        record={record}
-                                        blocked={editBlocked}
-                                        onDeleted={(deleted) => {
-                                            forgetRecord(deleted.id);
-                                        }}
-                                        onReload={() => {
-                                            setListAttempt(
-                                                (previous) => previous + 1,
-                                            );
-                                        }}
-                                    />
+                                        <IconButton
+                                            icon="edit"
+                                            dataProviderId={record.id}
+                                            blocked={editBlocked}
+                                            label={t(
+                                                "providers.list.editLabel",
+                                                {
+                                                    name: record.displayName,
+                                                },
+                                            )}
+                                            onClick={() => {
+                                                open({ kind: "edit", record });
+                                            }}
+                                        />
+                                        <ProviderDeleteAction
+                                            record={record}
+                                            blocked={editBlocked}
+                                            onDeleted={(deleted) => {
+                                                forgetRecord(deleted.id);
+                                            }}
+                                            onReload={() => {
+                                                setListAttempt(
+                                                    (previous) => previous + 1,
+                                                );
+                                            }}
+                                        />
+                                    </div>
                                 </li>
                             );
                         })}

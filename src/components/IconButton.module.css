@@ -23,8 +23,10 @@
 }
 
 .button[data-destructive] {
+    /* The icon carries the delete meaning. A danger-colored frame reads as a
+       warning stripe beside the quieter edit control. */
     color: var(--color-danger-fg);
-    border-color: var(--color-danger-border);
+    border-color: var(--color-border);
 }
 
 .button[data-destructive]:hover:not([aria-disabled="true"]) {

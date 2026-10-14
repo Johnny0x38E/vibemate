@@ -14,6 +14,8 @@ export interface IconButtonProps {
     blocked?: boolean;
     /** Apply danger styling; callers supply an appropriate removal icon. */
     destructive?: boolean;
+    /** Identifies the provider row that owns this control. */
+    dataProviderId?: string;
 }
 
 /**
@@ -30,6 +32,7 @@ export function IconButton({
     type = "button",
     blocked = false,
     destructive = false,
+    dataProviderId,
 }: IconButtonProps): JSX.Element {
     return (
         <Tooltip.Provider delay={300}>
@@ -39,6 +42,9 @@ export function IconButton({
                     className={styles["button"]}
                     aria-label={label}
                     aria-disabled={blocked}
+                    {...(dataProviderId !== undefined
+                        ? { "data-provider-id": dataProviderId }
+                        : {})}
                     data-destructive={destructive || undefined}
                     onClick={(event) => {
                         if (blocked) {

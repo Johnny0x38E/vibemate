@@ -440,6 +440,17 @@
             "operation_failed": "操作未完成，结果可能未知，请先重新读取再重试。",
             "desktop_required": "请使用 vibemate 桌面应用保存定义。",
             "invalid_response": "应用返回了无法识别的响应，请重新读取以确认结果。"
+        },
+        "delete": {
+            "label": "删除“{{name}}”",
+            "title": "删除 MCP 定义？",
+            "body": "从 vibemate 删除“{{name}}”及其存储的凭据？此操作不会修改 Agent 配置文件。",
+            "cancel": "取消",
+            "confirm": "删除",
+            "deleting": "正在删除…",
+            "done": "已删除“{{name}}”。",
+            "cleanupPending": "定义已删除，但部分存储的凭据仍待清理。请重试以移除这些凭据。",
+            "cleanup": "重试已删除定义的凭据清理"
         }
     },
     "agents": {

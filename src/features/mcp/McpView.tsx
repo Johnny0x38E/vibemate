@@ -1,3 +1,4 @@
+import { Dialog } from "@base-ui/react/dialog";
 import {
     useCallback,
     useEffect,
@@ -9,11 +10,15 @@ import {
 } from "react";
 import type { ModuleNavigationHandle } from "../../components/moduleNavigation";
 import { useTranslation } from "react-i18next";
+import { IconButton } from "../../components/IconButton";
+import dialog from "./McpDeleteDialog.module.css";
 import { Icon } from "../../components/Icon";
 import { PageModuleHeader } from "../../components/PageModuleHeader";
 import { useNotify } from "../../components/Notifications";
 import {
     cleanupMcpCredentials,
+    cleanupDeletedMcpCredentials,
+    deleteMcpDefinition,
     getMcpDefinition,
     listMcpDefinitions,
     McpRequestError,
@@ -37,6 +42,7 @@ type ListState =
           nextCursor: string | null;
           /** Library total, not the number of loaded rows. */
           total: number;
+          deletedCleanupPending: boolean;
           more: "idle" | "loading";
       };
 type PageState =
@@ -99,6 +105,9 @@ export function McpView({
     const [page, setPage] = useState<PageState>({ kind: "list" });
     const [action, setAction] = useState<ActionState>({ kind: "idle" });
     const [formBlocked, setFormBlocked] = useState(false);
+    const [deleteTarget, setDeleteTarget] = useState<McpRecord | null>(null);
+    const cancelDelete = useRef<HTMLButtonElement>(null);
+    const deleteTrigger = useRef<HTMLElement | null>(null);
     const active = useRef(true);
     const readGeneration = useRef(0);
     const pageGeneration = useRef(0);
@@ -106,6 +115,7 @@ export function McpView({
     const root = useRef<HTMLElement>(null);
     const focusRequested = useRef(false);
     const blocked =
+        deleteTarget !== null ||
         action.kind === "running" ||
         (action.kind === "error" && action.uncertain) ||
         (list.kind === "ready" && list.more === "loading");
@@ -212,6 +222,7 @@ export function McpView({
                 nextCursor: result.page.nextCursor,
                 // Later pages repeat the same library total.
                 total: result.page.total,
+                deletedCleanupPending: result.page.deletedCleanupPending,
                 more: "idle",
             });
             // The last page removes Load more; focus the heading if its button was focused.
@@ -262,6 +273,61 @@ export function McpView({
                 const code = errorCode(error);
                 setAction({ kind: "error", code, uncertain: uncertain(code) });
             }
+        } finally {
+            mutationPending.current = false;
+        }
+    }
+    async function remove(): Promise<void> {
+        if (deleteTarget === null || mutationPending.current) return;
+        const target = deleteTarget;
+        mutationPending.current = true;
+        setAction({ kind: "running" });
+        try {
+            const deleted = await deleteMcpDefinition({
+                id: target.id,
+                expectedRevision: target.revision,
+            });
+            if (!active.current) return;
+            setDeleteTarget(null);
+            focusRequested.current = true;
+            notify({
+                tone: deleted.cleanupPending ? "error" : "success",
+                message: t(
+                    deleted.cleanupPending
+                        ? "mcp.delete.cleanupPending"
+                        : "mcp.delete.done",
+                    { name: target.displayName },
+                ),
+            });
+            // Re-read the first page rather than leaving holes in a loaded cursor page.
+            await reload();
+        } catch (error: unknown) {
+            if (!active.current) return;
+            setDeleteTarget(null);
+            const code = errorCode(error);
+            setAction({
+                kind: "error",
+                code,
+                uncertain: uncertain(code) || code === "not_found",
+            });
+        } finally {
+            mutationPending.current = false;
+        }
+    }
+    async function cleanupDeleted(): Promise<void> {
+        if (blocked || mutationPending.current) return;
+        mutationPending.current = true;
+        setAction({ kind: "running" });
+        try {
+            await cleanupDeletedMcpCredentials();
+            if (active.current) await reload();
+        } catch (error: unknown) {
+            if (active.current)
+                setAction({
+                    kind: "error",
+                    code: errorCode(error),
+                    uncertain: false,
+                });
         } finally {
             mutationPending.current = false;
         }
@@ -386,6 +452,23 @@ export function McpView({
                     )}
                     {list.kind === "ready" && (
                         <>
+                            {list.deletedCleanupPending && (
+                                <div>
+                                    <p role="status">
+                                        {t("mcp.delete.cleanupPending")}
+                                    </p>
+                                    <button
+                                        type="button"
+                                        className={buttons["secondary"]}
+                                        aria-disabled={blocked}
+                                        onClick={() => {
+                                            void cleanupDeleted();
+                                        }}
+                                    >
+                                        {t("mcp.delete.cleanup")}
+                                    </button>
+                                </div>
+                            )}
                             {list.total > 0 && (
                                 <p className={styles["count"]}>
                                     {t("mcp.count", { count: list.total })}
@@ -502,6 +585,32 @@ export function McpView({
                                                                 : "mcp.enable",
                                                         )}
                                                     </button>
+                                                    <IconButton
+                                                        icon="trash"
+                                                        destructive
+                                                        label={t(
+                                                            "mcp.delete.label",
+                                                            {
+                                                                name: record.displayName,
+                                                            },
+                                                        )}
+                                                        blocked={blocked}
+                                                        onClick={() => {
+                                                            if (
+                                                                blocked ||
+                                                                mutationPending.current
+                                                            )
+                                                                return;
+                                                            deleteTrigger.current =
+                                                                document.activeElement instanceof
+                                                                HTMLElement
+                                                                    ? document.activeElement
+                                                                    : null;
+                                                            setDeleteTarget(
+                                                                record,
+                                                            );
+                                                        }}
+                                                    />
                                                     {record.cleanupPending && (
                                                         <button
                                                             className={
@@ -548,6 +657,67 @@ export function McpView({
                     )}
                 </>
             )}
+            <Dialog.Root
+                open={deleteTarget !== null}
+                onOpenChange={(open) => {
+                    if (!open && !mutationPending.current)
+                        setDeleteTarget(null);
+                }}
+            >
+                <Dialog.Portal>
+                    <Dialog.Backdrop className={dialog["backdrop"]} />
+                    <Dialog.Popup
+                        className={dialog["popup"]}
+                        initialFocus={cancelDelete}
+                        // A successful delete removes its trigger; return focus
+                        // to the stable heading when that row no longer exists.
+                        finalFocus={() =>
+                            deleteTrigger.current?.isConnected
+                                ? deleteTrigger.current
+                                : (root.current?.querySelector<HTMLElement>(
+                                      '[data-focus="heading"]',
+                                  ) ?? null)
+                        }
+                    >
+                        <Dialog.Title className={dialog["title"]}>
+                            {t("mcp.delete.title")}
+                        </Dialog.Title>
+                        <Dialog.Description className={dialog["body"]}>
+                            {t("mcp.delete.body", {
+                                name: deleteTarget?.displayName ?? "",
+                            })}
+                        </Dialog.Description>
+                        <div className={dialog["actions"]}>
+                            <button
+                                ref={cancelDelete}
+                                type="button"
+                                className={buttons["secondary"]}
+                                disabled={action.kind === "running"}
+                                onClick={() => {
+                                    if (!mutationPending.current)
+                                        setDeleteTarget(null);
+                                }}
+                            >
+                                {t("mcp.delete.cancel")}
+                            </button>
+                            <button
+                                type="button"
+                                className={buttons["dangerSecondary"]}
+                                aria-disabled={action.kind === "running"}
+                                onClick={() => {
+                                    void remove();
+                                }}
+                            >
+                                {t(
+                                    action.kind === "running"
+                                        ? "mcp.delete.deleting"
+                                        : "mcp.delete.confirm",
+                                )}
+                            </button>
+                        </div>
+                    </Dialog.Popup>
+                </Dialog.Portal>
+            </Dialog.Root>
         </section>
     );
 }

@@ -81,3 +81,46 @@ pub(crate) async fn cleanup_mcp_credentials(
     .await
     .map_err(|_| crate::mcp::McpError::OperationFailed)?
 }
+
+/// Delete a revision-checked central definition; Agent configuration is untouched.
+#[tauri::command]
+pub(crate) async fn delete_mcp_definition(
+    app: tauri::AppHandle,
+    request: crate::mcp::DeleteMcpRequest,
+) -> Result<crate::mcp::DeletedMcp, crate::mcp::McpError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        with_mcp_storage(&app, |storage| {
+            let lock = app
+                .try_state::<CredentialLock>()
+                .ok_or(crate::mcp::McpError::OperationFailed)?;
+            let _guard = lock
+                .0
+                .lock()
+                .map_err(|_| crate::mcp::McpError::OperationFailed)?;
+            crate::mcp::delete_definition(storage, &OsCredentialStore, request)
+        })
+    })
+    .await
+    .map_err(|_| crate::mcp::McpError::OperationFailed)?
+}
+
+/// Retry durable credential cleanup for removed definitions, in bounded batches.
+#[tauri::command]
+pub(crate) async fn cleanup_deleted_mcp_credentials(
+    app: tauri::AppHandle,
+) -> Result<bool, crate::mcp::McpError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        with_mcp_storage(&app, |storage| {
+            let lock = app
+                .try_state::<CredentialLock>()
+                .ok_or(crate::mcp::McpError::OperationFailed)?;
+            let _guard = lock
+                .0
+                .lock()
+                .map_err(|_| crate::mcp::McpError::OperationFailed)?;
+            crate::mcp::cleanup_deleted_credentials(storage, &OsCredentialStore)
+        })
+    })
+    .await
+    .map_err(|_| crate::mcp::McpError::OperationFailed)?
+}

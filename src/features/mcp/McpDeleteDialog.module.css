@@ -1,0 +1,51 @@
+.backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: var(--layer-dialog-backdrop);
+    background: rgb(0 0 0 / 35%);
+}
+
+.popup {
+    position: fixed;
+    inset: 50% auto auto 50%;
+    z-index: var(--layer-dialog);
+    width: min(28rem, calc(100vw - 32px));
+    max-height: calc(100vh - 32px);
+    overflow: auto;
+    transform: translate(-50%, -50%);
+    padding: var(--space-md);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    background: var(--color-surface);
+    box-shadow: 0 16px 56px rgb(0 0 0 / 24%);
+}
+
+.title {
+    margin: 0 0 var(--space-sm);
+    color: var(--color-text);
+    font-size: 0.9375rem;
+    font-weight: 600;
+}
+
+.body {
+    margin: 0;
+    color: var(--color-text);
+    font-size: 0.8125rem;
+    line-height: 1.55;
+    overflow-wrap: anywhere;
+}
+
+.error {
+    margin: var(--space-sm) 0 0;
+    color: var(--color-danger-fg);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+}
+
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: var(--space-sm);
+    margin-top: var(--space-md);
+}

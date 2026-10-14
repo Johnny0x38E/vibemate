@@ -850,7 +850,12 @@ test("Settings sidebar returns to General without unmounting preference input", 
 test("MCP mounts on first visit and sidebar activation returns to its list", async () => {
     vi.mocked(listMcpDefinitions).mockResolvedValue({
         kind: "desktop",
-        page: { items: [], nextCursor: null, total: 0 },
+        page: {
+            items: [],
+            nextCursor: null,
+            total: 0,
+            deletedCleanupPending: false,
+        },
     });
     render(<App />);
     expect(listMcpDefinitions).not.toHaveBeenCalled();

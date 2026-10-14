@@ -169,6 +169,7 @@ pub fn list_definitions(
         items,
         next_cursor,
         total,
+        deleted_cleanup_pending: has_deleted_cleanup(&connection)?,
     })
 }
 
@@ -342,4 +343,51 @@ pub(super) fn prepare_definition_save(
         old_refs,
         new_ids: ids,
     })
+}
+
+fn has_deleted_cleanup(connection: &rusqlite::Connection) -> Result<bool, McpError> {
+    connection.query_row(
+        "SELECT EXISTS(SELECT 1 FROM mcp_cleanup WHERE NOT EXISTS(SELECT 1 FROM mcp_definition WHERE id=mcp_cleanup.definition_id))",
+        [], |row| row.get(0),
+    ).map_err(|_| McpError::ReadFailed)
+}
+
+/// Read a bounded batch of removed identities so retries cannot do unlimited work.
+pub(super) fn deleted_cleanup_ids(storage: &Storage) -> Result<Vec<String>, McpError> {
+    let connection = lock(storage)?;
+    let mut statement = connection.prepare(
+        "SELECT DISTINCT definition_id FROM mcp_cleanup WHERE NOT EXISTS(SELECT 1 FROM mcp_definition WHERE id=mcp_cleanup.definition_id) ORDER BY definition_id LIMIT 100",
+    ).map_err(|_| McpError::ReadFailed)?;
+    statement
+        .query_map([], |row| row.get(0))
+        .map_err(|_| McpError::ReadFailed)?
+        .collect::<Result<_, _>>()
+        .map_err(|_| McpError::ReadFailed)
+}
+
+/// Queue credentials and delete metadata together; only confirmed commits allow OS cleanup.
+pub(super) fn commit_definition_delete(
+    storage: &Storage,
+    request: &DeleteMcpRequest,
+) -> Result<(), McpError> {
+    let mut connection = lock(storage)?;
+    let tx = connection
+        .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+        .map_err(|_| McpError::WriteFailed)?;
+    let record = read_record(&tx, &request.id)?;
+    if record.revision != request.expected_revision {
+        return Err(McpError::RevisionConflict);
+    }
+    tx.execute(
+        "INSERT OR IGNORE INTO mcp_cleanup(definition_id,credential_ref) SELECT definition_id,credential_ref FROM mcp_secret WHERE definition_id=?1",
+        [&request.id],
+    ).map_err(|_| McpError::WriteFailed)?;
+    // Foreign keys remove only this definition's secret references. The cleanup
+    // queue intentionally has no foreign key and survives deletion and restart.
+    tx.execute(
+        "DELETE FROM mcp_definition WHERE id=?1 AND revision=?2",
+        params![request.id, request.expected_revision],
+    )
+    .map_err(|_| McpError::WriteFailed)?;
+    tx.commit().map_err(|_| McpError::OutcomeUnknown)
 }

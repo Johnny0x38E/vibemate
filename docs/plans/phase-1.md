@@ -25,7 +25,8 @@ Command Code routing P15/C15 have maintainer acceptance; P15 real credential
 connection acceptance is maintainer-reported, not a new agent-executed test.
 Six-Agent discovery, version reading, local skill import, the central MCP
 credential-store checks and the provider/model additions passed maintainer
-acceptance on 2026-10-13; central MCP deletion is still missing (see todo.md).
+acceptance on 2026-10-13; central MCP deletion now includes confirmation, revision protection and durable
+credential cleanup retry; its acceptance is tracked in todo.md.
 
 Six-Agent read-only discovery and independent window-local manual paths are
 implemented. Automatic discovery checks entries and configuration file presence

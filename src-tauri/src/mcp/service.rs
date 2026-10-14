@@ -129,3 +129,47 @@ fn compensate(store: &dyn CredentialStore, refs: &[String]) -> bool {
     }
     clean
 }
+
+/// Remove a reviewed central definition and queue every credential before cleanup.
+/// Agent files are untouched. Call under the credential mutation lock. OS failures
+/// leave a durable queue rather than making a removed definition appear saved.
+///
+/// # Errors
+/// Invalid identities/revisions, missing rows, conflicts and known DB failures
+/// leave credentials untouched. An uncertain commit requires a metadata reload.
+pub fn delete_definition(
+    storage: &Storage,
+    store: &dyn CredentialStore,
+    request: DeleteMcpRequest,
+) -> Result<DeletedMcp, McpError> {
+    identity(&request.id)?;
+    if request.expected_revision < 1 {
+        return Err(McpError::InvalidRequest);
+    }
+    super::repository::commit_definition_delete(storage, &request)?;
+    let complete = cleanup_credentials(storage, store, &request.id).unwrap_or(false);
+    Ok(DeletedMcp {
+        id: request.id,
+        cleanup_pending: !complete,
+    })
+}
+
+/// Retry a bounded batch of deleted definitions' credentials, without reading values.
+/// Call under the credential mutation lock. Returns true when no deleted entries
+/// remain; larger queues or denied OS deletions need another explicit retry.
+///
+/// # Errors
+/// Returns storage, metadata and queue failures; never raw credential payloads.
+pub fn cleanup_deleted_credentials(
+    storage: &Storage,
+    store: &dyn CredentialStore,
+) -> Result<bool, McpError> {
+    for id in super::repository::deleted_cleanup_ids(storage)? {
+        cleanup_credentials(storage, store, &id)?;
+    }
+    let connection = super::repository::lock(storage)?;
+    connection.query_row(
+        "SELECT NOT EXISTS(SELECT 1 FROM mcp_cleanup WHERE NOT EXISTS(SELECT 1 FROM mcp_definition WHERE id=mcp_cleanup.definition_id))",
+        [], |row| row.get(0),
+    ).map_err(|_| McpError::ReadFailed)
+}

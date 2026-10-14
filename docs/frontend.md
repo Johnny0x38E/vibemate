@@ -903,6 +903,11 @@ values through a rapid navigation change. Non-secret drafts stay mounted while
 hidden, but successful sidebar home navigation closes the editor. Unknown write
 outcomes block another mutation until a successful metadata reload. The list
 supports bounded cursor pages, safe retry, and obsolete credential cleanup.
+Deleting a definition uses a Base UI confirmation dialog with safe initial focus
+and focus restoration. Pending deletion blocks dismissal, navigation and duplicate
+submissions. Known failures keep the row; conflicts and unknown outcomes require
+a successful list reload. Deleted credential cleanup remains visible and retryable
+after restart even when no definitions remain.
 Unmount guards ignore late responses; page transitions focus the heading.
 `src/lib/desktop/mcp.ts` validates exact metadata shapes and cursor ordering,
 rejects unexpected secret-bearing response fields, discards raw errors, and

@@ -93,6 +93,7 @@ export type McpPageResult =
               items: McpRecord[];
               nextCursor: string | null;
               total: number;
+              deletedCleanupPending: boolean;
           };
       };
 /** How many definitions the interface accepts in the reported total. */
@@ -218,6 +219,7 @@ export async function listMcpDefinitions(
         "items",
         "nextCursor",
         "total",
+        "deletedCleanupPending",
     ]);
     if (!Array.isArray(data["items"])) invalid();
     const items = data["items"].map((value: unknown) => record(value));
@@ -238,7 +240,11 @@ export async function listMcpDefinitions(
         (nextCursor !== null && nextCursor !== items[items.length - 1]?.id)
     )
         invalid();
-    return { kind: "desktop", page: { items, nextCursor, total } };
+    const deletedCleanupPending = boolean(data["deletedCleanupPending"]);
+    return {
+        kind: "desktop",
+        page: { items, nextCursor, total, deletedCleanupPending },
+    };
 }
 /** Re-read non-secret metadata before editing or retrying an unknown save. */
 export async function getMcpDefinition(id: string): Promise<McpRecord> {
@@ -268,4 +274,25 @@ export async function cleanupMcpCredentials(id: string): Promise<McpRecord> {
     const row = record(await call("cleanup_mcp_credentials", { id }));
     if (row.id !== id) invalid();
     return row;
+}
+
+/** Remove only a reviewed central revision; no Agent files are changed. */
+export async function deleteMcpDefinition(request: {
+    id: string;
+    expectedRevision: number;
+}): Promise<{ id: string; cleanupPending: boolean }> {
+    desktop();
+    const data = object(await call("delete_mcp_definition", { request }), [
+        "id",
+        "cleanupPending",
+    ]);
+    const id = identity(data["id"]);
+    if (id !== request.id) invalid();
+    return { id, cleanupPending: boolean(data["cleanupPending"]) };
+}
+
+/** Retry a bounded batch of deleted credentials; false means more work remains. */
+export async function cleanupDeletedMcpCredentials(): Promise<boolean> {
+    desktop();
+    return boolean(await call("cleanup_deleted_mcp_credentials", {}));
 }

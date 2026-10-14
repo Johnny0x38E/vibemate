@@ -22,6 +22,27 @@ use crate::providers::ProviderKind;
 /// The settings filename Claude Code reads from the user configuration root.
 const SETTINGS_FILE: &str = "settings.json";
 
+/// Keys that decide which model Claude Code's own surfaces run on.
+///
+/// `ANTHROPIC_MODEL` only picks the model a session starts with. The `opus`,
+/// `sonnet` and `haiku` aliases keep resolving through their own variables, and
+/// subagents, teammate and workflow agents fall back to
+/// `CLAUDE_CODE_SUBAGENT_MODEL`; on a user settings file that already carried
+/// those keys, a plan that wrote only the session model would leave every one
+/// of those surfaces on the previous model.
+///
+/// Claude Code documents all four as environment variables, and its example
+/// puts them in the settings `env` block, so they are written next to the
+/// session model. The value is the selected model ID exactly as stored: `[1m]`
+/// is Claude Code's own context-window convention and no verified source says
+/// how it applies to a gateway ID, so the plan never appends a suffix.
+const CLASS_MODEL_KEYS: &[&str] = &[
+    "env.ANTHROPIC_DEFAULT_OPUS_MODEL",
+    "env.ANTHROPIC_DEFAULT_SONNET_MODEL",
+    "env.ANTHROPIC_DEFAULT_HAIKU_MODEL",
+    "env.CLAUDE_CODE_SUBAGENT_MODEL",
+];
+
 /// How confidently vibemate can point Claude Code at a Provider.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -106,7 +127,8 @@ pub struct ProviderFacts {
 
 /// Facts about the selected model.
 pub struct ModelFacts {
-    /// Upstream model ID, written to `ANTHROPIC_MODEL`.
+    /// Upstream model ID, written to `ANTHROPIC_MODEL` and to the class keys in
+    /// [`CLASS_MODEL_KEYS`].
     pub id: String,
     /// SHA-256 of the stored model record.
     pub content_digest: String,
@@ -177,6 +199,13 @@ fn build(input: &ClaudeCodePlanInput) -> Result<(ConfigPlan, Map<String, Value>)
             value: PlannedValue::Literal(input.model.id.clone()),
         },
     ];
+    // The class keys carry the same model so the aliases, subagents and
+    // background work follow the session model instead of the user's previous
+    // values for those surfaces.
+    writes.extend(CLASS_MODEL_KEYS.iter().map(|&key_path| PlannedWrite {
+        key_path,
+        value: PlannedValue::Literal(input.model.id.clone()),
+    }));
     writes.extend(
         gateway
             .extra_writes

@@ -164,8 +164,25 @@ Anthropic 官方声明不支持通过任何网关把 Claude Code 路由到非 Cl
 
 DeepSeek 的配方除基地址与 `ANTHROPIC_AUTH_TOKEN` 外还设置 `ANTHROPIC_MODEL=deepseek-flash[1m]`、
 `ANTHROPIC_DEFAULT_OPUS/SONNET/HAIKU_MODEL`、`CLAUDE_CODE_SUBAGENT_MODEL`、
-`CLAUDE_CODE_EFFORT_LEVEL=max` 与 `CLAUDE_CODE_AUTO_COMPACT_WINDOW`。`[1m]` 变体和这些伴随变量
-是否适用于其他模型未核实；首版只映射基地址、凭据与模型名。
+`CLAUDE_CODE_EFFORT_LEVEL=max` 与 `CLAUDE_CODE_AUTO_COMPACT_WINDOW`。`[1m]` 变体是否适用于其他模型
+未核实；vibemate 目前写入基地址、凭据、会话模型与四个类别模型键，取值一律是模型 ID 的存储原值，
+不追加后缀。
+
+### 类别模型键（2026-10-14 复核 model-config 页）
+
+官方 Environment variables 一节把下列变量列为「别名解析到的模型」，示例即把它们写进设置文件的
+`env` 块；本机 2.1.287 二进制同样引用这四个变量名。
+
+| 变量                             | 生效面                                                            |
+| -------------------------------- | ----------------------------------------------------------------- |
+| `ANTHROPIC_DEFAULT_OPUS_MODEL`   | `opus` 别名，以及 Plan Mode 生效时的 `opusplan`                   |
+| `ANTHROPIC_DEFAULT_SONNET_MODEL` | `sonnet` 别名，以及 Plan Mode 未生效时的 `opusplan`               |
+| `ANTHROPIC_DEFAULT_HAIKU_MODEL`  | `haiku` 别名与后台功能（`ANTHROPIC_SMALL_FAST_MODEL` 已被它取代） |
+| `CLAUDE_CODE_SUBAGENT_MODEL`     | 子代理、团队队友与工作流代理的默认模型                            |
+
+同一页还写明窗口假定：被固定的 ID 若无法匹配到 Claude Code 已知的模型，会话按 200K 窗口运行，除非
+该 ID 带 `[1m]` 后缀；带原生 1M 窗口的模型在 ID 可匹配时无需后缀。因此窗口声明不能只写数字，必须与
+ID 形状一起决定（见 [p18-claude-code-link.md](../plans/p18-claude-code-link.md) 的未映射项）。
 
 ### DeepSeek 官方推荐配置与维护者实测（2026-10-13）
 

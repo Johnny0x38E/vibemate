@@ -108,6 +108,7 @@ pub fn run() {
             commands::models::cancel_provider_model_fetch,
             commands::models::get_provider_model_fetch_status,
             commands::models::list_provider_models,
+            commands::models::count_provider_models,
             commands::models::save_provider_model_selections,
             commands::models::set_provider_models_selected,
             commands::models::add_manual_provider_model,

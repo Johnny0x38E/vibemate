@@ -9,7 +9,7 @@ use crate::model_fetch::{
 };
 use crate::models::{
     self, AddManualModelRequest, DeleteManualModelRequest, ListProviderModelsRequest, ModelError,
-    ProviderModel, ProviderModelPage, SetModelsSelectedRequest,
+    ProviderModel, ProviderModelCount, ProviderModelPage, SetModelsSelectedRequest,
 };
 use serde::Serialize;
 use std::sync::PoisonError;
@@ -149,6 +149,20 @@ pub(crate) async fn list_provider_models(
         with_model_storage(&app, |storage| {
             models::list_provider_models(storage, &request)
         })
+    })
+    .await
+    .map_err(|_| ModelError::OperationFailed)?
+}
+
+/// Count models added to the library (`selected = 1` on `provider_model`).
+/// Unselected catalog-fetch rows are excluded. No network, credentials, or Agent
+/// discovery. Returns safe storage codes only.
+#[tauri::command]
+pub(crate) async fn count_provider_models(
+    app: tauri::AppHandle,
+) -> Result<ProviderModelCount, ModelError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        with_model_storage(&app, models::count_provider_models)
     })
     .await
     .map_err(|_| ModelError::OperationFailed)?

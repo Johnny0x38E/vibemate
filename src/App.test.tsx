@@ -40,6 +40,8 @@ import {
     replaceProviderSecret,
 } from "./lib/desktop/providerSecrets";
 import { listMcpDefinitions } from "./lib/desktop/mcp";
+import { listSkills } from "./lib/desktop/skills";
+import { countProviderModels } from "./lib/desktop/models";
 import { discoverAgents } from "./lib/desktop/agents";
 import { agentReport } from "./test/agentDiscovery";
 import en from "./locales/en.json";
@@ -121,11 +123,25 @@ vi.mock(import("./lib/desktop/mcp"), async (importOriginal) => ({
     listMcpDefinitions: vi.fn(),
 }));
 
+vi.mock(import("./lib/desktop/skills"), async (importOriginal) => ({
+    ...(await importOriginal()),
+    listSkills: vi.fn(),
+}));
+
+vi.mock(import("./lib/desktop/models"), async (importOriginal) => ({
+    ...(await importOriginal()),
+    countProviderModels: vi.fn(),
+}));
+
 beforeEach(async () => {
     vi.mocked(discoverAgents)
         .mockReset()
         .mockResolvedValue({ kind: "preview" });
     vi.mocked(listMcpDefinitions)
+        .mockReset()
+        .mockResolvedValue({ kind: "preview" });
+    vi.mocked(listSkills).mockReset().mockResolvedValue({ kind: "preview" });
+    vi.mocked(countProviderModels)
         .mockReset()
         .mockResolvedValue({ kind: "preview" });
     // jsdom is a browser, so the Providers page defaults to its preview state.
@@ -447,7 +463,17 @@ test("a saved Chinese choice overrides an English system at startup", async () =
     renderDesktopStartup("en-US");
     expect(await screen.findByRole("main", { name: "配置概览" })).toBeDefined();
     expect(document.documentElement.lang).toBe("zh-CN");
-    expect(screen.getByText("这里还没有内容")).toBeDefined();
+    // Overview v1 shows bilingual stat cards (browser preview stays honest).
+    expect(
+        await screen.findByRole("button", {
+            name: "服务商: 请在桌面应用中查看此数量。",
+        }),
+    ).toBeDefined();
+    expect(
+        screen.getByRole("button", {
+            name: "已添加模型: 请在桌面应用中查看此数量。",
+        }),
+    ).toBeDefined();
     // Brand and module names stay in their original form inside Chinese UI.
     expect(screen.getByRole("button", { name: "Agent" })).toBeDefined();
     expect(
@@ -597,11 +623,15 @@ function useDesktopProviders(): void {
 test("the Providers page reads nothing until first visited", async () => {
     useDesktopProviders();
     render(<App />);
+    // Overview may read the provider total; templates stay module-only until visit.
+    await screen.findByRole("button", { name: /Providers:/ });
+    expect(listProviders).toHaveBeenCalled();
+    expect(listProviderTemplates).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Agents" }));
-    expect(listProviders).not.toHaveBeenCalled();
     expect(listProviderTemplates).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Providers" }));
     expect(await screen.findByText("Personal DeepSeek")).toBeDefined();
+    expect(listProviderTemplates).toHaveBeenCalled();
 });
 
 test("the Providers sidebar returns to its list without remounting the module", async () => {
@@ -646,6 +676,10 @@ test("the Providers sidebar returns to its list without remounting the module", 
     expectNoKeysOrDiagnostics();
 });
 
+// Flaky (rare): asserts focus on the saved Edit row; sometimes lands on
+// document.body after the edit form unmounts and the list IconButton remounts
+// from refreshList. Rerun usually passes. Notifications close-button placement
+// outside role=status was checked; no clear product-safe fix yet (2026-10-14).
 test("a save shows an app-level notification that outlives the jump back and page changes", async () => {
     translator = await createAppI18n("en");
     useDesktopProviders();
@@ -858,7 +892,10 @@ test("MCP mounts on first visit and sidebar activation returns to its list", asy
         },
     });
     render(<App />);
-    expect(listMcpDefinitions).not.toHaveBeenCalled();
+    // Overview may read the MCP total; the MCP module stays unmounted until visit.
+    await screen.findByRole("button", { name: /MCP servers:/ });
+    expect(listMcpDefinitions).toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "New" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "MCP servers" }));
     await screen.findByText("No MCP definitions saved yet.");
     fireEvent.click(screen.getByRole("button", { name: "New" }));
@@ -930,16 +967,23 @@ test("Agent discovery starts on first visit and preserves paths across navigatio
         ]),
     });
     render(<App />);
-    expect(discoverAgents).not.toHaveBeenCalled();
+    // Overview may discover for its agent total; the Agents module mounts on visit.
+    await screen.findByRole("button", { name: /Discovered agents:/ });
+    expect(discoverAgents).toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Discover" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Agents" }));
     fireEvent.click(
         await screen.findByRole("button", { name: "Open Pi details" }),
     );
     const input = screen.getByRole("textbox", { name: "Pi entry path" });
     fireEvent.change(input, { target: { value: "/home/test/manual-pi" } });
-    const calls = vi.mocked(discoverAgents).mock.calls.length;
+    const callsBeforeOverview = vi.mocked(discoverAgents).mock.calls.length;
     fireEvent.click(screen.getByRole("button", { name: "Overview" }));
     expect(screen.queryByRole("textbox", { name: "Pi entry path" })).toBeNull();
+    // Returning home remounts Overview and may re-read totals; Agents stays cached.
+    await screen.findByRole("button", { name: /Discovered agents:/ });
+    const callsAfterOverview = vi.mocked(discoverAgents).mock.calls.length;
+    expect(callsAfterOverview).toBeGreaterThan(callsBeforeOverview);
     fireEvent.click(screen.getByRole("button", { name: "Agents" }));
     expect(screen.queryByRole("textbox", { name: "Pi entry path" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Open Pi details" }));
@@ -948,5 +992,5 @@ test("Agent discovery starts on first visit and preserves paths across navigatio
     ).toHaveProperty("value", "/home/test/manual-pi");
     fireEvent.click(screen.getByRole("button", { name: "Agents" }));
     expect(screen.queryByRole("textbox", { name: "Pi entry path" })).toBeNull();
-    expect(discoverAgents).toHaveBeenCalledTimes(calls);
+    expect(discoverAgents).toHaveBeenCalledTimes(callsAfterOverview);
 });

@@ -22,9 +22,19 @@
             "close": "Close window"
         },
         "overview": {
-            "state": "Not connected · planned",
-            "emptyTitle": "Nothing here yet",
-            "emptyDetail": "Overview content will land here in a later update."
+            "stats": "Configuration totals",
+            "cards": {
+                "providers": "Providers",
+                "models": "Added models",
+                "agents": "Discovered agents",
+                "skills": "Skills",
+                "mcp": "MCP servers"
+            },
+            "loading": "Loading…",
+            "preview": "Open the desktop app to read this count.",
+            "unavailable": "Unavailable",
+            "retry": "Retry",
+            "retryLabel": "Retry {{name}}"
         }
     },
     "settings": {

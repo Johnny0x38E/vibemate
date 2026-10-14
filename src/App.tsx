@@ -161,7 +161,13 @@ export default function App({ languageSettings }: AppProps): JSX.Element {
                     dragClassName={styles["titlebarDrag"]}
                 />
                 <main className={styles["content"]} aria-label={pageLabel}>
-                    {page === "home" && <OverviewView />}
+                    {page === "home" && (
+                        <OverviewView
+                            onNavigate={(destination) => {
+                                navigate(destination);
+                            }}
+                        />
+                    )}
                     {/* Hide instead of remounting to preserve pending work and caches.
                     Sidebar re-entry asks the destination to return home safely. */}
                     {agentsVisited && (

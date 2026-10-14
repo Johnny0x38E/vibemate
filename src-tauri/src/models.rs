@@ -14,15 +14,15 @@ pub use edit::{
     GetModelSnapshotRequest, ModelSnapshot, UpdateModelEditRequest, get_model_snapshot,
     update_model_edit,
 };
-pub use repository::list_provider_models;
+pub use repository::{count_provider_models, list_provider_models};
 pub use selection::{
     add_manual_model, delete_manual_model, save_provider_model_selections, set_models_selected,
 };
 pub use types::{
     AddManualModelRequest, DeleteManualModelRequest, ListProviderModelsRequest,
-    MAX_MODEL_PAGE_SIZE, MAX_SELECTION_BATCH, ModelSource, ProviderModel, ProviderModelPage,
-    SaveProviderModelEntry, SaveProviderModelSelectionsRequest, SetModelsSelectedRequest,
-    UpstreamState,
+    MAX_MODEL_PAGE_SIZE, MAX_SELECTION_BATCH, ModelSource, ProviderModel, ProviderModelCount,
+    ProviderModelPage, SaveProviderModelEntry, SaveProviderModelSelectionsRequest,
+    SetModelsSelectedRequest, UpstreamState,
 };
 pub use validation::{decode_cursor, encode_cursor};
 

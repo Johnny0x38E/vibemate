@@ -8,7 +8,17 @@
 2. 接着做 P18 最小 Claude Code 配置预览；P16 只按预览需要补模型信息，不是完整前置。
 3. 请求参数与必要能力覆盖属于目标 Agent 配置，不放在服务商模型页。
 4. 六种发现不等于六种配置注入；配置适配顺序为 Claude Code、Pi、Grok Build。维护者编码日常使用 Pi，Pi 不作为首个写入目标。
-5. 界面归属按关系基数划分：模型配置 1:1，操作在 Agent 模块；Skill/MCP 部署 1:N，操作在技能/MCP 模块。Agent 详情页只读汇总当前配置（模型/Skill/MCP 三个槽位，状态加跳转链接），不放注入操作。模型槽位与配置入口随 P18 交付；Skill/MCP 槽位随 P27/P32 各自添加，现在不留空壳。概览页另行重设计，暂不扩展。
+5. 界面归属按关系基数划分：模型配置 1:1，操作在 Agent 模块；Skill/MCP 部署 1:N，操作在技能/MCP 模块。Agent 详情页只读汇总当前配置（模型/Skill/MCP 三个槽位，状态加跳转链接），不放注入操作。模型槽位与配置入口随 P18 交付；Skill/MCP 槽位随 P27/P32 各自添加，现在不留空壳。概览页 v1 五张统计卡片已落地（含模型总数 IPC）；详见下方「概览 v1」。
+
+## 概览 v1（2026-10-14）
+
+维护者确认先读设计再动手；仓库内无独立五卡片设计文档，按确认五卡片范围从空态改为：
+
+- 服务商 / 已添加模型 / 已发现 Agent / 技能 / MCP：图标 + 名称 + 大数字；0 合法；加载占位；失败「无法读取」+ 重试；点击跳转对应侧栏（Agent → 列表；模型 → 服务商）。
+- 模型总数：`countProviderModels()` / `count_provider_models`，仅 `selected = 1`（已添加进库，不含未勾选的目录拉取缓存；preview 不发明数字）。
+- 技能 / MCP 文案只指中央库，不暗示已注入 Agent；Agent 计数用现有 `discoverAgents`，不自动读版本。
+
+**已知 flaky：** `App.test.tsx`「a save shows an app-level notification that outlives the jump back and page changes」偶发 focus 落在 `document.body`（编辑页卸载与 `refreshList` 重挂 IconButton 的竞态）；重跑通常通过。已核对 Notifications 关闭按钮在 `role=status` 外；暂无不改产品行为的稳妥修复。
 
 ## 执行约定
 

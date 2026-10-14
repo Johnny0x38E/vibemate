@@ -113,6 +113,14 @@ pub struct ProviderModelPage {
     pub total_matches: Option<usize>,
 }
 
+/// How many models the user has added across every provider (`selected = 1`).
+/// Unselected catalog-fetch rows are excluded; this is not a paged list total.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderModelCount {
+    pub total: i64,
+}
+
 /// Select or unselect several models at once.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

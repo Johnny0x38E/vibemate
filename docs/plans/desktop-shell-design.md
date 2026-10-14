@@ -83,15 +83,18 @@ See [brand assets](../../assets/brand/README.md) for files and regeneration.
 
 ## Home overview and honest states
 
-The home destination showed a configuration relationship diagram (providers
-above the configuration application point, agents below, shared skills/MCP
-definitions alongside) and a reserved statistics area. Both were removed on
-2026-10-14: until real overview content exists, the page shows one placeholder
-empty state (a decorative illustration and a short bilingual notice) and no
-data at all. The honest-states rule is unchanged and applies to whatever lands
-here next: this is a configuration relationship, not a running proxy, and no
-diagram, node color or statistic may imply a connected integration, enabled
-agent, spending, quota or telemetry behavior before that behavior exists.
+The home destination shows five configuration-total cards (providers,
+added/selected models, discovered agents, central skills, central MCP
+definitions). The models total is `selected = 1` only (not unselected catalog
+fetch rows). Each card shows an icon, a bilingual name and a large number (zero
+is valid), with loading, failure-plus-retry and browser-preview states that
+never invent a total.
+Clicking a card opens the matching sidebar module (models open Providers;
+agents open the Agent list). Skills and MCP copy names the central library only
+and must not imply injection into Agents. This remains a configuration
+relationship, not a running proxy: no card may imply a connected integration,
+enabled agent, spending, quota or telemetry behavior before that behavior
+exists. There is no separate overview design doc; the cards follow the maintainer-confirmed five-card v1 scope.
 
 ## Window behavior
 

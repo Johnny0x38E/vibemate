@@ -872,3 +872,44 @@ fn stored_capability_overrides_are_read_and_validated() {
         );
     }
 }
+
+#[test]
+fn count_provider_models_empty_database_is_zero() {
+    let directory = TestDirectory::new();
+    let storage = directory.open();
+    assert_eq!(
+        count_provider_models(&storage).expect("count"),
+        ProviderModelCount { total: 0 }
+    );
+}
+
+#[test]
+fn count_provider_models_counts_only_selected() {
+    let directory = TestDirectory::new();
+    let storage = directory.open();
+    insert_provider(&storage, PROVIDER, "deepseek", "chat_completions");
+    insert_provider(&storage, OTHER, "openrouter", "chat_completions");
+    // Fetched inserts start unselected; manual add selects the new row.
+    insert_fetched(&storage, PROVIDER, "unselected-a", None);
+    insert_fetched(&storage, OTHER, "unselected-b", None);
+    add(&storage, "selected-manual", None).expect("add");
+
+    // Only the manual (selected) row counts; unselected fetch cache does not.
+    assert_eq!(count_provider_models(&storage).expect("count").total, 1);
+
+    select(&storage, &["unselected-a"], true).expect("select one");
+    assert_eq!(
+        count_provider_models(&storage)
+            .expect("count after select")
+            .total,
+        2
+    );
+
+    select(&storage, &["unselected-a"], false).expect("unselect");
+    assert_eq!(
+        count_provider_models(&storage)
+            .expect("count after unselect")
+            .total,
+        1
+    );
+}

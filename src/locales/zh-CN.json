@@ -22,9 +22,19 @@
             "close": "关闭窗口"
         },
         "overview": {
-            "state": "未接入 · 计划中",
-            "emptyTitle": "这里还没有内容",
-            "emptyDetail": "概览内容将在后续版本中提供。"
+            "stats": "配置统计",
+            "cards": {
+                "providers": "服务商",
+                "models": "已添加模型",
+                "agents": "已发现 Agent",
+                "skills": "技能",
+                "mcp": "MCP 服务器"
+            },
+            "loading": "正在读取…",
+            "preview": "请在桌面应用中查看此数量。",
+            "unavailable": "无法读取",
+            "retry": "重试",
+            "retryLabel": "重试{{name}}"
         }
     },
     "settings": {

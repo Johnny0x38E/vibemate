@@ -4,6 +4,7 @@ import type { JSX, ReactNode } from "react";
 export type IconName =
     | "home"
     | "providers"
+    | "models"
     | "agents"
     | "skills"
     | "mcp"
@@ -39,6 +40,16 @@ export function Icon({ name }: { name: IconName }): JSX.Element {
                     <rect x="3" y="4" width="18" height="7" rx="2" />
                     <rect x="3" y="14" width="18" height="7" rx="2" />
                     <path d="M7 7.5h.01M7 17.5h.01" />
+                </>
+            );
+            break;
+        case "models":
+            // Stack of list rows: saved models live under Providers.
+            content = (
+                <>
+                    <rect x="4" y="5" width="16" height="4" rx="1" />
+                    <rect x="4" y="11" width="16" height="4" rx="1" />
+                    <rect x="4" y="17" width="16" height="4" rx="1" />
                 </>
             );
             break;

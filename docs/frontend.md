@@ -26,10 +26,11 @@ invalidated when returning home.
 - `src/main.tsx` locates the HTML root and mounts React in StrictMode, with
   `LocaleStartup` withholding the App until its language preference is ready.
 - `src/App.tsx` composes the desktop shell: the collapsible sidebar, the
-  home overview (`OverviewView`), `ProvidersView` (mounted on the first visit, then
-  kept mounted while hidden to retain caches and pending work), central MCP
-  management, read-only Agent discovery, `SkillLibrary`, and `SettingsView`
-  (mounted while hidden). Sidebar width is fixed; only the collapse button
+  home overview (`OverviewView` — five configuration-total cards including
+  `count_provider_models` (selected-into-library only)), `ProvidersView` (mounted on the first visit, then
+  kept mounted while hidden to retain caches and pending work),
+  central MCP management, read-only Agent discovery, `SkillLibrary`, and
+  `SettingsView` (mounted while hidden). Sidebar width is fixed; only the collapse button
   changes layout. `src/App.css` holds shared design variables and scaffold styles.
 - `src/features/providers/` holds the provider views; see
   [Provider configurations](#provider-configurations). `SettingsView` uses

@@ -97,6 +97,24 @@ pub fn list_provider_models(
     })
 }
 
+/// Count models the user has added (勾选 / `selected = 1`) across all providers.
+/// Unselected catalog-fetch cache rows are excluded.
+///
+/// # Errors
+/// `StorageUnavailable` when the database lock fails; `ReadFailed` when SQLite
+/// cannot run the count.
+pub fn count_provider_models(storage: &Storage) -> Result<ProviderModelCount, ModelError> {
+    let connection = lock(storage)?;
+    let total: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM provider_model WHERE selected = 1",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|_| ModelError::ReadFailed)?;
+    Ok(ProviderModelCount { total })
+}
+
 /// Rank every model of the provider (after the selection filter) in memory and
 /// return the best `limit`. SQLite only filters; it never sees the query.
 fn search_provider_models(

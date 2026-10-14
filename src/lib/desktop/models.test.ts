@@ -9,6 +9,7 @@ import {
     getProviderModelSnapshot,
     refreshSavedProviderModels,
     updateProviderModelEdit,
+    countProviderModels,
     listProviderModels,
     ModelRequestError,
     setProviderModelsSelected,
@@ -274,6 +275,7 @@ describe("model IPC boundary", () => {
         expect(invoke).not.toHaveBeenCalled();
         vi.mocked(isTauri).mockReturnValue(false);
         expect(await listProviderModels(input)).toEqual({ kind: "preview" });
+        expect(await countProviderModels()).toEqual({ kind: "preview" });
         expect(await getProviderModelFetchStatus(ID)).toEqual({
             kind: "preview",
         });
@@ -312,6 +314,33 @@ describe("model IPC boundary", () => {
                 code: "desktop_required",
             });
         expect(invoke).not.toHaveBeenCalled();
+    });
+
+    it("counts selected-into-library models with exact keys and rejects bad totals", async () => {
+        vi.mocked(invoke).mockResolvedValueOnce({ total: 0 });
+        expect(await countProviderModels()).toEqual({
+            kind: "desktop",
+            count: { total: 0 },
+        });
+        expect(invoke).toHaveBeenLastCalledWith("count_provider_models", {});
+        vi.mocked(invoke).mockResolvedValueOnce({ total: 3 });
+        expect(await countProviderModels()).toEqual({
+            kind: "desktop",
+            count: { total: 3 },
+        });
+        for (const bad of [
+            { total: -1 },
+            { total: 1.5 },
+            { total: 100_001 },
+            { total: 0, extra: true },
+            {},
+            null,
+        ]) {
+            vi.mocked(invoke).mockResolvedValueOnce(bad);
+            await expect(countProviderModels()).rejects.toMatchObject({
+                code: "invalid_response",
+            });
+        }
     });
 
     it("forwards cursor/filter and optional search without transforming model IDs", async () => {

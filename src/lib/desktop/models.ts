@@ -289,6 +289,15 @@ export interface ModelFetchStatus {
     } | null;
 }
 
+/** How many models the user has added to the library (`selected = 1`). */
+export interface ProviderModelCount {
+    total: number;
+}
+
+/** Preview must not invent a stored total. */
+export type ProviderModelCountResult =
+    { kind: "preview" } | { kind: "desktop"; count: ProviderModelCount };
+
 /** Preview never pretends to contain a persisted model list. */
 export type ProviderModelPageResult =
     { kind: "preview" } | { kind: "desktop"; page: ProviderModelPage };
@@ -586,6 +595,19 @@ export async function listProviderModels(
     )
         throw invalidResponse();
     return { kind: "desktop", page };
+}
+
+/**
+ * Count models selected into the library across every provider (`selected = 1`).
+ * Unselected catalog-fetch rows are excluded. Browser preview invents no total.
+ */
+export async function countProviderModels(): Promise<ProviderModelCountResult> {
+    if (!isTauri()) return { kind: "preview" };
+    const data = object(await call("count_provider_models", {}), ["total"]);
+    const total = integer(data["total"]);
+    // Match sibling overview list bounds (providers / skills / MCP).
+    if (total > 100_000) throw invalidResponse();
+    return { kind: "desktop", count: { total } };
 }
 
 function validateSnapshot(value: unknown, input: ModelIdentity): ModelSnapshot {

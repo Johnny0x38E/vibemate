@@ -288,6 +288,51 @@ const MIGRATIONS: &[Migration] = &[
             DEFAULT NULL
             CHECK(thinking_effort IS NULL OR json_valid(thinking_effort));",
     },
+    Migration {
+        version: 16,
+        // Operation log for Agent configuration writes (see `crate::config_apply`).
+        // One operation covers the files of a single apply step; every file is a
+        // step row recorded before the first replacement, so a crash halfway
+        // leaves a `planned` operation whose applied steps are visible after a
+        // restart. Rows keep paths, digests and stable error codes only: file
+        // content and credential values live in the private backup directory,
+        // which a step references by id, path and digest.
+        // - `kind` is validated in Rust so new features can reuse the log without
+        //   rebuilding this table; `state` is a closed set, as in other modules.
+        // - A step that is not applied holds no applied digest, only a failed step
+        //   carries an error code, and the three backup columns appear together.
+        // - Deleting an operation removes its steps with it.
+        sql: "CREATE TABLE config_operation (
+            id TEXT PRIMARY KEY CHECK(length(id)=32 AND id NOT GLOB '*[^0-9a-f]*'),
+            kind TEXT NOT NULL CHECK(length(kind) BETWEEN 1 AND 64),
+            state TEXT NOT NULL CHECK(state IN ('planned','applied','failed','partial','unknown','compensated')),
+            created_at INTEGER NOT NULL CHECK(created_at >= 0),
+            updated_at INTEGER NOT NULL CHECK(updated_at >= created_at)
+        ) STRICT;
+        CREATE INDEX config_operation_unfinished ON config_operation (state, created_at, id);
+        CREATE TABLE config_operation_step (
+            operation_id TEXT NOT NULL REFERENCES config_operation(id) ON DELETE CASCADE,
+            ordinal INTEGER NOT NULL CHECK(ordinal >= 0),
+            target_path TEXT NOT NULL CHECK(length(target_path) BETWEEN 1 AND 4096),
+            expected_digest TEXT CHECK(expected_digest IS NULL OR (
+                length(expected_digest)=64 AND expected_digest NOT GLOB '*[^0-9a-f]*')),
+            state TEXT NOT NULL CHECK(state IN ('pending','applied','failed')),
+            error_code TEXT CHECK(error_code IS NULL OR length(error_code) BETWEEN 1 AND 64),
+            backup_id TEXT CHECK(backup_id IS NULL OR length(backup_id) BETWEEN 1 AND 128),
+            backup_path TEXT CHECK(backup_path IS NULL OR length(backup_path) BETWEEN 1 AND 4096),
+            backup_digest TEXT CHECK(backup_digest IS NULL OR (
+                length(backup_digest)=64 AND backup_digest NOT GLOB '*[^0-9a-f]*')),
+            applied_digest TEXT CHECK(applied_digest IS NULL OR (
+                length(applied_digest)=64 AND applied_digest NOT GLOB '*[^0-9a-f]*')),
+            updated_at INTEGER NOT NULL CHECK(updated_at >= 0),
+            PRIMARY KEY (operation_id, ordinal),
+            CHECK (error_code IS NULL OR state = 'failed'),
+            CHECK (applied_digest IS NULL OR state = 'applied'),
+            CHECK (backup_id IS NULL OR state = 'applied'),
+            CHECK ((backup_id IS NULL AND backup_path IS NULL AND backup_digest IS NULL)
+                OR (backup_id IS NOT NULL AND backup_path IS NOT NULL AND backup_digest IS NOT NULL))
+        ) STRICT, WITHOUT ROWID;",
+    },
 ];
 
 /// Errors from opening or migrating the private database.

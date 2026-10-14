@@ -107,6 +107,9 @@ pub struct AppliedFile {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WriteError {
+    /// The caller asked for a write the module cannot describe: an empty step
+    /// list, a path that cannot be shown, or a digest that is not SHA-256.
+    InvalidRequest,
     /// The plan token no longer matches: the file appeared, vanished or changed.
     TargetChanged,
     /// The target path is a symbolic link; replacing it would write elsewhere.
@@ -125,11 +128,43 @@ pub enum WriteError {
     WriteFailed,
     /// The replacement may or may not have happened; reload before another try.
     OutcomeUnknown,
+    /// The private database is not open, or an earlier panic poisoned it.
+    StorageUnavailable,
+    /// The operation or one of its steps could not be recorded.
+    LogWriteFailed,
+    /// Recorded operations could not be read back.
+    LogReadFailed,
+    /// A stored operation row is malformed; the log is not shown as if it were valid.
+    InvalidStoredOperation,
+}
+
+impl WriteError {
+    /// Stable code for the operation log and the interface. [`WriteError`]
+    /// serializes to the same text; a test keeps the two in step.
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::InvalidRequest => "invalid_request",
+            Self::TargetChanged => "target_changed",
+            Self::SymlinkRefused => "symlink_refused",
+            Self::TargetReadOnly => "target_read_only",
+            Self::TargetPathInvalid => "target_path_invalid",
+            Self::TargetUnreadable => "target_unreadable",
+            Self::TargetTooLarge => "target_too_large",
+            Self::BackupUnavailable => "backup_unavailable",
+            Self::WriteFailed => "write_failed",
+            Self::OutcomeUnknown => "outcome_unknown",
+            Self::StorageUnavailable => "storage_unavailable",
+            Self::LogWriteFailed => "log_write_failed",
+            Self::LogReadFailed => "log_read_failed",
+            Self::InvalidStoredOperation => "invalid_stored_operation",
+        }
+    }
 }
 
 impl std::fmt::Display for WriteError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str(match self {
+            Self::InvalidRequest => "The requested write cannot be described.",
             Self::TargetChanged => "The configuration file changed since the preview.",
             Self::SymlinkRefused => "The configuration path is a symbolic link.",
             Self::TargetReadOnly => "The configuration file is read-only.",
@@ -139,11 +174,164 @@ impl std::fmt::Display for WriteError {
             Self::BackupUnavailable => "The backup could not be stored.",
             Self::WriteFailed => "The configuration file could not be written.",
             Self::OutcomeUnknown => "The configuration write result is unknown.",
+            Self::StorageUnavailable => "Private storage is unavailable.",
+            Self::LogWriteFailed => "The write operation could not be recorded.",
+            Self::LogReadFailed => "Recorded write operations could not be read.",
+            Self::InvalidStoredOperation => "A recorded write operation is invalid.",
         })
     }
 }
 
 impl std::error::Error for WriteError {}
+
+/// Which feature owns a recorded write operation.
+///
+/// Stored as text with a length bound only, so a later feature reuses the log
+/// without rebuilding the table; Rust decides which values are valid.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OperationKind {
+    /// Claude Code user settings, written by the model-link apply step (P20).
+    ClaudeCodeSettings,
+}
+
+impl OperationKind {
+    /// Value stored in `config_operation.kind`.
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::ClaudeCodeSettings => "claude_code_settings",
+        }
+    }
+
+    /// Parse a stored value; an unknown kind is a malformed row, not a new feature.
+    fn from_stored(value: &str) -> Option<Self> {
+        match value {
+            "claude_code_settings" => Some(Self::ClaudeCodeSettings),
+            _ => None,
+        }
+    }
+}
+
+/// How far a recorded operation got.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OperationState {
+    /// Recorded before the first replacement; steps say how far it got.
+    Planned,
+    /// Every step replaced its file.
+    Applied,
+    /// No step replaced its file, so nothing needs undoing.
+    Failed,
+    /// Some steps replaced their files and the operation then stopped.
+    Partial,
+    /// A step's outcome could not be verified; the files must be read before trusting them.
+    Unknown,
+    /// A failed operation whose applied steps were rolled back from their backups.
+    Compensated,
+}
+
+impl OperationState {
+    /// Value stored in `config_operation.state`.
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Planned => "planned",
+            Self::Applied => "applied",
+            Self::Failed => "failed",
+            Self::Partial => "partial",
+            Self::Unknown => "unknown",
+            Self::Compensated => "compensated",
+        }
+    }
+
+    /// Parse a stored value; an unknown state is a malformed row.
+    fn from_stored(value: &str) -> Option<Self> {
+        match value {
+            "planned" => Some(Self::Planned),
+            "applied" => Some(Self::Applied),
+            "failed" => Some(Self::Failed),
+            "partial" => Some(Self::Partial),
+            "unknown" => Some(Self::Unknown),
+            "compensated" => Some(Self::Compensated),
+            _ => None,
+        }
+    }
+
+    /// Whether the operation still needs an answer after a restart.
+    pub fn is_unfinished(self) -> bool {
+        matches!(self, Self::Planned | Self::Partial | Self::Unknown)
+    }
+}
+
+/// What one step of an operation did to its file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StepState {
+    /// Recorded and not attempted yet.
+    Pending,
+    /// The file was replaced with the planned content.
+    Applied,
+    /// The file was left as it was, and `error_code` says why.
+    Failed,
+}
+
+impl StepState {
+    /// Value stored in `config_operation_step.state`.
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Applied => "applied",
+            Self::Failed => "failed",
+        }
+    }
+
+    /// Parse a stored value; an unknown state is a malformed row.
+    fn from_stored(value: &str) -> Option<Self> {
+        match value {
+            "pending" => Some(Self::Pending),
+            "applied" => Some(Self::Applied),
+            "failed" => Some(Self::Failed),
+            _ => None,
+        }
+    }
+}
+
+/// One recorded file of an operation, without any file content.
+#[derive(Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StepRecord {
+    /// Position of the step in the operation, counted from zero.
+    pub ordinal: u32,
+    /// Absolute path this step replaces.
+    pub target_path: String,
+    /// SHA-256 the plan saw, or `None` when the file did not exist yet.
+    pub expected_digest: Option<String>,
+    /// What happened to this file.
+    pub state: StepState,
+    /// Stable code of the failure; present exactly when `state` is `failed`.
+    pub error_code: Option<String>,
+    /// Copy of the content this step replaced, when it replaced one.
+    pub backup: Option<Backup>,
+    /// SHA-256 written by this step; present exactly when it applied.
+    pub applied_digest: Option<String>,
+}
+
+/// One recorded write operation with its steps.
+#[derive(Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OperationRecord {
+    /// Stored identity of the operation.
+    pub id: String,
+    /// Feature that owns the operation.
+    pub kind: OperationKind,
+    /// How far the operation got.
+    pub state: OperationState,
+    /// Unix milliseconds when the operation was recorded.
+    pub created_at: i64,
+    /// Unix milliseconds of its last change.
+    pub updated_at: i64,
+    /// Steps in the order they are applied.
+    pub steps: Vec<StepRecord>,
+}
 
 /// Replace one configuration file with `content` after checking the plan token.
 ///
@@ -389,5 +577,14 @@ fn sync_directory(_: &Path) -> Result<(), WriteError> {
     Ok(())
 }
 
+mod operations;
+
+pub use operations::{
+    begin_operation, finish_operation, operation, record_step_applied, record_step_failed,
+    unfinished_operations,
+};
+
+#[cfg(test)]
+mod operation_tests;
 #[cfg(test)]
 mod tests;

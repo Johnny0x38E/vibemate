@@ -3,6 +3,7 @@
 pub mod agents;
 pub mod appearance;
 mod commands;
+pub mod config_apply;
 pub mod config_plan;
 pub mod credentials;
 mod log_access;

@@ -39,24 +39,33 @@ pub(super) fn with_model_storage<T>(
     operation(storage)
 }
 
-/// Run `operation` while holding the app-wide `CredentialLock`.
+/// Run `operation` while holding the app-wide `CredentialLock`, with the caller's
+/// error codes.
 ///
 /// The lock guards no data, only ordering, so a panic elsewhere ("poisoning")
 /// leaves nothing inconsistent to protect and the lock is used as usual.
 /// It gives mutual exclusion within this process only (see `CredentialLock`).
-///
 /// A missing lock means the app was wired up wrongly, not that storage failed,
-/// so it is reported as the generic internal `OperationFailed`, before anything
-/// was written.
+/// so the caller's `missing_lock` code is returned before anything was written.
+///
+/// Reading a Provider key takes the same lock as replacing one, so an apply step
+/// never loads a key while a replacement is halfway through.
+pub(super) fn with_credential_lock<T, E>(
+    app: &tauri::AppHandle,
+    missing_lock: E,
+    operation: impl FnOnce() -> Result<T, E>,
+) -> Result<T, E> {
+    let lock = app.try_state::<CredentialLock>().ok_or(missing_lock)?;
+    let _credential_writes = lock.0.lock().unwrap_or_else(PoisonError::into_inner);
+    operation()
+}
+
+/// Run `operation` while holding the app-wide `CredentialLock`.
 pub(super) fn with_credential_writes<T>(
     app: &tauri::AppHandle,
     operation: impl FnOnce() -> Result<T, ProviderError>,
 ) -> Result<T, ProviderError> {
-    let lock = app
-        .try_state::<CredentialLock>()
-        .ok_or(ProviderError::OperationFailed)?;
-    let _credential_writes = lock.0.lock().unwrap_or_else(PoisonError::into_inner);
-    operation()
+    with_credential_lock(app, ProviderError::OperationFailed, operation)
 }
 
 /// Run one provider operation against the storage opened at startup.
@@ -90,6 +99,24 @@ pub(super) fn with_plan_storage<T>(
     let storage = status
         .storage()
         .map_err(|_| crate::config_plan::PlanError::StorageUnavailable)?;
+    operation(storage)
+}
+
+/// Resolve startup storage while preserving the apply step's safe error codes.
+///
+/// The apply step reads the database, the OS credential store and the user
+/// settings file; all three are blocking, so callers run this on the blocking
+/// pool.
+pub(super) fn with_apply_storage<T>(
+    app: &tauri::AppHandle,
+    operation: impl FnOnce(&Storage) -> Result<T, crate::agents::ClaudeCodeApplyError>,
+) -> Result<T, crate::agents::ClaudeCodeApplyError> {
+    let status = app
+        .try_state::<StorageStatus>()
+        .ok_or(crate::agents::ClaudeCodeApplyError::StorageUnavailable)?;
+    let storage = status
+        .storage()
+        .map_err(|_| crate::agents::ClaudeCodeApplyError::StorageUnavailable)?;
     operation(storage)
 }
 

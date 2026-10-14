@@ -7,7 +7,7 @@
 //! being guessed. This module never writes a file, never reads a credential
 //! value and never sends a request.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::path::PathBuf;
 
@@ -254,6 +254,11 @@ fn build(input: &ClaudeCodePlanInput) -> Result<(ConfigPlan, Map<String, Value>)
 }
 
 /// Tokens the interface sends back from the plan the user reviewed.
+///
+/// The exact key set is enforced on the way in: a payload this build does not
+/// understand is refused instead of being applied with missing tokens.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ReviewedPlan {
     /// Settings file the plan was built for.
     pub target_path: String,

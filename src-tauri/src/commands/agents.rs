@@ -4,13 +4,15 @@
 //! Discovery and preview read the filesystem; the version launch is the only
 //! operation that runs another program, and it is not a sandbox.
 
-use super::state::with_plan_storage;
+use super::state::{with_apply_storage, with_credential_lock, with_plan_storage};
 use crate::agents::{
-    self, AgentObservation, AgentVersionResult, ClaudeCodePlanInput, DirectorySource,
+    self, AgentObservation, AgentVersionResult, ApplyClaudeCodeSettingsRequest, ClaudeCodeApplied,
+    ClaudeCodeApplyError, ClaudeCodeApplyInput, ClaudeCodePlanInput, DirectorySource,
     DiscoveryEnvironment, DiscoveryError, DiscoveryInput, ModelFacts, ProviderFacts,
     VersionProbeError, VersionProbeGate, VersionProbeInput,
 };
 use crate::config_plan::{ConfigPlan, PlanError};
+use crate::credentials::OsCredentialStore;
 use crate::models::{GetModelSnapshotRequest, ModelError};
 use crate::providers::ProviderError;
 use tauri::Manager;
@@ -114,6 +116,76 @@ pub(crate) async fn plan_claude_code_settings(
     .map_err(|_| PlanError::OperationFailed)?
 }
 
+/// Apply a reviewed Claude Code plan: write the user settings file with the key.
+///
+/// The first command that changes an Agent configuration file. It rechecks every
+/// token the preview bound, reads the Provider key from OS credential storage
+/// without returning it, and records the operation in the write log. The caller
+/// receives the state, the per-file outcome and where the copy of the previous
+/// content sits. File-level refusals are results; an error means the write could
+/// not be recorded.
+#[tauri::command]
+pub(crate) async fn apply_claude_code_settings(
+    app: tauri::AppHandle,
+    input: ApplyClaudeCodeSettingsRequest,
+) -> Result<ClaudeCodeApplied, ClaudeCodeApplyError> {
+    let environment = environment(&app).map_err(|()| ClaudeCodeApplyError::LocationUnavailable)?;
+    let (config_root, directory_source) = agents::claude_config_root(&environment);
+    if directory_source == DirectorySource::Unavailable {
+        return Err(ClaudeCodeApplyError::LocationUnavailable);
+    }
+    let config_root = config_root.ok_or(ClaudeCodeApplyError::LocationUnavailable)?;
+    // Reject a malformed identity before any storage or credential access.
+    let provider = crate::models::parse_provider_id(&input.provider_id)
+        .map_err(|_| ClaudeCodeApplyError::InvalidRequest)?;
+    // Replaced settings content is kept next to the database, never inside the
+    // settings folder it was read from.
+    let backups = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| ClaudeCodeApplyError::LocationUnavailable)?
+        .join("backups");
+
+    tauri::async_runtime::spawn_blocking(move || {
+        // The credential lock is taken before the key is read, so a replacement
+        // started by another command cannot be observed halfway through.
+        with_credential_lock(&app, ClaudeCodeApplyError::OperationFailed, || {
+            with_apply_storage(&app, |storage| {
+                let record = crate::providers::get_provider(storage, provider.as_str())
+                    .map_err(apply_provider_failure)?;
+                let snapshot = crate::models::get_model_snapshot(
+                    storage,
+                    &GetModelSnapshotRequest {
+                        provider_id: provider.as_str().to_owned(),
+                        model_id: input.model_id,
+                    },
+                )
+                .map_err(apply_model_failure)?;
+                let plan = ClaudeCodeApplyInput {
+                    plan: ClaudeCodePlanInput {
+                        config_root,
+                        provider: ProviderFacts {
+                            id: record.id.as_str().to_owned(),
+                            kind: record.kind,
+                            base_url: record.base_url,
+                            revision: record.revision,
+                        },
+                        model: ModelFacts {
+                            id: snapshot.model.model_id,
+                            content_digest: snapshot.content_digest,
+                        },
+                    },
+                    reviewed: input.reviewed,
+                    backups,
+                };
+                agents::apply_claude_code_settings(storage, &OsCredentialStore, &plan)
+            })
+        })
+    })
+    .await
+    .map_err(|_| ClaudeCodeApplyError::OperationFailed)?
+}
+
 /// Map a Provider read failure onto the preview's error namespace.
 fn provider_failure(error: ProviderError) -> PlanError {
     match error {
@@ -136,5 +208,32 @@ fn model_failure(error: ModelError) -> PlanError {
             PlanError::StorageUnavailable
         }
         _ => PlanError::OperationFailed,
+    }
+}
+
+/// Map a Provider read failure onto the apply step's error namespace.
+fn apply_provider_failure(error: ProviderError) -> ClaudeCodeApplyError {
+    match error {
+        ProviderError::NotFound => ClaudeCodeApplyError::ProviderNotFound,
+        ProviderError::InvalidRequest => ClaudeCodeApplyError::InvalidRequest,
+        ProviderError::StorageUnavailable
+        | ProviderError::ReadFailed
+        | ProviderError::WriteFailed => ClaudeCodeApplyError::StorageUnavailable,
+        _ => ClaudeCodeApplyError::OperationFailed,
+    }
+}
+
+/// Map a model read failure onto the apply step's error namespace.
+fn apply_model_failure(error: ModelError) -> ClaudeCodeApplyError {
+    match error {
+        ModelError::NotFound => ClaudeCodeApplyError::ProviderNotFound,
+        ModelError::ModelNotFound => ClaudeCodeApplyError::ModelNotFound,
+        ModelError::InvalidRequest | ModelError::ModelIdInvalid => {
+            ClaudeCodeApplyError::InvalidRequest
+        }
+        ModelError::StorageUnavailable | ModelError::ReadFailed | ModelError::WriteFailed => {
+            ClaudeCodeApplyError::StorageUnavailable
+        }
+        _ => ClaudeCodeApplyError::OperationFailed,
     }
 }

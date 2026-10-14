@@ -70,6 +70,7 @@ pub fn run() {
             commands::agents::discover_agents,
             commands::agents::probe_agent_version,
             commands::agents::plan_claude_code_settings,
+            commands::agents::apply_claude_code_settings,
             commands::mcp::list_mcp_definitions,
             commands::mcp::get_mcp_definition,
             commands::mcp::save_mcp_definition,

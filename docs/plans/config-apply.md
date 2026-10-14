@@ -108,7 +108,9 @@ SQLite schema v16 新增 `config_operation` 与 `config_operation_step`，仓储
   `provider_not_found`／`model_not_found`／`location_unavailable`／`storage_unavailable`／
   `invalid_request`／`operation_failed`。
 
-后续批次：P20.b IPC 命令与凭据锁、P20.c 前端边界（严格载荷校验）、P20.d 确认界面与双语文案。
+后续批次：P20.c 前端边界（严格载荷校验）、P20.d 确认界面与双语文案。P20.b（IPC 命令与凭据锁）
+已交付 2026-10-14：`apply_claude_code_settings` 命令按严格载荷解析请求，在阻塞线程上持有应用级凭据锁
+读取密钥，备份目录固定为应用数据目录下的 `backups/`。
 命令层与应用步骤共用应用级凭据锁，因此密钥替换与配置应用不会交错；界面明示密钥将以明文写入
 `~/.claude/settings.json`（预览已有该提示），且不依赖 vibemate 启动 Agent。
 

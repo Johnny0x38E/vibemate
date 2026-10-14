@@ -18,6 +18,8 @@
 - 模型总数：`countProviderModels()` / `count_provider_models`，仅 `selected = 1`（已添加进库，不含未勾选的目录拉取缓存；preview 不发明数字）。
 - 技能 / MCP 文案只指中央库，不暗示已注入 Agent；Agent 计数用现有 `discoverAgents`，不自动读版本。
 
+- [x] 维护者验收五张统计卡、已添加模型总数约 18、卡片折行与侧栏跳转。（维护者 2026-10-14）
+
 **已知 flaky：** `App.test.tsx`「a save shows an app-level notification that outlives the jump back and page changes」偶发 focus 落在 `document.body`（编辑页卸载与 `refreshList` 重挂 IconButton 的竞态）；重跑通常通过。已核对 Notifications 关闭按钮在 `role=status` 外；暂无不改产品行为的稳妥修复。
 
 ## 执行约定
@@ -255,7 +257,7 @@ Agent 详情页增加「当前配置」只读汇总区，首期只交付模型�
       重复应用只写一次；界面测试覆盖令牌回传、拒绝原因、计划过期丢弃、凭据缺失保留计划与重复点击。）
 - [x] 运行 `check:frontend` 与 Rust fmt/Clippy。（2026-10-14：前端 40 文件 755 项、0 警告；Rust
       fmt/Clippy 通过，全量测试 371 通过、1 忽略。）
-- [ ] 使用可恢复的测试配置，在真实 Tauri/Claude Code 中确认原生启动与模型选择。
+- [x] 使用可恢复的测试配置，在真实 Tauri/Claude Code 中确认原生启动与模型选择。（维护者 2026-10-14：预览、应用、改后须重预览、密钥不泄漏；真实 Claude Code 发消息正常。）
 
 **Dependencies:** P11,P18,P19。
 

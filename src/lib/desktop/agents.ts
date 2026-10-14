@@ -475,3 +475,217 @@ export async function planClaudeCodeSettings(
     }
     return { kind: "desktop", plan: claudeCodePlan(value) };
 }
+
+/** What one file of an apply step ended up as. */
+export const APPLY_STEP_STATES = ["pending", "applied", "failed"] as const;
+export type ApplyStepState = (typeof APPLY_STEP_STATES)[number];
+/** State of a whole apply step; the interface explains what each one means. */
+export const APPLY_STATES = [
+    "planned",
+    "applied",
+    "failed",
+    "partial",
+    "unknown",
+    "compensated",
+] as const;
+export type ApplyState = (typeof APPLY_STATES)[number];
+/**
+ * States a settled apply call can report. `planned` exists only in the write log:
+ * an apply call always settles its operation before it answers.
+ */
+export type AppliedState = Exclude<ApplyState, "planned">;
+/** Write-layer codes a step can carry, mirroring Rust's `WriteError`. */
+export const WRITE_ERROR_CODES = [
+    "invalid_request",
+    "target_changed",
+    "symlink_refused",
+    "target_read_only",
+    "target_path_invalid",
+    "target_unreadable",
+    "target_too_large",
+    "backup_unavailable",
+    "write_failed",
+    "outcome_unknown",
+    "storage_unavailable",
+    "log_write_failed",
+    "log_read_failed",
+    "invalid_stored_operation",
+] as const;
+export type WriteErrorCode = (typeof WRITE_ERROR_CODES)[number];
+/** Safe codes emitted by Rust's apply step. */
+export const APPLY_ERROR_CODES = [
+    "plan_stale",
+    "credential_missing",
+    "credential_unavailable",
+    "invalid_request",
+    "provider_not_found",
+    "model_not_found",
+    "gateway_unverified",
+    "base_url_unverified",
+    "target_unreadable",
+    "target_conflict",
+    "location_unavailable",
+    "storage_unavailable",
+    "operation_failed",
+] as const;
+/** Apply failures plus errors detected at this IPC boundary. */
+export type ApplyErrorCode =
+    | (typeof APPLY_ERROR_CODES)[number]
+    | "desktop_required"
+    | "invalid_response";
+/** Safe apply failure; the write outcome behind it never reaches the interface. */
+export class ApplyRequestError extends Error {
+    readonly code: ApplyErrorCode;
+
+    /** Construct a safe error without keeping its original payload or cause. */
+    constructor(code: ApplyErrorCode) {
+        super("Applying the Agent configuration failed.");
+        this.name = "ApplyRequestError";
+        this.code = code;
+    }
+}
+/** Tokens the interface received with the plan the user reviewed. */
+export interface ReviewedPlanTokens {
+    targetPath: string;
+    targetDigest: string | null;
+    providerRevision: number;
+    modelContentDigest: string;
+}
+/** What one file of a settled apply step ended up as. */
+export interface ApplyStep {
+    ordinal: number;
+    targetPath: string;
+    state: ApplyStepState;
+    errorCode: WriteErrorCode | null;
+    backupPath: string | null;
+}
+/** Result of applying a reviewed plan; the real key never crosses this boundary. */
+export interface ClaudeCodeApplied {
+    operationId: string;
+    state: AppliedState;
+    steps: ApplyStep[];
+    backupPath: string | null;
+    restartRequired: boolean;
+}
+
+/** Reject an apply payload; the error type stays separate from the preview's. */
+function applyInvalid(): never {
+    throw new ApplyRequestError("invalid_response");
+}
+
+function applyStep(value: unknown, ordinal: number): ApplyStep {
+    if (
+        !isObject(value) ||
+        !hasExactKeys(value, [
+            "ordinal",
+            "targetPath",
+            "state",
+            "errorCode",
+            "backupPath",
+        ]) ||
+        value["ordinal"] !== ordinal
+    )
+        return applyInvalid();
+    const targetPath = value["targetPath"];
+    if (!isSafePath(targetPath)) return applyInvalid();
+    const state = APPLY_STEP_STATES.find((known) => known === value["state"]);
+    if (state === undefined) return applyInvalid();
+    const errorCode =
+        value["errorCode"] === null
+            ? null
+            : WRITE_ERROR_CODES.find((known) => known === value["errorCode"]);
+    if (errorCode === undefined) return applyInvalid();
+    // A failed step explains itself; a step that applied or is still pending has
+    // no failure to report.
+    if ((state === "failed") !== (errorCode !== null)) return applyInvalid();
+    const backupPath = value["backupPath"];
+    if (backupPath !== null && !isSafePath(backupPath)) return applyInvalid();
+    return { ordinal, targetPath, state, errorCode, backupPath };
+}
+
+function appliedResult(value: unknown): ClaudeCodeApplied {
+    if (
+        !isObject(value) ||
+        !hasExactKeys(value, [
+            "operationId",
+            "state",
+            "steps",
+            "backupPath",
+            "restartRequired",
+        ]) ||
+        typeof value["restartRequired"] !== "boolean"
+    )
+        return applyInvalid();
+    const operationId = value["operationId"];
+    if (typeof operationId !== "string" || !/^[0-9a-f]{32}$/u.test(operationId))
+        return applyInvalid();
+    const state = APPLY_STATES.find((known) => known === value["state"]);
+    // An apply call always settles its operation; `planned` only exists in the log.
+    if (state === undefined || state === "planned") return applyInvalid();
+    const rawSteps = value["steps"];
+    if (!Array.isArray(rawSteps) || rawSteps.length === 0)
+        return applyInvalid();
+    const steps = rawSteps.map((entry: unknown, ordinal: number) =>
+        applyStep(entry, ordinal),
+    );
+    const backupPath = value["backupPath"];
+    if (backupPath !== null && !isSafePath(backupPath)) return applyInvalid();
+    // Cross-field checks: a backup the interface is told about belongs to one of
+    // the steps, a settled success means every attempted file applied, and a
+    // plain failure means none did.
+    if (
+        (backupPath !== null &&
+            !steps.some((step) => step.backupPath === backupPath)) ||
+        (state === "applied" &&
+            steps.some((step) => step.state !== "applied")) ||
+        (state === "failed" && steps.some((step) => step.state === "applied"))
+    )
+        return applyInvalid();
+    return {
+        operationId,
+        state,
+        steps,
+        backupPath,
+        restartRequired: value["restartRequired"],
+    };
+}
+
+/** Build the tokens an apply call must send back from a validated plan. */
+export function reviewedPlanTokens(plan: ClaudeCodePlan): ReviewedPlanTokens {
+    return {
+        targetPath: plan.target.path,
+        targetDigest: plan.target.contentDigest,
+        providerRevision: plan.source.providerRevision,
+        modelContentDigest: plan.source.modelContentDigest,
+    };
+}
+
+/**
+ * Apply a reviewed Claude Code plan.
+ *
+ * Rust checks the tokens again, reads the Provider key from OS credential
+ * storage and replaces the settings file, keeping a private copy of the previous
+ * content. Browser preview refuses: it can neither write a file nor reach the
+ * credential store, and it never claims a plan was applied. A failure that the
+ * write layer turned into a state (for example a stale file) is a successful
+ * call with that state, not a thrown error.
+ */
+export async function applyClaudeCodeSettings(
+    providerId: string,
+    modelId: string,
+    reviewed: ReviewedPlanTokens,
+): Promise<ClaudeCodeApplied> {
+    if (!isTauri()) throw new ApplyRequestError("desktop_required");
+    let value: unknown;
+    try {
+        value = await invoke<unknown>("apply_claude_code_settings", {
+            input: { providerId, modelId, reviewed },
+        });
+    } catch (error: unknown) {
+        throw new ApplyRequestError(
+            APPLY_ERROR_CODES.find((code) => code === error) ??
+                "operation_failed",
+        );
+    }
+    return appliedResult(value);
+}

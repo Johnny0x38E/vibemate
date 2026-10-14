@@ -21,18 +21,25 @@
   模型；Command Code 没有 Claude Code 接入说明。
 - 本机安装为 `2.1.287`（Homebrew Cask 布局）。
 
-## 映射决定（首批）
+## 映射决定（2026-10-14 更新）
 
-| 目标键                     | 值                                             | 说明                                        |
-| -------------------------- | ---------------------------------------------- | ------------------------------------------- |
-| `env.ANTHROPIC_BASE_URL`   | 该 Provider 已核实的 Claude Code 网关地址      | DeepSeek `.../anthropic`；OpenRouter `/api` |
-| `env.ANTHROPIC_AUTH_TOKEN` | 占位符；应用阶段由 Rust 从 OS 凭据存储取值写入 | 预览只标记"此处是密钥"                      |
-| `env.ANTHROPIC_MODEL`      | 所选模型的模型 ID                              | 与两家厂商配方一致                          |
-| `env.ANTHROPIC_API_KEY`    | `""`                                           | 仅 OpenRouter 官方要求显式置空              |
+| 目标键                                          | 值                                             | 说明                                        |
+| ----------------------------------------------- | ---------------------------------------------- | ------------------------------------------- |
+| `env.ANTHROPIC_BASE_URL`                        | 该 Provider 已核实的 Claude Code 网关地址      | DeepSeek `.../anthropic`；OpenRouter `/api` |
+| `env.ANTHROPIC_AUTH_TOKEN`                      | 占位符；应用阶段由 Rust 从 OS 凭据存储取值写入 | 预览只标记"此处是密钥"                      |
+| `env.ANTHROPIC_MODEL`                           | 所选模型的模型 ID                              | 与两家厂商配方一致                          |
+| `env.ANTHROPIC_DEFAULT_OPUS/SONNET/HAIKU_MODEL` | 同一模型 ID                                    | 别名解析；不写就会被已有值盖过              |
+| `env.CLAUDE_CODE_SUBAGENT_MODEL`                | 同一模型 ID                                    | 子代理、团队与工作流代理的默认模型          |
+| `env.ANTHROPIC_API_KEY`                         | `""`                                           | 仅 OpenRouter 官方要求显式置空              |
 
-未映射项（保持未知，不做猜测）：`[1m]` 上下文变体、`ANTHROPIC_DEFAULT_*_MODEL` 系列与
-`CLAUDE_CODE_SUBAGENT_MODEL`、`CLAUDE_CODE_EFFORT_LEVEL`、
-`CLAUDE_CODE_AUTO_COMPACT_WINDOW`、网关模型发现。
+四个类别键取所选模型 ID 的存储原值，不追加 `[1m]` 后缀（维护者决定 2026-10-14：四个类别都指向所选模型）。
+已核实依据：官方 model-config 页的 Environment variables 表列出这四个变量，分别决定 `opus`/`sonnet`/`haiku`
+别名解析、后台功能与子代理默认模型，官方示例把它们放在设置文件的 `env` 块；本机 2.1.287 二进制同样
+引用这四个变量名。
+
+未映射项（保持未知，不做猜测）：`[1m]` 上下文变体、`ANTHROPIC_DEFAULT_FABLE_MODEL`、
+`ANTHROPIC_DEFAULT_MODEL`、`ANTHROPIC_CUSTOM_MODEL_OPTION` 等选择器条目、
+`CLAUDE_CODE_EFFORT_LEVEL`、`CLAUDE_CODE_AUTO_COMPACT_WINDOW`、网关模型发现。
 
 ## 凭据通道（2026-10-13 决定）
 
@@ -83,9 +90,12 @@ Claude Code 的 `model-config` 与 `settings-reference` 页已核实下列键的
 4. `[1m]` 是 Claude Code 自己的窗口约定（网关或自定义 ID 带 `[1m]` 时按 1M 假定），
    `CLAUDE_CODE_MAX_CONTEXT_TOKENS` 的生效方式随 ID 形状变化，不能只写数字。
 
-据此，首版预览（只映射三个链接键）在维护者那份可用配置上会产生「一半新、一半旧」的状态。下一批要
-么把类别键一起映射，要么在预览里把它们明确列为覆盖来源；顺序建议先做类别映射，再做窗口声明与自动
-压缩，档位最后（受通道约束）。
+据此，只映射三个链接键的预览在维护者那份可用配置上会产生「一半新、一半旧」的状态。类别映射已补齐
+（B5，2026-10-14）；窗口声明与自动压缩、档位依次排在其后（受通道约束）。
+
+官方 model-config 页 2026-10-14 复核补充一条窗口规则：被固定的 ID 若无法匹配到 Claude Code 已知的
+模型，会话按 200K 窗口运行，除非该 ID 带 `[1m]`。这正是「写哪个数字」必须与 ID 形状一起决定的原因，
+窗口声明因此留在后续批次，而不是只写模型目录里的窗口值。
 
 三个 Agent 都把**选定的档位按模型**保存，只是形状不同：Claude Code 用 `modelSettings`，Pi 用
 `settings.json` 的 `modelThinkingLevels`（键是 `provider/model`），Grok Build 用
@@ -160,6 +170,15 @@ Rust 的 12 个 `PlanError` 码，加上边界自身的 `invalid_response` 与 `
 「已有外部值」（文件里的当前值），不能显示「待重启」——vibemate 还没有写入过任何内容，运行中
 会话的状态也不可观测。独立的只读状态行仍未实现；记录「待重启」需要 P20 的写入结果，不显示无法
 证明的状态。
+
+### B5：类别模型键（已交付 2026-10-14）
+
+`agents/claude_code.rs` 与其测试新增四个类别键，值取所选模型 ID 的存储原值。测试覆盖：两家已核实
+网关都写四个键、已有值（含 `[1m]` 变体）作为 `before` 报出并被替换、用户存储的 ID 原样写入（含带
+后缀的 ID）、无关键保留、`env` 块写入与序列化形状；`cargo fmt --check`、锁定 Clippy 与测试通过。
+
+本批不改前端：四个新键使用通用的 `changes` 条目形状，前端边界已有的精确键集合校验照常通过，不需要
+新增 `PLAN_NOTICE_CODES`。预览卡片对新键的说明与 `[1m]` 提示随 B5b 交付。
 
 ## 检查点 C18
 

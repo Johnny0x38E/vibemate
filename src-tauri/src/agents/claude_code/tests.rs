@@ -70,7 +70,7 @@ fn a_deepseek_plan_writes_the_verified_gateway_keys() {
     let plan =
         plan_claude_code_settings(&fixture.input(ProviderKind::DeepSeek, DEEPSEEK_BASE)).unwrap();
     assert_eq!(plan.agent, AgentId::ClaudeCode);
-    assert_eq!(plan.changes.len(), 3);
+    assert_eq!(plan.changes.len(), 7);
     assert_eq!(plan.changes[0].key_path, "env.ANTHROPIC_BASE_URL");
     assert_eq!(plan.changes[0].after, DEEPSEEK_BASE);
     assert!(!plan.changes[0].secret);
@@ -79,6 +79,19 @@ fn a_deepseek_plan_writes_the_verified_gateway_keys() {
     assert!(plan.changes[1].secret);
     assert_eq!(plan.changes[2].key_path, "env.ANTHROPIC_MODEL");
     assert_eq!(plan.changes[2].after, "deepseek-flash");
+    let class_keys: Vec<&str> = plan.changes[3..]
+        .iter()
+        .map(|change| change.key_path.as_str())
+        .collect();
+    assert_eq!(
+        class_keys,
+        [
+            "env.ANTHROPIC_DEFAULT_OPUS_MODEL",
+            "env.ANTHROPIC_DEFAULT_SONNET_MODEL",
+            "env.ANTHROPIC_DEFAULT_HAIKU_MODEL",
+            "env.CLAUDE_CODE_SUBAGENT_MODEL",
+        ]
+    );
     assert!(plan.restart_required);
     assert!(
         plan.notices
@@ -90,6 +103,70 @@ fn a_deepseek_plan_writes_the_verified_gateway_keys() {
             .iter()
             .any(|notice| notice.code == NoticeCode::OverridesNotChecked)
     );
+}
+
+#[test]
+fn every_class_model_key_carries_the_selected_model() {
+    let fixture = Fixture::new();
+    for kind in [ProviderKind::DeepSeek, ProviderKind::OpenRouter] {
+        let base = if kind == ProviderKind::DeepSeek {
+            DEEPSEEK_BASE
+        } else {
+            OPENROUTER_BASE
+        };
+        let plan = plan_claude_code_settings(&fixture.input(kind, base)).unwrap();
+        for key in CLASS_MODEL_KEYS {
+            let change = plan
+                .changes
+                .iter()
+                .find(|change| change.key_path == *key)
+                .unwrap();
+            assert_eq!(change.after, "deepseek-flash");
+            assert!(!change.secret);
+        }
+    }
+}
+
+#[test]
+fn previous_class_model_values_are_reported_and_replaced() {
+    let fixture = Fixture::new();
+    // The values a working DeepSeek setup carries today: the vendor recipe
+    // writes the 1M variant to the Opus/Sonnet classes.
+    fixture.settings(
+        "{\"env\":{\"ANTHROPIC_DEFAULT_OPUS_MODEL\":\"deepseek-flash[1m]\",\"ANTHROPIC_DEFAULT_HAIKU_MODEL\":\"deepseek-flash\"}}",
+    );
+    let (plan, document) = build(&fixture.input(ProviderKind::DeepSeek, DEEPSEEK_BASE)).unwrap();
+    let opus = plan
+        .changes
+        .iter()
+        .find(|change| change.key_path == "env.ANTHROPIC_DEFAULT_OPUS_MODEL")
+        .unwrap();
+    assert_eq!(opus.before.as_deref(), Some("deepseek-flash[1m]"));
+    assert_eq!(opus.after, "deepseek-flash");
+    // The plan never invents a context-variant suffix, in either direction.
+    assert_eq!(
+        document["env"]["ANTHROPIC_DEFAULT_OPUS_MODEL"],
+        json!("deepseek-flash")
+    );
+    assert_eq!(plan.changes.len(), 7);
+}
+
+#[test]
+fn a_stored_model_id_is_written_verbatim_to_the_class_keys() {
+    let fixture = Fixture::new();
+    // A manually added ID may itself carry the suffix; the plan copies whatever
+    // the user stored instead of rewriting it.
+    let mut input = fixture.input(ProviderKind::OpenRouter, OPENROUTER_BASE);
+    input.model.id = "anthropic/claude-sonnet-4-5[1m]".to_owned();
+    let plan = plan_claude_code_settings(&input).unwrap();
+    for key in CLASS_MODEL_KEYS {
+        let change = plan
+            .changes
+            .iter()
+            .find(|change| change.key_path == *key)
+            .unwrap();
+        assert_eq!(change.after, "anthropic/claude-sonnet-4-5[1m]");
+    }
 }
 
 #[test]
@@ -174,6 +251,14 @@ fn unrelated_settings_keys_survive_the_preview() {
     assert_eq!(document["permissions"]["defaultMode"], json!("acceptEdits"));
     assert_eq!(document["env"]["EDITOR"], json!("vim"));
     assert_eq!(document["env"]["ANTHROPIC_MODEL"], json!("deepseek-flash"));
+    assert_eq!(
+        document["env"]["ANTHROPIC_DEFAULT_OPUS_MODEL"],
+        json!("deepseek-flash")
+    );
+    assert_eq!(
+        document["env"]["CLAUDE_CODE_SUBAGENT_MODEL"],
+        json!("deepseek-flash")
+    );
     assert_eq!(
         document["env"]["ANTHROPIC_AUTH_TOKEN"],
         json!(SECRET_PLACEHOLDER)
@@ -278,6 +363,30 @@ fn the_plan_serializes_the_shape_the_interface_validates() {
                 },
                 {
                     "keyPath": "env.ANTHROPIC_MODEL",
+                    "before": null,
+                    "after": "deepseek-flash",
+                    "secret": false,
+                },
+                {
+                    "keyPath": "env.ANTHROPIC_DEFAULT_OPUS_MODEL",
+                    "before": null,
+                    "after": "deepseek-flash",
+                    "secret": false,
+                },
+                {
+                    "keyPath": "env.ANTHROPIC_DEFAULT_SONNET_MODEL",
+                    "before": null,
+                    "after": "deepseek-flash",
+                    "secret": false,
+                },
+                {
+                    "keyPath": "env.ANTHROPIC_DEFAULT_HAIKU_MODEL",
+                    "before": null,
+                    "after": "deepseek-flash",
+                    "secret": false,
+                },
+                {
+                    "keyPath": "env.CLAUDE_CODE_SUBAGENT_MODEL",
                     "before": null,
                     "after": "deepseek-flash",
                     "secret": false,

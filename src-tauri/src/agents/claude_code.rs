@@ -7,20 +7,47 @@
 //! being guessed. This module never writes a file, never reads a credential
 //! value and never sends a request.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::path::PathBuf;
 
 use super::AgentId;
+use crate::config_apply::{
+    BackupStore, OperationKind, OperationState, PlannedFile, StepOutcome, WriteError, WriteTarget,
+    apply_files,
+};
 use crate::config_plan::{
     ConfigPlan, NoticeCode, PlanError, PlanNotice, PlanSource, PlannedValue, PlannedWrite,
     planned_changes, read_target_document,
 };
+use crate::credentials::CredentialStore;
 use crate::model_identity::is_valid_model_id;
-use crate::providers::ProviderKind;
+use crate::providers::{ProviderId, ProviderKind};
+use crate::storage::Storage;
 
 /// The settings filename Claude Code reads from the user configuration root.
 const SETTINGS_FILE: &str = "settings.json";
+
+/// Keys that decide which model Claude Code's own surfaces run on.
+///
+/// `ANTHROPIC_MODEL` only picks the model a session starts with. The `opus`,
+/// `sonnet` and `haiku` aliases keep resolving through their own variables, and
+/// subagents, teammate and workflow agents fall back to
+/// `CLAUDE_CODE_SUBAGENT_MODEL`; on a user settings file that already carried
+/// those keys, a plan that wrote only the session model would leave every one
+/// of those surfaces on the previous model.
+///
+/// Claude Code documents all four as environment variables, and its example
+/// puts them in the settings `env` block, so they are written next to the
+/// session model. The value is the selected model ID exactly as stored: `[1m]`
+/// is Claude Code's own context-window convention and no verified source says
+/// how it applies to a gateway ID, so the plan never appends a suffix.
+const CLASS_MODEL_KEYS: &[&str] = &[
+    "env.ANTHROPIC_DEFAULT_OPUS_MODEL",
+    "env.ANTHROPIC_DEFAULT_SONNET_MODEL",
+    "env.ANTHROPIC_DEFAULT_HAIKU_MODEL",
+    "env.CLAUDE_CODE_SUBAGENT_MODEL",
+];
 
 /// How confidently vibemate can point Claude Code at a Provider.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -106,7 +133,8 @@ pub struct ProviderFacts {
 
 /// Facts about the selected model.
 pub struct ModelFacts {
-    /// Upstream model ID, written to `ANTHROPIC_MODEL`.
+    /// Upstream model ID, written to `ANTHROPIC_MODEL` and to the class keys in
+    /// [`CLASS_MODEL_KEYS`].
     pub id: String,
     /// SHA-256 of the stored model record.
     pub content_digest: String,
@@ -177,6 +205,13 @@ fn build(input: &ClaudeCodePlanInput) -> Result<(ConfigPlan, Map<String, Value>)
             value: PlannedValue::Literal(input.model.id.clone()),
         },
     ];
+    // The class keys carry the same model so the aliases, subagents and
+    // background work follow the session model instead of the user's previous
+    // values for those surfaces.
+    writes.extend(CLASS_MODEL_KEYS.iter().map(|&key_path| PlannedWrite {
+        key_path,
+        value: PlannedValue::Literal(input.model.id.clone()),
+    }));
     writes.extend(
         gateway
             .extra_writes
@@ -218,6 +253,232 @@ fn build(input: &ClaudeCodePlanInput) -> Result<(ConfigPlan, Map<String, Value>)
     Ok((plan, document))
 }
 
+/// Tokens the interface sends back from the plan the user reviewed.
+///
+/// The exact key set is enforced on the way in: a payload this build does not
+/// understand is refused instead of being applied with missing tokens.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ReviewedPlan {
+    /// Settings file the plan was built for.
+    pub target_path: String,
+    /// SHA-256 of that file when the plan was built; `None` when it did not exist.
+    pub target_digest: Option<String>,
+    /// Provider `revision` the plan bound.
+    pub provider_revision: i64,
+    /// Model content digest the plan bound.
+    pub model_content_digest: String,
+}
+
+/// Everything one apply call needs besides the database and the credential store.
+pub struct ClaudeCodeApplyInput {
+    /// Provider, model and settings root, read again by the caller.
+    pub plan: ClaudeCodePlanInput,
+    /// Tokens the user reviewed.
+    pub reviewed: ReviewedPlan,
+    /// Root of the private backup directory, normally the app-data folder.
+    pub backups: PathBuf,
+}
+
+/// What one apply call did to the settings file.
+///
+/// The real credential never appears here: the interface shows the state, the
+/// per-file outcome, and where the copy of the previous content is.
+#[derive(Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClaudeCodeApplied {
+    /// Identity of the recorded operation; the recovery entry (P34) reads it.
+    pub operation_id: String,
+    /// Final state: `applied`, or what the rollback reached after a failure.
+    pub state: OperationState,
+    /// One entry per file, with the failure code when the write did not happen.
+    pub steps: Vec<StepOutcome>,
+    /// Copy of the previous settings content, when there was one to replace.
+    pub backup_path: Option<String>,
+    /// Whether a new Claude Code session is needed. Only a file that now holds
+    /// the planned keys requires one; a refused or rolled-back write does not.
+    pub restart_required: bool,
+}
+
+/// Why a reviewed plan could not be applied.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ClaudeCodeApplyError {
+    /// The Provider revision, the model content or the settings file changed
+    /// since the preview; the user must preview again before anything is written.
+    PlanStale,
+    /// The Provider has no key in the OS credential store.
+    CredentialMissing,
+    /// The OS credential store could not be read.
+    CredentialUnavailable,
+    /// The request or a stored value is malformed.
+    InvalidRequest,
+    /// No provider instance has the requested ID.
+    ProviderNotFound,
+    /// The provider instance has no saved model with the requested ID.
+    ModelNotFound,
+    /// This Provider has no verified Claude Code gateway instructions.
+    GatewayUnverified,
+    /// The instance address is not one the vendor documents.
+    BaseUrlUnverified,
+    /// The settings file cannot be read, is too large, or its path cannot be used.
+    TargetUnreadable,
+    /// A key the plan must change holds a value of another shape.
+    TargetConflict,
+    /// The user configuration directory cannot be resolved.
+    LocationUnavailable,
+    /// The configuration database is not open, or reading it failed.
+    StorageUnavailable,
+    /// The write could not be recorded, so its outcome is not reported as one.
+    OperationFailed,
+}
+
+impl ClaudeCodeApplyError {
+    /// Map a preview refusal onto the apply step's own codes.
+    fn from_plan(error: PlanError) -> Self {
+        match error {
+            PlanError::InvalidRequest => Self::InvalidRequest,
+            PlanError::GatewayUnverified => Self::GatewayUnverified,
+            PlanError::BaseUrlUnverified => Self::BaseUrlUnverified,
+            PlanError::TargetPathInvalid
+            | PlanError::TargetUnreadable
+            | PlanError::TargetTooLarge => Self::TargetUnreadable,
+            PlanError::TargetConflict => Self::TargetConflict,
+            PlanError::StorageUnavailable => Self::StorageUnavailable,
+            PlanError::ProviderNotFound => Self::ProviderNotFound,
+            PlanError::ModelNotFound => Self::ModelNotFound,
+            PlanError::LocationUnavailable => Self::LocationUnavailable,
+            PlanError::OperationFailed => Self::OperationFailed,
+        }
+    }
+
+    /// Map a write-layer failure that stopped the operation from being recorded.
+    ///
+    /// A file-level failure is a result, not an error: it travels in the step's
+    /// `error_code`, and reaching this mapping means the log itself failed.
+    fn from_write(error: WriteError) -> Self {
+        match error {
+            WriteError::StorageUnavailable => Self::StorageUnavailable,
+            WriteError::InvalidRequest => Self::InvalidRequest,
+            _ => Self::OperationFailed,
+        }
+    }
+}
+
+impl std::fmt::Display for ClaudeCodeApplyError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(match self {
+            Self::PlanStale => "The configuration changed since the preview.",
+            Self::CredentialMissing => "The Provider key is not in the OS credential store.",
+            Self::CredentialUnavailable => "The OS credential store could not be read.",
+            Self::InvalidRequest => "The apply request is invalid.",
+            Self::ProviderNotFound => "The Provider configuration no longer exists.",
+            Self::ModelNotFound => "The model is no longer saved for this Provider.",
+            Self::GatewayUnverified => "This Provider has no verified Claude Code instructions.",
+            Self::BaseUrlUnverified => "The instance address is not one the vendor documents.",
+            Self::TargetUnreadable => "The settings file could not be read.",
+            Self::TargetConflict => "A settings key holds a value of another shape.",
+            Self::LocationUnavailable => "The user configuration directory is unavailable.",
+            Self::StorageUnavailable => "Private storage is unavailable.",
+            Self::OperationFailed => "The configuration write could not be recorded.",
+        })
+    }
+}
+
+impl std::error::Error for ClaudeCodeApplyError {}
+
+/// Apply a reviewed Claude Code plan: write the settings file with the Provider key.
+///
+/// The plan is rebuilt from the current Provider, model and file state first, and
+/// every token the user reviewed is compared again, so an edit made after the
+/// preview is refused with [`ClaudeCodeApplyError::PlanStale`] instead of being
+/// overwritten. The key is read from the OS credential store at this point, put
+/// where the plan showed the placeholder, and written through the shared
+/// configuration write, which keeps a private copy of the previous content and
+/// records the operation.
+///
+/// # Errors
+/// Returns `PlanStale` for any changed token, `CredentialMissing` or
+/// `CredentialUnavailable` for the key, the preview refusals for an unusable
+/// Provider or file, and `OperationFailed` when the write could not be recorded.
+/// A file-level write failure is reported in the returned steps, not as an error.
+pub fn apply_claude_code_settings(
+    storage: &Storage,
+    credentials: &impl CredentialStore,
+    input: &ClaudeCodeApplyInput,
+) -> Result<ClaudeCodeApplied, ClaudeCodeApplyError> {
+    let (plan, document) = build(&input.plan).map_err(ClaudeCodeApplyError::from_plan)?;
+    if plan.target.path != input.reviewed.target_path
+        || plan.target.content_digest != input.reviewed.target_digest
+        || plan.source.provider_revision != input.reviewed.provider_revision
+        || plan.source.model_content_digest != input.reviewed.model_content_digest
+    {
+        return Err(ClaudeCodeApplyError::PlanStale);
+    }
+    let credential_key = gateway(input.plan.provider.kind)
+        .map(|gateway| gateway.credential_key)
+        .ok_or(ClaudeCodeApplyError::GatewayUnverified)?;
+    // The reference is built from the stored ID, never from the display name.
+    let reference = ProviderId::parse(&input.plan.provider.id)
+        .ok_or(ClaudeCodeApplyError::InvalidRequest)?
+        .credential_reference();
+    let secret = credentials
+        .load(&reference)
+        .map_err(|_| ClaudeCodeApplyError::CredentialUnavailable)?
+        .ok_or(ClaudeCodeApplyError::CredentialMissing)?;
+
+    let mut document = document;
+    put_credential(&mut document, credential_key, secret.expose())?;
+    let mut content =
+        serde_json::to_vec_pretty(&document).map_err(|_| ClaudeCodeApplyError::OperationFailed)?;
+    // Editors and Claude Code both accept a trailing newline.
+    content.push(b'\n');
+
+    let backups = BackupStore::new(input.backups.clone());
+    let files = [PlannedFile {
+        target: WriteTarget::from_plan(&plan.target),
+        content,
+    }];
+    let applied = apply_files(storage, OperationKind::ClaudeCodeSettings, &files, &backups)
+        .map_err(ClaudeCodeApplyError::from_write)?;
+    Ok(ClaudeCodeApplied {
+        // Only a settings file that now holds the planned keys needs a new
+        // session; a refused or rolled-back write leaves the previous content.
+        restart_required: applied.state == OperationState::Applied,
+        operation_id: applied.operation_id,
+        state: applied.state,
+        backup_path: applied
+            .steps
+            .first()
+            .and_then(|step| step.backup_path.clone()),
+        steps: applied.steps,
+    })
+}
+
+/// Put the real key where the plan showed the credential placeholder.
+///
+/// The document stays inside this call; only the written file and the private
+/// backup ever hold the value.
+fn put_credential(
+    document: &mut Map<String, Value>,
+    key_path: &str,
+    value: &str,
+) -> Result<(), ClaudeCodeApplyError> {
+    let (parent, key) = key_path
+        .rsplit_once('.')
+        .ok_or(ClaudeCodeApplyError::InvalidRequest)?;
+    let mut cursor = document;
+    for segment in parent.split('.') {
+        let next = cursor
+            .get_mut(segment)
+            .and_then(Value::as_object_mut)
+            .ok_or(ClaudeCodeApplyError::InvalidRequest)?;
+        cursor = next;
+    }
+    cursor.insert(key.to_owned(), Value::String(value.to_owned()));
+    Ok(())
+}
+
 /// Whether the text is a lowercase SHA-256 token, the model digest format.
 fn is_digest(value: &str) -> bool {
     value.len() == 64
@@ -225,7 +486,6 @@ fn is_digest(value: &str) -> bool {
             .chars()
             .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
 }
-
 /// Render a JSON value as short display text.
 fn display_value(value: &Value) -> String {
     match value {
@@ -236,3 +496,6 @@ fn display_value(value: &Value) -> String {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod apply_tests;

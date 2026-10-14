@@ -720,6 +720,109 @@ fn model_rows_are_constrained_and_follow_their_provider() {
     }
 }
 
+#[test]
+fn operation_log_migration_keeps_earlier_rows_and_starts_empty() {
+    let directory = TestDirectory::new("operation-log-upgrade");
+    let path = directory.path.join(DATABASE_FILE_NAME);
+    let old = Storage::open_file(&path, &MIGRATIONS[..15]).expect("v15 database");
+    old.lock()
+        .expect("lock")
+        .execute_batch(
+            "INSERT INTO provider_instance VALUES \
+             ('0123456789abcdef0123456789abcdef', 'deepseek', 'Work', \
+              'https://api.deepseek.com', 'chat_completions', 1, 1, 1);",
+        )
+        .expect("v15 row");
+    drop(old);
+
+    let upgraded = Storage::open_in_directory(&directory.path).expect("upgrade");
+    assert_eq!(
+        upgraded.schema_version().expect("version"),
+        latest_schema_version()
+    );
+    let providers: i64 = upgraded
+        .lock()
+        .expect("lock")
+        .query_row("SELECT COUNT(*) FROM provider_instance", [], |row| {
+            row.get(0)
+        })
+        .expect("kept row");
+    assert_eq!(providers, 1);
+    // A freshly migrated database has no unfinished write to report.
+    assert!(
+        crate::config_apply::unfinished_operations(&upgraded)
+            .expect("read log")
+            .is_empty()
+    );
+}
+
+#[test]
+fn operation_rows_are_constrained_and_follow_their_operation() {
+    let directory = TestDirectory::new("operation-constraints");
+    let storage = Storage::open_in_directory(&directory.path).expect("open");
+    let connection = storage.lock().expect("lock");
+    let id = "a".repeat(32);
+    connection
+        .execute(
+            "INSERT INTO config_operation VALUES (?1, 'claude_code_settings', 'planned', 10, 10)",
+            [&id],
+        )
+        .expect("operation row");
+    let step = |operation_id: &str, ordinal: i64, state: &str| {
+        connection.execute(
+            "INSERT INTO config_operation_step
+                 (operation_id, ordinal, target_path, state, updated_at)
+             VALUES (?1, ?2, '/tmp/settings.json', ?3, 10)",
+            rusqlite::params![operation_id, ordinal, state],
+        )
+    };
+    assert!(step(&id, 0, "pending").is_ok());
+    // One row per ordinal, known states only, and the operation must exist.
+    assert!(step(&id, 0, "pending").is_err());
+    assert!(step(&id, 1, "half-applied").is_err());
+    assert!(step(&"b".repeat(32), 0, "pending").is_err());
+    // The operation table owns its own closed set of states.
+    assert!(
+        connection
+            .execute(
+                "UPDATE config_operation SET state = 'running' WHERE id = ?1",
+                [&id]
+            )
+            .is_err()
+    );
+    // A step that did not fail cannot carry a failure code, an applied digest
+    // belongs to an applied step, and the backup columns appear together.
+    let update = |sql: &str| connection.execute(sql, [&id]);
+    assert!(
+        update(
+            "UPDATE config_operation_step SET error_code = 'target_changed' WHERE operation_id = ?1"
+        )
+        .is_err()
+    );
+    assert!(
+        update(
+            "UPDATE config_operation_step SET applied_digest = \
+             'abababababababababababababababababababababababababababababababab' \
+             WHERE operation_id = ?1"
+        )
+        .is_err()
+    );
+    assert!(
+        update("UPDATE config_operation_step SET backup_id = '1700000000000-1-0' WHERE operation_id = ?1")
+            .is_err()
+    );
+    // Deleting the operation removes its steps with it.
+    connection
+        .execute("DELETE FROM config_operation WHERE id = ?1", [&id])
+        .expect("delete operation");
+    let steps: i64 = connection
+        .query_row("SELECT COUNT(*) FROM config_operation_step", [], |row| {
+            row.get(0)
+        })
+        .expect("count steps");
+    assert_eq!(steps, 0);
+}
+
 /// Read the single row written by the test migrations.
 fn read_sample_value(storage: &Storage) -> String {
     let connection = storage.lock().expect("lock test connection");

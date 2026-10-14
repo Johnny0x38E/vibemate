@@ -5,8 +5,12 @@ import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { createAppI18n } from "../../i18n";
 import {
+    ApplyRequestError,
     PlanRequestError,
+    applyClaudeCodeSettings,
     planClaudeCodeSettings,
+    type ApplyStep,
+    type ClaudeCodeApplied,
     type ClaudeCodePlan,
 } from "../../lib/desktop/agents";
 import {
@@ -26,6 +30,7 @@ import { ConfigPreview } from "./ConfigPreview";
 
 vi.mock(import("../../lib/desktop/agents"), async (original) => ({
     ...(await original()),
+    applyClaudeCodeSettings: vi.fn(),
     planClaudeCodeSettings: vi.fn(),
 }));
 vi.mock(import("../../lib/desktop/models"), async (original) => ({
@@ -162,6 +167,23 @@ const plan: ClaudeCodePlan = {
 const loadProviders = vi.mocked(listProviders);
 const loadModels = vi.mocked(listProviderModels);
 const buildPlan = vi.mocked(planClaudeCodeSettings);
+const writePlan = vi.mocked(applyClaudeCodeSettings);
+const BACKUP_PATH =
+    "/Users/test/Library/Application Support/dev.vibemate.desktop/backups/1700000000000-1-0/settings.json";
+const writtenStep: ApplyStep = {
+    ordinal: 0,
+    targetPath: plan.target.path,
+    state: "applied",
+    errorCode: null,
+    backupPath: BACKUP_PATH,
+};
+const writtenResult: ClaudeCodeApplied = {
+    operationId: "fedcba9876543210fedcba9876543210",
+    state: "applied",
+    steps: [writtenStep],
+    backupPath: BACKUP_PATH,
+    restartRequired: true,
+};
 
 beforeEach(() => {
     loadProviders.mockReset().mockResolvedValue(providersPage([deepseek]));
@@ -169,6 +191,7 @@ beforeEach(() => {
         .mockReset()
         .mockResolvedValue(modelsPage([row(deepseek.id, FLASH)]));
     buildPlan.mockReset().mockResolvedValue({ kind: "desktop", plan });
+    writePlan.mockReset();
 });
 afterEach(cleanup);
 
@@ -352,4 +375,121 @@ test("turns an unexpected failure into a translated message", async () => {
         "The operation could not finish. Try again.",
     );
     expect(screen.queryByText(/private-runtime-error/u)).toBeNull();
+});
+
+test("applies the shown plan with its own tokens", async () => {
+    writePlan.mockResolvedValue(writtenResult);
+    await mount();
+    await chooseAndPreview();
+    await userEvent.click(
+        await screen.findByRole("button", { name: "Apply these settings" }),
+    );
+
+    // The tokens travel back with the request, so Rust can refuse a stale plan.
+    await waitFor(() => {
+        expect(writePlan).toHaveBeenCalledExactlyOnceWith(deepseek.id, FLASH, {
+            targetPath: plan.target.path,
+            targetDigest: plan.target.contentDigest,
+            providerRevision: plan.source.providerRevision,
+            modelContentDigest: plan.source.modelContentDigest,
+        });
+    });
+    expect(
+        await screen.findByText(/Written\. The settings file now holds/u),
+    ).toBeTruthy();
+    expect(screen.getByText(/Previous content kept at/u).textContent).toContain(
+        BACKUP_PATH,
+    );
+    expect(screen.getByText(/Start a new Claude Code session/u)).toBeTruthy();
+    // The applied plan is gone; another write needs a fresh preview.
+    expect(
+        screen.queryByRole("button", { name: "Apply these settings" }),
+    ).toBeNull();
+});
+
+test("reports a refused write with the step's own message", async () => {
+    writePlan.mockResolvedValue({
+        ...writtenResult,
+        state: "failed",
+        steps: [
+            {
+                ...writtenStep,
+                state: "failed",
+                errorCode: "target_changed",
+                backupPath: null,
+            },
+        ],
+        backupPath: null,
+        restartRequired: false,
+    });
+    await mount();
+    await chooseAndPreview();
+    await userEvent.click(
+        await screen.findByRole("button", { name: "Apply these settings" }),
+    );
+
+    expect(await screen.findByText(/Nothing was written/u)).toBeTruthy();
+    expect(
+        screen.getByText(/the file changed since the preview/u).textContent,
+    ).toContain(plan.target.path);
+    // Nothing changed on disk, so no new session is asked for.
+    expect(screen.queryByText(/Start a new Claude Code session/u)).toBeNull();
+});
+
+test("drops a plan the write found stale", async () => {
+    writePlan.mockRejectedValue(new ApplyRequestError("plan_stale"));
+    await mount();
+    await chooseAndPreview();
+    await userEvent.click(
+        await screen.findByRole("button", { name: "Apply these settings" }),
+    );
+
+    expect(
+        await screen.findByText(
+            /changed since the preview, so nothing was written/u,
+        ),
+    ).toBeTruthy();
+    // A stale plan cannot be applied, so it is not offered again.
+    expect(screen.queryByText("env.ANTHROPIC_MODEL")).toBeNull();
+    expect(
+        screen.queryByRole("button", { name: "Apply these settings" }),
+    ).toBeNull();
+});
+
+test("keeps the plan when the key is missing", async () => {
+    writePlan.mockRejectedValue(new ApplyRequestError("credential_missing"));
+    await mount();
+    await chooseAndPreview();
+    await userEvent.click(
+        await screen.findByRole("button", { name: "Apply these settings" }),
+    );
+
+    expect(
+        await screen.findByText(/No API key is saved for this provider/u),
+    ).toBeTruthy();
+    // The file was untouched, so the reviewed plan stays usable after a fix.
+    expect(screen.getByText("env.ANTHROPIC_MODEL")).toBeTruthy();
+});
+
+test("ignores a second apply while the first is in flight", async () => {
+    let finish: (result: ClaudeCodeApplied) => void = () => {};
+    writePlan.mockImplementation(
+        () =>
+            new Promise((resolve) => {
+                finish = resolve;
+            }),
+    );
+    await mount();
+    await chooseAndPreview();
+    const button = await screen.findByRole("button", {
+        name: "Apply these settings",
+    });
+    await userEvent.click(button);
+    await userEvent.click(button);
+    expect(writePlan).toHaveBeenCalledTimes(1);
+
+    finish(writtenResult);
+    expect(
+        await screen.findByText(/Written\. The settings file now holds/u),
+    ).toBeTruthy();
 });

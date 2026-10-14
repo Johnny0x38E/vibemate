@@ -6,14 +6,31 @@ mod claude_code;
 mod discovery;
 mod version_probe;
 pub use claude_code::{
-    ClaudeCodePlanInput, GatewayStatus, ModelFacts, ProviderFacts, gateway_status,
-    plan_claude_code_settings,
+    ClaudeCodeApplied, ClaudeCodeApplyError, ClaudeCodeApplyInput, ClaudeCodePlanInput,
+    GatewayStatus, ModelFacts, ProviderFacts, ReviewedPlan, apply_claude_code_settings,
+    gateway_status, plan_claude_code_settings,
 };
 pub use version_probe::{
     AgentVersionResult, VersionProbeError, VersionProbeGate, VersionProbeInput, probe_agent_version,
 };
 #[cfg(test)]
 mod tests;
+
+/// One apply request: the identity the user selected and the tokens of the plan
+/// they reviewed.
+///
+/// The whole payload is checked before any storage or credential access, and
+/// every token is compared with a fresh read before a file is written.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ApplyClaudeCodeSettingsRequest {
+    /// Stored Provider instance the plan was built from.
+    pub provider_id: String,
+    /// Upstream model ID the plan was built from.
+    pub model_id: String,
+    /// Tokens the interface received with the plan.
+    pub reviewed: ReviewedPlan,
+}
 
 /// Claude Code settings root, shared by discovery and the configuration preview.
 pub(crate) use discovery::claude_config_root;

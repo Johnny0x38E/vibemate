@@ -1,8 +1,13 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { beforeEach, expect, test, vi } from "vitest";
 import {
+    APPLY_ERROR_CODES,
     PLAN_ERROR_CODES,
+    applyClaudeCodeSettings,
     planClaudeCodeSettings,
+    reviewedPlanTokens,
+    type ApplyStep,
+    type ClaudeCodeApplied,
     type ClaudeCodePlan,
     type ConfigChange,
     discoverAgents,
@@ -410,5 +415,192 @@ test.each([
         name: "PlanRequestError",
         code: "invalid_response",
         message: "Agent configuration preview failed.",
+    });
+});
+
+const BACKUP_PATH =
+    "/home/test/Library/Application Support/dev.vibemate.desktop/backups/1700000000000-1-0/settings.json";
+const appliedStep: ApplyStep = {
+    ordinal: 0,
+    targetPath: plan.target.path,
+    state: "applied",
+    errorCode: null,
+    backupPath: BACKUP_PATH,
+};
+const applied: ClaudeCodeApplied = {
+    operationId: "fedcba9876543210fedcba9876543210",
+    state: "applied",
+    steps: [appliedStep],
+    backupPath: BACKUP_PATH,
+    restartRequired: true,
+};
+
+test("browser preview refuses to apply and issues no call", async () => {
+    vi.mocked(isTauri).mockReturnValue(false);
+    await expect(
+        applyClaudeCodeSettings(
+            plan.source.providerId,
+            plan.source.modelId,
+            reviewedPlanTokens(plan),
+        ),
+    ).rejects.toMatchObject({
+        name: "ApplyRequestError",
+        code: "desktop_required",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+});
+
+test("sends the reviewed tokens and returns the validated outcome", async () => {
+    vi.mocked(invoke).mockResolvedValue(applied);
+    const reviewed = reviewedPlanTokens(plan);
+    expect(reviewed).toEqual({
+        targetPath: plan.target.path,
+        targetDigest: plan.target.contentDigest,
+        providerRevision: plan.source.providerRevision,
+        modelContentDigest: plan.source.modelContentDigest,
+    });
+    expect(
+        await applyClaudeCodeSettings(
+            plan.source.providerId,
+            plan.source.modelId,
+            reviewed,
+        ),
+    ).toEqual(applied);
+    expect(invoke).toHaveBeenCalledExactlyOnceWith(
+        "apply_claude_code_settings",
+        {
+            input: {
+                providerId: plan.source.providerId,
+                modelId: plan.source.modelId,
+                reviewed,
+            },
+        },
+    );
+});
+
+test("accepts a refused write as a settled outcome", async () => {
+    const refused: ClaudeCodeApplied = {
+        ...applied,
+        state: "failed",
+        steps: [
+            {
+                ...appliedStep,
+                state: "failed",
+                errorCode: "symlink_refused",
+                backupPath: null,
+            },
+        ],
+        backupPath: null,
+    };
+    vi.mocked(invoke).mockResolvedValue(refused);
+    expect(
+        await applyClaudeCodeSettings(
+            plan.source.providerId,
+            plan.source.modelId,
+            reviewedPlanTokens(plan),
+        ),
+    ).toEqual(refused);
+});
+
+test("accepts a rollback that left one file alone", async () => {
+    const partial: ClaudeCodeApplied = {
+        ...applied,
+        state: "partial",
+        steps: [
+            appliedStep,
+            {
+                ordinal: 1,
+                targetPath: "/home/test/.claude/models.json",
+                state: "failed",
+                errorCode: "target_changed",
+                backupPath: null,
+            },
+        ],
+    };
+    vi.mocked(invoke).mockResolvedValue(partial);
+    expect(
+        await applyClaudeCodeSettings(
+            plan.source.providerId,
+            plan.source.modelId,
+            reviewedPlanTokens(plan),
+        ),
+    ).toEqual(partial);
+});
+
+test.each(APPLY_ERROR_CODES)(
+    "returns the apply refusal code %s",
+    async (code) => {
+        vi.mocked(invoke).mockRejectedValue(code);
+        await expect(
+            applyClaudeCodeSettings(
+                plan.source.providerId,
+                plan.source.modelId,
+                reviewedPlanTokens(plan),
+            ),
+        ).rejects.toMatchObject({
+            code,
+            message: "Applying the Agent configuration failed.",
+        });
+    },
+);
+
+test.each([
+    "private-refusal",
+    "sk-synthetic-never-display",
+    new Error("private-runtime-error"),
+])("sanitizes unexpected apply failure %s", async (error) => {
+    vi.mocked(invoke).mockRejectedValue(error);
+    await expect(
+        applyClaudeCodeSettings(
+            plan.source.providerId,
+            plan.source.modelId,
+            reviewedPlanTokens(plan),
+        ),
+    ).rejects.toMatchObject({ code: "operation_failed" });
+});
+
+test.each([
+    { ...applied, extra: "synthetic" },
+    { ...applied, operationId: "fedcba9876543210fedcba987654321" },
+    { ...applied, operationId: "FEDCBA9876543210FEDCBA9876543210" },
+    { ...applied, state: "running" },
+    { ...applied, state: "planned" },
+    { ...applied, state: "failed" },
+    { ...applied, restartRequired: "yes" },
+    { ...applied, steps: [] },
+    { ...applied, steps: [{ ...appliedStep, ordinal: 1 }] },
+    { ...applied, steps: [{ ...appliedStep, extra: true }] },
+    { ...applied, steps: [{ ...appliedStep, state: "pending" }] },
+    { ...applied, steps: [{ ...appliedStep, state: "failed" }] },
+    {
+        ...applied,
+        steps: [{ ...appliedStep, errorCode: "write_failed" }],
+    },
+    {
+        ...applied,
+        steps: [{ ...appliedStep, errorCode: "private_refusal" }],
+    },
+    {
+        ...applied,
+        steps: [{ ...appliedStep, targetPath: "settings.json" }],
+    },
+    {
+        ...applied,
+        steps: [{ ...appliedStep, backupPath: "backups/settings.json" }],
+    },
+    { ...applied, backupPath: "/home/test/elsewhere/settings.json" },
+    { ...applied, backupPath: "relative/settings.json" },
+])("rejects malformed or contradictory apply outcome %#", async (response) => {
+    vi.mocked(invoke).mockResolvedValue(response);
+    await expect(
+        applyClaudeCodeSettings(
+            plan.source.providerId,
+            plan.source.modelId,
+            reviewedPlanTokens(plan),
+        ),
+    ).rejects.toMatchObject({
+        name: "ApplyRequestError",
+        code: "invalid_response",
+        message: "Applying the Agent configuration failed.",
     });
 });

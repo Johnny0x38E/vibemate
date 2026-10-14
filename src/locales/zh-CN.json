@@ -586,6 +586,35 @@
             "restartRequired": "需要重新启动 Claude Code 会话后这些设置才会生效。",
             "secretValue": "系统凭据存储中的 API 密钥，以明文写入",
             "emptyValue": "（空）",
+            "apply": "应用这些设置",
+            "applying": "正在应用…",
+            "outcomeHeading": "应用结果",
+            "outcome": {
+                "applied": "已写入，配置文件现在包含计划中的键。",
+                "failed": "没有写入任何内容，配置文件保持原样。",
+                "compensated": "写入已回滚，配置文件恢复为之前的内容。",
+                "partial": "部分写入无法撤销，再次尝试前请先查看配置文件。",
+                "unknown": "有一个文件的结果无法确认，再次尝试前请先查看配置文件。"
+            },
+            "stepFailed": "{{path}}：{{error}}",
+            "backupAt": "原内容保存在 {{path}}",
+            "applyPreviewAgain": "再次预览即可看到文件的当前状态。",
+            "writeErrors": {
+                "invalid_request": "请求不合法",
+                "target_changed": "文件在预览后被改动",
+                "symlink_refused": "路径是符号链接",
+                "target_read_only": "文件为只读",
+                "target_path_invalid": "路径无法使用",
+                "target_unreadable": "文件无法读取",
+                "target_too_large": "文件超过写入上限",
+                "backup_unavailable": "备份无法保存",
+                "write_failed": "文件无法替换",
+                "outcome_unknown": "写入结果未知",
+                "storage_unavailable": "本地配置存储不可用",
+                "log_write_failed": "操作无法记录",
+                "log_read_failed": "操作日志无法读取",
+                "invalid_stored_operation": "已记录的操作不合法"
+            },
             "notices": {
                 "credentialFromStore": "API 密钥不会进入这个窗口。应用改动时，vibemate 会从系统凭据存储读取它，并以明文写入该配置文件。",
                 "overridesNotChecked": "本预览没有读取托管设置、项目设置和 shell 环境变量，它们都可能覆盖这个文件。",
@@ -603,8 +632,12 @@
                 "storage_unavailable": "本地配置库不可用，请重启 vibemate。",
                 "provider_not_found": "该服务商配置已不存在。",
                 "model_not_found": "该服务商已没有这个保存的模型。",
+                "plan_stale": "配置在预览之后发生了变化，未写入任何内容。请重新预览。",
+                "credential_missing": "该服务商在系统凭据存储中没有保存密钥。",
+                "credential_unavailable": "无法读取系统凭据存储，请解锁后重试。",
                 "location_unavailable": "无法定位 Claude Code 的配置目录。",
                 "operation_failed": "预览生成失败，请重试。",
+                "desktop_required": "应用配置需要在 vibemate 桌面应用中进行。",
                 "invalid_response": "桌面应用返回了意外的计划。"
             }
         }

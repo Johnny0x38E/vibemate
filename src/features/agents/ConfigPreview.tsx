@@ -8,11 +8,18 @@ import {
 import detailForm from "../../components/detailForm.module.css";
 import buttons from "../../components/actionButtons.module.css";
 import {
+    ApplyRequestError,
     PlanRequestError,
+    applyClaudeCodeSettings,
     planClaudeCodeSettings,
+    reviewedPlanTokens,
+    type ApplyErrorCode,
+    type ApplyStep,
+    type ClaudeCodeApplied,
     type ClaudeCodePlan,
     type PlanErrorCode,
     type PlanNotice,
+    type WriteErrorCode,
 } from "../../lib/desktop/agents";
 import {
     ModelRequestError,
@@ -53,6 +60,13 @@ type PreviewState =
     | { kind: "error"; code: PlanErrorCode }
     | { kind: "ready"; plan: ClaudeCodePlan };
 
+/** The apply step's own outcome; it outlives the plan it was built from. */
+type ApplyState =
+    | { kind: "idle" }
+    | { kind: "applying" }
+    | { kind: "error"; code: ApplyErrorCode }
+    | { kind: "done"; result: ClaudeCodeApplied };
+
 /**
  * Read-only link between one saved Provider instance and one of its added
  * models: the panel asks Rust for a sanitized Claude Code settings plan.
@@ -68,6 +82,7 @@ export function ConfigPreview(): JSX.Element {
     });
     const [models, setModels] = useState<ModelsState | null>(null);
     const [preview, setPreview] = useState<PreviewState>({ kind: "idle" });
+    const [apply, setApply] = useState<ApplyState>({ kind: "idle" });
     const [providerId, setProviderId] = useState("");
     const [modelId, setModelId] = useState("");
     const [providersAttempt, setProvidersAttempt] = useState(0);
@@ -187,6 +202,9 @@ export function ConfigPreview(): JSX.Element {
         // `canPreview` already proves both selections exist for this render.
         if (!canPreview || pending.current) return;
         pending.current = true;
+        // A new preview replaces the previous outcome, which described another
+        // plan and would otherwise sit under the card it no longer belongs to.
+        setApply({ kind: "idle" });
         setPreview({ kind: "loading" });
         try {
             const result = await planClaudeCodeSettings(
@@ -208,6 +226,44 @@ export function ConfigPreview(): JSX.Element {
                         ? error.code
                         : "operation_failed",
             });
+        } finally {
+            pending.current = false;
+        }
+    }
+
+    /**
+     * Write the shown plan.
+     *
+     * The tokens travel back with the request, so Rust refuses a plan whose
+     * settings file, Provider revision or model content changed since the
+     * preview. Any answer clears the plan: the file may have changed, and a
+     * second click must build and review a fresh preview instead of repeating
+     * this write.
+     */
+    async function runApply(): Promise<void> {
+        if (preview.kind !== "ready" || pending.current) return;
+        const plan = preview.plan;
+        pending.current = true;
+        setApply({ kind: "applying" });
+        try {
+            const result = await applyClaudeCodeSettings(
+                plan.source.providerId,
+                plan.source.modelId,
+                reviewedPlanTokens(plan),
+            );
+            if (!mounted.current) return;
+            setPreview({ kind: "idle" });
+            setApply({ kind: "done", result });
+        } catch (error: unknown) {
+            if (!mounted.current) return;
+            const code =
+                error instanceof ApplyRequestError
+                    ? error.code
+                    : "operation_failed";
+            // A stale plan cannot be applied at all; the other refusals leave the
+            // file untouched, so the user can fix the cause and preview again.
+            if (code === "plan_stale") setPreview({ kind: "idle" });
+            setApply({ kind: "error", code });
         } finally {
             pending.current = false;
         }
@@ -298,6 +354,7 @@ export function ConfigPreview(): JSX.Element {
                                         setProviderId(value);
                                         setModelId("");
                                         setPreview({ kind: "idle" });
+                                        setApply({ kind: "idle" });
                                     }}
                                 />
                             </span>
@@ -365,6 +422,9 @@ export function ConfigPreview(): JSX.Element {
                                                     setPreview({
                                                         kind: "idle",
                                                     });
+                                                    setApply({
+                                                        kind: "idle",
+                                                    });
                                                 }}
                                             />
                                         </span>
@@ -397,13 +457,35 @@ export function ConfigPreview(): JSX.Element {
                     </p>
                 )}
             </DetailPanel>
-            {preview.kind === "ready" && <PlanCard plan={preview.plan} />}
+            {preview.kind === "ready" && (
+                <PlanCard
+                    plan={preview.plan}
+                    applying={apply.kind === "applying"}
+                    onApply={() => {
+                        void runApply();
+                    }}
+                />
+            )}
+            {apply.kind === "done" && <AppliedCard result={apply.result} />}
+            {apply.kind === "error" && (
+                <p className={styles["error"]} role="alert">
+                    {t(`agents.modelConfig.errors.${apply.code}`)}
+                </p>
+            )}
         </>
     );
 }
 
-/** One sanitized plan: target file, key changes, notices and take-effect note. */
-function PlanCard({ plan }: { plan: ClaudeCodePlan }): JSX.Element {
+/** One sanitized plan: target file, key changes, notices and the apply action. */
+function PlanCard({
+    plan,
+    applying,
+    onApply,
+}: {
+    plan: ClaudeCodePlan;
+    applying: boolean;
+    onApply: () => void;
+}): JSX.Element {
     const { t } = useTranslation();
     const fileState = plan.target.exists
         ? plan.target.symlink
@@ -457,6 +539,66 @@ function PlanCard({ plan }: { plan: ClaudeCodePlan }): JSX.Element {
                     ))}
                 </ul>
             )}
+            <div className={card["actions"]}>
+                <button
+                    type="button"
+                    className={buttons["primary"]}
+                    aria-disabled={applying}
+                    onClick={onApply}
+                >
+                    {applying
+                        ? t("agents.modelConfig.applying")
+                        : t("agents.modelConfig.apply")}
+                </button>
+            </div>
+        </DetailPanel>
+    );
+}
+
+/** What an apply call did: the settled state, failed files and the backup. */
+function AppliedCard({ result }: { result: ClaudeCodeApplied }): JSX.Element {
+    const { t } = useTranslation();
+    // A failed step always carries its code; the IPC boundary refuses other shapes.
+    const failed = result.steps.filter(
+        (step): step is ApplyStep & { errorCode: WriteErrorCode } =>
+            step.state === "failed" && step.errorCode !== null,
+    );
+    return (
+        <DetailPanel label={t("agents.modelConfig.outcomeHeading")}>
+            <div className={card["summary"]}>
+                <span className={card["path"]}>
+                    {t(`agents.modelConfig.outcome.${result.state}`)}
+                </span>
+                {result.backupPath !== null && (
+                    <span className={card["note"]}>
+                        {t("agents.modelConfig.backupAt", {
+                            path: result.backupPath,
+                        })}
+                    </span>
+                )}
+                {result.restartRequired && (
+                    <span className={card["note"]}>
+                        {t("agents.modelConfig.restartRequired")}
+                    </span>
+                )}
+            </div>
+            {failed.length > 0 && (
+                <ul className={card["notices"]}>
+                    {failed.map((step) => (
+                        <li key={step.ordinal}>
+                            {t("agents.modelConfig.stepFailed", {
+                                path: step.targetPath,
+                                error: t(
+                                    `agents.modelConfig.writeErrors.${step.errorCode}`,
+                                ),
+                            })}
+                        </li>
+                    ))}
+                </ul>
+            )}
+            <p className={styles["hint"]}>
+                {t("agents.modelConfig.applyPreviewAgain")}
+            </p>
         </DetailPanel>
     );
 }

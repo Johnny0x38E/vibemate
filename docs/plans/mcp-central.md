@@ -44,3 +44,15 @@ and cannot save again after an unknown outcome until the list or definition is
 reloaded. Enablement labels describe the central definition, not a connection or
 an applied Agent configuration. Native and visual acceptance remain distinct
 from simulated behavior tests. Task status lives only in [todo.md](todo.md).
+
+## Deletion
+
+Deletion confirms the definition name and affects only central storage. A revision
+check, queuing all credential references and metadata removal share one immediate
+transaction. OS cleanup runs after a confirmed commit; its failure is reported
+separately from metadata deletion. The durable queue survives restarts, appears
+above the list even when it is empty, and retries at most 100 deleted identities
+per request. Active references are excluded from every cleanup operation.
+Uncertain commits require reloading before another mutation. Agent registration
+relationships are not implemented; P35 must enforce references when deployment
+arrives. No Agent file is silently rewritten or removed. See [mcp-delete.md](mcp-delete.md).

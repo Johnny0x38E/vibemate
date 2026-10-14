@@ -429,6 +429,17 @@
             "operation_failed": "The operation could not finish; its result may be unknown. Reload before retrying.",
             "desktop_required": "Use the vibemate desktop app to save definitions.",
             "invalid_response": "The app returned an unrecognized response. Reload to check the result."
+        },
+        "delete": {
+            "label": "Delete “{{name}}”",
+            "title": "Delete MCP definition?",
+            "body": "Delete “{{name}}” from vibemate and remove its stored credentials? Agent configuration files will not be changed.",
+            "cancel": "Cancel",
+            "confirm": "Delete",
+            "deleting": "Deleting…",
+            "done": "Deleted “{{name}}”.",
+            "cleanupPending": "The definition was deleted, but some stored credentials still need cleanup. Retry to remove them.",
+            "cleanup": "Retry deleted credential cleanup"
         }
     },
     "agents": {

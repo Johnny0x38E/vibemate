@@ -556,3 +556,236 @@ fn mcp_unavailable_store_reports_the_cause_without_a_plaintext_fallback() {
             .is_empty()
     );
 }
+
+fn deletion(record: &McpRecord) -> DeleteMcpRequest {
+    DeleteMcpRequest {
+        id: record.id.clone(),
+        expected_revision: record.revision,
+    }
+}
+
+#[test]
+fn deletion_removes_only_reviewed_definition_and_its_credentials() {
+    let f = Fixture::new();
+    let store = FakeStore::default();
+    let saved = save_definition(
+        &f.storage,
+        &store,
+        with_env(vec![secret("TOKEN", Some("synthetic-delete-test"))]),
+        1,
+    )
+    .unwrap();
+    let mut other = with_env(vec![secret("OTHER", Some("synthetic-other-test"))]);
+    other.server_name = "other".into();
+    let other = save_definition(&f.storage, &store, other, 1).unwrap();
+    let result = delete_definition(&f.storage, &store, deletion(&saved)).unwrap();
+    assert_eq!(result.id, saved.id);
+    assert!(!result.cleanup_pending);
+    assert_eq!(
+        get_definition(&f.storage, &saved.id).unwrap_err(),
+        McpError::NotFound
+    );
+    assert!(get_definition(&f.storage, &other.id).is_ok());
+    assert!(
+        store
+            .values
+            .borrow()
+            .keys()
+            .all(|key| key.starts_with(&format!("mcp-{}-", other.id)))
+    );
+    let page = list_definitions(&f.storage, None, 20).unwrap();
+    assert_eq!(page.total, 1);
+    assert!(!page.deleted_cleanup_pending);
+}
+
+#[test]
+fn deleted_cleanup_survives_restart_and_retries_without_secret_reads() {
+    let f = Fixture::new();
+    let store = FakeStore::default();
+    let saved = save_definition(
+        &f.storage,
+        &store,
+        with_env(vec![secret("TOKEN", Some("synthetic-delete-test"))]),
+        1,
+    )
+    .unwrap();
+    store.fail_delete.set(true);
+    assert!(
+        delete_definition(&f.storage, &store, deletion(&saved))
+            .unwrap()
+            .cleanup_pending
+    );
+    let restarted = Storage::open_in_directory(&f.path).unwrap();
+    let page = list_definitions(&restarted, None, 20).unwrap();
+    assert_eq!(page.total, 0);
+    assert!(page.deleted_cleanup_pending);
+    assert!(!cleanup_deleted_credentials(&restarted, &store).unwrap());
+    store.fail_delete.set(false);
+    assert!(cleanup_deleted_credentials(&restarted, &store).unwrap());
+    assert!(store.values.borrow().is_empty());
+    assert!(
+        !list_definitions(&restarted, None, 20)
+            .unwrap()
+            .deleted_cleanup_pending
+    );
+}
+
+#[test]
+fn invalid_missing_and_stale_deletions_leave_credentials_untouched() {
+    let f = Fixture::new();
+    let store = FakeStore::default();
+    let saved = save_definition(
+        &f.storage,
+        &store,
+        with_env(vec![secret("TOKEN", Some("synthetic-delete-test"))]),
+        1,
+    )
+    .unwrap();
+    let before = store.values.borrow().clone();
+    for (id, revision, error) in [
+        ("bad".to_string(), 1, McpError::InvalidRequest),
+        (saved.id.clone(), 0, McpError::InvalidRequest),
+        (saved.id.clone(), 2, McpError::RevisionConflict),
+        ("f".repeat(32), 1, McpError::NotFound),
+    ] {
+        assert_eq!(
+            delete_definition(
+                &f.storage,
+                &store,
+                DeleteMcpRequest {
+                    id,
+                    expected_revision: revision
+                }
+            )
+            .unwrap_err(),
+            error
+        );
+        assert_eq!(*store.values.borrow(), before);
+    }
+}
+
+#[test]
+fn failed_delete_transaction_rolls_back_queue_and_keeps_current_credentials() {
+    let f = Fixture::new();
+    let store = FakeStore::default();
+    let saved = save_definition(
+        &f.storage,
+        &store,
+        with_env(vec![secret("TOKEN", Some("synthetic-delete-test"))]),
+        1,
+    )
+    .unwrap();
+    lock(&f.storage).unwrap().execute_batch("CREATE TRIGGER fail_mcp_delete BEFORE DELETE ON mcp_definition BEGIN SELECT RAISE(ABORT, 'synthetic failure'); END;").unwrap();
+    let before = store.values.borrow().clone();
+    assert_eq!(
+        delete_definition(&f.storage, &store, deletion(&saved)).unwrap_err(),
+        McpError::WriteFailed
+    );
+    assert_eq!(*store.values.borrow(), before);
+    assert!(
+        !get_definition(&f.storage, &saved.id)
+            .unwrap()
+            .cleanup_pending
+    );
+}
+
+#[test]
+fn http_delete_cleans_current_and_previously_obsolete_credentials() {
+    let f = Fixture::new();
+    let store = FakeStore::default();
+    let mut input = request();
+    input.connection = ConnectionInput::Http {
+        url: "https://example.com/mcp".into(),
+        headers: vec![secret("Authorization", Some("synthetic-old"))],
+    };
+    let first = save_definition(&f.storage, &store, input, 1).unwrap();
+    let mut input = request();
+    input.id = Some(first.id.clone());
+    input.expected_revision = Some(first.revision);
+    input.connection = ConnectionInput::Http {
+        url: "https://example.com/mcp".into(),
+        headers: vec![secret("Authorization", Some("synthetic-new"))],
+    };
+    store.fail_delete.set(true);
+    let saved = save_definition(&f.storage, &store, input, 2).unwrap();
+    assert!(saved.cleanup_pending);
+    assert_eq!(store.values.borrow().len(), 2);
+    store.fail_delete.set(false);
+    assert!(
+        !delete_definition(&f.storage, &store, deletion(&saved))
+            .unwrap()
+            .cleanup_pending
+    );
+    assert!(store.values.borrow().is_empty());
+}
+
+#[test]
+fn no_secret_delete_needs_no_credential_store() {
+    let f = Fixture::new();
+    let store = FakeStore::default();
+    store.fail_delete.set(true);
+    let saved = save_definition(&f.storage, &store, request(), 1).unwrap();
+    assert!(
+        !delete_definition(&f.storage, &store, deletion(&saved))
+            .unwrap()
+            .cleanup_pending
+    );
+}
+
+#[test]
+fn uncertain_delete_commit_keeps_credentials_and_requires_reload() {
+    let f = Fixture::new();
+    let store = FakeStore::default();
+    let saved = save_definition(
+        &f.storage,
+        &store,
+        with_env(vec![secret("TOKEN", Some("synthetic-uncertain-delete"))]),
+        1,
+    )
+    .unwrap();
+    let before = store.values.borrow().clone();
+    lock(&f.storage).unwrap().execute_batch("CREATE TABLE mcp_delete_deferred(id TEXT REFERENCES mcp_definition(id) DEFERRABLE INITIALLY DEFERRED); CREATE TEMP TRIGGER fail_delete_commit AFTER DELETE ON mcp_definition BEGIN INSERT INTO mcp_delete_deferred VALUES('missing'); END;").unwrap();
+    assert_eq!(
+        delete_definition(&f.storage, &store, deletion(&saved)).unwrap_err(),
+        McpError::OutcomeUnknown
+    );
+    assert_eq!(*store.values.borrow(), before);
+    assert!(get_definition(&f.storage, &saved.id).is_ok());
+}
+
+#[test]
+fn deleted_cleanup_is_bounded_and_preserves_active_definitions() {
+    let f = Fixture::new();
+    let store = FakeStore::default();
+    let active = save_definition(
+        &f.storage,
+        &store,
+        with_env(vec![secret("TOKEN", Some("synthetic-active"))]),
+        1,
+    )
+    .unwrap();
+    let before = store.values.borrow().clone();
+    {
+        let connection = lock(&f.storage).unwrap();
+        for index in 1..=101 {
+            let id = format!("{index:032x}");
+            let reference = format!("mcp-{id}-{:032x}", 1);
+            connection
+                .execute(
+                    "INSERT INTO mcp_cleanup(definition_id,credential_ref) VALUES(?1,?2)",
+                    rusqlite::params![id, reference],
+                )
+                .unwrap();
+        }
+    }
+    assert!(!cleanup_deleted_credentials(&f.storage, &store).unwrap());
+    assert_eq!(
+        super::repository::deleted_cleanup_ids(&f.storage)
+            .unwrap()
+            .len(),
+        1
+    );
+    assert!(cleanup_deleted_credentials(&f.storage, &store).unwrap());
+    assert_eq!(*store.values.borrow(), before);
+    assert!(get_definition(&f.storage, &active.id).is_ok());
+}

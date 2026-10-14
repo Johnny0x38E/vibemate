@@ -16,6 +16,8 @@ import {
     getMcpDefinition,
     saveMcpDefinition,
     cleanupMcpCredentials,
+    deleteMcpDefinition,
+    cleanupDeletedMcpCredentials,
     McpRequestError,
     type McpRecord,
 } from "../../lib/desktop/mcp";
@@ -26,6 +28,8 @@ vi.mock(import("../../lib/desktop/mcp"), async (importOriginal) => ({
     getMcpDefinition: vi.fn(),
     saveMcpDefinition: vi.fn(),
     cleanupMcpCredentials: vi.fn(),
+    deleteMcpDefinition: vi.fn(),
+    cleanupDeletedMcpCredentials: vi.fn(),
 }));
 const list = vi.mocked(listMcpDefinitions);
 const get = vi.mocked(getMcpDefinition);
@@ -53,7 +57,10 @@ function page(
     nextCursor: string | null = null,
     total = items.length,
 ) {
-    return { kind: "desktop" as const, page: { items, nextCursor, total } };
+    return {
+        kind: "desktop" as const,
+        page: { items, nextCursor, total, deletedCleanupPending: false },
+    };
 }
 async function setup(
     locale: "en" | "zh-CN" = "en",
@@ -73,6 +80,10 @@ beforeEach(() => {
     get.mockReset().mockResolvedValue(row);
     save.mockReset().mockResolvedValue({ ...row, revision: 2, enabled: false });
     clean.mockReset().mockResolvedValue(row);
+    vi.mocked(deleteMcpDefinition)
+        .mockReset()
+        .mockResolvedValue({ id: row.id, cleanupPending: false });
+    vi.mocked(cleanupDeletedMcpCredentials).mockReset().mockResolvedValue(true);
 });
 afterEach(() => {
     cleanup();
@@ -336,4 +347,151 @@ test("unmounted lists ignore late read replies", async () => {
         await Promise.resolve();
     });
     expect(screen.queryByText("Tools")).toBeNull();
+});
+
+test("delete requires confirmation, cancellation restores focus, and success reloads counts", async () => {
+    await setup();
+    const trigger = await screen.findByRole("button", {
+        name: "Delete “Tools”",
+    });
+    trigger.focus();
+    fireEvent.click(trigger);
+    await screen.findByRole("dialog");
+    expect(deleteMcpDefinition).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => {
+        expect(screen.queryByRole("dialog")).toBeNull();
+    });
+    await waitFor(() => {
+        expect(document.activeElement).toBe(trigger);
+    });
+    fireEvent.click(trigger);
+    list.mockResolvedValue(page([]));
+    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
+    await screen.findByText("No MCP definitions saved yet.");
+    expect(deleteMcpDefinition).toHaveBeenCalledExactlyOnceWith({
+        id: row.id,
+        expectedRevision: 1,
+    });
+    expect(screen.queryByRole("button", { name: "Delete “Tools”" })).toBeNull();
+});
+
+test("pending delete prevents duplicate submissions, dismissal and home navigation", async () => {
+    const homeRef = createRef<ModuleNavigationHandle>();
+    let resolve: (result: {
+        id: string;
+        cleanupPending: boolean;
+    }) => void = () => {};
+    vi.mocked(deleteMcpDefinition).mockReturnValue(
+        new Promise((done) => {
+            resolve = done;
+        }),
+    );
+    await setup("en", homeRef);
+    fireEvent.click(
+        await screen.findByRole("button", { name: "Delete “Tools”" }),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
+    fireEvent.click(screen.getByRole("button", { name: "Deleting…" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(deleteMcpDefinition).toHaveBeenCalledOnce();
+    act(() => {
+        expect(homeRef.current?.openHome()).toBe(false);
+    });
+    expect(screen.getByRole("dialog")).toBeDefined();
+    list.mockResolvedValue(page([]));
+    await act(async () => {
+        resolve({ id: row.id, cleanupPending: false });
+        await Promise.resolve();
+    });
+    await screen.findByText("No MCP definitions saved yet.");
+});
+
+test.each(["outcome_unknown", "revision_conflict", "not_found"] as const)(
+    "%s delete blocks mutations until reconciliation succeeds",
+    async (code) => {
+        vi.mocked(deleteMcpDefinition).mockRejectedValue(
+            new McpRequestError(code),
+        );
+        await setup();
+        fireEvent.click(
+            await screen.findByRole("button", { name: "Delete “Tools”" }),
+        );
+        fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
+        await screen.findByRole("alert");
+        fireEvent.click(screen.getByRole("button", { name: "Delete “Tools”" }));
+        expect(deleteMcpDefinition).toHaveBeenCalledOnce();
+        expect(screen.queryByRole("dialog")).toBeNull();
+        list.mockRejectedValueOnce(new McpRequestError("read_failed"));
+        fireEvent.click(
+            screen.getByRole("button", { name: "Reload before retrying" }),
+        );
+        await screen.findByRole("button", { name: "Try again" });
+        expect(
+            screen.queryByRole("button", { name: "Delete “Tools”" }),
+        ).toBeNull();
+        fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+        await screen.findByRole("button", { name: "Delete “Tools”" });
+    },
+);
+
+test("known delete failure keeps the definition and permits another confirmation", async () => {
+    vi.mocked(deleteMcpDefinition).mockRejectedValueOnce(
+        new McpRequestError("write_failed"),
+    );
+    await setup();
+    fireEvent.click(
+        await screen.findByRole("button", { name: "Delete “Tools”" }),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
+    await screen.findByRole("alert");
+    expect(screen.getByText("Tools")).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Delete “Tools”" }));
+    await screen.findByRole("dialog");
+});
+
+test("deleted credential cleanup remains retryable with an empty library after restart", async () => {
+    list.mockResolvedValue({
+        kind: "desktop",
+        page: {
+            items: [],
+            nextCursor: null,
+            total: 0,
+            deletedCleanupPending: true,
+        },
+    });
+    vi.mocked(cleanupDeletedMcpCredentials)
+        .mockResolvedValueOnce(false)
+        .mockResolvedValue(true);
+    await setup();
+    fireEvent.click(
+        await screen.findByRole("button", {
+            name: "Retry deleted credential cleanup",
+        }),
+    );
+    await waitFor(() => {
+        expect(cleanupDeletedMcpCredentials).toHaveBeenCalledOnce();
+    });
+    await waitFor(() => {
+        expect(
+            screen
+                .getByRole("button", {
+                    name: "Retry deleted credential cleanup",
+                })
+                .getAttribute("aria-disabled"),
+        ).toBe("false");
+    });
+    list.mockResolvedValue(page([]));
+    fireEvent.click(
+        screen.getByRole("button", {
+            name: "Retry deleted credential cleanup",
+        }),
+    );
+    await waitFor(() => {
+        expect(
+            screen.queryByRole("button", {
+                name: "Retry deleted credential cleanup",
+            }),
+        ).toBeNull();
+    });
 });

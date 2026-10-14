@@ -73,6 +73,8 @@ pub fn run() {
             commands::mcp::get_mcp_definition,
             commands::mcp::save_mcp_definition,
             commands::mcp::cleanup_mcp_credentials,
+            commands::mcp::delete_mcp_definition,
+            commands::mcp::cleanup_deleted_mcp_credentials,
             commands::skills::list_skills,
             commands::skills::get_skill,
             commands::skills::pick_skill_folder,

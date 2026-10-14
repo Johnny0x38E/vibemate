@@ -4,12 +4,15 @@
 mod types;
 mod validation;
 pub use types::{
-    ConnectionInput, ConnectionRecord, McpError, McpPage, McpRecord, SaveMcpRequest, SecretInput,
+    ConnectionInput, ConnectionRecord, DeleteMcpRequest, DeletedMcp, McpError, McpPage, McpRecord,
+    SaveMcpRequest, SecretInput,
 };
 mod repository;
 mod service;
 pub use repository::{get_definition, list_definitions};
-pub use service::{cleanup_credentials, save_definition};
+pub use service::{
+    cleanup_credentials, cleanup_deleted_credentials, delete_definition, save_definition,
+};
 
 #[cfg(test)]
 mod tests;

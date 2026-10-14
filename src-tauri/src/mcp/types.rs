@@ -174,6 +174,8 @@ pub struct McpPage {
     /// How many definitions exist in total, so a count stays correct without
     /// reading every page.
     pub total: i64,
+    /// Deleted definitions still have queued OS credential entries.
+    pub deleted_cleanup_pending: bool,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -212,4 +214,24 @@ impl McpId {
     pub(super) fn into_string(self) -> String {
         self.0
     }
+}
+
+/// Revision-checked removal of one central definition, without Agent writes.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DeleteMcpRequest {
+    /// Stable definition identity.
+    pub id: String,
+    /// Revision the user reviewed before confirming deletion.
+    pub expected_revision: i64,
+}
+
+/// Confirmed metadata deletion; OS cleanup may still require a retry.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeletedMcp {
+    /// The removed definition identity.
+    pub id: String,
+    /// Whether unused credentials remain durably queued for deletion.
+    pub cleanup_pending: bool,
 }

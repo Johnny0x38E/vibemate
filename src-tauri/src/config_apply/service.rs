@@ -42,6 +42,9 @@ pub struct StepOutcome {
     pub state: StepState,
     /// Stable code of the failure; present exactly when the step failed.
     pub error_code: Option<String>,
+    /// Absolute path of the copy holding the content this step replaced, when
+    /// there was one; the interface shows it so the user can find the backup.
+    pub backup_path: Option<String>,
 }
 
 /// Result of one apply step over one or more files.
@@ -94,6 +97,7 @@ pub fn apply_files(
                     .target
                     .content_digest
                     .ok_or(WriteError::OutcomeUnknown)?;
+                let backup_path = applied.backup.as_ref().map(|backup| backup.path.clone());
                 record_step_applied(
                     storage,
                     &operation_id,
@@ -106,6 +110,7 @@ pub fn apply_files(
                     target_path,
                     state: StepState::Applied,
                     error_code: None,
+                    backup_path,
                 });
             }
             Err(error) => {
@@ -115,6 +120,7 @@ pub fn apply_files(
                     target_path,
                     state: StepState::Failed,
                     error_code: Some(error.code().to_owned()),
+                    backup_path: None,
                 });
                 let state = compensate_operation(storage, &operation_id, backups)?;
                 return Ok(AppliedOperation {

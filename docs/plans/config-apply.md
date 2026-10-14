@@ -89,6 +89,29 @@ SQLite schema v16 新增 `config_operation` 与 `config_operation_step`，仓储
 需要逐步骤结果，用 `ALTER TABLE ADD COLUMN`（v17）补一列即可。日志目前只增不减，已结束操作的清理
 策略仍未定。
 
+## P20：应用 Claude Code 配置
+
+首个把计划写到磁盘的功能。Rust 侧（`agents/claude_code.rs`，P20.a 已交付 2026-10-14）：
+
+- `apply_claude_code_settings(storage, credentials, input)`：先用与预览完全相同的 `build()` 重新读取
+  当前 Provider、模型与设置文件，再把界面回传的四个令牌（目标路径、文件摘要、Provider `revision`、
+  模型内容摘要）逐一比对；任一不符返回 `plan_stale`，不写任何字节。
+- 令牌通过后才读凭据：引用名由存储的 Provider ID 生成（`provider-<id>`），取值放入计划显示的占位符
+  位置。密钥不进入计划、返回值、错误或日志；返回值只带状态、逐文件结果与备份路径。
+- 写入复用 P19 的 `apply_files`（操作类型 `claude_code_settings`），备份根目录为应用数据目录下的
+  `backups/`，因此替换前的设置内容可在该目录定位，操作也会记入日志。
+- 结果 `ClaudeCodeApplied`：`state`（`applied` 或回滚后的状态）、逐文件 `steps`（含 `errorCode` 与
+  `backupPath`）、`backupPath` 与 `restartRequired`。文件级失败是结果而不是错误：界面按 `errorCode`
+  翻译并提示重新预览或处理冲突。
+- 错误码：`plan_stale`、`credential_missing`、`credential_unavailable`，加上预览已有的
+  `gateway_unverified`／`base_url_unverified`／`target_unreadable`／`target_conflict`／
+  `provider_not_found`／`model_not_found`／`location_unavailable`／`storage_unavailable`／
+  `invalid_request`／`operation_failed`。
+
+后续批次：P20.b IPC 命令与凭据锁、P20.c 前端边界（严格载荷校验）、P20.d 确认界面与双语文案。
+命令层与应用步骤共用应用级凭据锁，因此密钥替换与配置应用不会交错；界面明示密钥将以明文写入
+`~/.claude/settings.json`（预览已有该提示），且不依赖 vibemate 启动 Agent。
+
 ## 检查点 C19
 
 - P19.a 与 P19.b 的故障注入测试通过：并发变化、符号链接、只读目标、替换失败与部分提交。

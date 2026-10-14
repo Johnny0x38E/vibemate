@@ -4,7 +4,7 @@ use super::*;
 use crate::config_plan::read_target_document;
 use std::{
     fs,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
 };
 
@@ -91,8 +91,13 @@ fn an_apply_step_replaces_every_file_and_settles_as_applied() {
     );
     assert_eq!(fixture.content("settings.json"), "{\"old\":false}\n");
     assert_eq!(fixture.content("models.json"), "{\"models\":[\"one\"]}\n");
-    // Both replaced files have their previous content stored.
+    // Both replaced files have their previous content stored, and each step
+    // reports where that copy is.
     assert_eq!(fs::read_dir(backups.root()).unwrap().count(), 2);
+    for step in &result.steps {
+        let backup = step.backup_path.as_ref().expect("backup path");
+        assert!(Path::new(backup).is_file());
+    }
     // The settled operation is no longer unfinished, and its steps are recorded.
     assert!(unfinished_operations(&fixture.storage).unwrap().is_empty());
     let record = operation(&fixture.storage, &result.operation_id)

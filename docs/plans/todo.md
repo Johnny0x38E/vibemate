@@ -14,7 +14,6 @@
 
 - 按依赖顺序实施，一次一个可检查行为；不使用未授权子代理。
 - 不主动推送远端；仅在维护者当次明确指示时执行 push（2026-10-13 约定）。
-- 每批最多约五个实际文件，测试、资源、注册和迁移也计数；超出先拆批。
 - UI 变更同时补中英文和可访问名称；保持既有严格检查，不用 suppression 绕过失败。
 - 外观按维护者人工验收策略；原生行为、真实凭据和跨平台验证单独记录。
 - Verification 使用 `AGENTS.md` 的适用命令；Rust 过滤测试必须实际运行非零用例。
@@ -78,7 +77,7 @@ P15 的真实连接记录来自维护者确认，不代表代理重新执行，�
 - `src/lib/desktop/models.ts` 与边界测试
 - `src/features/providers/` 的模型信息/别名视图与行为测试
 
-**Estimated scope:** 原建议文件表不足以覆盖当前调用路径；按下列阶段实施。设计、证据缺口与数据边界见 [model-parameters.md](model-parameters.md)。后续阶段开始前继续拆成最多五个实际文件的小批任务。
+**Estimated scope:** 原建议文件表不足以覆盖当前调用路径；按下列阶段实施。设计、证据缺口与数据边界见 [model-parameters.md](model-parameters.md)。后续阶段开始前继续拆成可检查的小批任务。
 
 #### P16.0：现状、证据与计划
 
@@ -182,7 +181,7 @@ Agent 详情页增加「当前配置」只读汇总区，首期只交付模型�
 - `src/features/agents/ConfigPreview.tsx`
 - `src/features/agents/AgentPage.tsx`
 
-**Estimated scope:** M：5 个建议主文件；如需额外文件先按执行约定拆分。
+**Estimated scope:** M：5 个建议主文件。
 
 ### Checkpoint C18（P17–P18；最小 Claude Code 预览）
 
@@ -213,7 +212,7 @@ Agent 详情页增加「当前配置」只读汇总区，首期只交付模型�
 - `src-tauri/src/credentials.rs`
 - `src-tauri/src/config_apply_tests.rs`
 
-**Estimated scope:** M：4 个建议主文件；如需额外文件先按执行约定拆分。
+**Estimated scope:** M：4 个建议主文件。
 
 ### Task P20: 应用 Claude Code 模型配置
 
@@ -241,7 +240,7 @@ Agent 详情页增加「当前配置」只读汇总区，首期只交付模型�
 - `src/features/agents/ConfigPreview.tsx`
 - `src/features/agents/ConfigPreview.test.tsx`
 
-**Estimated scope:** M：5 个建议主文件；如需额外文件先按执行约定拆分。
+**Estimated scope:** M：5 个建议主文件。
 
 ### Task P21: 回滚 Claude Code 配置
 
@@ -269,7 +268,7 @@ Agent 详情页增加「当前配置」只读汇总区，首期只交付模型�
 - `src/features/agents/RestoreView.tsx`
 - `src/features/agents/RestoreView.test.tsx`
 
-**Estimated scope:** M：5 个建议主文件；如需额外文件先按执行约定拆分。
+**Estimated scope:** M：5 个建议主文件。
 
 ### Checkpoint C21（P19–P21）
 
@@ -305,7 +304,7 @@ Pi 为第二个配置适配器，复用 P19–P21 的预览/写入/回滚机制�
 - `src/features/agents/ConfigPreview.tsx`
 - `src/features/agents/ConfigPreview.test.tsx`
 
-**Estimated scope:** M：5 个建议主文件；如需额外文件先按执行约定拆分。
+**Estimated scope:** M：5 个建议主文件。
 
 ### Task P23: 应用 Grok Build 配置
 
@@ -333,7 +332,7 @@ Pi 为第二个配置适配器，复用 P19–P21 的预览/写入/回滚机制�
 - `src/features/agents/ConfigPreview.tsx`
 - `src/features/agents/ConfigPreview.test.tsx`
 
-**Estimated scope:** M：5 个建议主文件；如需额外文件先按执行约定拆分。
+**Estimated scope:** M：5 个建议主文件。
 
 ### Task P24: 验证 Provider 与 Agent 组合
 
@@ -360,7 +359,7 @@ Pi 为第二个配置适配器，复用 P19–P21 的预览/写入/回滚机制�
 - `src/features/agents/AgentList.test.tsx`
 - `docs/integrations/compatibility.md`
 
-**Estimated scope:** M：4 个建议主文件；如需额外文件先按执行约定拆分。
+**Estimated scope:** M：4 个建议主文件。
 
 ### Checkpoint C24（P22–P24）
 
@@ -428,7 +427,7 @@ Skill 部署目标顺序与配置适配一致（Claude Code、Pi、Grok Build）
 - `src/features/skills/SkillLibrary.tsx`
 - `src/features/skills/SkillLibrary.test.tsx`
 
-**Estimated scope:** M：5 个建议主文件；如需额外文件先按执行约定拆分。
+**Estimated scope:** M：5 个建议主文件。
 
 ### Task P27: 向 Pi 部署 Skill
 
@@ -457,7 +456,7 @@ Skill 部署目标顺序与配置适配一致（Claude Code、Pi、Grok Build）
 - `src/features/skills/SkillDeployment.tsx`
 - `src/features/skills/SkillDeployment.test.tsx`
 
-**Estimated scope:** M：5 个建议主文件；如需额外文件先按执行约定拆分。
+**Estimated scope:** M：5 个建议主文件。
 
 ### Checkpoint C27（P25–P27）
 
@@ -489,7 +488,7 @@ Skill 部署目标顺序与配置适配一致（Claude Code、Pi、Grok Build）
 - `src/features/skills/SkillDeployment.tsx`
 - `src/features/skills/SkillDeployment.test.tsx`
 
-**Estimated scope:** M：5 个建议主文件；如需额外文件先按执行约定拆分。
+**Estimated scope:** M：5 个建议主文件。
 
 ### Task P29: 预览 Skill 更新
 
@@ -516,7 +515,7 @@ Skill 部署目标顺序与配置适配一致（Claude Code、Pi、Grok Build）
 - `src/features/skills/SkillUpdate.tsx`
 - `src/features/skills/SkillUpdate.test.tsx`
 
-**Estimated scope:** M：5 个建议主文件；如需额外文件先按执行约定拆分。
+**Estimated scope:** M：5 个建议主文件。
 
 ### Task P30: 应用 Skill 更新
 
@@ -544,7 +543,7 @@ Skill 部署目标顺序与配置适配一致（Claude Code、Pi、Grok Build）
 - `src/features/skills/SkillUpdate.tsx`
 - `src/features/skills/SkillUpdate.test.tsx`
 
-**Estimated scope:** M：5 个建议主文件；如需额外文件先按执行约定拆分。
+**Estimated scope:** M：5 个建议主文件。
 
 ### Checkpoint C30（P28–P30）
 
@@ -590,7 +589,7 @@ P32/P33 仍需安全 Agent 写入与恢复，中央保存不代表服务器已�
 - `src/features/mcp/McpDeployment.tsx`
 - `src/features/mcp/McpDeployment.test.tsx`
 
-**Estimated scope:** M：5 个建议主文件；如需额外文件先按执行约定拆分。
+**Estimated scope:** M：5 个建议主文件。
 
 ### Task P33: 向 Grok Build 注入 MCP 配置
 
@@ -618,7 +617,7 @@ P32/P33 仍需安全 Agent 写入与恢复，中央保存不代表服务器已�
 - `src/features/mcp/McpDeployment.tsx`
 - `src/features/mcp/McpDeployment.test.tsx`
 
-**Estimated scope:** M：5 个建议主文件；如需额外文件先按执行约定拆分。
+**Estimated scope:** M：5 个建议主文件。
 
 ### Checkpoint C33（P31–P33）
 
@@ -679,7 +678,7 @@ P32/P33 仍需安全 Agent 写入与恢复，中央保存不代表服务器已�
 - `src/features/settings/DeletionPreview.tsx`
 - `src/features/settings/DeletionPreview.test.tsx`
 
-**Estimated scope:** M：5 个建议主文件；如需额外文件先按执行约定拆分。
+**Estimated scope:** M：5 个建议主文件。
 
 ### Task P36: 检查前端实际可用性
 
@@ -689,7 +688,7 @@ P32/P33 仍需安全 Agent 写入与恢复，中央保存不代表服务器已�
 
 - [ ] 中英文在 720×560、缩放和长 URL/模型 ID 下可操作，列表加载/空/失败/分页有明确反馈。
 - [ ] 表单与确认界面键盘可达、焦点恢复正确，状态不只靠颜色；符合严格样式规则。
-- [ ] 仅修复发现的问题，若跨多个 feature 超过五个文件，先按页面拆子任务。
+- [ ] 仅修复发现的问题；跨多个 feature 时先按页面拆子任务。
 
 **Verification:**
 
@@ -707,7 +706,7 @@ P32/P33 仍需安全 Agent 写入与恢复，中央保存不代表服务器已�
 - `src/features/<受影响页面>/*.module.css`
 - `src/features/<受影响页面>/*.test.tsx`
 
-**Estimated scope:** M：5 个建议主文件；如需额外文件先按执行约定拆分。
+**Estimated scope:** M：5 个建议主文件。
 
 ### Checkpoint C36（P34–P36）
 
@@ -739,7 +738,7 @@ P32/P33 仍需安全 Agent 写入与恢复，中央保存不代表服务器已�
 - `src-tauri/src/credentials.rs`
 - `docs/verification/platforms.md`
 
-**Estimated scope:** M：5 个建议主文件；如需额外文件先按执行约定拆分。
+**Estimated scope:** M：5 个建议主文件。
 
 ### Task P38: 完成真实接入验收
 
@@ -764,7 +763,7 @@ P32/P33 仍需安全 Agent 写入与恢复，中央保存不代表服务器已�
 - `docs/integrations/compatibility.md`
 - `docs/plans/todo.md`
 
-**Estimated scope:** S：3 个建议主文件；如需额外文件先按执行约定拆分。
+**Estimated scope:** S：3 个建议主文件。
 
 ### Task P39: 准备首个草稿 Release
 
@@ -791,7 +790,7 @@ P32/P33 仍需安全 Agent 写入与恢复，中央保存不代表服务器已�
 - `.github/workflows/release.yml`
 - `docs/plans/todo.md`
 
-**Estimated scope:** M：5 个建议主文件；如需额外文件先按执行约定拆分。
+**Estimated scope:** M：5 个建议主文件。
 
 ### Checkpoint C39（P37–P39）
 

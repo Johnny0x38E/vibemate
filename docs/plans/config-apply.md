@@ -68,11 +68,26 @@ SQLite schema v16 新增 `config_operation` 与 `config_operation_step`，仓储
 
 本批不含编排与补偿（P19.b2）与界面（P34）。
 
-### P19.b2：多文件编排与补偿（未开始）
+### P19.b2：多文件编排与补偿（2026-10-14 交付）
 
-按 `begin_operation` → 逐文件 `apply_file` + `record_step_*` → `finish_operation` 串联；失败时按已
-应用步骤的备份回滚并记为 `compensated`，回滚失败保留 `partial`/`unknown`。开始前按编排与故障
-注入拆批，并决定已结束操作的清理策略（当前日志只增不减）。
+`config_apply/service.rs` 与 `config_apply/service_tests.rs`：
+
+- `apply_files(storage, kind, files, backups)`：先用 `begin_operation` 记录整个计划，再按顺序对每个
+  文件 `apply_file` 并记录该步骤的结果；全部成功记为 `applied`。
+- 任一步失败时记录失败步骤与稳定错误码，然后调用 `compensate_operation` 回滚，并返回最终状态而不是
+  错误：`failed` 表示没有任何文件被替换，`compensated` 表示全部回滚，`partial`／`unknown` 表示有文件
+  无法回滚（例如用户后来改过它），此时操作留在未完成列表里供 P34 处理。只有操作日志本身不可信时才
+  返回错误，因为那时无法诚实报告结果。
+- `compensate_operation` 也可用于更早留下的未完成操作（P34 的恢复入口）：它按记录的步骤倒序处理，
+  从不触碰未应用的步骤。
+- `restore_file` 读取备份并校验其摘要，再通过 `apply_file` 写回，因此回滚同样受令牌检查、私有备份与
+  原子替换保护；`remove_created_file` 只删除内容仍等于本模块写入值的文件，文件已不存在按成功处理。
+- 回滚会丢弃它自己产生的那份备份（操作记录已说明发生了什么）；创建文件的那次写入没有备份，回滚时
+  直接删除。
+
+已知边界：步骤状态只有 `pending`／`applied`／`failed`，回滚结果记在操作状态上，不逐步骤标记；界面若
+需要逐步骤结果，用 `ALTER TABLE ADD COLUMN`（v17）补一列即可。日志目前只增不减，已结束操作的清理
+策略仍未定。
 
 ## 检查点 C19
 

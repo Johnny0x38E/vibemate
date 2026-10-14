@@ -578,13 +578,20 @@ fn sync_directory(_: &Path) -> Result<(), WriteError> {
 }
 
 mod operations;
+mod service;
 
 pub use operations::{
     begin_operation, finish_operation, operation, record_step_applied, record_step_failed,
     unfinished_operations,
 };
+pub use service::{
+    AppliedOperation, PlannedFile, StepOutcome, apply_files, compensate_operation,
+    remove_created_file, restore_file,
+};
 
 #[cfg(test)]
 mod operation_tests;
+#[cfg(test)]
+mod service_tests;
 #[cfg(test)]
 mod tests;

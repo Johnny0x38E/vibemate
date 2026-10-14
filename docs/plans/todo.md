@@ -399,7 +399,7 @@ Skill 部署目标顺序与配置适配一致（Claude Code、Pi、Grok Build）
 **删除补充（2026-10-14）：** 中央库条目可经双语确认对话框删除（`delete_skill`），revision 保护拒绝过期确认；只删除库记录与 vibemate 受管副本，导入来源目录不变。受管副本先改名停放（`.delete-<id>`）再删记录，被拒绝的删除改名还原；无法删除的停放副本报告 `cleanup_pending` 并可重试清理，`cleanup_deleted_skill_copies` 只清理无对应记录的停放副本。当前无部署关系，删除不涉及 Agent 配置；部署关系实现后需补引用检查。设计见 [skill-library](skill-library.md)。
 
 - [x] Rust skills 测试增至 27 项（删除、过期 revision、副本缺失、停放清理与 IPC 契约）；`SkillLibrary` 与 `desktop/skills` 测试覆盖确认对话框、过期拒绝、清理重试与响应校验；`check:frontend`、Rust fmt/Clippy/全量测试与锁定 no-bundle 构建通过。
-- [ ] 技能删除新增原生确认对话框/外观验收；既有 P25 验收不覆盖本次新增行为。
+- [x] 技能删除新增原生确认对话框/外观验收；既有 P25 验收不覆盖本次新增行为。（维护者 2026-10-14 确认：本地副本与数据库记录均已删除）
 
 ### Task P26: 从已确认来源安装 Skill
 

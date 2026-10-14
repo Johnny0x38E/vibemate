@@ -37,7 +37,7 @@
 | P17.a–P17.n   | 六 Agent 固定目录、只读发现、独立手动路径与严格 IPC                     | [agent-discovery](agent-discovery.md)；维护者已验收（2026-10-13）                    |
 | P17.o–P17.s   | 用户二次确认的受限 CLI 版本读取、双语交互与完整代码检查                 | [agent-version-probe](agent-version-probe.md)；维护者已验收，自动读取开关验证通过    |
 | P17.t         | 四家官方标志与状态/版本同行布局                                         | [assets README](../../assets/agents/README.md)；品牌条款核对通过（2026-10-13）       |
-| P25           | 中央 Skill 库、系统选择器本地导入（单个或多个技能）、来源补充与双语列表 | [skill-library](skill-library.md)；安装、更新与部署未实施                            |
+| P25           | 中央 Skill 库、本地导入（单个或多个技能）、来源补充、条目删除与双语列表 | [skill-library](skill-library.md)；安装、更新与部署未实施                            |
 | P31           | 中央 MCP 定义、凭据引用、编辑与启停                                     | [mcp-central](mcp-central.md)；未执行或部署服务器                                    |
 
 P15 的真实连接记录来自维护者确认，不代表代理重新执行，也不补写未提供的模型、协议或套餐细节。
@@ -396,6 +396,11 @@ Skill 部署目标顺序与配置适配一致（Claude Code、Pi、Grok Build）
 **Dependencies:** P05,P17。
 
 **Files:** `src-tauri/src/skills/`（manifest/validation/repository/service/tests）、`src-tauri/src/commands/skills.rs`、`src-tauri/src/storage.rs`、`src/lib/desktop/skills.ts` 与其测试、`src/features/skills/`、双语资源。
+
+**删除补充（2026-10-14）：** 中央库条目可经双语确认对话框删除（`delete_skill`），revision 保护拒绝过期确认；只删除库记录与 vibemate 受管副本，导入来源目录不变。受管副本先改名停放（`.delete-<id>`）再删记录，被拒绝的删除改名还原；无法删除的停放副本报告 `cleanup_pending` 并可重试清理，`cleanup_deleted_skill_copies` 只清理无对应记录的停放副本。当前无部署关系，删除不涉及 Agent 配置；部署关系实现后需补引用检查。设计见 [skill-library](skill-library.md)。
+
+- [x] Rust skills 测试增至 27 项（删除、过期 revision、副本缺失、停放清理与 IPC 契约）；`SkillLibrary` 与 `desktop/skills` 测试覆盖确认对话框、过期拒绝、清理重试与响应校验；`check:frontend`、Rust fmt/Clippy/全量测试与锁定 no-bundle 构建通过。
+- [ ] 技能删除新增原生确认对话框/外观验收；既有 P25 验收不覆盖本次新增行为。
 
 ### Task P26: 从已确认来源安装 Skill
 

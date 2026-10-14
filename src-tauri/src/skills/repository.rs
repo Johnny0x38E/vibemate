@@ -4,7 +4,7 @@
 //! import service, and a failed insert is compensated there.
 
 use super::manifest;
-use super::types::{SkillError, SkillPage, SkillRecord};
+use super::types::{DeleteSkillRequest, SkillError, SkillPage, SkillRecord};
 use super::validation::{
     cursor, cursor_for, description, identity, skill_name, stored_path, stored_revision, stored_url,
 };
@@ -151,6 +151,49 @@ pub(super) fn update_source(
     } else {
         SkillError::NotFound
     })
+}
+
+/// Remove one skill's row at the reviewed revision, inside one transaction.
+///
+/// The row is read again before the delete, so a record that changed since the
+/// review is refused as `RevisionConflict` and one that is already gone as
+/// `NotFound`. A failed commit may or may not have removed the row, so it is
+/// reported as `OutcomeUnknown` and the caller must reload.
+pub(super) fn commit_skill_delete(
+    storage: &Storage,
+    request: &DeleteSkillRequest,
+) -> Result<(), SkillError> {
+    let mut connection = lock(storage)?;
+    let tx = connection
+        .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+        .map_err(|_| SkillError::WriteFailed)?;
+    let record = read_record(&tx, &request.id)?;
+    if record.revision != request.expected_revision {
+        return Err(SkillError::RevisionConflict);
+    }
+    // The second revision check keeps the delete bound to what was reviewed even
+    // if the read above and this statement ever run under separate writers.
+    tx.execute(
+        "DELETE FROM skill WHERE id=?1 AND revision=?2",
+        params![request.id, request.expected_revision],
+    )
+    .map_err(|_| SkillError::WriteFailed)?;
+    tx.commit().map_err(|_| SkillError::OutcomeUnknown)
+}
+
+/// Whether the library still holds a record for this identity.
+///
+/// Used by the parked-copy cleanup to tell a finished delete from an interrupted
+/// one whose record is still there.
+pub(super) fn skill_exists(storage: &Storage, id: &str) -> Result<bool, SkillError> {
+    let connection = lock(storage)?;
+    connection
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM skill WHERE id=?1)",
+            [id],
+            |row| row.get(0),
+        )
+        .map_err(|_| SkillError::ReadFailed)
 }
 
 /// Read one skill's safe metadata.

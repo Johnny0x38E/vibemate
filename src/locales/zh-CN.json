@@ -665,6 +665,18 @@
         "save": "保存",
         "saving": "正在保存…",
         "backLabel": "返回技能列表",
+        "delete": {
+            "label": "删除“{{name}}”",
+            "title": "删除技能？",
+            "body": "从技能库删除“{{name}}”并移除 vibemate 的副本？导入来源文件夹不会被修改。",
+            "cancel": "取消",
+            "confirm": "删除",
+            "deleting": "正在删除…",
+            "done": "已删除“{{name}}”。",
+            "cleanupPending": "技能已删除，但副本文件未能移除。请重试以清理这些文件。",
+            "cleanup": "重试清理副本文件",
+            "cleanupDone": "副本文件已移除。"
+        },
         "errors": {
             "storage_unavailable": "vibemate 暂时无法访问自己的私有库。",
             "read_failed": "无法读取技能库。",

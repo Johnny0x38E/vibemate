@@ -131,6 +131,10 @@ function integer(value: unknown, minimum: number): number {
         invalid();
     return value;
 }
+function boolean(value: unknown): boolean {
+    if (typeof value !== "boolean") invalid();
+    return value;
+}
 function record(value: unknown): SkillRecord {
     const data = object(value, [
         "id",
@@ -347,4 +351,28 @@ export async function setSkillSource(input: {
     if (row.id !== input.id || row.revision !== input.expectedRevision + 1)
         invalid();
     return row;
+}
+/**
+ * Remove one reviewed skill record and vibemate's managed copy of it. The
+ * folder the skill was imported from is never part of this request. A stale
+ * confirmation is refused, and copied files that could not be removed come
+ * back as `cleanupPending` instead of being reported as gone.
+ */
+export async function deleteSkill(request: {
+    id: string;
+    expectedRevision: number;
+}): Promise<{ id: string; cleanupPending: boolean }> {
+    desktop();
+    const data = object(await call("delete_skill", { request }), [
+        "id",
+        "cleanupPending",
+    ]);
+    const id = string(data["id"]);
+    if (id !== request.id || !ID_PATTERN.test(id)) invalid();
+    return { id, cleanupPending: boolean(data["cleanupPending"]) };
+}
+/** Retry removing parked copies left by finished deletions; false means more. */
+export async function cleanupDeletedSkillCopies(): Promise<boolean> {
+    desktop();
+    return boolean(await call("cleanup_deleted_skill_copies", {}));
 }

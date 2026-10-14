@@ -1,6 +1,7 @@
 //! Central skill library facade. A skill is a directory with a `SKILL.md` file;
 //! this module owns the managed copy, its content digest and its source record.
-//! Importing never runs a skill command and never changes the source directory.
+//! Importing never runs a skill command and never changes the source directory,
+//! and deleting removes only the managed copy and its record.
 
 mod manifest;
 mod repository;
@@ -9,10 +10,10 @@ mod types;
 mod validation;
 
 pub use repository::{get_skill, list_skills};
-pub use service::{import_folder, set_skill_source};
+pub use service::{cleanup_deleted_skill_copies, delete_skill, import_folder, set_skill_source};
 pub use types::{
-    ImportFolderReport, ImportFolderRequest, PickedFolder, SetSkillSourceRequest, SkillError,
-    SkillPage, SkillRecord, SkippedSkill,
+    DeleteSkillRequest, DeletedSkill, ImportFolderReport, ImportFolderRequest, PickedFolder,
+    SetSkillSourceRequest, SkillError, SkillPage, SkillRecord, SkippedSkill,
 };
 
 use std::path::PathBuf;

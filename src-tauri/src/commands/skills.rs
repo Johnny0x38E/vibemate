@@ -1,8 +1,9 @@
 //! Skill library IPC: list entries, choose a folder, import its skills, record
-//! a source. Importing copies files into the private library and never executes
-//! a skill command. All work happens on the blocking pool because it touches
-//! the disk, and the folder dialog is opened from Rust so the frontend never
-//! calls the dialog plugin's own commands.
+//! a source and delete a reviewed entry. Importing copies files into the private
+//! library and never executes a skill command; deleting removes only vibemate's
+//! own copy. All work happens on the blocking pool because it touches the disk,
+//! and the folder dialog is opened from Rust so the frontend never calls the
+//! dialog plugin's own commands.
 
 use super::state::with_skill_library;
 use tauri::Manager;
@@ -106,6 +107,37 @@ pub(crate) async fn set_skill_source(
             .map_err(|_| crate::skills::SkillError::OperationFailed)?;
         with_skill_library(&app, |_, storage| {
             crate::skills::set_skill_source(storage, request, now)
+        })
+    })
+    .await
+    .map_err(|_| crate::skills::SkillError::OperationFailed)?
+}
+
+/// Delete one reviewed skill record and its managed copy; the user's imported
+/// folder is untouched. A copy that cannot be removed is reported as pending
+/// cleanup instead of making the deletion look refused.
+#[tauri::command]
+pub(crate) async fn delete_skill(
+    app: tauri::AppHandle,
+    request: crate::skills::DeleteSkillRequest,
+) -> Result<crate::skills::DeletedSkill, crate::skills::SkillError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        with_skill_library(&app, |library, storage| {
+            crate::skills::delete_skill(library, storage, request)
+        })
+    })
+    .await
+    .map_err(|_| crate::skills::SkillError::OperationFailed)?
+}
+
+/// Retry the removal of parked copies left by finished deletions.
+#[tauri::command]
+pub(crate) async fn cleanup_deleted_skill_copies(
+    app: tauri::AppHandle,
+) -> Result<bool, crate::skills::SkillError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        with_skill_library(&app, |library, storage| {
+            crate::skills::cleanup_deleted_skill_copies(library, storage)
         })
     })
     .await

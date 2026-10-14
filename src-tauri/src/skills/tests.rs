@@ -85,6 +85,18 @@ impl Fixture {
             NOW,
         )
     }
+
+    /// Delete one skill at the revision the user reviewed.
+    fn delete(&self, id: &str, expected_revision: i64) -> Result<DeletedSkill, SkillError> {
+        delete_skill(
+            &self.library,
+            &self.storage,
+            DeleteSkillRequest {
+                id: id.to_string(),
+                expected_revision,
+            },
+        )
+    }
 }
 
 impl Drop for Fixture {
@@ -846,6 +858,24 @@ fn ipc_payloads_match_the_frontend_contract() {
     )
     .expect("source request");
     assert_eq!(source.expected_revision, 2);
+    let delete: DeleteSkillRequest =
+        serde_json::from_str(r#"{"id":"0123456789abcdef0123456789abcdef","expectedRevision":3}"#)
+            .expect("delete request");
+    assert_eq!(delete.expected_revision, 3);
+    assert!(
+        serde_json::from_str::<DeleteSkillRequest>(
+            r#"{"id":"0123456789abcdef0123456789abcdef","expectedRevision":3,"extra":true}"#
+        )
+        .is_err()
+    );
+    assert_eq!(
+        serde_json::to_value(DeletedSkill {
+            id: "0".repeat(32),
+            cleanup_pending: true,
+        })
+        .expect("deleted"),
+        serde_json::json!({ "id": "0".repeat(32), "cleanupPending": true })
+    );
 
     // Every error code the interface translates keeps its documented spelling.
     let codes = [
@@ -904,4 +934,145 @@ fn stored_metadata_is_revalidated_on_read() {
         get_skill(&fixture.storage, "not-an-id").unwrap_err(),
         SkillError::InvalidRequest
     );
+}
+
+#[test]
+fn delete_removes_the_record_and_copy_but_not_the_source() {
+    let fixture = Fixture::new();
+    let record = fixture.import_named("demo", "demo-skill");
+    let source = fixture.root.join("sources").join("demo");
+    let before = tree_snapshot(&source);
+
+    let deleted = fixture.delete(&record.id, record.revision).expect("delete");
+    assert_eq!(
+        deleted,
+        DeletedSkill {
+            id: record.id.clone(),
+            cleanup_pending: false,
+        }
+    );
+
+    // The record and vibemate's managed copy are gone…
+    assert_eq!(
+        get_skill(&fixture.storage, &record.id).unwrap_err(),
+        SkillError::NotFound
+    );
+    assert_eq!(
+        list_skills(&fixture.storage, None, 20).expect("page").total,
+        0
+    );
+    // …and a completed deletion leaves nothing parked in the library.
+    assert_eq!(
+        fs::read_dir(fixture.library.root())
+            .expect("library directory")
+            .count(),
+        0
+    );
+    // The user's imported folder is never touched.
+    assert_eq!(tree_snapshot(&source), before);
+}
+
+#[test]
+fn delete_refuses_a_stale_revision_and_keeps_the_copy() {
+    let fixture = Fixture::new();
+    let record = fixture.import_named("demo", "demo-skill");
+    // A recorded source edit moves the record on, so the reviewed revision is stale.
+    fixture
+        .set_source(
+            &record.id,
+            record.revision,
+            Some("https://example.com/skills"),
+            None,
+        )
+        .expect("record source");
+
+    assert_eq!(
+        fixture.delete(&record.id, record.revision).unwrap_err(),
+        SkillError::RevisionConflict
+    );
+    let current = get_skill(&fixture.storage, &record.id).expect("still present");
+    assert_eq!(current.revision, record.revision + 1);
+    // The parked copy was renamed back: one skill, one copy, nothing lost.
+    assert!(fixture.library.root().join(&record.id).exists());
+    assert_eq!(
+        fs::read_dir(fixture.library.root())
+            .expect("library directory")
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn delete_reports_a_missing_skill_and_refuses_invalid_requests() {
+    let fixture = Fixture::new();
+    let record = fixture.import_named("demo", "demo-skill");
+    fixture.delete(&record.id, record.revision).expect("delete");
+
+    assert_eq!(
+        fixture.delete(&record.id, record.revision).unwrap_err(),
+        SkillError::NotFound
+    );
+    assert_eq!(
+        fixture.delete(&"f".repeat(32), 1).unwrap_err(),
+        SkillError::NotFound
+    );
+    assert_eq!(
+        fixture.delete("not-an-id", 1).unwrap_err(),
+        SkillError::InvalidRequest
+    );
+    assert_eq!(
+        fixture.delete(&record.id, 0).unwrap_err(),
+        SkillError::InvalidRequest
+    );
+}
+
+#[test]
+fn delete_removes_the_record_when_the_managed_copy_is_already_gone() {
+    let fixture = Fixture::new();
+    let record = fixture.import_named("demo", "demo-skill");
+    fs::remove_dir_all(fixture.library.root().join(&record.id)).expect("remove copy");
+
+    // Removing the record is still what the user asked for, with nothing to clean.
+    let deleted = fixture.delete(&record.id, record.revision).expect("delete");
+    assert!(!deleted.cleanup_pending);
+    assert_eq!(
+        get_skill(&fixture.storage, &record.id).unwrap_err(),
+        SkillError::NotFound
+    );
+}
+
+#[test]
+fn cleanup_takes_only_parked_copies_without_a_record() {
+    let fixture = Fixture::new();
+    let kept = fixture.import_named("demo", "demo-skill");
+    let root = fixture.library.root();
+    let orphan_id = "f".repeat(32);
+    let blocked_id = "e".repeat(32);
+
+    // An interrupted delete parked this copy before its record was removed.
+    fs::rename(
+        root.join(&kept.id),
+        root.join(format!(".delete-{}", kept.id)),
+    )
+    .expect("park");
+    let orphan = root.join(format!(".delete-{orphan_id}"));
+    fs::create_dir(&orphan).expect("orphan");
+    fs::write(orphan.join("SKILL.md"), b"leftover").expect("leftover file");
+    // A foreign file in the parked namespace cannot be removed and is reported.
+    fs::write(root.join(format!(".delete-{blocked_id}")), b"file").expect("blocked entry");
+
+    assert!(!cleanup_deleted_skill_copies(&fixture.library, &fixture.storage).expect("cleanup"));
+    // Only the parked copy without a record is removed.
+    assert!(!orphan.exists());
+    assert!(root.join(format!(".delete-{}", kept.id)).exists());
+    assert!(root.join(format!(".delete-{blocked_id}")).exists());
+
+    fs::remove_file(root.join(format!(".delete-{blocked_id}"))).expect("remove blocked");
+    // The parked copy of a live record stays recoverable, so cleanup is done.
+    assert!(cleanup_deleted_skill_copies(&fixture.library, &fixture.storage).expect("cleanup"));
+
+    // Deleting that record finishes its parked copy as well.
+    let deleted = fixture.delete(&kept.id, kept.revision).expect("delete");
+    assert!(!deleted.cleanup_pending);
+    assert!(!root.join(format!(".delete-{}", kept.id)).exists());
 }

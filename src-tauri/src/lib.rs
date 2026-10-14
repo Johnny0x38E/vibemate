@@ -80,6 +80,8 @@ pub fn run() {
             commands::skills::pick_skill_folder,
             commands::skills::import_skill_folder,
             commands::skills::set_skill_source,
+            commands::skills::delete_skill,
+            commands::skills::cleanup_deleted_skill_copies,
             commands::app::get_log_location,
             commands::app::open_log_file,
             commands::app::open_log_directory,

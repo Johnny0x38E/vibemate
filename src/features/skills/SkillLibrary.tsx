@@ -7,6 +7,7 @@ import {
     type JSX,
     type Ref,
 } from "react";
+import { Dialog } from "@base-ui/react/dialog";
 import type { ModuleNavigationHandle } from "../../components/moduleNavigation";
 import { useTranslation } from "react-i18next";
 import { Icon } from "../../components/Icon";
@@ -14,6 +15,8 @@ import { IconButton } from "../../components/IconButton";
 import { PageModuleHeader } from "../../components/PageModuleHeader";
 import { useNotify } from "../../components/Notifications";
 import {
+    cleanupDeletedSkillCopies,
+    deleteSkill,
     getSkill,
     importSkillFolder,
     listSkills,
@@ -26,6 +29,7 @@ import {
 import { SkillDetail } from "./SkillDetail";
 import { skillSource } from "./skillSource";
 import buttons from "../../components/actionButtons.module.css";
+import dialog from "./SkillDeleteDialog.module.css";
 import surfaceList from "../../components/surfaceList.module.css";
 import styles from "./SkillLibrary.module.css";
 
@@ -42,7 +46,7 @@ type ListState =
       };
 type PageState = { kind: "list" } | { kind: "detail"; record: SkillRecord };
 type ActionState =
-    | { kind: "idle" | "picking" | "importing" }
+    | { kind: "idle" | "picking" | "importing" | "deleting" }
     | { kind: "error"; code: SkillErrorCode; uncertain: boolean };
 
 /**
@@ -106,15 +110,23 @@ export function SkillLibrary({
     const [action, setAction] = useState<ActionState>({ kind: "idle" });
     const [report, setReport] = useState<ImportReport | null>(null);
     const [formBlocked, setFormBlocked] = useState(false);
+    const [deleteTarget, setDeleteTarget] = useState<SkillRecord | null>(null);
+    // A deletion whose files could not be removed keeps offering the retry.
+    const [cleanupPending, setCleanupPending] = useState(false);
     const active = useRef(true);
     const readGeneration = useRef(0);
     const pageGeneration = useRef(0);
     const mutationPending = useRef(false);
     const root = useRef<HTMLElement>(null);
     const focusRequested = useRef(false);
+    const cancelDelete = useRef<HTMLButtonElement>(null);
+    const deleteTrigger = useRef<HTMLElement | null>(null);
     const busy = action.kind === "picking" || action.kind === "importing";
+    // A running deletion shows its progress on the dialog button, so it blocks
+    // the list without joining the import progress area.
     const blocked =
         busy ||
+        action.kind === "deleting" ||
         (action.kind === "error" && action.uncertain) ||
         (list.kind === "ready" && list.more === "loading");
 
@@ -300,6 +312,80 @@ export function SkillLibrary({
                 : state,
         );
     }
+    /**
+     * Delete the reviewed skill record and vibemate's managed copy. The
+     * confirmation carries the revision the user saw, so a record that changed
+     * meanwhile is refused and the list is re-read instead of overwritten. The
+     * folder the skill was imported from is never touched.
+     */
+    async function remove(): Promise<void> {
+        if (deleteTarget === null || mutationPending.current) return;
+        const target = deleteTarget;
+        mutationPending.current = true;
+        setAction({ kind: "deleting" });
+        try {
+            const deleted = await deleteSkill({
+                id: target.id,
+                expectedRevision: target.revision,
+            });
+            if (!stillMounted()) return;
+            setDeleteTarget(null);
+            focusRequested.current = true;
+            // Files that could not be removed are a real leftover, so the
+            // deletion is reported with the retry instead of as fully clean.
+            setCleanupPending(deleted.cleanupPending);
+            notify({
+                tone: deleted.cleanupPending ? "error" : "success",
+                message: t(
+                    deleted.cleanupPending
+                        ? "skills.delete.cleanupPending"
+                        : "skills.delete.done",
+                    { name: target.name },
+                ),
+            });
+            // Re-read the first page rather than leaving holes in a loaded page.
+            await reload();
+        } catch (error: unknown) {
+            if (!stillMounted()) return;
+            setDeleteTarget(null);
+            const code = errorCode(error);
+            setAction({
+                kind: "error",
+                code,
+                // A missing skill is also a stale view that needs a reload.
+                uncertain: uncertain(code) || code === "not_found",
+            });
+        } finally {
+            mutationPending.current = false;
+        }
+    }
+    /** Retry removing parked copies after a deletion could not clean up. */
+    async function cleanupDeleted(): Promise<void> {
+        if (blocked || mutationPending.current) return;
+        mutationPending.current = true;
+        setAction({ kind: "deleting" });
+        try {
+            const complete = await cleanupDeletedSkillCopies();
+            if (!stillMounted()) return;
+            setCleanupPending(!complete);
+            setAction({ kind: "idle" });
+            notify({
+                tone: complete ? "success" : "error",
+                message: t(
+                    complete
+                        ? "skills.delete.cleanupDone"
+                        : "skills.delete.cleanupPending",
+                ),
+            });
+        } catch (error: unknown) {
+            if (active.current) {
+                const code = errorCode(error);
+                setAction({ kind: "error", code, uncertain: uncertain(code) });
+            }
+        } finally {
+            mutationPending.current = false;
+        }
+    }
     return (
         <section
             ref={root}
@@ -345,9 +431,11 @@ export function SkillLibrary({
                             </button>
                         }
                     />
-                    {/* Import feedback sits under the header, next to the list. */}
+                    {/* Import and cleanup feedback sits under the header, next
+                    to the list. */}
                     {(busy ||
                         action.kind === "error" ||
+                        cleanupPending ||
                         (report !== null && report.skipped.length > 0)) && (
                         <div className={styles["importFeedback"]}>
                             {busy && (
@@ -410,6 +498,22 @@ export function SkillLibrary({
                                             {t("skills.reload")}
                                         </button>
                                     )}
+                                </>
+                            )}
+                            {cleanupPending && (
+                                <>
+                                    <p className={styles["hint"]} role="status">
+                                        {t("skills.delete.cleanupPending")}
+                                    </p>
+                                    <button
+                                        className={buttons["secondary"]}
+                                        type="button"
+                                        onClick={() => {
+                                            void cleanupDeleted();
+                                        }}
+                                    >
+                                        {t("skills.delete.cleanup")}
+                                    </button>
                                 </>
                             )}
                         </div>
@@ -487,6 +591,32 @@ export function SkillLibrary({
                                                         void openDetail(record);
                                                     }}
                                                 />
+                                                <IconButton
+                                                    icon="trash"
+                                                    destructive
+                                                    blocked={blocked}
+                                                    label={t(
+                                                        "skills.delete.label",
+                                                        { name: record.name },
+                                                    )}
+                                                    onClick={() => {
+                                                        if (
+                                                            blocked ||
+                                                            mutationPending.current
+                                                        )
+                                                            return;
+                                                        // Remember the row so
+                                                        // focus can return to it,
+                                                        // or to the heading once
+                                                        // the row is gone.
+                                                        deleteTrigger.current =
+                                                            document.activeElement instanceof
+                                                            HTMLElement
+                                                                ? document.activeElement
+                                                                : null;
+                                                        setDeleteTarget(record);
+                                                    }}
+                                                />
                                             </div>
                                         </li>
                                     ))}
@@ -514,6 +644,67 @@ export function SkillLibrary({
                     )}
                 </>
             )}
+            <Dialog.Root
+                open={deleteTarget !== null}
+                onOpenChange={(open) => {
+                    if (!open && !mutationPending.current)
+                        setDeleteTarget(null);
+                }}
+            >
+                <Dialog.Portal>
+                    <Dialog.Backdrop className={dialog["backdrop"]} />
+                    <Dialog.Popup
+                        className={dialog["popup"]}
+                        initialFocus={cancelDelete}
+                        // A successful delete removes its row; return focus to
+                        // the stable heading when that trigger no longer exists.
+                        finalFocus={() =>
+                            deleteTrigger.current?.isConnected
+                                ? deleteTrigger.current
+                                : (root.current?.querySelector<HTMLElement>(
+                                      '[data-focus="heading"]',
+                                  ) ?? null)
+                        }
+                    >
+                        <Dialog.Title className={dialog["title"]}>
+                            {t("skills.delete.title")}
+                        </Dialog.Title>
+                        <Dialog.Description className={dialog["body"]}>
+                            {t("skills.delete.body", {
+                                name: deleteTarget?.name ?? "",
+                            })}
+                        </Dialog.Description>
+                        <div className={dialog["actions"]}>
+                            <button
+                                ref={cancelDelete}
+                                type="button"
+                                className={buttons["secondary"]}
+                                disabled={action.kind === "deleting"}
+                                onClick={() => {
+                                    if (!mutationPending.current)
+                                        setDeleteTarget(null);
+                                }}
+                            >
+                                {t("skills.delete.cancel")}
+                            </button>
+                            <button
+                                type="button"
+                                className={buttons["dangerSecondary"]}
+                                aria-disabled={action.kind === "deleting"}
+                                onClick={() => {
+                                    void remove();
+                                }}
+                            >
+                                {t(
+                                    action.kind === "deleting"
+                                        ? "skills.delete.deleting"
+                                        : "skills.delete.confirm",
+                                )}
+                            </button>
+                        </div>
+                    </Dialog.Popup>
+                </Dialog.Portal>
+            </Dialog.Root>
         </section>
     );
 }

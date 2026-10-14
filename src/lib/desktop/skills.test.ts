@@ -1,6 +1,8 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { beforeEach, expect, test, vi } from "vitest";
 import {
+    cleanupDeletedSkillCopies,
+    deleteSkill,
     importSkillFolder,
     listSkills,
     pickSkillFolder,
@@ -50,6 +52,12 @@ test("preview reads nothing and rejects every write", async () => {
             revision: null,
         }),
     ).rejects.toMatchObject({ code: "desktop_required" });
+    await expect(
+        deleteSkill({ id: ID, expectedRevision: 1 }),
+    ).rejects.toMatchObject({ code: "desktop_required" });
+    await expect(cleanupDeletedSkillCopies()).rejects.toMatchObject({
+        code: "desktop_required",
+    });
     expect(vi.mocked(invoke)).not.toHaveBeenCalled();
 });
 
@@ -290,6 +298,54 @@ test("source records must advance the revision they were edited from", async () 
             revision: null,
         }),
     ).rejects.toMatchObject({ code: "invalid_response" });
+});
+
+test("a delete acknowledgment must match the request", async () => {
+    vi.mocked(invoke).mockResolvedValue({ id: ID, cleanupPending: false });
+    expect(await deleteSkill({ id: ID, expectedRevision: 1 })).toEqual({
+        id: ID,
+        cleanupPending: false,
+    });
+    expect(vi.mocked(invoke)).toHaveBeenCalledWith("delete_skill", {
+        request: { id: ID, expectedRevision: 1 },
+    });
+
+    // An acknowledgment for another skill is not accepted as this deletion.
+    vi.mocked(invoke).mockResolvedValue({
+        id: OTHER_ID,
+        cleanupPending: false,
+    });
+    await expect(
+        deleteSkill({ id: ID, expectedRevision: 1 }),
+    ).rejects.toMatchObject({ code: "invalid_response" });
+    // Neither is a malformed one; the UI never guesses a cleanup state.
+    vi.mocked(invoke).mockResolvedValue({ id: ID, cleanupPending: "yes" });
+    await expect(
+        deleteSkill({ id: ID, expectedRevision: 1 }),
+    ).rejects.toMatchObject({ code: "invalid_response" });
+    vi.mocked(invoke).mockResolvedValue({
+        id: ID,
+        cleanupPending: false,
+        extra: true,
+    });
+    await expect(
+        deleteSkill({ id: ID, expectedRevision: 1 }),
+    ).rejects.toMatchObject({ code: "invalid_response" });
+});
+
+test("parked-file cleanup reports honest booleans", async () => {
+    vi.mocked(invoke).mockResolvedValue(true);
+    expect(await cleanupDeletedSkillCopies()).toBe(true);
+    expect(vi.mocked(invoke)).toHaveBeenCalledWith(
+        "cleanup_deleted_skill_copies",
+        {},
+    );
+    vi.mocked(invoke).mockResolvedValue(false);
+    expect(await cleanupDeletedSkillCopies()).toBe(false);
+    vi.mocked(invoke).mockResolvedValue("true");
+    await expect(cleanupDeletedSkillCopies()).rejects.toMatchObject({
+        code: "invalid_response",
+    });
 });
 
 test("domain codes are kept and unknown failures are generic", async () => {

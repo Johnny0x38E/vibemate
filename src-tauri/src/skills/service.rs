@@ -1,16 +1,20 @@
-//! Import local skill directories into the managed library and record sources.
+//! Import local skill directories into the managed library, record sources and
+//! remove reviewed entries again.
 //!
 //! The user's directories are only read. Content is copied into a temporary
 //! sibling directory and renamed into place, so an interrupted import never
-//! leaves a half-copied skill under a name that a record points at. No command
-//! from a skill directory is ever executed.
+//! leaves a half-copied skill under a name that a record points at. Deleting
+//! removes only vibemate's own copy: the managed directory is parked under a
+//! name no record can point at before its record is removed, so a refused
+//! deletion restores everything and a failed removal never deletes live content.
+//! No command from a skill directory is ever executed.
 
 use super::SkillLibrary;
 use super::manifest::{self, SourcePlan};
 use super::repository::{self, NewSkill};
 use super::types::{
-    ImportFolderReport, ImportFolderRequest, SetSkillSourceRequest, SkillError, SkillRecord,
-    SkippedSkill,
+    DeleteSkillRequest, DeletedSkill, ImportFolderReport, ImportFolderRequest,
+    SetSkillSourceRequest, SkillError, SkillRecord, SkippedSkill,
 };
 use super::validation;
 use crate::storage::Storage;
@@ -23,6 +27,9 @@ use std::path::{Path, PathBuf};
 const DIGEST_DOMAIN: &[u8] = b"vibemate-skill-v1\0";
 /// Temporary directories are hidden and never match a 32-character ID.
 const TEMPORARY_PREFIX: &str = ".import-";
+/// Directory name prefix of a managed copy parked for removal. No record ever
+/// points at such a name, so a cleanup sweep can never delete live content.
+const PARKED_PREFIX: &str = ".delete-";
 
 /// Import every skill inside one chosen folder.
 ///
@@ -209,6 +216,99 @@ pub fn set_skill_source(
         now_ms,
     )?;
     repository::get_skill(storage, &request.id)
+}
+
+/// Remove one reviewed skill: its record and the managed copy only.
+///
+/// The managed directory is first parked with an atomic rename, then the record
+/// is removed at the reviewed revision, and only then is the parked copy
+/// deleted. A refused deletion renames the copy back, so nothing changes. The
+/// user's imported folder is never touched.
+///
+/// # Errors
+/// Rejects an invalid identity or revision, a missing skill, a stale revision,
+/// and a copy that cannot be parked. A copy that cannot be deleted after the
+/// record is gone reports `cleanup_pending` instead of an error; an uncertain
+/// restore or commit requires a reload before another change.
+pub fn delete_skill(
+    library: &SkillLibrary,
+    storage: &Storage,
+    request: DeleteSkillRequest,
+) -> Result<DeletedSkill, SkillError> {
+    validation::identity(&request.id)?;
+    if request.expected_revision < 1 {
+        return Err(SkillError::InvalidRequest);
+    }
+    let root = library.root();
+    let target = root.join(&request.id);
+    let parked = root.join(format!("{PARKED_PREFIX}{}", request.id));
+    // A missing copy is not an obstacle: the record can still be removed, which
+    // also cleans a copy parked by an earlier interrupted delete of this id.
+    let parked_now = match fs::rename(&target, &parked) {
+        Ok(()) => true,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+        Err(_) => return Err(SkillError::WriteFailed),
+    };
+    if let Err(error) = repository::commit_skill_delete(storage, &request) {
+        // Put the copy back so a refused deletion changes nothing. If even the
+        // restore fails, the caller must reload before another change.
+        if parked_now && fs::rename(&parked, &target).is_err() {
+            return Err(SkillError::OutcomeUnknown);
+        }
+        return Err(error);
+    }
+    // With the record gone, every parked copy of this id is content to remove.
+    let complete = match fs::remove_dir_all(&parked) {
+        Ok(()) => true,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => true,
+        Err(_) => false,
+    };
+    Ok(DeletedSkill {
+        id: request.id,
+        cleanup_pending: !complete,
+    })
+}
+
+/// Remove parked copies left behind by a finished delete, and only those.
+///
+/// A parked copy whose record still exists belongs to an interrupted delete that
+/// did not reach the record; it is kept so its content stays recoverable, and a
+/// later delete of that skill removes it. The result is `true` when no parked
+/// copy without a record remains.
+///
+/// # Errors
+/// Reports an unreadable library directory and storage failures. One copy that
+/// cannot be removed does not stop the others; it is reported by the result.
+pub fn cleanup_deleted_skill_copies(
+    library: &SkillLibrary,
+    storage: &Storage,
+) -> Result<bool, SkillError> {
+    let entries = match fs::read_dir(library.root()) {
+        Ok(entries) => entries,
+        // No library directory means nothing is parked.
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(true),
+        Err(_) => return Err(SkillError::WriteFailed),
+    };
+    let mut unremovable = 0usize;
+    for entry in entries {
+        let name = entry.map_err(|_| SkillError::ReadFailed)?.file_name();
+        let Some(name) = name.to_str() else { continue };
+        let Some(id) = name.strip_prefix(PARKED_PREFIX) else {
+            continue;
+        };
+        // Only well-formed parked names belong to this module; anything else is
+        // left alone.
+        if validation::identity(id).is_err() {
+            continue;
+        }
+        if repository::skill_exists(storage, id)? {
+            continue;
+        }
+        if fs::remove_dir_all(library.root().join(name)).is_err() {
+            unremovable += 1;
+        }
+    }
+    Ok(unremovable == 0)
 }
 
 /// Copy the planned files and return the digest of exactly those bytes.

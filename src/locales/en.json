@@ -665,6 +665,18 @@
         "save": "Save",
         "saving": "Saving…",
         "backLabel": "Back to skills",
+        "delete": {
+            "label": "Delete “{{name}}”",
+            "title": "Delete skill?",
+            "body": "Delete “{{name}}” from the library and remove vibemate's copy of it? The folder it was imported from stays unchanged.",
+            "cancel": "Cancel",
+            "confirm": "Delete",
+            "deleting": "Deleting…",
+            "done": "Deleted “{{name}}”.",
+            "cleanupPending": "The skill was deleted, but its copied files could not be removed. Retry to remove them.",
+            "cleanup": "Retry file cleanup",
+            "cleanupDone": "The copied files were removed."
+        },
         "errors": {
             "storage_unavailable": "vibemate cannot reach its private library right now.",
             "read_failed": "The skill library could not be read.",

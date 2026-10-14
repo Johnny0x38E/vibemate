@@ -110,6 +110,29 @@ pub struct SetSkillSourceRequest {
     pub revision: Option<String>,
 }
 
+/// Revision-checked removal of one library entry and its managed copy.
+///
+/// The user's imported folder is never part of this request and is never
+/// changed; only vibemate's own copy is removed.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DeleteSkillRequest {
+    /// Stable identity of the library entry.
+    pub id: String,
+    /// Revision the user reviewed before confirming deletion.
+    pub expected_revision: i64,
+}
+
+/// Confirmed removal of one skill; parked files may still need a retry.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeletedSkill {
+    /// Identity of the removed library entry.
+    pub id: String,
+    /// Whether copied files remain parked until an explicit cleanup retry.
+    pub cleanup_pending: bool,
+}
+
 /// Safe skill metadata; file contents never cross IPC.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]

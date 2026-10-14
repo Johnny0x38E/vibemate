@@ -13,6 +13,8 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { createAppI18n } from "../../i18n";
 import { NotificationProvider } from "../../components/Notifications";
 import {
+    cleanupDeletedSkillCopies,
+    deleteSkill,
     getSkill,
     importSkillFolder,
     listSkills,
@@ -29,12 +31,16 @@ vi.mock(import("../../lib/desktop/skills"), async (importOriginal) => ({
     pickSkillFolder: vi.fn(),
     importSkillFolder: vi.fn(),
     setSkillSource: vi.fn(),
+    deleteSkill: vi.fn(),
+    cleanupDeletedSkillCopies: vi.fn(),
 }));
 const list = vi.mocked(listSkills);
 const get = vi.mocked(getSkill);
 const pick = vi.mocked(pickSkillFolder);
 const create = vi.mocked(importSkillFolder);
 const save = vi.mocked(setSkillSource);
+const remove = vi.mocked(deleteSkill);
+const removeCopies = vi.mocked(cleanupDeletedSkillCopies);
 
 const ID = "0123456789abcdef0123456789abcdef";
 const row: SkillRecord = {
@@ -93,6 +99,8 @@ beforeEach(() => {
         sourceRevision: "v1.2.0",
         revision: 2,
     });
+    remove.mockReset().mockResolvedValue({ id: ID, cleanupPending: false });
+    removeCopies.mockReset().mockResolvedValue(true);
 });
 afterEach(() => {
     cleanup();
@@ -377,6 +385,94 @@ test("a stale source revision asks for a reload instead of overwriting", async (
     });
 });
 
+test("a skill is deleted only after the confirmation names it", async () => {
+    // The re-read list after the deletion no longer holds the skill.
+    list.mockResolvedValueOnce(page([row])).mockResolvedValue(
+        page([], null, 0),
+    );
+    await setup();
+    fireEvent.click(
+        await screen.findByRole("button", { name: "Delete “demo-skill”" }),
+    );
+    // The dialog names the skill and states what stays unchanged.
+    expect(
+        await screen.findByText(
+            "Delete “demo-skill” from the library and remove vibemate's copy of it? The folder it was imported from stays unchanged.",
+        ),
+    ).toBeDefined();
+    // Cancelling changes nothing.
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(remove).not.toHaveBeenCalled();
+
+    fireEvent.click(
+        screen.getByRole("button", { name: "Delete “demo-skill”" }),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
+    await waitFor(() => {
+        expect(remove).toHaveBeenCalledExactlyOnceWith({
+            id: ID,
+            expectedRevision: 1,
+        });
+    });
+    expect(await screen.findByText("Deleted “demo-skill”.")).toBeDefined();
+    // The list is re-read instead of silently dropping the row.
+    await waitFor(() => {
+        expect(list).toHaveBeenCalledTimes(2);
+    });
+    expect(screen.queryByRole("heading", { name: "demo-skill" })).toBeNull();
+});
+
+test("a stale delete confirmation is refused and the list can be reloaded", async () => {
+    remove.mockRejectedValue(new SkillRequestError("revision_conflict"));
+    await setup();
+    fireEvent.click(
+        await screen.findByRole("button", { name: "Delete “demo-skill”" }),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
+    expect(
+        await screen.findByText(
+            "Another change was saved first. Reload and try again.",
+        ),
+    ).toBeDefined();
+    // The row stays until the user re-reads the list.
+    expect(screen.getByRole("heading", { name: "demo-skill" })).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Reload list" }));
+    await waitFor(() => {
+        expect(list).toHaveBeenCalledTimes(2);
+    });
+});
+
+test("leftover files after a delete can be cleaned up", async () => {
+    remove.mockResolvedValue({ id: ID, cleanupPending: true });
+    list.mockResolvedValueOnce(page([row])).mockResolvedValue(
+        page([], null, 0),
+    );
+    await setup();
+    fireEvent.click(
+        await screen.findByRole("button", { name: "Delete “demo-skill”" }),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
+    // The leftover is stated and keeps a retry instead of being hidden.
+    expect(
+        await screen.findByRole("button", { name: "Retry file cleanup" }),
+    ).toBeDefined();
+    expect(
+        screen.getAllByText(
+            "The skill was deleted, but its copied files could not be removed. Retry to remove them.",
+        ).length,
+    ).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: "Retry file cleanup" }));
+    await waitFor(() => {
+        expect(removeCopies).toHaveBeenCalledTimes(1);
+    });
+    expect(
+        await screen.findByText("The copied files were removed."),
+    ).toBeDefined();
+    expect(
+        screen.queryByRole("button", { name: "Retry file cleanup" }),
+    ).toBeNull();
+});
+
 test("the browser preview reads nothing", async () => {
     list.mockResolvedValue({ kind: "preview" });
     await setup();
@@ -399,6 +495,15 @@ test("the Chinese page shows the same states and controls", async () => {
         await screen.findByRole("heading", { name: "demo-skill" }),
     ).toBeDefined();
     expect(screen.getByText("来源：本地导入")).toBeDefined();
+    // The delete action and its confirmation are translated as well.
+    fireEvent.click(screen.getByRole("button", { name: "删除“demo-skill”" }));
+    expect(await screen.findByText("删除技能？")).toBeDefined();
+    expect(
+        screen.getByText(
+            "从技能库删除“demo-skill”并移除 vibemate 的副本？导入来源文件夹不会被修改。",
+        ),
+    ).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "取消" }));
     fireEvent.click(
         screen.getByRole("button", { name: "查看 demo-skill 的详情" }),
     );

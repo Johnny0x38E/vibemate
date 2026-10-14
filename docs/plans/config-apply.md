@@ -108,11 +108,23 @@ SQLite schema v16 新增 `config_operation` 与 `config_operation_step`，仓储
   `provider_not_found`／`model_not_found`／`location_unavailable`／`storage_unavailable`／
   `invalid_request`／`operation_failed`。
 
-后续批次：P20.c 前端边界（严格载荷校验）、P20.d 确认界面与双语文案。P20.b（IPC 命令与凭据锁）
-已交付 2026-10-14：`apply_claude_code_settings` 命令按严格载荷解析请求，在阻塞线程上持有应用级凭据锁
-读取密钥，备份目录固定为应用数据目录下的 `backups/`。
+后续批次（均已交付 2026-10-14）：
+
+- **P20.b IPC 命令与凭据锁**：`apply_claude_code_settings` 命令按严格载荷解析请求，在阻塞线程上持有
+  应用级凭据锁读取密钥，备份目录固定为应用数据目录下的 `backups/`。
+- **P20.c 前端边界**：`applyClaudeCodeSettings` 与 `reviewedPlanTokens`；响应按精确键集合校验（操作 id
+  形状、状态闭集、步骤序号连续、步骤状态与错误码互相一致），并做三项跨字段检查：回报的备份属于某个
+  步骤、`applied` 表示每个文件都已写入、`failed` 表示没有任何文件被写入。浏览器预览抛
+  `desktop_required`，不发 IPC，也不声称已应用。
+- **P20.d 确认界面与双语文案**：计划卡片新增「应用这些设置」按钮，应用期间按钮标记 `aria-disabled`
+  并由同一个 pending 守卫拦住重复点击；结果卡片显示状态、失败步骤的文件与原因、备份位置，并且只在
+  文件确实写入新键时提示重启会话。任何一次应用都会消费掉当前计划，再次写入必须重新预览。
+
 命令层与应用步骤共用应用级凭据锁，因此密钥替换与配置应用不会交错；界面明示密钥将以明文写入
 `~/.claude/settings.json`（预览已有该提示），且不依赖 vibemate 启动 Agent。
+
+仍未验证：真实 Tauri/Claude Code 中的原生应用与启动选择模型（维护者验收），以及 Windows/Linux 行为
+（P37）。
 
 ## 检查点 C19
 

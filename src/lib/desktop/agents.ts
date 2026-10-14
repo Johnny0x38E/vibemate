@@ -489,6 +489,11 @@ export const APPLY_STATES = [
     "compensated",
 ] as const;
 export type ApplyState = (typeof APPLY_STATES)[number];
+/**
+ * States a settled apply call can report. `planned` exists only in the write log:
+ * an apply call always settles its operation before it answers.
+ */
+export type AppliedState = Exclude<ApplyState, "planned">;
 /** Write-layer codes a step can carry, mirroring Rust's `WriteError`. */
 export const WRITE_ERROR_CODES = [
     "invalid_request",
@@ -557,7 +562,7 @@ export interface ApplyStep {
 /** Result of applying a reviewed plan; the real key never crosses this boundary. */
 export interface ClaudeCodeApplied {
     operationId: string;
-    state: ApplyState;
+    state: AppliedState;
     steps: ApplyStep[];
     backupPath: string | null;
     restartRequired: boolean;

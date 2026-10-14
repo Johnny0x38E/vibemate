@@ -586,6 +586,35 @@
             "restartRequired": "Start a new Claude Code session for these settings to take effect.",
             "secretValue": "The API key from OS credential storage, written as plain text",
             "emptyValue": "(empty)",
+            "apply": "Apply these settings",
+            "applying": "Applying…",
+            "outcomeHeading": "Applied result",
+            "outcome": {
+                "applied": "Written. The settings file now holds the planned keys.",
+                "failed": "Nothing was written; the settings file still holds its previous content.",
+                "compensated": "The write was rolled back; the settings file holds its previous content again.",
+                "partial": "Part of the write could not be undone. Review the settings file before trying again.",
+                "unknown": "The result for one file could not be verified. Review the settings file before trying again."
+            },
+            "stepFailed": "{{path}} — {{error}}",
+            "backupAt": "Previous content kept at {{path}}",
+            "applyPreviewAgain": "Preview again to see the current state of the file.",
+            "writeErrors": {
+                "invalid_request": "the request was not valid",
+                "target_changed": "the file changed since the preview",
+                "symlink_refused": "the path is a symbolic link",
+                "target_read_only": "the file is read-only",
+                "target_path_invalid": "the path cannot be used",
+                "target_unreadable": "the file could not be read",
+                "target_too_large": "the file is larger than the write limit",
+                "backup_unavailable": "the backup could not be stored",
+                "write_failed": "the file could not be replaced",
+                "outcome_unknown": "the write result is unknown",
+                "storage_unavailable": "local configuration storage is unavailable",
+                "log_write_failed": "the operation could not be recorded",
+                "log_read_failed": "the operation log could not be read",
+                "invalid_stored_operation": "a recorded operation is not valid"
+            },
             "notices": {
                 "credentialFromStore": "The API key stays out of this window. When the change is applied, vibemate reads it from OS credential storage and writes it into the settings file as plain text.",
                 "overridesNotChecked": "Managed settings, project settings and shell environment variables were not read. They can override this file.",
@@ -603,8 +632,12 @@
                 "storage_unavailable": "Local configuration storage is unavailable. Restart vibemate.",
                 "provider_not_found": "That provider configuration is no longer saved.",
                 "model_not_found": "That provider no longer has this saved model.",
+                "plan_stale": "The configuration changed since the preview, so nothing was written. Preview again.",
+                "credential_missing": "No API key is saved for this provider in OS credential storage.",
+                "credential_unavailable": "The OS credential store could not be read. Unlock it and try again.",
                 "location_unavailable": "The Claude Code settings directory could not be located.",
                 "operation_failed": "The preview could not be built. Try again.",
+                "desktop_required": "Applying configuration needs the vibemate desktop app.",
                 "invalid_response": "The desktop app returned an unexpected plan."
             }
         }

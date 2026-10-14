@@ -295,7 +295,8 @@ pub struct ClaudeCodeApplied {
     pub steps: Vec<StepOutcome>,
     /// Copy of the previous settings content, when there was one to replace.
     pub backup_path: Option<String>,
-    /// A running Claude Code session keeps the environment it started with.
+    /// Whether a new Claude Code session is needed. Only a file that now holds
+    /// the planned keys requires one; a refused or rolled-back write does not.
     pub restart_required: bool,
 }
 
@@ -441,6 +442,9 @@ pub fn apply_claude_code_settings(
     let applied = apply_files(storage, OperationKind::ClaudeCodeSettings, &files, &backups)
         .map_err(ClaudeCodeApplyError::from_write)?;
     Ok(ClaudeCodeApplied {
+        // Only a settings file that now holds the planned keys needs a new
+        // session; a refused or rolled-back write leaves the previous content.
+        restart_required: applied.state == OperationState::Applied,
         operation_id: applied.operation_id,
         state: applied.state,
         backup_path: applied
@@ -448,7 +452,6 @@ pub fn apply_claude_code_settings(
             .first()
             .and_then(|step| step.backup_path.clone()),
         steps: applied.steps,
-        restart_required: true,
     })
 }
 

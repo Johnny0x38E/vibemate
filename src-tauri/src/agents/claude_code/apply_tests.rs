@@ -268,6 +268,8 @@ fn a_symbolic_link_target_fails_with_its_step_code() {
         Some("symlink_refused")
     );
     assert_eq!(applied.backup_path, None);
+    // Nothing was written, so no new session is needed for unchanged settings.
+    assert!(!applied.restart_required);
     assert_eq!(fs::read_to_string(&real).unwrap(), "{\"theme\":\"dark\"}\n");
     // The refusal is recorded and settled, so the recovery entry does not list it.
     let record = operation(&fixture.storage, &applied.operation_id)

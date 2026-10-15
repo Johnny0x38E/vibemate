@@ -2,7 +2,6 @@
 //! and what a retry does after a partial rollback. Every fixture is a temporary
 //! directory removed when the test ends.
 use super::*;
-use crate::config_apply::restore::discard_copy;
 use crate::config_plan::read_target_document;
 use std::{
     fs,
@@ -526,6 +525,9 @@ fn a_malformed_applied_step_is_refused_instead_of_classified() {
 #[cfg(unix)]
 #[test]
 fn a_copy_that_cannot_be_removed_is_reported_instead_of_hidden() {
+    // Imported here because only this Unix-only test uses it: on Windows a
+    // read-only directory does not block removal, so the case cannot be built.
+    use crate::config_apply::restore::discard_copy;
     use std::os::unix::fs::PermissionsExt;
 
     let fixture = Fixture::new();

@@ -126,8 +126,97 @@ SQLite schema v16 新增 `config_operation` 与 `config_operation_step`，仓储
 仍未验证：真实 Tauri/Claude Code 中的原生应用与启动选择模型（维护者验收），以及 Windows/Linux 行为
 （P37）。
 
+## P21：回滚 Claude Code 配置
+
+目标：让用户看到 vibemate 写过的 Claude Code 配置操作，预览把某个操作写过的文件恢复成它替换前的内容，
+冲突时拒绝覆盖。首个界面只服务 Claude Code；机制放在 `config_apply`，供之后的 Pi/Grok 适配器与 MCP 注入复用。
+
+本模块仍只读写自己记录过的东西：恢复的前提是操作日志里有这个操作，用户手动改回的文件不会变成一条记录。
+
+### 已确认决定（2026-10-14）
+
+- **逐步骤回滚状态（schema v17）。** `config_operation_step` 新增 `restore_state`，取值为 `restored`
+  （已写回原内容或已删除新建文件）、`conflict`（文件在写入后被改成别的内容，保持原样）、`unavailable`
+  （备份缺失或摘要不符）、`failed`（写回没有完成）、`unknown`（结果无法核对）；空值表示还没尝试。
+  没有这一列时，`partial` 操作重试补偿会把已回滚的步骤再恢复一次，`restore_file` 的令牌检查随即返回
+  `target_changed`，操作永远停在 `partial`。回滚因此跳过已经是 `restored` 的步骤；每次尝试覆盖同一行，
+  不保存尝试历史。
+- **凭据只随文件内容回写。** 恢复不读取 OS 凭据、不改凭据引用：写回的就是备份里的原内容，可能仍含之前
+  那家 Provider 的明文密钥。`config_operation` 新增 `owner_ref`（写入该操作的 Provider ID，可为空），
+  恢复预览用摘要链判断「恢复后的内容由哪次操作写入」，据此说明密钥归属；判断不出来时明确显示未知。
+  全程不读文件内容、不做密钥值比较。
+- **日志只增不减。** 本次不删除已结束操作，也不加清理策略；界面按上限读取（默认 10 条，最新在前）。
+
+### 回滚语义与记录
+
+- 恢复**不新增操作行**：它更新原操作与其步骤（操作状态、`restore_state`）。如果把一次恢复记成新操作，
+  恢复失败就会留下一个新的未完成操作，P34 的恢复入口会去「补偿」它，等于把用户刚撤掉的配置写回去。
+- 原操作的备份保留：它记录的是那次应用替换掉的内容，恢复之后仍可再恢复或用于审计。只有**恢复过程中**
+  新产生的副本（写回时被替换掉的当前内容）在写回成功后删除。
+- 可恢复 = 至少一个步骤 `state = applied` 且 `restore_state` 不是 `restored`。`applied`、`partial`、
+  `unknown` 与写了一半的 `planned` 都可能符合；`failed`（没有步骤写过盘）与 `compensated` 不符合。
+- 清理失败不再静默：`BackupStore::discard` 改为返回结果，恢复结果带 `leftovers`（未能删除的副本路径），
+  界面显示残留位置并提供继续恢复的入口。
+- 竞态与重试：写回时若文件当前摘要已等于备份摘要，说明这一步已经被恢复过（另一次点击或另一次恢复），
+  记为 `restored`；只有文件确实是第三种内容时才记 `conflict`。
+
+### 恢复预览（只读）
+
+`config_apply/restore.rs` 的 `restore_plan(storage, kind, operation_id, backups)` 读取操作记录并逐步分类：
+
+| 步骤情况                                              | 预览动作   | 说明                         |
+| ----------------------------------------------------- | ---------- | ---------------------------- |
+| 当前摘要 = 记录的应用后摘要，且有可读且摘要相符的备份 | `restore`  | 写回备份内容                 |
+| 同上，但该步骤当时新建了文件（没有备份）              | `remove`   | 删除 vibemate 新建的文件     |
+| 文件存在但摘要不等于应用后摘要                        | `conflict` | 用户或其它工具改过，拒绝覆盖 |
+| 备份缺失/摘要不符，或目标是符号链接、超限、不可读     | `blocked`  | 带稳定原因码与处理提示       |
+| 步骤不是 `applied`，或已经是 `restored`               | `skip`     | 不触碰                       |
+
+预览只返回路径、摘要、动作与状态，以及由 `owner_ref` 解析出的密钥归属说明；**不返回备份内容**。
+摘要不是秘密，路径是用户自己的文件路径，因此历史列表同样只带这两类信息。
+
+### 恢复应用
+
+`apply_restore(storage, kind, operation_id, reviewed, backups)` 先用与预览相同的代码重新构建计划，再逐项核对
+界面回传的令牌（步骤序号 + 预览时的当前摘要），任一不符返回 `plan_stale` 且不写任何文件。通过后按应用顺序的
+**倒序**处理可恢复步骤，每步写入 `restore_state`；`conflict`、`blocked`、`skip` 步骤不动。操作最终状态：
+全部恢复为 `compensated`，否则 `partial`；任何一步结果无法核对时为 `unknown`。返回值带逐步骤结果、操作状态与
+`leftovers`。
+
+`compensate_operation` 保持原语义（自动回滚未完成操作，事务失败后调用），但改为复用同一份逐步骤回滚实现，
+因此两条路径的冲突判定与记录方式一致。
+
+### 命令与界面（P21.c / P21.d）
+
+- `commands/agents.rs`：`claude_code_operations`（脱敏历史）、`plan_claude_code_restore`、
+  `apply_claude_code_restore`。三个命令先确认操作 `kind = claude_code_settings`，再走 `with_apply_storage`；
+  恢复不读凭据，所以不取凭据锁。
+- `src/lib/desktop/agents.ts`：三个边界函数加精确键集合与跨字段校验；浏览器预览返回 `desktop_required`，
+  不声称可恢复。
+- `src/features/agents/RestoreView.tsx`：历史列表（时间、状态、文件、可恢复入口）、恢复预览（逐步骤动作、
+  冲突处理提示、密钥归属、确认按钮）、结果（状态、逐步骤结果、残留副本、继续恢复）。
+- 错误码：沿用 `WriteError` 的稳定码，命令层新增 `operation_not_found` 与 `operation_kind_mismatch`；
+  过期预览沿用 P20 的 `plan_stale`。
+
+### 批次
+
+- P21.a 设计与本文件（2026-10-14）。
+- P21.b `config_apply/restore.rs`、v17 迁移（`owner_ref`、`restore_state`）、故障注入测试。
+- P21.c 三个命令与前端边界。
+- P21.d RestoreView、双语文案与行为测试。
+- P21.e 维护者原生验收：临时配置 apply → restore → 原生启动。
+
+已知边界：恢复只覆盖 vibemate 记录过的操作；`planned` 操作可能从未写盘，预览按步骤状态如实显示；
+跨平台替换、权限与文件锁差异在 P37 记录。
+
 ## 检查点 C19
 
 - P19.a 与 P19.b 的故障注入测试通过：并发变化、符号链接、只读目标、替换失败与部分提交。
 - 备份权限与内容不外泄有测试；成功与失败都不残留临时文件。
 - 原生 macOS 行为与真实 Agent 文件由维护者验收；跨平台差异在 P37 记录。
+
+## 检查点 C21
+
+- P21 的预览、冲突判定、逐步骤回滚状态与残留清理结果都有故障注入测试。
+- 恢复预览与结果不包含文件内容；过期预览被拒绝且不写盘。
+- 维护者在真实 Tauri/Claude Code 中完成 apply → restore → 原生启动验收；跨平台差异在 P37 记录。

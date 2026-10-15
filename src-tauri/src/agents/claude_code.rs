@@ -507,3 +507,14 @@ mod tests;
 
 #[cfg(test)]
 mod apply_tests;
+
+mod restore;
+pub use restore::{
+    ApplyClaudeCodeRestoreRequest, ClaudeCodeOperation, ClaudeCodeOperationStep,
+    ClaudeCodeRestoreError, ClaudeCodeRestorePlan, ClaudeCodeRestoreStep,
+    ReviewedRestoreStepRequest, apply_claude_code_restore, list_claude_code_operations,
+    plan_claude_code_restore,
+};
+
+#[cfg(test)]
+mod restore_tests;

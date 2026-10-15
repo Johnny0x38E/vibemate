@@ -277,6 +277,8 @@ P19.b1（操作日志，schema v16）与 P19.b2（多文件编排与补偿）均
 **Description:** 提供历史操作结果和恢复预览，将误操作恢复为备份版本。机制放在 `config_apply`，
 首个界面只服务 Claude Code；设计见 [config-apply.md](config-apply.md) 的 P21 段，批次为 P21.a 设计与
 文档、P21.b v17 逐步骤回滚状态与 `restore.rs`、P21.c 命令与前端边界、P21.d RestoreView、P21.e 维护者原生验收。
+**进度（2026-10-14）：** P21.a–P21.c 已交付（schema v17、恢复预览/应用、三个 IPC 命令与前端边界，双端测试通过）；
+剩下 P21.d 界面与双语文案、P21.e 维护者原生验收。
 
 **Acceptance criteria:**
 

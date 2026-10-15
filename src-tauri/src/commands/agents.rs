@@ -1,16 +1,21 @@
 //! Thin Agent IPC: static discovery, a separately confirmed version launch, and
 //! the read-only Claude Code configuration preview.
 //!
-//! Discovery and preview read the filesystem; the version launch is the only
-//! operation that runs another program, and it is not a sandbox.
+//! Discovery, preview and restore planning read the filesystem; the version
+//! launch is the only operation that runs another program, and it is not a
+//! sandbox.
 
-use super::state::{with_apply_storage, with_credential_lock, with_plan_storage};
-use crate::agents::{
-    self, AgentObservation, AgentVersionResult, ApplyClaudeCodeSettingsRequest, ClaudeCodeApplied,
-    ClaudeCodeApplyError, ClaudeCodeApplyInput, ClaudeCodePlanInput, DirectorySource,
-    DiscoveryEnvironment, DiscoveryError, DiscoveryInput, ModelFacts, ProviderFacts,
-    VersionProbeError, VersionProbeGate, VersionProbeInput,
+use super::state::{
+    with_apply_storage, with_credential_lock, with_plan_storage, with_restore_storage,
 };
+use crate::agents::{
+    self, AgentObservation, AgentVersionResult, ApplyClaudeCodeRestoreRequest,
+    ApplyClaudeCodeSettingsRequest, ClaudeCodeApplied, ClaudeCodeApplyError, ClaudeCodeApplyInput,
+    ClaudeCodeOperation, ClaudeCodePlanInput, ClaudeCodeRestoreError, ClaudeCodeRestorePlan,
+    DirectorySource, DiscoveryEnvironment, DiscoveryError, DiscoveryInput, ModelFacts,
+    ProviderFacts, VersionProbeError, VersionProbeGate, VersionProbeInput,
+};
+use crate::config_apply::RestoreOutcome;
 use crate::config_plan::{ConfigPlan, PlanError};
 use crate::credentials::OsCredentialStore;
 use crate::models::{GetModelSnapshotRequest, ModelError};
@@ -184,6 +189,69 @@ pub(crate) async fn apply_claude_code_settings(
     })
     .await
     .map_err(|_| ClaudeCodeApplyError::OperationFailed)?
+}
+
+/// List the Claude Code settings writes vibemate recorded, newest first.
+///
+/// Read-only: the listing carries paths, states and digests, never file content,
+/// and each row says whether the files as they are now leave something to
+/// restore.
+#[tauri::command]
+pub(crate) async fn claude_code_operations(
+    app: tauri::AppHandle,
+) -> Result<Vec<ClaudeCodeOperation>, ClaudeCodeRestoreError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        with_restore_storage(&app, agents::list_claude_code_operations)
+    })
+    .await
+    .map_err(|_| ClaudeCodeRestoreError::OperationFailed)?
+}
+
+/// Preview what undoing one recorded write would do, without writing anything.
+///
+/// The answer names the files, the action per file and — when the log can prove
+/// it — the Provider whose key the restored content carries. No file content and
+/// no credential value is read into it.
+#[tauri::command]
+pub(crate) async fn plan_claude_code_restore(
+    app: tauri::AppHandle,
+    operation_id: String,
+) -> Result<ClaudeCodeRestorePlan, ClaudeCodeRestoreError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        with_restore_storage(&app, |storage| {
+            agents::plan_claude_code_restore(storage, &operation_id)
+        })
+    })
+    .await
+    .map_err(|_| ClaudeCodeRestoreError::OperationFailed)?
+}
+
+/// Apply a restore the user confirmed, writing the previous content back.
+///
+/// The write layer rebuilds the plan and compares every token the interface sent
+/// back, so a settings edit made after the preview is refused with `plan_stale`
+/// before any file is touched. Restoring reads no credential: the previous
+/// content comes from the private copy, and the settings file ends up with
+/// whichever key it held before the write being undone.
+#[tauri::command]
+pub(crate) async fn apply_claude_code_restore(
+    app: tauri::AppHandle,
+    input: ApplyClaudeCodeRestoreRequest,
+) -> Result<RestoreOutcome, ClaudeCodeRestoreError> {
+    // Restored content is copied from and to the private backup directory next
+    // to the database, never inside the settings folder it was read from.
+    let backups = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| ClaudeCodeRestoreError::StorageUnavailable)?
+        .join("backups");
+    tauri::async_runtime::spawn_blocking(move || {
+        with_restore_storage(&app, |storage| {
+            agents::apply_claude_code_restore(storage, &input, &backups)
+        })
+    })
+    .await
+    .map_err(|_| ClaudeCodeRestoreError::OperationFailed)?
 }
 
 /// Map a Provider read failure onto the preview's error namespace.

@@ -3,13 +3,23 @@ import { beforeEach, expect, test, vi } from "vitest";
 import {
     APPLY_ERROR_CODES,
     PLAN_ERROR_CODES,
+    RESTORE_ERROR_CODES,
+    applyClaudeCodeRestore,
     applyClaudeCodeSettings,
+    listClaudeCodeOperations,
+    planClaudeCodeRestore,
     planClaudeCodeSettings,
     reviewedPlanTokens,
     type ApplyStep,
     type ClaudeCodeApplied,
     type ClaudeCodePlan,
+    type ClaudeCodeRestorePlan,
     type ConfigChange,
+    type RecordedOperation,
+    type RestoreOutcome,
+    type RecordedOperationStep,
+    type RestorePlanStep,
+    type RestoreStepOutcome,
     discoverAgents,
     type AgentObservation,
 } from "./agents";
@@ -604,3 +614,345 @@ test.each([
         message: "Applying the Agent configuration failed.",
     });
 });
+
+const recordedStep: RecordedOperationStep = {
+    ordinal: 0,
+    targetPath: plan.target.path,
+    state: "applied",
+    restoreState: null,
+};
+const recorded: RecordedOperation = {
+    operationId: "fedcba9876543210fedcba9876543210",
+    state: "applied",
+    providerId: plan.source.providerId,
+    providerLabel: "DeepSeek Work",
+    createdAt: 1_700_000_000_000,
+    updatedAt: 1_700_000_000_500,
+    restorable: true,
+    steps: [recordedStep],
+};
+const restorePlanStep: RestorePlanStep = {
+    ordinal: 0,
+    targetPath: plan.target.path,
+    action: "restore",
+    reason: null,
+    currentDigest: "a".repeat(64),
+    appliedDigest: "b".repeat(64),
+    restoreState: null,
+    restoredProviderId: null,
+    restoredProviderLabel: null,
+};
+const restorePlan: ClaudeCodeRestorePlan = {
+    operationId: recorded.operationId,
+    state: "applied",
+    createdAt: recorded.createdAt,
+    restorable: true,
+    providerId: recorded.providerId,
+    providerLabel: recorded.providerLabel,
+    steps: [restorePlanStep],
+};
+const restoredStep: RestoreStepOutcome = {
+    ordinal: 0,
+    targetPath: plan.target.path,
+    action: "restore",
+    state: "restored",
+    errorCode: null,
+    leftoverPath: null,
+};
+const restoreOutcome: RestoreOutcome = {
+    operationId: recorded.operationId,
+    state: "compensated",
+    steps: [restoredStep],
+    leftovers: [],
+};
+
+test("browser preview lists no history and refuses to restore", async () => {
+    vi.mocked(isTauri).mockReturnValue(false);
+    expect(await listClaudeCodeOperations()).toEqual({ kind: "preview" });
+    expect(await planClaudeCodeRestore(recorded.operationId)).toEqual({
+        kind: "preview",
+    });
+    await expect(
+        applyClaudeCodeRestore(recorded.operationId, []),
+    ).rejects.toMatchObject({
+        name: "RestoreRequestError",
+        code: "desktop_required",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+});
+
+test("lists the recorded writes with their labels and states", async () => {
+    vi.mocked(invoke).mockResolvedValue([recorded]);
+    expect(await listClaudeCodeOperations()).toEqual({
+        kind: "desktop",
+        operations: [recorded],
+    });
+    expect(invoke).toHaveBeenCalledExactlyOnceWith("claude_code_operations");
+});
+
+test("returns a validated preview for a recorded write", async () => {
+    vi.mocked(invoke).mockResolvedValue(restorePlan);
+    expect(await planClaudeCodeRestore(recorded.operationId)).toEqual({
+        kind: "desktop",
+        plan: restorePlan,
+    });
+    expect(invoke).toHaveBeenCalledExactlyOnceWith("plan_claude_code_restore", {
+        operationId: recorded.operationId,
+    });
+});
+
+test("sends the reviewed digests back and returns the outcome", async () => {
+    const reviewed = [
+        { ordinal: 0, currentDigest: restorePlanStep.currentDigest },
+    ];
+    vi.mocked(invoke).mockResolvedValue(restoreOutcome);
+    expect(
+        await applyClaudeCodeRestore(recorded.operationId, reviewed),
+    ).toEqual(restoreOutcome);
+    expect(invoke).toHaveBeenCalledExactlyOnceWith(
+        "apply_claude_code_restore",
+        { input: { operationId: recorded.operationId, reviewed } },
+    );
+});
+
+test("accepts a restore that left a conflicting file alone", async () => {
+    const partial: RestoreOutcome = {
+        ...restoreOutcome,
+        state: "partial",
+        steps: [
+            restoredStep,
+            {
+                ordinal: 1,
+                targetPath: "/home/test/.claude/other.json",
+                action: "restore",
+                state: "conflict",
+                errorCode: "target_changed",
+                leftoverPath: null,
+            },
+        ],
+    };
+    vi.mocked(invoke).mockResolvedValue(partial);
+    expect(
+        await applyClaudeCodeRestore(recorded.operationId, [
+            { ordinal: 0, currentDigest: null },
+        ]),
+    ).toEqual(partial);
+});
+
+test("accepts a restore that reports a copy it could not remove", async () => {
+    const leftover = "/home/test/backups/1700000000000-1-0/settings.json";
+    const withLeftover: RestoreOutcome = {
+        ...restoreOutcome,
+        steps: [{ ...restoredStep, leftoverPath: leftover }],
+        leftovers: [leftover],
+    };
+    vi.mocked(invoke).mockResolvedValue(withLeftover);
+    expect(await applyClaudeCodeRestore(recorded.operationId, [])).toEqual(
+        withLeftover,
+    );
+});
+
+test.each(RESTORE_ERROR_CODES)(
+    "returns the restore refusal code %s",
+    async (code) => {
+        vi.mocked(invoke).mockRejectedValue(code);
+        await expect(
+            planClaudeCodeRestore(recorded.operationId),
+        ).rejects.toMatchObject({
+            name: "RestoreRequestError",
+            code,
+            message: "The configuration restore failed.",
+        });
+    },
+);
+
+test.each(["private-refusal", new Error("private-runtime-error")])(
+    "sanitizes unexpected restore failure %s",
+    async (error) => {
+        vi.mocked(invoke).mockRejectedValue(error);
+        await expect(listClaudeCodeOperations()).rejects.toMatchObject({
+            code: "operation_failed",
+        });
+    },
+);
+
+const malformedListings: unknown[] = [
+    "not-a-list",
+    { operations: [recorded] },
+    [{ ...recorded, extra: "synthetic" }],
+    [{ ...recorded, operationId: "FEDCBA9876543210FEDCBA9876543210" }],
+    [{ ...recorded, state: "running" }],
+    [{ ...recorded, providerLabel: "Named", providerId: null }],
+    [{ ...recorded, updatedAt: 1 }],
+    [{ ...recorded, restorable: "yes" }],
+    [{ ...recorded, steps: [] }],
+    [{ ...recorded, steps: [{ ...recordedStep, extra: true }] }],
+    [{ ...recorded, steps: [{ ...recordedStep, ordinal: 1 }] }],
+    [
+        {
+            ...recorded,
+            steps: [
+                {
+                    ...recordedStep,
+                    state: "pending",
+                    restoreState: "restored",
+                },
+            ],
+        },
+    ],
+    [
+        {
+            ...recorded,
+            steps: [{ ...recordedStep, restoreState: "running" }],
+        },
+    ],
+    [
+        {
+            ...recorded,
+            steps: [{ ...recordedStep, targetPath: "settings.json" }],
+        },
+    ],
+];
+
+test.each(malformedListings)(
+    "rejects malformed or contradictory listing %#",
+    async (response) => {
+        vi.mocked(invoke).mockResolvedValue(response);
+        await expect(listClaudeCodeOperations()).rejects.toMatchObject({
+            name: "RestoreRequestError",
+            code: "invalid_response",
+        });
+    },
+);
+
+const malformedPreviews: unknown[] = [
+    { ...restorePlan, extra: "synthetic" },
+    { ...restorePlan, operationId: "not-an-id" },
+    { ...restorePlan, state: "running" },
+    { ...restorePlan, providerLabel: "Named", providerId: null },
+    { ...restorePlan, steps: [] },
+    { ...restorePlan, restorable: false },
+    { ...restorePlan, steps: [{ ...restorePlanStep, action: "rewrite" }] },
+    { ...restorePlan, steps: [{ ...restorePlanStep, action: "conflict" }] },
+    {
+        ...restorePlan,
+        steps: [{ ...restorePlanStep, reason: "target_changed" }],
+    },
+    {
+        // A code the preview cannot produce (only a failed write-back reports
+        // it) is not a preview reason.
+        ...restorePlan,
+        steps: [
+            { ...restorePlanStep, action: "blocked", reason: "write_failed" },
+        ],
+    },
+    {
+        ...restorePlan,
+        steps: [
+            {
+                ...restorePlanStep,
+                action: "blocked",
+                reason: "private_refusal",
+            },
+        ],
+    },
+    {
+        ...restorePlan,
+        steps: [{ ...restorePlanStep, action: "remove", appliedDigest: null }],
+    },
+    { ...restorePlan, steps: [{ ...restorePlanStep, currentDigest: null }] },
+    {
+        ...restorePlan,
+        steps: [{ ...restorePlanStep, currentDigest: "A".repeat(64) }],
+    },
+    {
+        ...restorePlan,
+        steps: [
+            {
+                ...restorePlanStep,
+                restoredProviderId: null,
+                restoredProviderLabel: "Named",
+            },
+        ],
+    },
+];
+
+test.each(malformedPreviews)(
+    "rejects malformed or contradictory preview %#",
+    async (response) => {
+        vi.mocked(invoke).mockResolvedValue(response);
+        await expect(
+            planClaudeCodeRestore(recorded.operationId),
+        ).rejects.toMatchObject({
+            name: "RestoreRequestError",
+            code: "invalid_response",
+        });
+    },
+);
+
+const malformedOutcomes: unknown[] = [
+    { ...restoreOutcome, extra: "synthetic" },
+    { ...restoreOutcome, operationId: "0".repeat(31) },
+    { ...restoreOutcome, state: "planned" },
+    { ...restoreOutcome, state: "applied" },
+    { ...restoreOutcome, state: "running" },
+    { ...restoreOutcome, steps: [] },
+    { ...restoreOutcome, leftovers: "none" },
+    {
+        ...restoreOutcome,
+        steps: [{ ...restoredStep, ordinal: 1 }],
+    },
+    {
+        ...restoreOutcome,
+        steps: [
+            {
+                ...restoredStep,
+                state: "restored",
+                errorCode: "target_changed",
+            },
+        ],
+    },
+    {
+        ...restoreOutcome,
+        steps: [{ ...restoredStep, state: "conflict", errorCode: null }],
+    },
+    {
+        ...restoreOutcome,
+        steps: [{ ...restoredStep, errorCode: "private_refusal" }],
+    },
+    {
+        ...restoreOutcome,
+        steps: [
+            { ...restoredStep, leftoverPath: "/home/test/backups/left.json" },
+        ],
+    },
+    {
+        ...restoreOutcome,
+        steps: [
+            {
+                ...restoredStep,
+                leftoverPath: "relative/left.json",
+            },
+        ],
+    },
+    {
+        ...restoreOutcome,
+        steps: [
+            { ...restoredStep, leftoverPath: "/home/test/backups/left.json" },
+        ],
+        leftovers: ["/home/test/backups/other.json"],
+    },
+];
+
+test.each(malformedOutcomes)(
+    "rejects malformed or contradictory outcome %#",
+    async (response) => {
+        vi.mocked(invoke).mockResolvedValue(response);
+        await expect(
+            applyClaudeCodeRestore(recorded.operationId, []),
+        ).rejects.toMatchObject({
+            name: "RestoreRequestError",
+            code: "invalid_response",
+        });
+    },
+);

@@ -1,20 +1,20 @@
 //! Multi-file apply steps: record the plan, replace each file, and undo what the
 //! step already replaced when a later file fails.
 //!
-//! [`apply_files`] is the entry point a feature uses; [`compensate_operation`]
-//! rolls back an operation recorded earlier, which is also what the recovery
-//! entry (P34) calls after a restart. Both build on the single-file write in the
-//! parent module, so every replacement keeps the same guarantees: a token check,
-//! a private backup, a same-directory temporary file and a verified re-read.
-
-use std::{fs, path::Path};
+//! [`apply_files`] is the entry point a feature uses. A failure inside it, and
+//! [`compensate_operation`] for an operation recorded earlier, both call the
+//! shared rollback in [`super::restore`], so an automatic compensation and a
+//! user-confirmed restore judge conflicts and record results the same way. Every
+//! replacement keeps the same guarantees: a token check, a private backup, a
+//! same-directory temporary file and a verified re-read.
 
 use serde::Serialize;
 
 use super::{
-    AppliedFile, Backup, BackupStore, MAX_TARGET_BYTES, OperationKind, OperationState, StepRecord,
-    StepState, WriteError, WriteTarget, apply_file, begin_operation, digest_hex, finish_operation,
-    operation, path_text, read_target, record_step_applied, record_step_failed,
+    BackupStore, OperationKind, OperationState, StepState, WriteError, WriteTarget, apply_file,
+    begin_operation, finish_operation, operation, path_text, record_step_applied,
+    record_step_failed,
+    restore::{pending_ordinals, roll_back_operation},
 };
 use crate::storage::Storage;
 
@@ -62,7 +62,10 @@ pub struct AppliedOperation {
 /// Replace every file of one apply step, or undo the ones already replaced.
 ///
 /// The operation is recorded before the first file is touched, and each file is
-/// recorded as it finishes. A failure at any file stops the step, rolls back the
+/// recorded as it finishes. `owner` names what the step writes configuration for
+/// (the Provider ID for a model link) and is stored with the operation row, so a
+/// later restore can label which key the written file carried.
+/// A failure at any file stops the step, rolls back the
 /// files already replaced, and returns the settled state instead of an error:
 /// `failed` when no file was replaced, `compensated` when the rollback undid all
 /// of them, `partial` or `unknown` when a file could not be restored. The
@@ -73,12 +76,14 @@ pub struct AppliedOperation {
 /// discoverable through [`unfinished_operations`](super::unfinished_operations).
 ///
 /// # Errors
-/// Returns `InvalidRequest` for an empty file list or a path that cannot be
-/// shown, and `StorageUnavailable`, `LogWriteFailed` or `LogReadFailed` when the
-/// operation log cannot be written or read.
+/// Returns `InvalidRequest` for an empty file list, a path that cannot be shown
+/// or an owner reference of the wrong shape, and `StorageUnavailable`,
+/// `LogWriteFailed` or `LogReadFailed` when the operation log cannot be written
+/// or read.
 pub fn apply_files(
     storage: &Storage,
     kind: OperationKind,
+    owner: Option<&str>,
     files: &[PlannedFile],
     backups: &BackupStore,
 ) -> Result<AppliedOperation, WriteError> {
@@ -86,7 +91,7 @@ pub fn apply_files(
         return Err(WriteError::InvalidRequest);
     }
     let targets: Vec<WriteTarget> = files.iter().map(|file| file.target.clone()).collect();
-    let operation_id = begin_operation(storage, kind, &targets)?;
+    let operation_id = begin_operation(storage, kind, owner, &targets)?;
     let mut steps = Vec::with_capacity(files.len());
     for (index, file) in files.iter().enumerate() {
         let ordinal = u32::try_from(index).map_err(|_| WriteError::InvalidRequest)?;
@@ -96,14 +101,20 @@ pub fn apply_files(
                 let digest = applied
                     .target
                     .content_digest
+                    .clone()
                     .ok_or(WriteError::OutcomeUnknown)?;
                 let backup_path = applied.backup.as_ref().map(|backup| backup.path.clone());
+                // A write that found the planned content already in place keeps
+                // no copy, exactly like one that created the file; the recorded
+                // fact keeps a later restore from deleting an existing file.
+                let previously_existed = applied.backup.is_some() || !applied.changed;
                 record_step_applied(
                     storage,
                     &operation_id,
                     ordinal,
                     applied.backup.as_ref(),
                     &digest,
+                    previously_existed,
                 )?;
                 steps.push(StepOutcome {
                     ordinal,
@@ -122,10 +133,19 @@ pub fn apply_files(
                     error_code: Some(error.code().to_owned()),
                     backup_path: None,
                 });
-                let state = compensate_operation(storage, &operation_id, backups)?;
+                // Stop at the first failure and undo what this step replaced,
+                // through the same rollback a user-confirmed restore uses. The
+                // record is read again so the rollback sees the recorded steps.
+                let recorded =
+                    operation(storage, &operation_id)?.ok_or(WriteError::InvalidStoredOperation)?;
+                let rolled_back =
+                    roll_back_operation(storage, &recorded, &pending_ordinals(&recorded), backups)?;
+                // The rollback records each step; this call settles the operation
+                // itself, exactly like a user-confirmed restore does.
+                finish_operation(storage, &operation_id, rolled_back.state)?;
                 return Ok(AppliedOperation {
                     operation_id,
-                    state,
+                    state: rolled_back.state,
                     steps,
                 });
             }
@@ -141,12 +161,17 @@ pub fn apply_files(
 
 /// Undo the files an unfinished operation already replaced, newest first.
 ///
-/// Each file is restored from the copy stored before it was replaced, or removed
-/// when the operation created it. A file another writer changed after the write
-/// is left alone; the operation then settles as `partial`, or as `unknown` when
-/// a rollback outcome could not be verified, so the recovery entry can pick it
-/// up again. An operation whose steps all failed settles as `failed`, and steps
-/// that were never applied are not touched.
+/// Kept for the automatic compensation of a failed apply and for the recovery
+/// entry (P34); a user-confirmed restore goes through [`super::apply_restore`]
+/// instead, which additionally compares what the interface reviewed. Both use
+/// the same rollback, so an operation a user partly restored reports the same
+/// state here as it does there.
+///
+/// A file another writer changed after the write is left alone; the operation
+/// then settles as `partial`, or as `unknown` when a rollback outcome could not
+/// be verified, so the recovery entry can pick it up again. An operation whose
+/// steps all failed settles as `failed`, and steps that were never applied are
+/// not touched.
 ///
 /// # Errors
 /// Returns `InvalidRequest` when the operation does not exist or has already
@@ -160,116 +185,7 @@ pub fn compensate_operation(
     if !record.state.is_unfinished() {
         return Err(WriteError::InvalidRequest);
     }
-    // Nothing was replaced, so there is nothing to undo.
-    if !record
-        .steps
-        .iter()
-        .any(|step| step.state == StepState::Applied)
-    {
-        finish_operation(storage, operation_id, OperationState::Failed)?;
-        return Ok(OperationState::Failed);
-    }
-    let mut restored = true;
-    let mut unknown = false;
-    for step in record.steps.iter().rev() {
-        if step.state != StepState::Applied {
-            continue;
-        }
-        if let Err(error) = restore_step(step, backups) {
-            restored = false;
-            unknown |= error == WriteError::OutcomeUnknown;
-        }
-    }
-    let state = match (restored, unknown) {
-        (true, _) => OperationState::Compensated,
-        (false, true) => OperationState::Unknown,
-        (false, false) => OperationState::Partial,
-    };
-    finish_operation(storage, operation_id, state)?;
-    Ok(state)
-}
-
-/// Put back the content a recorded step replaced.
-///
-/// The stored copy is checked against the digest recorded with it, and the write
-/// goes through [`apply_file`], so the rollback keeps the same guarantees: the
-/// file must still hold what this module wrote, the replacement goes through a
-/// temporary file, and the content it removes is copied first.
-///
-/// # Errors
-/// Returns `BackupUnavailable` when the stored copy cannot be read or no longer
-/// matches its digest, `TargetChanged` when the file changed after the write
-/// being undone, and the [`apply_file`] errors for the new write.
-pub fn restore_file(
-    path: &Path,
-    applied_digest: &str,
-    backup: &Backup,
-    backups: &BackupStore,
-) -> Result<AppliedFile, WriteError> {
-    let bytes = read_backup(backup)?;
-    apply_file(
-        &WriteTarget {
-            path: path.to_path_buf(),
-            expected_digest: Some(applied_digest.to_owned()),
-        },
-        &bytes,
-        backups,
-    )
-}
-
-/// Remove a file this module created, when it still holds exactly that content.
-///
-/// The file did not exist before the write, so a rollback removes it instead of
-/// restoring content. A file that another writer changed is left in place, and a
-/// file that is already gone counts as removed.
-///
-/// # Errors
-/// Returns `SymlinkRefused` for a link, `TargetChanged` when the content is not
-/// the one this module wrote, `TargetUnreadable` when the path cannot be read,
-/// and `WriteFailed` when the removal failed.
-pub fn remove_created_file(path: &Path, applied_digest: &str) -> Result<(), WriteError> {
-    let document = read_target(path)?;
-    if document.target.symlink {
-        return Err(WriteError::SymlinkRefused);
-    }
-    if !document.target.exists {
-        return Ok(());
-    }
-    if document.target.content_digest.as_deref() != Some(applied_digest) {
-        return Err(WriteError::TargetChanged);
-    }
-    fs::remove_file(path).map_err(|_| WriteError::WriteFailed)
-}
-
-/// Roll back one applied step and leave no copy of the content it removed.
-fn restore_step(step: &StepRecord, backups: &BackupStore) -> Result<(), WriteError> {
-    let digest = step
-        .applied_digest
-        .as_deref()
-        .ok_or(WriteError::InvalidStoredOperation)?;
-    let path = Path::new(&step.target_path);
-    let Some(backup) = &step.backup else {
-        return remove_created_file(path, digest);
-    };
-    let applied = restore_file(path, digest, backup, backups)?;
-    // The restored file is what the user had; the copy this rollback took of the
-    // content it removed is not referenced by any step, so it is discarded.
-    if let Some(created) = &applied.backup {
-        backups.discard(created);
-    }
-    Ok(())
-}
-
-/// Read a stored copy, bounded like a target file and checked against its digest.
-fn read_backup(backup: &Backup) -> Result<Vec<u8>, WriteError> {
-    let path = Path::new(&backup.path);
-    let metadata = fs::metadata(path).map_err(|_| WriteError::BackupUnavailable)?;
-    if metadata.len() > MAX_TARGET_BYTES {
-        return Err(WriteError::BackupUnavailable);
-    }
-    let bytes = fs::read(path).map_err(|_| WriteError::BackupUnavailable)?;
-    if digest_hex(&bytes) != backup.content_digest {
-        return Err(WriteError::BackupUnavailable);
-    }
-    Ok(bytes)
+    let outcome = roll_back_operation(storage, &record, &pending_ordinals(&record), backups)?;
+    finish_operation(storage, operation_id, outcome.state)?;
+    Ok(outcome.state)
 }

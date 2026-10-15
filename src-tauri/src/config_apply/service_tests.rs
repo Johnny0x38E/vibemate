@@ -76,6 +76,7 @@ fn an_apply_step_replaces_every_file_and_settles_as_applied() {
     let result = apply_files(
         &fixture.storage,
         OperationKind::ClaudeCodeSettings,
+        None,
         &files,
         &backups,
     )
@@ -127,6 +128,7 @@ fn a_failing_second_file_rolls_the_first_one_back() {
     let result = apply_files(
         &fixture.storage,
         OperationKind::ClaudeCodeSettings,
+        None,
         &[first, second],
         &fixture.backups(),
     )
@@ -181,6 +183,7 @@ fn a_created_file_is_removed_when_the_step_is_rolled_back() {
     let result = apply_files(
         &fixture.storage,
         OperationKind::ClaudeCodeSettings,
+        None,
         &[first, second],
         &fixture.backups(),
     )
@@ -211,6 +214,7 @@ fn a_failing_first_file_changes_nothing_and_settles_as_failed() {
     let result = apply_files(
         &fixture.storage,
         OperationKind::ClaudeCodeSettings,
+        None,
         &[stale, later],
         &fixture.backups(),
     )
@@ -241,6 +245,7 @@ fn compensation_leaves_a_file_a_later_edit_changed() {
     let result = apply_files(
         &fixture.storage,
         OperationKind::ClaudeCodeSettings,
+        None,
         &files,
         &backups,
     )
@@ -267,6 +272,7 @@ fn compensation_leaves_a_file_a_later_edit_changed() {
     let unfinished = begin_operation(
         &fixture.storage,
         OperationKind::ClaudeCodeSettings,
+        None,
         &[WriteTarget {
             path: fixture.path("settings.json"),
             expected_digest: None,
@@ -279,6 +285,7 @@ fn compensation_leaves_a_file_a_later_edit_changed() {
         0,
         Some(step.backup.as_ref().unwrap()),
         step.applied_digest.as_deref().unwrap(),
+        true,
     )
     .unwrap();
     assert_eq!(
@@ -302,6 +309,7 @@ fn a_stored_copy_that_no_longer_matches_its_digest_is_refused() {
     let result = apply_files(
         &fixture.storage,
         OperationKind::ClaudeCodeSettings,
+        None,
         &files,
         &backups,
     )
@@ -338,6 +346,7 @@ fn an_empty_step_or_a_settled_operation_is_refused() {
         apply_files(
             &fixture.storage,
             OperationKind::ClaudeCodeSettings,
+            None,
             &empty,
             &fixture.backups()
         )
@@ -351,6 +360,7 @@ fn an_empty_step_or_a_settled_operation_is_refused() {
     let settled = apply_files(
         &fixture.storage,
         OperationKind::ClaudeCodeSettings,
+        None,
         &files,
         &backups,
     )

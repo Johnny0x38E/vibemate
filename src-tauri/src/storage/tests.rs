@@ -757,6 +757,55 @@ fn operation_log_migration_keeps_earlier_rows_and_starts_empty() {
 }
 
 #[test]
+fn restore_columns_migrate_an_older_operation_log_without_guessing() {
+    let directory = TestDirectory::new("operation-restore-upgrade");
+    let path = directory.path.join(DATABASE_FILE_NAME);
+    let old = Storage::open_file(&path, &MIGRATIONS[..16]).expect("v16 database");
+    let operation_id = "c".repeat(32);
+    old.lock()
+        .expect("lock")
+        .execute_batch(&format!(
+            "INSERT INTO config_operation (id, kind, state, created_at, updated_at)
+             VALUES ('{operation_id}', 'claude_code_settings', 'planned', 10, 10);
+             INSERT INTO config_operation_step
+                 (operation_id, ordinal, target_path, state, applied_digest, updated_at)
+             VALUES ('{operation_id}', 0, '/tmp/settings.json', 'applied',
+                 'abababababababababababababababababababababababababababababababab', 10);
+             INSERT INTO config_operation_step
+                 (operation_id, ordinal, target_path, state, updated_at)
+             VALUES ('{operation_id}', 1, '/tmp/models.json', 'pending', 10);"
+        ))
+        .expect("v16 rows");
+    drop(old);
+
+    let upgraded = Storage::open_in_directory(&directory.path).expect("upgrade");
+    assert_eq!(
+        upgraded.schema_version().expect("version"),
+        latest_schema_version()
+    );
+    // An older write has no owner, no rollback result and no statement about
+    // whether its file existed: NULL means "not recorded", so the reader reports
+    // exactly that instead of inventing a value.
+    let record = crate::config_apply::operation(&upgraded, &operation_id)
+        .expect("read log")
+        .expect("kept operation");
+    assert_eq!(record.owner_ref, None);
+    assert_eq!(record.steps.len(), 2);
+    assert_eq!(
+        record.steps[0].state,
+        crate::config_apply::StepState::Applied
+    );
+    assert_eq!(record.steps[0].restore_state, None);
+    assert_eq!(record.steps[0].previous_existed, None);
+    assert_eq!(
+        record.steps[1].state,
+        crate::config_apply::StepState::Pending
+    );
+    assert_eq!(record.steps[1].restore_state, None);
+    assert_eq!(record.steps[1].previous_existed, None);
+}
+
+#[test]
 fn operation_rows_are_constrained_and_follow_their_operation() {
     let directory = TestDirectory::new("operation-constraints");
     let storage = Storage::open_in_directory(&directory.path).expect("open");
@@ -764,7 +813,8 @@ fn operation_rows_are_constrained_and_follow_their_operation() {
     let id = "a".repeat(32);
     connection
         .execute(
-            "INSERT INTO config_operation VALUES (?1, 'claude_code_settings', 'planned', 10, 10)",
+            "INSERT INTO config_operation (id, kind, state, created_at, updated_at)
+             VALUES (?1, 'claude_code_settings', 'planned', 10, 10)",
             [&id],
         )
         .expect("operation row");
@@ -777,6 +827,7 @@ fn operation_rows_are_constrained_and_follow_their_operation() {
         )
     };
     assert!(step(&id, 0, "pending").is_ok());
+    assert!(step(&id, 1, "pending").is_ok());
     // One row per ordinal, known states only, and the operation must exist.
     assert!(step(&id, 0, "pending").is_err());
     assert!(step(&id, 1, "half-applied").is_err());
@@ -810,6 +861,79 @@ fn operation_rows_are_constrained_and_follow_their_operation() {
     assert!(
         update("UPDATE config_operation_step SET backup_id = '1700000000000-1-0' WHERE operation_id = ?1")
             .is_err()
+    );
+    // A rollback result belongs to an applied step and is one of the known
+    // values; it is stored apart from the failure code above.
+    let second_step = "UPDATE config_operation_step SET restore_state = 'restored'
+         WHERE operation_id = ?1 AND ordinal = 1";
+    assert!(connection.execute(second_step, [&id]).is_err());
+    connection
+        .execute(
+            "UPDATE config_operation_step SET state = 'applied', applied_digest = \
+             'abababababababababababababababababababababababababababababababab' \
+             WHERE operation_id = ?1 AND ordinal = 0",
+            [&id],
+        )
+        .expect("applied step");
+    let first_step = |sql: &str| connection.execute(sql, [&id]);
+    assert!(
+        first_step(
+            "UPDATE config_operation_step SET restore_state = 'restored'\n             WHERE operation_id = ?1 AND ordinal = 0"
+        )
+        .is_ok()
+    );
+    assert!(
+        first_step(
+            "UPDATE config_operation_step SET restore_state = 'half-done'\n             WHERE operation_id = ?1 AND ordinal = 0"
+        )
+        .is_err()
+    );
+    assert!(
+        first_step(
+            "UPDATE config_operation_step SET restore_state = NULL\n             WHERE operation_id = ?1 AND ordinal = 0"
+        )
+        .is_ok()
+    );
+    // Whether the file existed before the step is stated the same way: only an
+    // applied step may carry it, and only as one of its two values.
+    assert!(
+        connection
+            .execute(
+                "UPDATE config_operation_step SET previous_existed = 1\n                 WHERE operation_id = ?1 AND ordinal = 1",
+                [&id],
+            )
+            .is_err()
+    );
+    let first_existed = |sql: &str| connection.execute(sql, [&id]);
+    assert!(
+        first_existed(
+            "UPDATE config_operation_step SET previous_existed = 1\n             WHERE operation_id = ?1 AND ordinal = 0"
+        )
+        .is_ok()
+    );
+    assert!(
+        first_existed(
+            "UPDATE config_operation_step SET previous_existed = 0\n             WHERE operation_id = ?1 AND ordinal = 0"
+        )
+        .is_ok()
+    );
+    assert!(
+        first_existed(
+            "UPDATE config_operation_step SET previous_existed = 7\n             WHERE operation_id = ?1 AND ordinal = 0"
+        )
+        .is_err()
+    );
+    // An operation owner is a bounded printable reference, never a display name
+    // that a later rename would rewrite.
+    let owner = |sql: &str| connection.execute(sql, [&id]);
+    assert!(
+        owner("UPDATE config_operation SET owner_ref = '0123456789abcdef' WHERE id = ?1").is_ok()
+    );
+    assert!(owner("UPDATE config_operation SET owner_ref = '' WHERE id = ?1").is_err());
+    assert!(owner("UPDATE config_operation SET owner_ref = char(1) || 'x' WHERE id = ?1").is_err());
+    assert!(
+        owner("UPDATE config_operation SET owner_ref = 'x' WHERE id = ?1").is_ok(),
+        "a short reference is valid"
     );
     // Deleting the operation removes its steps with it.
     connection

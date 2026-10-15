@@ -439,8 +439,16 @@ pub fn apply_claude_code_settings(
         target: WriteTarget::from_plan(&plan.target),
         content,
     }];
-    let applied = apply_files(storage, OperationKind::ClaudeCodeSettings, &files, &backups)
-        .map_err(ClaudeCodeApplyError::from_write)?;
+    let applied = apply_files(
+        storage,
+        OperationKind::ClaudeCodeSettings,
+        // The stored Provider ID labels the operation, so the restore view can
+        // say which key the written file carried without reading any key.
+        Some(plan.source.provider_id.as_str()),
+        &files,
+        &backups,
+    )
+    .map_err(ClaudeCodeApplyError::from_write)?;
     Ok(ClaudeCodeApplied {
         // Only a settings file that now holds the planned keys needs a new
         // session; a refused or rolled-back write leaves the previous content.
@@ -499,3 +507,14 @@ mod tests;
 
 #[cfg(test)]
 mod apply_tests;
+
+mod restore;
+pub use restore::{
+    ApplyClaudeCodeRestoreRequest, ClaudeCodeOperation, ClaudeCodeOperationStep,
+    ClaudeCodeRestoreError, ClaudeCodeRestorePlan, ClaudeCodeRestoreStep,
+    ReviewedRestoreStepRequest, apply_claude_code_restore, list_claude_code_operations,
+    plan_claude_code_restore,
+};
+
+#[cfg(test)]
+mod restore_tests;

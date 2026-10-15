@@ -120,6 +120,23 @@ pub(super) fn with_apply_storage<T>(
     operation(storage)
 }
 
+/// Resolve startup storage while preserving the restore step's safe error codes.
+///
+/// The restore reads and writes the database and the user settings file; both
+/// are blocking, so callers run this on the blocking pool.
+pub(super) fn with_restore_storage<T>(
+    app: &tauri::AppHandle,
+    operation: impl FnOnce(&Storage) -> Result<T, crate::agents::ClaudeCodeRestoreError>,
+) -> Result<T, crate::agents::ClaudeCodeRestoreError> {
+    let status = app
+        .try_state::<StorageStatus>()
+        .ok_or(crate::agents::ClaudeCodeRestoreError::StorageUnavailable)?;
+    let storage = status
+        .storage()
+        .map_err(|_| crate::agents::ClaudeCodeRestoreError::StorageUnavailable)?;
+    operation(storage)
+}
+
 /// Resolve startup storage while preserving safe MCP error codes.
 pub(super) fn with_mcp_storage<T>(
     app: &tauri::AppHandle,

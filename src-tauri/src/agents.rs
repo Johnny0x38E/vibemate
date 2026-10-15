@@ -6,9 +6,12 @@ mod claude_code;
 mod discovery;
 mod version_probe;
 pub use claude_code::{
-    ClaudeCodeApplied, ClaudeCodeApplyError, ClaudeCodeApplyInput, ClaudeCodePlanInput,
-    GatewayStatus, ModelFacts, ProviderFacts, ReviewedPlan, apply_claude_code_settings,
-    gateway_status, plan_claude_code_settings,
+    ApplyClaudeCodeRestoreRequest, ClaudeCodeApplied, ClaudeCodeApplyError, ClaudeCodeApplyInput,
+    ClaudeCodeOperation, ClaudeCodeOperationStep, ClaudeCodePlanInput, ClaudeCodeRestoreError,
+    ClaudeCodeRestorePlan, ClaudeCodeRestoreStep, GatewayStatus, ModelFacts, ProviderFacts,
+    ReviewedPlan, ReviewedRestoreStepRequest, apply_claude_code_restore,
+    apply_claude_code_settings, gateway_status, list_claude_code_operations,
+    plan_claude_code_restore, plan_claude_code_settings,
 };
 pub use version_probe::{
     AgentVersionResult, VersionProbeError, VersionProbeGate, VersionProbeInput, probe_agent_version,

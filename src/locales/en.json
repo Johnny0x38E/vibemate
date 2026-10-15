@@ -650,6 +650,89 @@
                 "desktop_required": "Applying configuration needs the vibemate desktop app.",
                 "invalid_response": "The desktop app returned an unexpected plan."
             }
+        },
+        "restore": {
+            "title": "Configuration history",
+            "previewMode": "The browser preview cannot read configuration files or the write history. Open the Agents page in the vibemate desktop app.",
+            "loading": "Reading recorded writes…",
+            "empty": "vibemate has not written this configuration yet.",
+            "retry": "Try again",
+            "recheck": "Recheck",
+            "preview": "Preview restore",
+            "previewing": "Building the restore preview…",
+            "previewFor": "Restore preview for the write made {{time}}",
+            "previewHeading": "Restore preview",
+            "confirm": "Restore the previous content",
+            "restoring": "Restoring…",
+            "nothingToRestore": "This write has nothing to restore in its current state.",
+            "conflictHint": "Open the file and decide what to keep, then recheck and preview again. vibemate never overwrites a file that changed after its write.",
+            "keyNotice": "The restored file gets back whatever it held before this write, including a plain text API key if it contained one. OS credential storage is not changed.",
+            "provider": "Provider: {{name}}",
+            "providerRemoved": "Provider: {{id}} (no longer in the library)",
+            "restoredOwnerNamed": "The content that comes back was written by the Provider {{name}}.",
+            "restoredOwnerRemoved": "The content that comes back was written for {{id}}, a Provider no longer in the library.",
+            "restoredOwnerUnknown": "The content that comes back was not written by vibemate: it was edited by hand or by another tool.",
+            "states": {
+                "planned": "Recorded, not finished",
+                "applied": "Written",
+                "failed": "Nothing written",
+                "partial": "Partly rolled back",
+                "unknown": "Result unverified",
+                "compensated": "Rolled back"
+            },
+            "stepStates": {
+                "restored": "Already restored",
+                "conflict": "Left alone: conflict",
+                "unavailable": "Copy unavailable",
+                "failed": "Restore did not finish",
+                "unknown": "Result unverified"
+            },
+            "actions": {
+                "restore": "Write the previous content back",
+                "remove": "Remove the file this write created",
+                "conflict": "Left alone: the file changed after this write",
+                "blocked": "Cannot be restored safely",
+                "skip": "Nothing to do"
+            },
+            "reasons": {
+                "invalid_request": "the request was not valid",
+                "target_changed": "the file changed after this write",
+                "symlink_refused": "the path is a symbolic link",
+                "target_read_only": "the file is read-only",
+                "target_path_invalid": "the path cannot be used",
+                "target_unreadable": "the file could not be read",
+                "target_too_large": "the file is larger than the restore limit",
+                "backup_unavailable": "the stored copy is missing or no longer matches its digest",
+                "write_failed": "the previous content could not be written back",
+                "outcome_unknown": "the result could not be verified",
+                "storage_unavailable": "local configuration storage is unavailable",
+                "log_write_failed": "the operation could not be recorded",
+                "log_read_failed": "the operation log could not be read",
+                "invalid_stored_operation": "a recorded operation is not valid",
+                "restore_history_unknown": "this write did not record whether the file existed before it, so removing it cannot be shown to be safe"
+            },
+            "outcomeHeading": "Restore result",
+            "outcome": {
+                "compensated": "The write is undone; the file holds the content it had before it.",
+                "partial": "Some files were left alone. They still hold what the write put there.",
+                "unknown": "The result for one file could not be verified. Check the file before trying again.",
+                "failed": "Nothing was restored; the files still hold what the write left."
+            },
+            "stepRestored": "{{path}} — previous content restored",
+            "stepRemoved": "{{path}} — file created by this write removed",
+            "stepProblem": "{{path}} — {{error}}",
+            "leftoversHeading": "These private copies could not be removed:",
+            "leftoverHint": "They hold content that is no longer referenced by any recorded write. Only your user account can read them; delete them yourself if you do not want to keep them.",
+            "resultHint": "Recheck to see the current state, then preview again if a file still needs attention.",
+            "errors": {
+                "operation_not_found": "That recorded write no longer exists. Recheck the list.",
+                "plan_stale": "A file changed since the preview, so nothing was written. Preview again.",
+                "invalid_request": "The restore request was not valid.",
+                "storage_unavailable": "Local configuration storage is unavailable; restart vibemate.",
+                "operation_failed": "The restore could not be completed. Try again.",
+                "desktop_required": "Restoring configuration needs the vibemate desktop app.",
+                "invalid_response": "The desktop app returned an unexpected restore answer."
+            }
         }
     },
     "skills": {

@@ -689,3 +689,507 @@ export async function applyClaudeCodeSettings(
     }
     return appliedResult(value);
 }
+
+/** What a rollback did to one applied step, mirroring Rust's `RestoreState`. */
+export const RESTORE_STATES = [
+    "restored",
+    "conflict",
+    "unavailable",
+    "failed",
+    "unknown",
+] as const;
+export type RestoreState = (typeof RESTORE_STATES)[number];
+/** What a restore would do to one file, mirroring Rust's `RestoreAction`. */
+export const RESTORE_ACTIONS = [
+    "restore",
+    "remove",
+    "conflict",
+    "blocked",
+    "skip",
+] as const;
+export type RestoreAction = (typeof RESTORE_ACTIONS)[number];
+/**
+ * Codes a restore preview attaches to a step it will not carry out: the file
+ * moved on after the write, cannot be read safely, its stored copy is unusable,
+ * or an older write did not record whether the file existed. A write that only
+ * fails when the restore is attempted reports its own code in the result, not
+ * here.
+ */
+export const RESTORE_REASON_CODES = [
+    "target_changed",
+    "target_unreadable",
+    "target_too_large",
+    "target_path_invalid",
+    "symlink_refused",
+    "backup_unavailable",
+    "restore_history_unknown",
+] as const;
+export type RestoreReasonCode = (typeof RESTORE_REASON_CODES)[number];
+/** Safe codes emitted by the restore commands. */
+export const RESTORE_ERROR_CODES = [
+    "operation_not_found",
+    "plan_stale",
+    "invalid_request",
+    "storage_unavailable",
+    "operation_failed",
+] as const;
+/** Restore failures plus errors detected at this IPC boundary. */
+export type RestoreErrorCode =
+    | (typeof RESTORE_ERROR_CODES)[number]
+    | "desktop_required"
+    | "invalid_response";
+/** Safe restore failure; no file content travels with it. */
+export class RestoreRequestError extends Error {
+    readonly code: RestoreErrorCode;
+
+    /** Construct a safe error without keeping its original payload or cause. */
+    constructor(code: RestoreErrorCode) {
+        super("The configuration restore failed.");
+        this.name = "RestoreRequestError";
+        this.code = code;
+    }
+}
+/** One file of a recorded write, without backup paths or file content. */
+export interface RecordedOperationStep {
+    ordinal: number;
+    targetPath: string;
+    state: ApplyStepState;
+    restoreState: RestoreState | null;
+}
+/** One recorded Claude Code settings write, as the restore view lists it. */
+export interface RecordedOperation {
+    operationId: string;
+    state: ApplyState;
+    providerId: string | null;
+    providerLabel: string | null;
+    createdAt: number;
+    updatedAt: number;
+    restorable: boolean;
+    steps: RecordedOperationStep[];
+}
+/** One file of a restore preview. */
+export interface RestorePlanStep {
+    ordinal: number;
+    targetPath: string;
+    action: RestoreAction;
+    reason: RestoreReasonCode | null;
+    currentDigest: string | null;
+    appliedDigest: string | null;
+    restoreState: RestoreState | null;
+    restoredProviderId: string | null;
+    restoredProviderLabel: string | null;
+}
+/** A restore preview: what undoing one recorded write would do. */
+export interface ClaudeCodeRestorePlan {
+    operationId: string;
+    state: ApplyState;
+    createdAt: number;
+    restorable: boolean;
+    providerId: string | null;
+    providerLabel: string | null;
+    steps: RestorePlanStep[];
+}
+/** One reviewed step, exactly as the preview showed it. */
+export interface ReviewedRestoreStep {
+    ordinal: number;
+    currentDigest: string | null;
+}
+/** What one step of a restore did. */
+export interface RestoreStepOutcome {
+    ordinal: number;
+    targetPath: string;
+    action: RestoreAction;
+    state: RestoreState;
+    errorCode: WriteErrorCode | null;
+    leftoverPath: string | null;
+}
+/**
+ * States a restore can settle into. A rollback never applies anything, so a
+ * completed restore is undone, partly undone, unverified or refused — never
+ * `applied`.
+ */
+export const RESTORE_OUTCOME_STATES = [
+    "compensated",
+    "partial",
+    "unknown",
+    "failed",
+] as const;
+export type RestoreOutcomeState = (typeof RESTORE_OUTCOME_STATES)[number];
+/** Result of one confirmed restore, settled before it is answered. */
+export interface RestoreOutcome {
+    operationId: string;
+    state: RestoreOutcomeState;
+    steps: RestoreStepOutcome[];
+    leftovers: string[];
+}
+/** Listing result; the browser preview has no history to show. */
+export type OperationListResult =
+    { kind: "preview" } | { kind: "desktop"; operations: RecordedOperation[] };
+/** Preview result; the browser preview neither lists nor plans a restore. */
+export type RestorePlanResult =
+    { kind: "preview" } | { kind: "desktop"; plan: ClaudeCodeRestorePlan };
+
+/** Reject a restore payload; the error type stays separate from the others. */
+function restoreInvalid(): never {
+    throw new RestoreRequestError("invalid_response");
+}
+
+/** A stored operation identity, in the shape every row uses. */
+function operationId(value: unknown): string {
+    if (typeof value !== "string" || !/^[0-9a-f]{32}$/u.test(value))
+        return restoreInvalid();
+    return value;
+}
+
+/** A bounded display name, or `null` when a reference has no resolved name. */
+function optionalLabel(value: unknown): string | null {
+    if (value === null) return null;
+    if (typeof value !== "string" || value.length === 0 || value.length > 256)
+        return restoreInvalid();
+    return value;
+}
+
+/** A stored digest or `null`; the log stores nothing else in these fields. */
+function optionalDigest(value: unknown): string | null {
+    if (value === null) return null;
+    if (typeof value !== "string" || !/^[0-9a-f]{64}$/u.test(value))
+        return restoreInvalid();
+    return value;
+}
+
+/** A millisecond timestamp the log can have written. */
+function timestamp(value: unknown): number {
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0)
+        return restoreInvalid();
+    return value;
+}
+
+function restoreState(value: unknown): RestoreState | null {
+    if (value === null) return null;
+    const state = RESTORE_STATES.find((known) => known === value);
+    return state ?? restoreInvalid();
+}
+
+function recordedOperationStep(
+    value: unknown,
+    ordinal: number,
+): RecordedOperationStep {
+    if (
+        !isObject(value) ||
+        !hasExactKeys(value, [
+            "ordinal",
+            "targetPath",
+            "state",
+            "restoreState",
+        ]) ||
+        value["ordinal"] !== ordinal
+    )
+        return restoreInvalid();
+    const targetPath = value["targetPath"];
+    if (!isSafePath(targetPath)) return restoreInvalid();
+    const state = APPLY_STEP_STATES.find((known) => known === value["state"]);
+    if (state === undefined) return restoreInvalid();
+    const restore = restoreState(value["restoreState"]);
+    // Only a step that wrote something can carry a rollback result.
+    if (restore !== null && state !== "applied") return restoreInvalid();
+    return { ordinal, targetPath, state, restoreState: restore };
+}
+
+function recordedOperation(value: unknown): RecordedOperation {
+    if (
+        !isObject(value) ||
+        !hasExactKeys(value, [
+            "operationId",
+            "state",
+            "providerId",
+            "providerLabel",
+            "createdAt",
+            "updatedAt",
+            "restorable",
+            "steps",
+        ]) ||
+        typeof value["restorable"] !== "boolean"
+    )
+        return restoreInvalid();
+    const id = operationId(value["operationId"]);
+    const state = APPLY_STATES.find((known) => known === value["state"]);
+    if (state === undefined) return restoreInvalid();
+    const providerId = optionalLabel(value["providerId"]);
+    const providerLabel = optionalLabel(value["providerLabel"]);
+    const createdAt = timestamp(value["createdAt"]);
+    const updatedAt = timestamp(value["updatedAt"]);
+    // A name without the reference it names, or a write that claims to end
+    // before it started, cannot come from the log.
+    if (
+        (providerLabel !== null && providerId === null) ||
+        updatedAt < createdAt
+    )
+        return restoreInvalid();
+    const rawSteps = value["steps"];
+    if (!Array.isArray(rawSteps) || rawSteps.length === 0)
+        return restoreInvalid();
+    return {
+        operationId: id,
+        state,
+        providerId,
+        providerLabel,
+        createdAt,
+        updatedAt,
+        restorable: value["restorable"],
+        steps: rawSteps.map((entry: unknown, index: number) =>
+            recordedOperationStep(entry, index),
+        ),
+    };
+}
+
+function restorePlanStep(value: unknown, ordinal: number): RestorePlanStep {
+    if (
+        !isObject(value) ||
+        !hasExactKeys(value, [
+            "ordinal",
+            "targetPath",
+            "action",
+            "reason",
+            "currentDigest",
+            "appliedDigest",
+            "restoreState",
+            "restoredProviderId",
+            "restoredProviderLabel",
+        ]) ||
+        value["ordinal"] !== ordinal
+    )
+        return restoreInvalid();
+    const targetPath = value["targetPath"];
+    if (!isSafePath(targetPath)) return restoreInvalid();
+    const action = RESTORE_ACTIONS.find((known) => known === value["action"]);
+    if (action === undefined) return restoreInvalid();
+    const reason =
+        value["reason"] === null
+            ? null
+            : RESTORE_REASON_CODES.find((known) => known === value["reason"]);
+    if (reason === undefined) return restoreInvalid();
+    const currentDigest = optionalDigest(value["currentDigest"]);
+    const appliedDigest = optionalDigest(value["appliedDigest"]);
+    const restore = restoreState(value["restoreState"]);
+    const restoredProviderId = optionalLabel(value["restoredProviderId"]);
+    const restoredProviderLabel = optionalLabel(value["restoredProviderLabel"]);
+    // Cross-field checks: only a step the restore will not carry out carries a
+    // reason, writing a copy back needs both digests, removing a created file
+    // needs the digest it was left with, and a name needs its reference.
+    if (
+        (action === "conflict" || action === "blocked") !== (reason !== null) ||
+        (action === "restore" &&
+            (currentDigest === null || appliedDigest === null)) ||
+        (action === "remove" && appliedDigest === null) ||
+        (restoredProviderLabel !== null && restoredProviderId === null)
+    )
+        return restoreInvalid();
+    return {
+        ordinal,
+        targetPath,
+        action,
+        reason,
+        currentDigest,
+        appliedDigest,
+        restoreState: restore,
+        restoredProviderId,
+        restoredProviderLabel,
+    };
+}
+
+function restorePlan(value: unknown): ClaudeCodeRestorePlan {
+    if (
+        !isObject(value) ||
+        !hasExactKeys(value, [
+            "operationId",
+            "state",
+            "createdAt",
+            "restorable",
+            "providerId",
+            "providerLabel",
+            "steps",
+        ]) ||
+        typeof value["restorable"] !== "boolean"
+    )
+        return restoreInvalid();
+    const id = operationId(value["operationId"]);
+    const state = APPLY_STATES.find((known) => known === value["state"]);
+    if (state === undefined) return restoreInvalid();
+    const providerId = optionalLabel(value["providerId"]);
+    const providerLabel = optionalLabel(value["providerLabel"]);
+    if (providerLabel !== null && providerId === null) return restoreInvalid();
+    const rawSteps = value["steps"];
+    if (!Array.isArray(rawSteps) || rawSteps.length === 0)
+        return restoreInvalid();
+    const steps = rawSteps.map((entry: unknown, index: number) =>
+        restorePlanStep(entry, index),
+    );
+    // The flag the interface uses to offer a restore must match the steps it
+    // would carry out.
+    const changesFiles = steps.some(
+        (step) => step.action === "restore" || step.action === "remove",
+    );
+    if (value["restorable"] !== changesFiles) return restoreInvalid();
+    return {
+        operationId: id,
+        state,
+        createdAt: timestamp(value["createdAt"]),
+        restorable: value["restorable"],
+        providerId,
+        providerLabel,
+        steps,
+    };
+}
+
+function restoreStepOutcome(
+    value: unknown,
+    ordinal: number,
+): RestoreStepOutcome {
+    if (
+        !isObject(value) ||
+        !hasExactKeys(value, [
+            "ordinal",
+            "targetPath",
+            "action",
+            "state",
+            "errorCode",
+            "leftoverPath",
+        ]) ||
+        value["ordinal"] !== ordinal
+    )
+        return restoreInvalid();
+    const targetPath = value["targetPath"];
+    if (!isSafePath(targetPath)) return restoreInvalid();
+    const action = RESTORE_ACTIONS.find((known) => known === value["action"]);
+    const state = RESTORE_STATES.find((known) => known === value["state"]);
+    if (action === undefined || state === undefined) return restoreInvalid();
+    const errorCode =
+        value["errorCode"] === null
+            ? null
+            : WRITE_ERROR_CODES.find((known) => known === value["errorCode"]);
+    if (errorCode === undefined) return restoreInvalid();
+    // A step that reached its previous content explains nothing; every other
+    // result carries the code of what stopped it.
+    if ((state === "restored") !== (errorCode === null))
+        return restoreInvalid();
+    const leftoverPath = value["leftoverPath"];
+    if (leftoverPath !== null && !isSafePath(leftoverPath))
+        return restoreInvalid();
+    return { ordinal, targetPath, action, state, errorCode, leftoverPath };
+}
+
+function restoreOutcome(value: unknown): RestoreOutcome {
+    if (
+        !isObject(value) ||
+        !hasExactKeys(value, ["operationId", "state", "steps", "leftovers"])
+    )
+        return restoreInvalid();
+    const id = operationId(value["operationId"]);
+    const state = RESTORE_OUTCOME_STATES.find(
+        (known) => known === value["state"],
+    );
+    if (state === undefined) return restoreInvalid();
+    const rawSteps = value["steps"];
+    if (!Array.isArray(rawSteps) || rawSteps.length === 0)
+        return restoreInvalid();
+    const steps = rawSteps.map((entry: unknown, index: number) =>
+        restoreStepOutcome(entry, index),
+    );
+    const rawLeftovers = value["leftovers"];
+    if (!Array.isArray(rawLeftovers)) return restoreInvalid();
+    const leftovers = rawLeftovers.map((entry: unknown) => {
+        if (!isSafePath(entry)) return restoreInvalid();
+        return entry;
+    });
+    // The list of copies left behind is exactly the paths the steps report, so a
+    // reported leftover cannot be dropped from the summary.
+    const reported = steps
+        .map((step) => step.leftoverPath)
+        .filter((entry): entry is string => entry !== null);
+    if (
+        reported.length !== leftovers.length ||
+        reported.some((entry) => !leftovers.includes(entry))
+    )
+        return restoreInvalid();
+    return { operationId: id, state, steps, leftovers };
+}
+
+/**
+ * List the Claude Code settings writes vibemate recorded, newest first.
+ *
+ * Read-only: the listing names files, states and digests, never file content and
+ * never where a copy of it sits. Browser preview says so instead of inventing a
+ * history.
+ */
+export async function listClaudeCodeOperations(): Promise<OperationListResult> {
+    if (!isTauri()) return { kind: "preview" };
+    let value: unknown;
+    try {
+        value = await invoke<unknown>("claude_code_operations");
+    } catch (error: unknown) {
+        throw new RestoreRequestError(
+            RESTORE_ERROR_CODES.find((code) => code === error) ??
+                "operation_failed",
+        );
+    }
+    if (!Array.isArray(value)) return restoreInvalid();
+    return {
+        kind: "desktop",
+        operations: value.map((entry: unknown) => recordedOperation(entry)),
+    };
+}
+
+/**
+ * Preview what undoing one recorded write would do.
+ *
+ * Rust reads the settings file for its change token and compares it with what
+ * the write left, so the answer says whether each file would be written back,
+ * removed, or left alone because it changed. No file content and no credential
+ * value is read into it.
+ */
+export async function planClaudeCodeRestore(
+    operationId: string,
+): Promise<RestorePlanResult> {
+    if (!isTauri()) return { kind: "preview" };
+    let value: unknown;
+    try {
+        value = await invoke<unknown>("plan_claude_code_restore", {
+            operationId,
+        });
+    } catch (error: unknown) {
+        throw new RestoreRequestError(
+            RESTORE_ERROR_CODES.find((code) => code === error) ??
+                "operation_failed",
+        );
+    }
+    return { kind: "desktop", plan: restorePlan(value) };
+}
+
+/**
+ * Apply a restore the user confirmed.
+ *
+ * Rust rebuilds the preview and compares every reviewed digest, so a settings
+ * edit made after the preview is refused with `plan_stale` instead of being
+ * overwritten. Restoring reads no credential: the previous content comes from
+ * the private copy, and the settings file ends up with whichever key it held
+ * before the write being undone. A file-level conflict is a state in the result,
+ * not a thrown error.
+ */
+export async function applyClaudeCodeRestore(
+    operationId: string,
+    reviewed: ReviewedRestoreStep[],
+): Promise<RestoreOutcome> {
+    if (!isTauri()) throw new RestoreRequestError("desktop_required");
+    let value: unknown;
+    try {
+        value = await invoke<unknown>("apply_claude_code_restore", {
+            input: { operationId, reviewed },
+        });
+    } catch (error: unknown) {
+        throw new RestoreRequestError(
+            RESTORE_ERROR_CODES.find((code) => code === error) ??
+                "operation_failed",
+        );
+    }
+    return restoreOutcome(value);
+}

@@ -1,0 +1,77 @@
+/*
+ * Configuration-history card for the Claude Code detail page.
+ *
+ * The card surface, the action row and the notice list come from the shared
+ * `DetailPanel` and the neighbouring plan card, so this module owns only the
+ * history rows: one bordered row per recorded write, with the state and time on
+ * one line, the changed files under it, and this row's restore entry at the end.
+ * Borders separate rows instead of extra containers, matching the change list
+ * next door.
+ */
+
+.rows {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.row {
+    display: grid;
+    gap: 4px;
+    padding: 10px 0;
+    border-top: 1px solid var(--color-border);
+}
+
+.rowSummary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 6px;
+}
+
+.state {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    line-height: 1.5;
+}
+
+.time {
+    color: var(--color-summary);
+    font-size: 0.75rem;
+    line-height: 1.4;
+}
+
+.files {
+    display: grid;
+    gap: 2px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.file {
+    display: grid;
+    gap: 2px;
+}
+
+.stepState {
+    color: var(--color-summary);
+    font-size: 0.75rem;
+    line-height: 1.4;
+}
+
+.provider {
+    margin: 0;
+    color: var(--color-summary);
+    font-size: 0.75rem;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.action {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    line-height: 1.5;
+}

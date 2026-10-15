@@ -203,8 +203,8 @@ Agent 详情页增加「当前配置」只读汇总区，首期只交付模型�
 ### Task P19: 建立可恢复配置写入
 
 **Description:** 实现文件写入安全机制，供 Pi 应用与其他注入复用，不扩展为通用文件管理器。
-设计、安全规则与批次见 [config-apply.md](config-apply.md)；P19.a（目标校验、私有备份、原子替换）
-与 P19.b1（操作日志，schema v16）已交付 2026-10-14，P19.b2（多文件编排与补偿）未开始。
+设计、安全规则与批次见 [config-apply.md](config-apply.md)；P19.a（目标校验、私有备份、原子替换）、
+P19.b1（操作日志，schema v16）与 P19.b2（多文件编排与补偿）均已交付 2026-10-14。
 
 **Acceptance criteria:**
 
@@ -221,7 +221,8 @@ Agent 详情页增加「当前配置」只读汇总区，首期只交付模型�
 - [x] 运行 Rust `config_apply` 故障注入测试，覆盖并发、替换失败、权限和部分提交。（2026-10-14：32 项，
       含并发变化、文件出现/消失、符号链接、只读目标与只读父目录、备份不可用或摘要不符、第二文件失败后
       回滚、回滚遇到用户改动时记 `partial`。）
-- [ ] 运行 Rust fmt/Clippy；阶段检查点执行原生构建。
+- [x] 运行 Rust fmt/Clippy；阶段检查点执行原生构建。（2026-10-14 补记：`cargo fmt --check`、`cargo clippy --locked --all-targets -- -D warnings`、
+      `cargo test --locked`（378 通过、1 忽略）与 `pnpm run tauri build --no-bundle -- --locked` 均通过；原生真实写入验收已由 P20 覆盖。）
 
 **Dependencies:** P05,P06,P18。
 
@@ -273,7 +274,12 @@ Agent 详情页增加「当前配置」只读汇总区，首期只交付模型�
 
 ### Task P21: 回滚 Claude Code 配置
 
-**Description:** 提供历史操作结果和恢复预览，将误操作恢复为备份版本。
+**Description:** 提供历史操作结果和恢复预览，将误操作恢复为备份版本。机制放在 `config_apply`，
+首个界面只服务 Claude Code；设计见 [config-apply.md](config-apply.md) 的 P21 段，批次为 P21.a 设计与
+文档、P21.b v17 逐步骤回滚状态与 `restore.rs`、P21.c 命令与前端边界、P21.d RestoreView、P21.e 维护者原生验收。
+**进度（2026-10-14）：** P21.a–P21.d 已交付（schema v17、恢复预览/应用、三个 IPC 命令与前端边界、
+双语「配置历史」卡片与行为测试）；剩下维护者的 P21.e 原生验收（预览 → 恢复 → Claude Code 启动），
+因此接受标准与本地验收先不勾选。
 
 **Acceptance criteria:**
 
@@ -283,8 +289,11 @@ Agent 详情页增加「当前配置」只读汇总区，首期只交付模型�
 
 **Verification:**
 
-- [ ] 运行 Rust `config_restore` 故障测试与 RestoreView 行为测试。
-- [ ] 运行 `check:frontend` 与 Rust fmt/Clippy。
+- [x] 运行 Rust `config_restore` 故障测试与 RestoreView 行为测试。（2026-10-14：`config_apply/restore_tests.rs`
+      13 项与 `agents/claude_code/restore_tests.rs` 7 项覆盖分类、冲突、重试继续、过期审批、残留副本与凭据归属；
+      `RestoreView.test.tsx` 13 项覆盖列表、预览、确认、重复点击、键盘提交与冲突提示。）
+- [x] 运行 `check:frontend` 与 Rust fmt/Clippy。（2026-10-14：前端 42 文件 834 项与 `check:frontend` 全绿；
+      Rust fmt/Clippy 通过，全量测试 403 通过、1 忽略。）
 - [ ] 真实 Tauri 使用临时配置完成应用→恢复→原生启动检查。
 
 **Dependencies:** P20。

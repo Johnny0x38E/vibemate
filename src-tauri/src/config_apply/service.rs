@@ -62,7 +62,10 @@ pub struct AppliedOperation {
 /// Replace every file of one apply step, or undo the ones already replaced.
 ///
 /// The operation is recorded before the first file is touched, and each file is
-/// recorded as it finishes. A failure at any file stops the step, rolls back the
+/// recorded as it finishes. `owner` names what the step writes configuration for
+/// (the Provider ID for a model link) and is stored with the operation row, so a
+/// later restore can label which key the written file carried.
+/// A failure at any file stops the step, rolls back the
 /// files already replaced, and returns the settled state instead of an error:
 /// `failed` when no file was replaced, `compensated` when the rollback undid all
 /// of them, `partial` or `unknown` when a file could not be restored. The
@@ -73,12 +76,14 @@ pub struct AppliedOperation {
 /// discoverable through [`unfinished_operations`](super::unfinished_operations).
 ///
 /// # Errors
-/// Returns `InvalidRequest` for an empty file list or a path that cannot be
-/// shown, and `StorageUnavailable`, `LogWriteFailed` or `LogReadFailed` when the
-/// operation log cannot be written or read.
+/// Returns `InvalidRequest` for an empty file list, a path that cannot be shown
+/// or an owner reference of the wrong shape, and `StorageUnavailable`,
+/// `LogWriteFailed` or `LogReadFailed` when the operation log cannot be written
+/// or read.
 pub fn apply_files(
     storage: &Storage,
     kind: OperationKind,
+    owner: Option<&str>,
     files: &[PlannedFile],
     backups: &BackupStore,
 ) -> Result<AppliedOperation, WriteError> {
@@ -86,7 +91,7 @@ pub fn apply_files(
         return Err(WriteError::InvalidRequest);
     }
     let targets: Vec<WriteTarget> = files.iter().map(|file| file.target.clone()).collect();
-    let operation_id = begin_operation(storage, kind, &targets)?;
+    let operation_id = begin_operation(storage, kind, owner, &targets)?;
     let mut steps = Vec::with_capacity(files.len());
     for (index, file) in files.iter().enumerate() {
         let ordinal = u32::try_from(index).map_err(|_| WriteError::InvalidRequest)?;

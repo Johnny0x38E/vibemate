@@ -201,7 +201,8 @@ SQLite schema v16 新增 `config_operation` 与 `config_operation_step`，仓储
 ### 批次
 
 - P21.a 设计与本文件（2026-10-14）。
-- P21.b `config_apply/restore.rs`、v17 迁移（`owner_ref`、`restore_state`）、故障注入测试。
+- P21.b1 schema v17（`owner_ref`、`restore_state`）、日志读写与迁移测试（2026-10-14 交付）。
+- P21.b2 `config_apply/restore.rs`：恢复预览、恢复应用、共享回滚实现与故障注入测试。
 - P21.c 三个命令与前端边界。
 - P21.d RestoreView、双语文案与行为测试。
 - P21.e 维护者原生验收：临时配置 apply → restore → 原生启动。

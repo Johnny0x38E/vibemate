@@ -295,6 +295,51 @@ impl StepState {
     }
 }
 
+/// What a rollback did to one applied step.
+///
+/// Stored per step so a partly rolled back operation can be retried: without it
+/// a second attempt would treat a file that already holds its previous content
+/// as one the user edited, and the operation would stay `partial` forever.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RestoreState {
+    /// The previous content is back, or a file this module created is gone.
+    Restored,
+    /// The file changed after the write, so the rollback left it untouched.
+    Conflict,
+    /// The stored copy is missing or damaged, so the previous content cannot be produced.
+    Unavailable,
+    /// Writing the previous content back did not complete.
+    Failed,
+    /// Whether the rollback happened could not be checked.
+    Unknown,
+}
+
+impl RestoreState {
+    /// Value stored in `config_operation_step.restore_state`.
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Restored => "restored",
+            Self::Conflict => "conflict",
+            Self::Unavailable => "unavailable",
+            Self::Failed => "failed",
+            Self::Unknown => "unknown",
+        }
+    }
+
+    /// Parse a stored value; an unknown value is a malformed row.
+    pub(crate) fn from_stored(value: &str) -> Option<Self> {
+        match value {
+            "restored" => Some(Self::Restored),
+            "conflict" => Some(Self::Conflict),
+            "unavailable" => Some(Self::Unavailable),
+            "failed" => Some(Self::Failed),
+            "unknown" => Some(Self::Unknown),
+            _ => None,
+        }
+    }
+}
+
 /// One recorded file of an operation, without any file content.
 #[derive(Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -313,6 +358,8 @@ pub struct StepRecord {
     pub backup: Option<Backup>,
     /// SHA-256 written by this step; present exactly when it applied.
     pub applied_digest: Option<String>,
+    /// What a rollback did to this file; `None` until one is attempted.
+    pub restore_state: Option<RestoreState>,
 }
 
 /// One recorded write operation with its steps.
@@ -323,6 +370,8 @@ pub struct OperationRecord {
     pub id: String,
     /// Feature that owns the operation.
     pub kind: OperationKind,
+    /// Reference to what the operation wrote configuration for, when it wrote one.
+    pub owner_ref: Option<String>,
     /// How far the operation got.
     pub state: OperationState,
     /// Unix milliseconds when the operation was recorded.
@@ -581,8 +630,8 @@ mod operations;
 mod service;
 
 pub use operations::{
-    begin_operation, finish_operation, operation, record_step_applied, record_step_failed,
-    unfinished_operations,
+    begin_operation, finish_operation, operation, recent_operations, record_step_applied,
+    record_step_failed, record_step_restored, unfinished_operations,
 };
 pub use service::{
     AppliedOperation, PlannedFile, StepOutcome, apply_files, compensate_operation,

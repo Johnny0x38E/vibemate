@@ -166,7 +166,7 @@ fn an_applied_step_keeps_its_backup_reference() {
         content_digest: digest_hex(b"replaced"),
     };
     let applied = digest_hex(b"applied");
-    record_step_applied(&fixture.storage, &id, 0, Some(&backup), &applied).unwrap();
+    record_step_applied(&fixture.storage, &id, 0, Some(&backup), &applied, true).unwrap();
 
     let record = operation(&fixture.storage, &id).unwrap().unwrap();
     assert_eq!(record.steps[0].state, StepState::Applied);
@@ -238,7 +238,7 @@ fn a_crash_between_steps_stays_discoverable_after_a_restart() {
         &steps,
     )
     .unwrap();
-    record_step_applied(&fixture.storage, &id, 0, None, &digest_hex(b"first")).unwrap();
+    record_step_applied(&fixture.storage, &id, 0, None, &digest_hex(b"first"), false).unwrap();
     // The process stops here: the operation is never finished.
 
     let reopened = crate::storage::Storage::open_in_directory(&fixture.root).unwrap();
@@ -255,7 +255,15 @@ fn operations_keep_their_own_steps() {
     let fixture = Fixture::new();
     let first = fixture.begin_one("settings.json");
     let second = fixture.begin_one("models.json");
-    record_step_applied(&fixture.storage, &first, 0, None, &digest_hex(b"one")).unwrap();
+    record_step_applied(
+        &fixture.storage,
+        &first,
+        0,
+        None,
+        &digest_hex(b"one"),
+        false,
+    )
+    .unwrap();
 
     let listed = unfinished_operations(&fixture.storage).unwrap();
     assert_eq!(listed.len(), 2);
@@ -313,7 +321,15 @@ fn invalid_log_input_is_refused_without_recording_anything() {
 
     let id = fixture.begin_one("settings.json");
     assert_eq!(
-        record_step_applied(&fixture.storage, &id, 1, None, &digest_hex(b"applied")).unwrap_err(),
+        record_step_applied(
+            &fixture.storage,
+            &id,
+            1,
+            None,
+            &digest_hex(b"applied"),
+            false
+        )
+        .unwrap_err(),
         WriteError::InvalidRequest
     );
     assert_eq!(
@@ -321,7 +337,7 @@ fn invalid_log_input_is_refused_without_recording_anything() {
         WriteError::InvalidRequest
     );
     assert_eq!(
-        record_step_applied(&fixture.storage, &id, 0, None, "not-a-digest").unwrap_err(),
+        record_step_applied(&fixture.storage, &id, 0, None, "not-a-digest", false).unwrap_err(),
         WriteError::InvalidRequest
     );
     let missing = "0".repeat(32);
@@ -330,8 +346,15 @@ fn invalid_log_input_is_refused_without_recording_anything() {
         WriteError::InvalidRequest
     );
     assert_eq!(
-        record_step_applied(&fixture.storage, &missing, 0, None, &digest_hex(b"applied"))
-            .unwrap_err(),
+        record_step_applied(
+            &fixture.storage,
+            &missing,
+            0,
+            None,
+            &digest_hex(b"applied"),
+            false
+        )
+        .unwrap_err(),
         WriteError::InvalidRequest
     );
     assert_eq!(
@@ -362,6 +385,8 @@ fn a_malformed_row_is_rejected_instead_of_displayed() {
         "UPDATE config_operation_step SET backup_id = 'x', backup_path = '/tmp/x' WHERE operation_id = ?1",
         "UPDATE config_operation_step SET error_code = 'WRONG' WHERE operation_id = ?1",
         "UPDATE config_operation_step SET restore_state = 'half-done' WHERE operation_id = ?1",
+        "UPDATE config_operation_step SET previous_existed = 1 WHERE operation_id = ?1",
+        "UPDATE config_operation_step SET previous_existed = 7 WHERE operation_id = ?1",
         "UPDATE config_operation SET owner_ref = char(1) WHERE id = ?1",
         "DELETE FROM config_operation_step WHERE operation_id = ?1",
     ];
@@ -401,6 +426,7 @@ fn the_log_never_stores_file_content() {
         0,
         written.backup.as_ref(),
         written.target.content_digest.as_deref().unwrap(),
+        true,
     )
     .unwrap();
 
@@ -445,7 +471,15 @@ fn a_rollback_result_is_recorded_on_an_applied_step_only() {
         record_step_restored(&fixture.storage, &id, 3, RestoreState::Restored).unwrap_err(),
         WriteError::InvalidRequest
     );
-    record_step_applied(&fixture.storage, &id, 0, None, &digest_hex(b"applied")).unwrap();
+    record_step_applied(
+        &fixture.storage,
+        &id,
+        0,
+        None,
+        &digest_hex(b"applied"),
+        false,
+    )
+    .unwrap();
     record_step_restored(&fixture.storage, &id, 0, RestoreState::Restored).unwrap();
     let record = operation(&fixture.storage, &id).unwrap().unwrap();
     assert_eq!(record.steps[0].state, StepState::Applied);
@@ -524,7 +558,15 @@ fn a_recent_listing_is_newest_first_bounded_and_kind_filtered() {
 fn a_malformed_rollback_result_hides_the_operation_from_a_listing() {
     let fixture = Fixture::new();
     let id = fixture.begin_one("settings.json");
-    record_step_applied(&fixture.storage, &id, 0, None, &digest_hex(b"applied")).unwrap();
+    record_step_applied(
+        &fixture.storage,
+        &id,
+        0,
+        None,
+        &digest_hex(b"applied"),
+        false,
+    )
+    .unwrap();
     {
         let connection = fixture.storage.lock().unwrap();
         connection
@@ -562,6 +604,7 @@ fn every_error_code_matches_its_serialized_form() {
         WriteError::LogWriteFailed,
         WriteError::LogReadFailed,
         WriteError::InvalidStoredOperation,
+        WriteError::PlanStale,
     ];
     for error in errors {
         assert_eq!(

@@ -783,8 +783,9 @@ fn restore_columns_migrate_an_older_operation_log_without_guessing() {
         upgraded.schema_version().expect("version"),
         latest_schema_version()
     );
-    // An older write has no owner and no rollback result: NULL means "never
-    // attempted", so the reader reports exactly that instead of inventing one.
+    // An older write has no owner, no rollback result and no statement about
+    // whether its file existed: NULL means "not recorded", so the reader reports
+    // exactly that instead of inventing a value.
     let record = crate::config_apply::operation(&upgraded, &operation_id)
         .expect("read log")
         .expect("kept operation");
@@ -795,11 +796,13 @@ fn restore_columns_migrate_an_older_operation_log_without_guessing() {
         crate::config_apply::StepState::Applied
     );
     assert_eq!(record.steps[0].restore_state, None);
+    assert_eq!(record.steps[0].previous_existed, None);
     assert_eq!(
         record.steps[1].state,
         crate::config_apply::StepState::Pending
     );
     assert_eq!(record.steps[1].restore_state, None);
+    assert_eq!(record.steps[1].previous_existed, None);
 }
 
 #[test]
@@ -890,6 +893,35 @@ fn operation_rows_are_constrained_and_follow_their_operation() {
             "UPDATE config_operation_step SET restore_state = NULL\n             WHERE operation_id = ?1 AND ordinal = 0"
         )
         .is_ok()
+    );
+    // Whether the file existed before the step is stated the same way: only an
+    // applied step may carry it, and only as one of its two values.
+    assert!(
+        connection
+            .execute(
+                "UPDATE config_operation_step SET previous_existed = 1\n                 WHERE operation_id = ?1 AND ordinal = 1",
+                [&id],
+            )
+            .is_err()
+    );
+    let first_existed = |sql: &str| connection.execute(sql, [&id]);
+    assert!(
+        first_existed(
+            "UPDATE config_operation_step SET previous_existed = 1\n             WHERE operation_id = ?1 AND ordinal = 0"
+        )
+        .is_ok()
+    );
+    assert!(
+        first_existed(
+            "UPDATE config_operation_step SET previous_existed = 0\n             WHERE operation_id = ?1 AND ordinal = 0"
+        )
+        .is_ok()
+    );
+    assert!(
+        first_existed(
+            "UPDATE config_operation_step SET previous_existed = 7\n             WHERE operation_id = ?1 AND ordinal = 0"
+        )
+        .is_err()
     );
     // An operation owner is a bounded printable reference, never a display name
     // that a later rename would rewrite.

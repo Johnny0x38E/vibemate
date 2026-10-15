@@ -141,7 +141,9 @@ pub fn begin_operation(
 /// Record that one step replaced its file.
 ///
 /// `backup` is stored when the step replaced an existing file; `applied_digest`
-/// is the SHA-256 now on disk, which a later operation compares against.
+/// is the SHA-256 now on disk, which a later operation compares against; and
+/// `previously_existed` says whether the file was there before this step ran, so
+/// a restore can tell a file the step created from one it found unchanged.
 ///
 /// # Errors
 /// Returns `InvalidRequest` for a digest that is not SHA-256 or for a step the
@@ -153,6 +155,7 @@ pub fn record_step_applied(
     ordinal: u32,
     backup: Option<&Backup>,
     applied_digest: &str,
+    previously_existed: bool,
 ) -> Result<(), WriteError> {
     if !is_digest(applied_digest) {
         return Err(WriteError::InvalidRequest);
@@ -174,13 +177,15 @@ pub fn record_step_applied(
         .execute(
             "UPDATE config_operation_step
              SET state = ?3, error_code = NULL, applied_digest = ?4,
-                 backup_id = ?5, backup_path = ?6, backup_digest = ?7, updated_at = ?8
+                 previous_existed = ?5, backup_id = ?6, backup_path = ?7,
+                 backup_digest = ?8, updated_at = ?9
              WHERE operation_id = ?1 AND ordinal = ?2",
             params![
                 operation_id,
                 i64::from(ordinal),
                 StepState::Applied.as_str(),
                 applied_digest,
+                i64::from(previously_existed),
                 backup_id,
                 backup_path,
                 backup_digest,
@@ -218,7 +223,8 @@ pub fn record_step_failed(
         .execute(
             "UPDATE config_operation_step
              SET state = ?3, error_code = ?4, applied_digest = NULL,
-                 backup_id = NULL, backup_path = NULL, backup_digest = NULL, updated_at = ?5
+                 previous_existed = NULL, backup_id = NULL, backup_path = NULL,
+                 backup_digest = NULL, updated_at = ?5
              WHERE operation_id = ?1 AND ordinal = ?2",
             params![
                 operation_id,
@@ -466,7 +472,8 @@ fn read_steps(connection: &Connection, id: &str) -> Result<Vec<StepRecord>, Writ
     let mut statement = connection
         .prepare(
             "SELECT ordinal, target_path, expected_digest, state, error_code,
-                    backup_id, backup_path, backup_digest, applied_digest, restore_state
+                    backup_id, backup_path, backup_digest, applied_digest,
+                    previous_existed, restore_state
              FROM config_operation_step WHERE operation_id = ?1 ORDER BY ordinal",
         )
         .map_err(|_| WriteError::LogReadFailed)?;
@@ -482,7 +489,8 @@ fn read_steps(connection: &Connection, id: &str) -> Result<Vec<StepRecord>, Writ
                 row.get::<_, Option<String>>(6)?,
                 row.get::<_, Option<String>>(7)?,
                 row.get::<_, Option<String>>(8)?,
-                row.get::<_, Option<String>>(9)?,
+                row.get::<_, Option<i64>>(9)?,
+                row.get::<_, Option<String>>(10)?,
             ))
         })
         .map_err(|_| WriteError::LogReadFailed)?;
@@ -499,6 +507,7 @@ fn read_steps(connection: &Connection, id: &str) -> Result<Vec<StepRecord>, Writ
             backup_path,
             backup_digest,
             applied_digest,
+            previous_existed,
             restore_state,
         ) = row.map_err(|_| WriteError::LogReadFailed)?;
         // Ordinals are the step order; a gap or a repeat means the row was changed.
@@ -539,6 +548,14 @@ fn read_steps(connection: &Connection, id: &str) -> Result<Vec<StepRecord>, Writ
         if path_text(Path::new(&target_path)).is_err() {
             return Err(invalid());
         }
+        // Whether the file existed before the step belongs to an applied step,
+        // and only its two stated values count.
+        let previous_existed = match (previous_existed, state) {
+            (None, _) => None,
+            (Some(0), StepState::Applied) => Some(false),
+            (Some(1), StepState::Applied) => Some(true),
+            (Some(_), _) => return Err(invalid()),
+        };
         // Only an applied step can carry a rollback result, and only a known
         // value counts as one.
         let restore_state = match (restore_state, state) {
@@ -556,6 +573,7 @@ fn read_steps(connection: &Connection, id: &str) -> Result<Vec<StepRecord>, Writ
             error_code,
             backup,
             applied_digest,
+            previous_existed,
             restore_state,
         });
     }

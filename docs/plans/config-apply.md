@@ -141,6 +141,10 @@ SQLite schema v16 新增 `config_operation` 与 `config_operation_step`，仓储
   没有这一列时，`partial` 操作重试补偿会把已回滚的步骤再恢复一次，`restore_file` 的令牌检查随即返回
   `target_changed`，操作永远停在 `partial`。回滚因此跳过已经是 `restored` 的步骤；每次尝试覆盖同一行，
   不保存尝试历史。
+- **写入前是否存在也要记录（同一迁移）。** 一个应用成功的步骤可能没有备份：它新建了文件，或者发现计划
+  内容已经在文件里（空操作）。两者在旧日志里长得一样，而把「空操作」当成「新建」会在恢复时删掉用户本
+  来就有的配置文件。v17 因此还加了 `previous_existed`：`0` 表示该步骤新建了文件，`1` 表示文件当时已存在，
+  空值表示旧版本写的行没记录这件事。空值不猜：预览把它标为 `blocked`，理由码 `restore_history_unknown`。
 - **凭据只随文件内容回写。** 恢复不读取 OS 凭据、不改凭据引用：写回的就是备份里的原内容，可能仍含之前
   那家 Provider 的明文密钥。`config_operation` 新增 `owner_ref`（写入该操作的 Provider ID，可为空），
   恢复预览用摘要链判断「恢复后的内容由哪次操作写入」，据此说明密钥归属；判断不出来时明确显示未知。
@@ -162,22 +166,25 @@ SQLite schema v16 新增 `config_operation` 与 `config_operation_step`，仓储
 
 ### 恢复预览（只读）
 
-`config_apply/restore.rs` 的 `restore_plan(storage, kind, operation_id, backups)` 读取操作记录并逐步分类：
+`config_apply/restore.rs` 的 `plan_restore(storage, operation_id)` 读取操作记录并逐步分类；操作不存在时返回
+`None`，由命令层报 `operation_not_found`：
 
-| 步骤情况                                              | 预览动作   | 说明                         |
-| ----------------------------------------------------- | ---------- | ---------------------------- |
-| 当前摘要 = 记录的应用后摘要，且有可读且摘要相符的备份 | `restore`  | 写回备份内容                 |
-| 同上，但该步骤当时新建了文件（没有备份）              | `remove`   | 删除 vibemate 新建的文件     |
-| 文件存在但摘要不等于应用后摘要                        | `conflict` | 用户或其它工具改过，拒绝覆盖 |
-| 备份缺失/摘要不符，或目标是符号链接、超限、不可读     | `blocked`  | 带稳定原因码与处理提示       |
-| 步骤不是 `applied`，或已经是 `restored`               | `skip`     | 不触碰                       |
+| 步骤情况                                              | 预览动作   | 说明                             |
+| ----------------------------------------------------- | ---------- | -------------------------------- |
+| 当前摘要 = 记录的应用后摘要，且有可读且摘要相符的备份 | `restore`  | 写回备份内容                     |
+| 同上，但该步骤当时新建了文件（没有备份）              | `remove`   | 删除 vibemate 新建的文件         |
+| 文件存在但摘要不等于应用后摘要                        | `conflict` | 用户或其它工具改过，拒绝覆盖     |
+| 备份缺失/摘要不符，或目标是符号链接、超限、不可读     | `blocked`  | 带稳定原因码与处理提示           |
+| 没有备份、旧日志未记录写入前是否存在                  | `blocked`  | 理由码 `restore_history_unknown` |
+| 没有备份，且旧日志说明文件当时已存在（空操作）        | `skip`     | 没有需要恢复的内容               |
+| 步骤不是 `applied`，或已经是 `restored`               | `skip`     | 不触碰                           |
 
 预览只返回路径、摘要、动作与状态，以及由 `owner_ref` 解析出的密钥归属说明；**不返回备份内容**。
 摘要不是秘密，路径是用户自己的文件路径，因此历史列表同样只带这两类信息。
 
 ### 恢复应用
 
-`apply_restore(storage, kind, operation_id, reviewed, backups)` 先用与预览相同的代码重新构建计划，再逐项核对
+`apply_restore(storage, operation_id, reviewed, backups)` 先用与预览相同的代码重新构建计划，再逐项核对
 界面回传的令牌（步骤序号 + 预览时的当前摘要），任一不符返回 `plan_stale` 且不写任何文件。通过后按应用顺序的
 **倒序**处理可恢复步骤，每步写入 `restore_state`；`conflict`、`blocked`、`skip` 步骤不动。操作最终状态：
 全部恢复为 `compensated`，否则 `partial`；任何一步结果无法核对时为 `unknown`。返回值带逐步骤结果、操作状态与
@@ -201,14 +208,16 @@ SQLite schema v16 新增 `config_operation` 与 `config_operation_step`，仓储
 ### 批次
 
 - P21.a 设计与本文件（2026-10-14）。
-- P21.b1 schema v17（`owner_ref`、`restore_state`）、日志读写与迁移测试（2026-10-14 交付）。
-- P21.b2 `config_apply/restore.rs`：恢复预览、恢复应用、共享回滚实现与故障注入测试。
+- P21.b1 schema v17（`owner_ref`、`restore_state`、`previous_existed`）、日志读写与迁移测试
+  （2026-10-14 交付）。
+- P21.b2 `config_apply/restore.rs`：恢复预览、恢复应用、共享回滚实现与故障注入测试（2026-10-14 交付）。
 - P21.c 三个命令与前端边界。
 - P21.d RestoreView、双语文案与行为测试。
 - P21.e 维护者原生验收：临时配置 apply → restore → 原生启动。
 
 已知边界：恢复只覆盖 vibemate 记录过的操作；`planned` 操作可能从未写盘，预览按步骤状态如实显示；
-跨平台替换、权限与文件锁差异在 P37 记录。
+写入失败时 apply 阶段为被替换内容留下的那份副本不再被任何步骤引用，清理失败也不会进入恢复结果
+（恢复路径自己产生的副本会进 `leftovers`）；跨平台替换、权限与文件锁差异在 P37 记录。
 
 ## 检查点 C19
 

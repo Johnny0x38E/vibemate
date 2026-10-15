@@ -10,7 +10,7 @@
 
 use std::{
     fs::{self, OpenOptions},
-    io::Write,
+    io::{ErrorKind, Write},
     path::{Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
 };
@@ -49,7 +49,7 @@ pub struct BackupStore {
 }
 
 /// One stored copy of a file that was replaced.
-#[derive(Debug, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Backup {
     /// Identifier of the write that stored this copy; also its directory name.
@@ -86,8 +86,16 @@ impl BackupStore {
 
     /// Remove a copy whose write did not happen, keeping the store free of
     /// entries no operation refers to.
-    fn discard(&self, backup: &Backup) {
-        let _ = fs::remove_dir_all(self.root.join(&backup.id));
+    ///
+    /// Returns whether the copy is gone. A caller that must not hide a leftover
+    /// (the restore path) reports the path instead of discarding this result.
+    fn discard(&self, backup: &Backup) -> Result<(), ()> {
+        match fs::remove_dir_all(self.root.join(&backup.id)) {
+            Ok(()) => Ok(()),
+            // A copy that is already gone is not a leftover.
+            Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
+            Err(_) => Err(()),
+        }
     }
 }
 
@@ -136,6 +144,8 @@ pub enum WriteError {
     LogReadFailed,
     /// A stored operation row is malformed; the log is not shown as if it were valid.
     InvalidStoredOperation,
+    /// The reviewed restore plan no longer matches the files on disk.
+    PlanStale,
 }
 
 impl WriteError {
@@ -157,6 +167,7 @@ impl WriteError {
             Self::LogWriteFailed => "log_write_failed",
             Self::LogReadFailed => "log_read_failed",
             Self::InvalidStoredOperation => "invalid_stored_operation",
+            Self::PlanStale => "plan_stale",
         }
     }
 }
@@ -178,6 +189,7 @@ impl std::fmt::Display for WriteError {
             Self::LogWriteFailed => "The write operation could not be recorded.",
             Self::LogReadFailed => "Recorded write operations could not be read.",
             Self::InvalidStoredOperation => "A recorded write operation is invalid.",
+            Self::PlanStale => "The reviewed restore plan no longer matches the files.",
         })
     }
 }
@@ -358,6 +370,11 @@ pub struct StepRecord {
     pub backup: Option<Backup>,
     /// SHA-256 written by this step; present exactly when it applied.
     pub applied_digest: Option<String>,
+    /// Whether the target existed before this step ran; present exactly when it
+    /// applied. A step without a copy either created the file (`false`) or found
+    /// the planned content already in place (`true`), and a restore must not
+    /// confuse the two. `None` means an older build wrote the row without it.
+    pub previous_existed: Option<bool>,
     /// What a rollback did to this file; `None` until one is attempted.
     pub restore_state: Option<RestoreState>,
 }
@@ -432,10 +449,11 @@ pub fn apply_file(
         None => None,
     };
     if let Err(error) = replace(&target.path, content, previous.is_some(), &id) {
-        // Nothing was replaced, so the copy has no matching operation; a later
-        // batch records backups and operations together.
+        // The write did not happen, so this copy is already unreferenced. A copy
+        // that cannot be removed stays a private file and is not this failed
+        // write's result to report; the restore path reports its own leftovers.
         if let Some(backup) = &backup {
-            backups.discard(backup);
+            let _ = backups.discard(backup);
         }
         return Err(error);
     }
@@ -627,19 +645,23 @@ fn sync_directory(_: &Path) -> Result<(), WriteError> {
 }
 
 mod operations;
+mod restore;
 mod service;
 
 pub use operations::{
     begin_operation, finish_operation, operation, recent_operations, record_step_applied,
     record_step_failed, record_step_restored, unfinished_operations,
 };
-pub use service::{
-    AppliedOperation, PlannedFile, StepOutcome, apply_files, compensate_operation,
-    remove_created_file, restore_file,
+pub use restore::{
+    RestoreAction, RestoreOutcome, RestorePlan, RestoreStepOutcome, RestoreStepPlan,
+    ReviewedRestoreStep, apply_restore, plan_restore, remove_created_file, restore_file,
 };
+pub use service::{AppliedOperation, PlannedFile, StepOutcome, apply_files, compensate_operation};
 
 #[cfg(test)]
 mod operation_tests;
+#[cfg(test)]
+mod restore_tests;
 #[cfg(test)]
 mod service_tests;
 #[cfg(test)]

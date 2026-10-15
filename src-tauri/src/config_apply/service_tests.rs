@@ -285,6 +285,7 @@ fn compensation_leaves_a_file_a_later_edit_changed() {
         0,
         Some(step.backup.as_ref().unwrap()),
         step.applied_digest.as_deref().unwrap(),
+        true,
     )
     .unwrap();
     assert_eq!(

@@ -347,9 +347,16 @@ const MIGRATIONS: &[Migration] = &[
         //   `unknown` (outcome unverifiable). NULL means never attempted. Without
         //   this column a partly rolled back operation could not be retried: the
         //   second attempt would treat already-restored files as conflicts.
+        // - `previous_existed` states whether a step found its file already on
+        //   disk. A step keeps no copy when it created the file and when the
+        //   planned content was already there; a restore that confused the two
+        //   would delete a settings file the user already had.
         sql: "ALTER TABLE config_operation ADD COLUMN owner_ref TEXT
             DEFAULT NULL CHECK(owner_ref IS NULL OR (length(owner_ref) BETWEEN 1 AND 64
                 AND owner_ref NOT GLOB '*[^ -~]*'));
+        ALTER TABLE config_operation_step ADD COLUMN previous_existed INTEGER
+            DEFAULT NULL CHECK(previous_existed IS NULL OR
+                (state = 'applied' AND previous_existed IN (0, 1)));
         ALTER TABLE config_operation_step ADD COLUMN restore_state TEXT
             DEFAULT NULL CHECK(restore_state IS NULL OR
                 (state = 'applied' AND restore_state IN

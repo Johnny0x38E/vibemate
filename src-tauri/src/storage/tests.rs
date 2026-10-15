@@ -762,20 +762,41 @@ fn restore_columns_migrate_an_older_operation_log_without_guessing() {
     let path = directory.path.join(DATABASE_FILE_NAME);
     let old = Storage::open_file(&path, &MIGRATIONS[..16]).expect("v16 database");
     let operation_id = "c".repeat(32);
-    old.lock()
-        .expect("lock")
-        .execute_batch(&format!(
+    // The paths come from this test's own directory because the log reader only
+    // accepts a path that is absolute on the platform running the test: the
+    // same paths are produced by the writer. A hardcoded "/tmp/..." literal has
+    // no prefix on Windows and would be refused as a malformed row.
+    let settings = directory.path.join("settings.json");
+    let models = directory.path.join("models.json");
+    let connection = old.lock().expect("lock");
+    connection
+        .execute(
             "INSERT INTO config_operation (id, kind, state, created_at, updated_at)
-             VALUES ('{operation_id}', 'claude_code_settings', 'planned', 10, 10);
-             INSERT INTO config_operation_step
+             VALUES (?1, 'claude_code_settings', 'planned', 10, 10)",
+            [&operation_id],
+        )
+        .expect("v16 operation");
+    connection
+        .execute(
+            "INSERT INTO config_operation_step
                  (operation_id, ordinal, target_path, state, applied_digest, updated_at)
-             VALUES ('{operation_id}', 0, '/tmp/settings.json', 'applied',
-                 'abababababababababababababababababababababababababababababababab', 10);
-             INSERT INTO config_operation_step
+             VALUES (?1, 0, ?2, 'applied',
+                 'abababababababababababababababababababababababababababababababab', 10)",
+            rusqlite::params![
+                operation_id,
+                settings.to_str().expect("readable settings path")
+            ],
+        )
+        .expect("v16 applied step");
+    connection
+        .execute(
+            "INSERT INTO config_operation_step
                  (operation_id, ordinal, target_path, state, updated_at)
-             VALUES ('{operation_id}', 1, '/tmp/models.json', 'pending', 10);"
-        ))
-        .expect("v16 rows");
+             VALUES (?1, 1, ?2, 'pending', 10)",
+            rusqlite::params![operation_id, models.to_str().expect("readable models path")],
+        )
+        .expect("v16 pending step");
+    drop(connection);
     drop(old);
 
     let upgraded = Storage::open_in_directory(&directory.path).expect("upgrade");

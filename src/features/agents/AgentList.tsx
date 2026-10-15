@@ -31,6 +31,7 @@ import { IconButton } from "../../components/IconButton";
 import { AgentPage } from "./AgentPage";
 import { AgentVersionPanel } from "./AgentVersionPanel";
 import { ConfigPreview } from "./ConfigPreview";
+import { RestoreView } from "./RestoreView";
 import {
     probeAgentVersion,
     type AgentVersionResult,
@@ -684,6 +685,7 @@ export function AgentList({
                         exists; the remaining facts, the manual entry path and
                         the version read share one card below it. */}
                     {id === "claudeCode" && <ConfigPreview />}
+                    {id === "claudeCode" && <RestoreView />}
                     <DetailPanel label={t("agents.detail.detailsHeading")}>
                         {row !== undefined && details(row)}
                         <form

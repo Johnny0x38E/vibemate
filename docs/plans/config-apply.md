@@ -202,8 +202,10 @@ SQLite schema v16 新增 `config_operation` 与 `config_operation_step`，仓储
 - `src/lib/desktop/agents.ts`：三个边界函数加精确键集合与跨字段校验（`restorable` 必须等于实际会改动文件
   的步骤数、`reason` 只出现在 `conflict`/`blocked`、`errorCode` 与 `restored` 互斥、`leftovers` 与步骤回报
   一致）；浏览器预览返回 `{ kind: "preview" }`，不声称可恢复。
-- `src/features/agents/RestoreView.tsx`（P21.d）：历史列表（时间、状态、文件、可恢复入口）、恢复预览
-  （逐步骤动作、冲突处理提示、密钥归属、确认按钮）、结果（状态、逐步骤结果、残留副本、继续恢复）。
+- `src/features/agents/RestoreView.tsx`（P21.d 交付）：历史列表（状态、本地时间、服务商、文件、
+  「预览恢复」入口与「重新检查」）、恢复预览（逐步骤动作与理由、冲突处理提示、密钥归属、确认按钮）、
+  结果（状态、逐步骤结果、残留副本路径与说明、重新预览提示）。只有 `restorable` 的行才提供预览入口，
+  预览里没有可恢复步骤时不显示确认按钮，因此「已回滚」的行不会被误点。
 - 错误码：沿用 `WriteError` 的稳定码，命令层新增 `operation_not_found`；过期预览沿用 P20 的 `plan_stale`；
   预览理由码新增 `restore_history_unknown`。
 
@@ -215,7 +217,7 @@ SQLite schema v16 新增 `config_operation` 与 `config_operation_step`，仓储
 - P21.b2 `config_apply/restore.rs`：恢复预览、恢复应用、共享回滚实现与故障注入测试（2026-10-14 交付）。
 - P21.c 三个命令（`claude_code_operations`、`plan_claude_code_restore`、`apply_claude_code_restore`）、
   `with_restore_storage`、前端边界与双端测试（2026-10-14 交付；无界面，CHANGELOG 未新增条目）。
-- P21.d RestoreView、双语文案与行为测试。
+- P21.d RestoreView、双语文案与行为测试（2026-10-14 交付）。
 - P21.e 维护者原生验收：临时配置 apply → restore → 原生启动。
 
 已知边界：恢复只覆盖 vibemate 记录过的操作；`planned` 操作可能从未写盘，预览按步骤状态如实显示；

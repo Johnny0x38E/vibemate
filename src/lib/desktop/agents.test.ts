@@ -839,6 +839,14 @@ const malformedPreviews: unknown[] = [
         steps: [{ ...restorePlanStep, reason: "target_changed" }],
     },
     {
+        // A code the preview cannot produce (only a failed write-back reports
+        // it) is not a preview reason.
+        ...restorePlan,
+        steps: [
+            { ...restorePlanStep, action: "blocked", reason: "write_failed" },
+        ],
+    },
+    {
         ...restorePlan,
         steps: [
             {
@@ -886,6 +894,7 @@ const malformedOutcomes: unknown[] = [
     { ...restoreOutcome, extra: "synthetic" },
     { ...restoreOutcome, operationId: "0".repeat(31) },
     { ...restoreOutcome, state: "planned" },
+    { ...restoreOutcome, state: "applied" },
     { ...restoreOutcome, state: "running" },
     { ...restoreOutcome, steps: [] },
     { ...restoreOutcome, leftovers: "none" },

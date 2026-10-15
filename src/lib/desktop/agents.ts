@@ -709,12 +709,19 @@ export const RESTORE_ACTIONS = [
 ] as const;
 export type RestoreAction = (typeof RESTORE_ACTIONS)[number];
 /**
- * Codes a preview attaches to a step it will not carry out: the write layer's
- * own codes, plus the one the log produces when an older write did not say
- * whether its file already existed.
+ * Codes a restore preview attaches to a step it will not carry out: the file
+ * moved on after the write, cannot be read safely, its stored copy is unusable,
+ * or an older write did not record whether the file existed. A write that only
+ * fails when the restore is attempted reports its own code in the result, not
+ * here.
  */
 export const RESTORE_REASON_CODES = [
-    ...WRITE_ERROR_CODES,
+    "target_changed",
+    "target_unreadable",
+    "target_too_large",
+    "target_path_invalid",
+    "symlink_refused",
+    "backup_unavailable",
     "restore_history_unknown",
 ] as const;
 export type RestoreReasonCode = (typeof RESTORE_REASON_CODES)[number];
@@ -796,10 +803,22 @@ export interface RestoreStepOutcome {
     errorCode: WriteErrorCode | null;
     leftoverPath: string | null;
 }
+/**
+ * States a restore can settle into. A rollback never applies anything, so a
+ * completed restore is undone, partly undone, unverified or refused — never
+ * `applied`.
+ */
+export const RESTORE_OUTCOME_STATES = [
+    "compensated",
+    "partial",
+    "unknown",
+    "failed",
+] as const;
+export type RestoreOutcomeState = (typeof RESTORE_OUTCOME_STATES)[number];
 /** Result of one confirmed restore, settled before it is answered. */
 export interface RestoreOutcome {
     operationId: string;
-    state: AppliedState;
+    state: RestoreOutcomeState;
     steps: RestoreStepOutcome[];
     leftovers: string[];
 }
@@ -1066,9 +1085,10 @@ function restoreOutcome(value: unknown): RestoreOutcome {
     )
         return restoreInvalid();
     const id = operationId(value["operationId"]);
-    const state = APPLY_STATES.find((known) => known === value["state"]);
-    // A restore always settles its operation; `planned` only exists in the log.
-    if (state === undefined || state === "planned") return restoreInvalid();
+    const state = RESTORE_OUTCOME_STATES.find(
+        (known) => known === value["state"],
+    );
+    if (state === undefined) return restoreInvalid();
     const rawSteps = value["steps"];
     if (!Array.isArray(rawSteps) || rawSteps.length === 0)
         return restoreInvalid();

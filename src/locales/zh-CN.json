@@ -650,6 +650,89 @@
                 "desktop_required": "应用配置需要在 vibemate 桌面应用中进行。",
                 "invalid_response": "桌面应用返回了意外的计划。"
             }
+        },
+        "restore": {
+            "title": "配置历史",
+            "previewMode": "浏览器预览无法读取配置文件与写入历史，请在 vibemate 桌面应用的 Agent 页面查看。",
+            "loading": "正在读取写入记录…",
+            "empty": "vibemate 还没有写过这个配置文件。",
+            "retry": "重试",
+            "recheck": "重新检查",
+            "preview": "预览恢复",
+            "previewing": "正在生成恢复预览…",
+            "previewFor": "{{time}} 那次写入的恢复预览",
+            "previewHeading": "恢复预览",
+            "confirm": "恢复原内容",
+            "restoring": "正在恢复…",
+            "nothingToRestore": "这次写入在当前状态下没有可恢复的内容。",
+            "conflictHint": "请先打开该文件决定保留哪份内容，再点「重新检查」并重新预览。vibemate 不会覆盖写入后被改动的文件。",
+            "keyNotice": "恢复后的文件会回到这次写入之前的内容，其中可能包含当时的明文 API 密钥。系统凭据存储不会改动。",
+            "provider": "服务商：{{name}}",
+            "providerRemoved": "服务商：{{id}}（已不在库中）",
+            "restoredOwnerNamed": "要恢复的内容由服务商 {{name}} 写入。",
+            "restoredOwnerRemoved": "要恢复的内容由 {{id}} 写入，该服务商已不在库中。",
+            "restoredOwnerUnknown": "要恢复的内容不是 vibemate 写的：可能是手工或其它工具改的。",
+            "states": {
+                "planned": "已记录，未完成",
+                "applied": "已写入",
+                "failed": "未写入",
+                "partial": "部分未回滚",
+                "unknown": "结果未确认",
+                "compensated": "已回滚"
+            },
+            "stepStates": {
+                "restored": "已恢复",
+                "conflict": "保持原样：冲突",
+                "unavailable": "副本不可用",
+                "failed": "恢复未完成",
+                "unknown": "结果未确认"
+            },
+            "actions": {
+                "restore": "写回原内容",
+                "remove": "删除这次写入新建的文件",
+                "conflict": "保持原样：文件在这次写入后被改动",
+                "blocked": "无法安全恢复",
+                "skip": "无需处理"
+            },
+            "reasons": {
+                "invalid_request": "请求不合法",
+                "target_changed": "文件在这次写入后被改动",
+                "symlink_refused": "路径是符号链接",
+                "target_read_only": "文件为只读",
+                "target_path_invalid": "路径无法使用",
+                "target_unreadable": "文件无法读取",
+                "target_too_large": "文件超过恢复上限",
+                "backup_unavailable": "保存的副本缺失或摘要不符",
+                "write_failed": "原内容无法写回",
+                "outcome_unknown": "结果无法确认",
+                "storage_unavailable": "本地配置存储不可用",
+                "log_write_failed": "操作无法记录",
+                "log_read_failed": "操作日志无法读取",
+                "invalid_stored_operation": "已记录的操作不合法",
+                "restore_history_unknown": "这次写入没有记录文件当时是否存在，无法确认删除是否安全"
+            },
+            "outcomeHeading": "恢复结果",
+            "outcome": {
+                "compensated": "写入已撤销，文件恢复为写入前的内容。",
+                "partial": "有文件保持原样，仍是这次写入后的内容。",
+                "unknown": "有一个文件的结果无法确认，再次尝试前请先查看文件。",
+                "failed": "没有恢复任何内容，文件仍是这次写入后的状态。"
+            },
+            "stepRestored": "{{path}}：已恢复原内容",
+            "stepRemoved": "{{path}}：已删除这次写入新建的文件",
+            "stepProblem": "{{path}}：{{error}}",
+            "leftoversHeading": "以下私有副本未能删除：",
+            "leftoverHint": "它们保存的内容已不再被任何写入记录引用。只有你的用户账号可读；不想保留时可以自行删除。",
+            "resultHint": "点「重新检查」查看当前状态；若仍有文件需要处理，再重新预览。",
+            "errors": {
+                "operation_not_found": "这次写入记录已不存在，请重新检查列表。",
+                "plan_stale": "有文件在预览之后发生了变化，未写入任何内容。请重新预览。",
+                "invalid_request": "恢复请求不合法。",
+                "storage_unavailable": "本地配置存储不可用，请重启 vibemate。",
+                "operation_failed": "恢复未能完成，请重试。",
+                "desktop_required": "恢复配置需要在 vibemate 桌面应用中进行。",
+                "invalid_response": "桌面应用返回了意外的恢复结果。"
+            }
         }
     },
     "skills": {

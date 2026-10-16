@@ -20,6 +20,7 @@ import {
     AGENT_IDS,
     type DiscoveryInput,
     type AgentId,
+    type ConfigurableAgent,
     type AgentObservation,
     type DiscoveryErrorCode,
     type DiscoveryResult,
@@ -50,6 +51,16 @@ function failure(error: unknown): DiscoveryErrorCode {
     return error instanceof DiscoveryRequestError
         ? error.code
         : "operation_failed";
+}
+
+/**
+ * Whether this Agent's adapter can write, back up and roll back a configuration.
+ *
+ * Detection is not the same claim: every catalog entry can be discovered, while
+ * the model-configuration cards appear only where a verified adapter exists.
+ */
+function hasConfigAdapter(id: AgentId): id is ConfigurableAgent {
+    return id === "claudeCode" || id === "pi" || id === "grokBuild";
 }
 
 /**
@@ -682,10 +693,11 @@ export function AgentList({
                     </p>
                 ) : null}
                 <section className={styles["detailGroup"]} data-layout="page">
-                    {/* A configuration card leads the page where an adapter
-                        exists; the remaining facts, the manual entry path and
-                        the version read share one card below it. */}
-                    {(id === "claudeCode" || id === "pi") && (
+                    {/* A configuration card leads the page where an adapter can
+                        write; below it the recorded-write history for that same
+                        Agent, then the remaining facts, the manual entry path and
+                        the version read share one card. */}
+                    {hasConfigAdapter(id) && (
                         <ConfigPreview
                             key={JSON.stringify([id, row?.entryPath])}
                             onApplied={() => {
@@ -700,7 +712,7 @@ export function AgentList({
                             }}
                         />
                     )}
-                    {(id === "claudeCode" || id === "pi") && (
+                    {hasConfigAdapter(id) && (
                         <RestoreView
                             key={JSON.stringify([id, configEpoch])}
                             blocked={blocked}

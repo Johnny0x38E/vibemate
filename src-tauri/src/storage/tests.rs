@@ -827,6 +827,79 @@ fn restore_columns_migrate_an_older_operation_log_without_guessing() {
 }
 
 #[test]
+fn grok_binding_migration_keeps_pi_aliases_and_scopes_each_root() {
+    let directory = TestDirectory::new("grok-binding-upgrade");
+    let path = directory.path.join(DATABASE_FILE_NAME);
+    let provider = "0123456789abcdef0123456789abcdef";
+    let old = Storage::open_file(&path, &MIGRATIONS[..18]).expect("v18 database");
+    old.lock()
+        .expect("lock")
+        .execute(
+            "INSERT INTO pi_provider_binding(config_root,provider_key,provider_id) VALUES (?1,?2,?3)",
+            rusqlite::params!["/test/pi", "vibemate-DeepSeek", provider],
+        )
+        .expect("v18 Pi alias");
+    drop(old);
+
+    let upgraded = Storage::open_in_directory(&directory.path).expect("upgrade");
+    assert_eq!(
+        upgraded.schema_version().expect("version"),
+        latest_schema_version()
+    );
+    let connection = upgraded.lock().expect("lock");
+    let kept: i64 = connection
+        .query_row("SELECT COUNT(*) FROM pi_provider_binding", [], |row| {
+            row.get(0)
+        })
+        .expect("Pi binding");
+    assert_eq!(kept, 1);
+    // A freshly migrated database owns no Grok alias: an entry in the user's
+    // `config.toml` is theirs until a recorded write says otherwise.
+    let empty: i64 = connection
+        .query_row("SELECT COUNT(*) FROM grok_model_binding", [], |row| {
+            row.get(0)
+        })
+        .expect("Grok bindings");
+    assert_eq!(empty, 0);
+
+    let insert = |root: &str, alias: &str, id: &str, model: &str| {
+        connection.execute(
+            "INSERT INTO grok_model_binding(config_root,model_alias,provider_id,model_id) VALUES (?1,?2,?3,?4)",
+            rusqlite::params![root, alias, id, model],
+        )
+    };
+    insert(
+        "/test/grok",
+        "vibemate-deepseek-flash",
+        provider,
+        "deepseek",
+    )
+    .expect("recorded alias");
+    // Ownership is per configuration root, because `GROK_HOME` can point another
+    // install at a different file with the same alias inside it.
+    insert(
+        "/other/grok",
+        "vibemate-deepseek-flash",
+        provider,
+        "deepseek",
+    )
+    .expect("same alias in another root");
+    assert!(
+        insert(
+            "/test/grok",
+            "vibemate-deepseek-flash",
+            provider,
+            "other-model"
+        )
+        .is_err(),
+        "one alias cannot name two saved models"
+    );
+    assert!(insert("/test/grok", "vibemate-x", "not-an-id", "m").is_err());
+    assert!(insert("/test/grok", "", provider, "m").is_err());
+    assert!(insert("/test/grok", "vibemate-x", provider, "").is_err());
+}
+
+#[test]
 fn operation_rows_are_constrained_and_follow_their_operation() {
     let directory = TestDirectory::new("operation-constraints");
     let storage = Storage::open_in_directory(&directory.path).expect("open");

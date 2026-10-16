@@ -37,8 +37,8 @@ impl Fixture {
 
     /// The token a preview would have produced for the current file state.
     fn plan(&self) -> WriteTarget {
-        let document = read_target_document(&self.target()).unwrap();
-        WriteTarget::from_plan(&document.target)
+        let (target, _bytes) = read_target_bytes(&self.target()).unwrap();
+        WriteTarget::from_plan(&target)
     }
 
     fn content(&self) -> String {
@@ -96,6 +96,23 @@ fn an_unchanged_file_is_not_written_again() {
     assert_eq!(fixture.content(), FIRST);
     assert_eq!(fixture.stored_backups(), 0);
     assert!(leftovers(&fixture.0).is_empty());
+}
+
+#[test]
+fn a_target_that_is_not_json_is_still_written_and_reloaded() {
+    // Grok Build keeps its settings in TOML. The writer compares exact bytes and
+    // never parses the file, so the first adapter's document format must not
+    // become a condition every later adapter has to satisfy.
+    const TOML: &str = "[models]\ndefault = \"mine\"\n";
+    let fixture = Fixture::new();
+    fixture.write(TOML);
+    let applied = apply_file(&fixture.plan(), FIRST.as_bytes(), &fixture.backups()).unwrap();
+    assert!(applied.changed);
+    assert_eq!(fixture.content(), FIRST);
+    assert_eq!(
+        fs::read_to_string(applied.backup.as_ref().unwrap().path.clone()).unwrap(),
+        TOML
+    );
 }
 
 #[cfg(unix)]

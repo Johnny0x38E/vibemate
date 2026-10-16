@@ -54,7 +54,9 @@ pub struct PlanSource {
 #[derive(Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigChange {
-    /// Dotted path inside the JSON document, for example `env.ANTHROPIC_MODEL`.
+    /// Dotted path inside the settings document, for example `env.ANTHROPIC_MODEL`.
+    /// Both formats the adapters write (JSON for Claude Code and Pi, TOML for
+    /// Grok Build) name nested keys this way.
     pub key_path: String,
     /// Current value as display text; `None` when the key is absent.
     pub before: Option<String>,
@@ -79,6 +81,10 @@ pub enum NoticeCode {
     OverridesNotChecked,
     /// An existing `model` key is overridden by the planned `env` variable.
     ModelKeyOverridden,
+    /// The planned inline key outranks an environment reference the entry already
+    /// has, so the effective credential source changes. Grok Build documents
+    /// `api_key` ahead of `env_key`; the preview keeps the other field untouched.
+    EnvKeyOverridden,
     /// The vendor documents a limitation for this Provider.
     ProviderLimited,
 }
@@ -194,6 +200,55 @@ pub struct ConfigPlan {
     pub restart_required: bool,
 }
 
+/// Read a target file's identity and exact bytes, without parsing them.
+///
+/// A missing file yields `exists = false` and no digest; every present file
+/// yields the digest of its bytes, so any concurrent edit invalidates an older
+/// plan. Both the JSON and the TOML readers build on this, which keeps a plan
+/// and its write step from disagreeing about what a target looked like.
+///
+/// # Errors
+/// Returns `TargetPathInvalid` for a relative or unprintable path and
+/// `TargetUnreadable` for a directory, a dangling symbolic link or a failed
+/// read, and `TargetTooLarge` above [`MAX_TARGET_BYTES`].
+pub fn read_target_bytes(path: &Path) -> Result<(TargetFile, Vec<u8>), PlanError> {
+    let path_text = display_path(path).ok_or(PlanError::TargetPathInvalid)?;
+    let symlink = fs::symlink_metadata(path)
+        .map(|metadata| metadata.file_type().is_symlink())
+        .unwrap_or(false);
+    let metadata = match fs::metadata(path) {
+        Ok(metadata) => metadata,
+        // A dangling symbolic link is a broken target, not a missing file: a
+        // later write would replace the link instead of the file it names.
+        Err(error) if error.kind() == ErrorKind::NotFound && !symlink => {
+            return Ok((
+                TargetFile {
+                    path: path_text,
+                    exists: false,
+                    content_digest: None,
+                    symlink,
+                },
+                Vec::new(),
+            ));
+        }
+        Err(_) => return Err(PlanError::TargetUnreadable),
+    };
+    if !metadata.is_file() {
+        return Err(PlanError::TargetUnreadable);
+    }
+    if metadata.len() > MAX_TARGET_BYTES {
+        return Err(PlanError::TargetTooLarge);
+    }
+    let bytes = fs::read(path).map_err(|_| PlanError::TargetUnreadable)?;
+    let target = TargetFile {
+        content_digest: Some(digest_hex(&bytes)),
+        path: path_text,
+        exists: true,
+        symlink,
+    };
+    Ok((target, bytes))
+}
+
 /// Read the JSON object a plan would change.
 ///
 /// A missing file reads as an empty document without a digest; a blank file
@@ -206,35 +261,7 @@ pub struct ConfigPlan {
 /// file, or content that is not a JSON object, and `TargetTooLarge` above
 /// [`MAX_TARGET_BYTES`].
 pub fn read_target_document(path: &Path) -> Result<TargetDocument, PlanError> {
-    let path_text = display_path(path).ok_or(PlanError::TargetPathInvalid)?;
-    let symlink = fs::symlink_metadata(path)
-        .map(|metadata| metadata.file_type().is_symlink())
-        .unwrap_or(false);
-    let metadata = match fs::metadata(path) {
-        Ok(metadata) => metadata,
-        // A dangling symbolic link is a broken target, not a missing file: a
-        // later write would replace the link instead of the file it names.
-        Err(error) if error.kind() == ErrorKind::NotFound && !symlink => {
-            return Ok(TargetDocument {
-                target: TargetFile {
-                    path: path_text,
-                    exists: false,
-                    content_digest: None,
-                    symlink,
-                },
-                document: Map::new(),
-            });
-        }
-        Err(_) => return Err(PlanError::TargetUnreadable),
-    };
-    if !metadata.is_file() {
-        return Err(PlanError::TargetUnreadable);
-    }
-    if metadata.len() > MAX_TARGET_BYTES {
-        return Err(PlanError::TargetTooLarge);
-    }
-    let bytes = fs::read(path).map_err(|_| PlanError::TargetUnreadable)?;
-    let content_digest = digest_hex(&bytes);
+    let (target, bytes) = read_target_bytes(path)?;
     // A blank file is a valid empty settings document; whitespace-only content
     // must not be reported as a parse failure.
     let document = if bytes.iter().all(u8::is_ascii_whitespace) {
@@ -245,15 +272,7 @@ pub fn read_target_document(path: &Path) -> Result<TargetDocument, PlanError> {
             _ => return Err(PlanError::TargetUnreadable),
         }
     };
-    Ok(TargetDocument {
-        target: TargetFile {
-            path: path_text,
-            exists: true,
-            content_digest: Some(content_digest),
-            symlink,
-        },
-        document,
-    })
+    Ok(TargetDocument { target, document })
 }
 
 /// Lowercase SHA-256 of the given bytes.

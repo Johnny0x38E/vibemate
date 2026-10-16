@@ -596,6 +596,19 @@ test("filename version remains unverified and unavailable config roots do not sh
         }),
     );
     const versionBadge = await screen.findByText("1.0.50");
+    // This detail page also mounts the configuration and history cards, and each
+    // one lands with its own browser-preview notice a tick after the scan reply.
+    // Wait for both, or their re-render closes the tooltip this hover opens.
+    expect(
+        await screen.findByText(
+            "The browser preview cannot read or write configuration files. Open the Agents page in the vibemate desktop app.",
+        ),
+    ).toBeTruthy();
+    expect(
+        await screen.findByText(
+            "The browser preview cannot read configuration files or the write history. Open the Agents page in the vibemate desktop app.",
+        ),
+    ).toBeTruthy();
     expect(
         screen.queryByText("Filename hint only; version unverified"),
     ).toBeNull();

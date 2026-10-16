@@ -42,8 +42,11 @@ and have maintainer acceptance: preview/apply on 2026-10-14 and native restore
 on 2026-10-16. The shared write path provides change checks, private backups,
 atomic replacement and recoverable operation records. Pi configuration preview, backups, apply and restore are implemented for the
 compatible published Pi 1.x format (verified with 1.2.0 and 1.3.0). The maintainer accepted Pi 1.3.0 preview compatibility and readable provider names on 2026-10-16; real Provider/session acceptance remains in PI1. Grok Build
-configuration, skill installation/update/deployment, MCP deployment,
-managed Agent installation and the later compatibility checks remain pending. Local skill
+configuration preview, apply and restore (P22–P23) are implemented against the
+installed 1.0.60 contract and accepted by the maintainer on 2026-10-16. Its skill
+and MCP
+deployment, managed Agent installation and the later compatibility checks
+remain pending. Local skill
 import (P25) is implemented: the system folder picker chooses a skill folder or a
 folder of skill folders, each found skill is validated and copied into the
 private library with a content digest and a source record, and the original
@@ -66,9 +69,13 @@ deferred to the release-time platform check.
    requested on 2026-10-16. Reuse the accepted file writer and history restore;
    preserve the maintainer's existing configuration. Track real Pi session
    acceptance in [todo.md](todo.md).
-2. Verify and implement the Grok Build adapter next, reusing the same safety
-   rules. Central models hold metadata; request settings belong to the target
-   Agent and require verified native mappings.
+2. Grok Build preview, apply and restore (P22–P23) landed on 2026-10-16 against
+   the installed 1.0.60 contract and closed with maintainer acceptance the same
+   day, without a launcher or local bridge. Grok skill and MCP deployment follow,
+   reusing the same safety rules. Central models hold metadata; request settings
+   belong to the target Agent and require verified native mappings, and the
+   Anthropic Messages backend stays refused until Grok documents how it sends a
+   per-model key.
 3. Finish the skill workflow on top of the delivered local import (P25):
    source installation, update preview and per-Agent symlink deployment, with an
    explicit copy-sync fallback and protection of local changes.

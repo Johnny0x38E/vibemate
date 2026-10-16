@@ -17,9 +17,7 @@ use std::{
 
 use serde::Serialize;
 
-use crate::config_plan::{
-    MAX_TARGET_BYTES, PlanError, TargetDocument, TargetFile, digest_hex, read_target_document,
-};
+use crate::config_plan::{MAX_TARGET_BYTES, PlanError, TargetFile, digest_hex, read_target_bytes};
 use crate::shared;
 
 /// A file a plan wants to replace, with the token the plan was built from.
@@ -207,6 +205,8 @@ pub enum OperationKind {
     ClaudeCodeSettings,
     /// Pi provider/model definitions and default model selection.
     PiSettings,
+    /// Grok Build model entry and default model selection in `config.toml`.
+    GrokSettings,
 }
 
 impl OperationKind {
@@ -215,6 +215,7 @@ impl OperationKind {
         match self {
             Self::ClaudeCodeSettings => "claude_code_settings",
             Self::PiSettings => "pi_settings",
+            Self::GrokSettings => "grok_settings",
         }
     }
 
@@ -223,6 +224,7 @@ impl OperationKind {
         match value {
             "claude_code_settings" => Some(Self::ClaudeCodeSettings),
             "pi_settings" => Some(Self::PiSettings),
+            "grok_settings" => Some(Self::GrokSettings),
             _ => None,
         }
     }
@@ -444,23 +446,23 @@ fn apply_file_with_mode(
     preserve_mode: bool,
 ) -> Result<AppliedFile, WriteError> {
     let current = read_target(&target.path)?;
-    if current.target.symlink {
+    if current.symlink {
         return Err(WriteError::SymlinkRefused);
     }
-    if current.target.content_digest != target.expected_digest {
+    if current.content_digest != target.expected_digest {
         return Err(WriteError::TargetChanged);
     }
     let new_digest = digest_hex(content);
-    if current.target.content_digest.as_deref() == Some(new_digest.as_str())
+    if current.content_digest.as_deref() == Some(new_digest.as_str())
         && (preserve_mode || has_private_mode(&target.path)?)
     {
         return Ok(AppliedFile {
-            target: current.target,
+            target: current,
             backup: None,
             changed: false,
         });
     }
-    let previous = match current.target.exists {
+    let previous = match current.exists {
         true => {
             if is_read_only(&target.path)? {
                 return Err(WriteError::TargetReadOnly);
@@ -489,11 +491,11 @@ fn apply_file_with_mode(
         return Err(error);
     }
     let after = read_target(&target.path).map_err(|_| WriteError::OutcomeUnknown)?;
-    if after.target.content_digest.as_deref() != Some(new_digest.as_str()) {
+    if after.content_digest.as_deref() != Some(new_digest.as_str()) {
         return Err(WriteError::OutcomeUnknown);
     }
     Ok(AppliedFile {
-        target: after.target,
+        target: after,
         backup,
         changed: true,
     })
@@ -546,14 +548,22 @@ fn write_temporary(path: &Path, content: &[u8]) -> Result<(), WriteError> {
     Ok(())
 }
 
-/// Read a target's identity through the preview's reader, so both steps agree
-/// on what an unchanged file means.
-fn read_target(path: &Path) -> Result<TargetDocument, WriteError> {
-    read_target_document(path).map_err(|error| match error {
-        PlanError::TargetPathInvalid => WriteError::TargetPathInvalid,
-        PlanError::TargetTooLarge => WriteError::TargetTooLarge,
-        _ => WriteError::TargetUnreadable,
-    })
+/// Read a target's identity through the preview's reader, so both steps agree on
+/// what an unchanged file means.
+///
+/// The writer deliberately does not parse the file: a settings document is JSON
+/// for Claude Code and Pi but TOML for Grok Build, and its shape belongs to the
+/// adapter that planned the change. What both sides must share is the identity of
+/// the exact bytes at that path — existence, digest, symbolic-link flag and the
+/// size limit.
+fn read_target(path: &Path) -> Result<TargetFile, WriteError> {
+    read_target_bytes(path)
+        .map_err(|error| match error {
+            PlanError::TargetPathInvalid => WriteError::TargetPathInvalid,
+            PlanError::TargetTooLarge => WriteError::TargetTooLarge,
+            _ => WriteError::TargetUnreadable,
+        })
+        .map(|(target, _bytes)| target)
 }
 
 /// Read the bytes that are about to be replaced, within the preview limit.

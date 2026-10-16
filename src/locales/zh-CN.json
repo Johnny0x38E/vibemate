@@ -629,6 +629,7 @@
                 "credentialFromStore": "API 密钥不会进入这个窗口。应用改动时，vibemate 会从系统凭据存储读取它，并以明文写入该配置文件。",
                 "overridesNotChecked": "本预览没有读取托管设置、项目设置和 shell 环境变量，它们都可能覆盖这个文件。",
                 "modelKeyOverridden": "文件里已有的 model 设置（{{value}}）会被环境变量覆盖。",
+                "envKeyOverridden": "“{{value}}”条目已经用环境变量指定密钥。Grok 优先使用 api_key，应用后计划写入的密钥会接管这个条目；原有的环境变量行保持不变。",
                 "providerLimited": "厂商只保证该路径对 Anthropic 一等厂商的模型可用。"
             },
             "errors": {
@@ -655,6 +656,8 @@
             },
             "piRestartRequired": "新建 Pi 会话以使用这些默认设置；项目设置、命令行参数和恢复的会话可能覆盖默认选择。",
             "piNotice": "仅在应用时从系统凭据库读取密钥，并以明文写入 models.json。替换前会备份原文件。未知模型信息沿用 Pi 默认值，推理档位保持原设置。",
+            "grokRestartRequired": "新建 Grok Build 会话后这个条目才会生效。命令行参数、shell 环境变量和策略文件都可能覆盖配置文件。",
+            "grokOutcomeApplied": "已写入。Grok Build 的 config.toml 现在包含计划的模型条目与默认选择。",
             "piOutcome": {
                 "applied": "已写入，两个 Pi 配置文件均已保存计划中的设置。",
                 "failed": "未写入，Pi 原配置保持完整。",

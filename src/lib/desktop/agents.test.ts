@@ -4,11 +4,10 @@ import {
     APPLY_ERROR_CODES,
     PLAN_ERROR_CODES,
     RESTORE_ERROR_CODES,
-    applyClaudeCodeRestore,
     applyAgentRestore,
     applyClaudeCodeSettings,
-    listClaudeCodeOperations,
-    planClaudeCodeRestore,
+    listAgentOperations,
+    planAgentRestore,
     planClaudeCodeSettings,
     reviewedPlanTokens,
     type ApplyStep,
@@ -669,12 +668,14 @@ const restoreOutcome: RestoreOutcome = {
 
 test("browser preview lists no history and refuses to restore", async () => {
     vi.mocked(isTauri).mockReturnValue(false);
-    expect(await listClaudeCodeOperations()).toEqual({ kind: "preview" });
-    expect(await planClaudeCodeRestore(recorded.operationId)).toEqual({
+    expect(await listAgentOperations("claudeCode")).toEqual({
+        kind: "preview",
+    });
+    expect(await planAgentRestore("claudeCode", recorded.operationId)).toEqual({
         kind: "preview",
     });
     await expect(
-        applyClaudeCodeRestore(recorded.operationId, []),
+        applyAgentRestore("claudeCode", recorded.operationId, []),
     ).rejects.toMatchObject({
         name: "RestoreRequestError",
         code: "desktop_required",
@@ -684,7 +685,7 @@ test("browser preview lists no history and refuses to restore", async () => {
 
 test("lists the recorded writes with their labels and states", async () => {
     vi.mocked(invoke).mockResolvedValue([recorded]);
-    expect(await listClaudeCodeOperations()).toEqual({
+    expect(await listAgentOperations("claudeCode")).toEqual({
         kind: "desktop",
         operations: [recorded],
     });
@@ -693,7 +694,7 @@ test("lists the recorded writes with their labels and states", async () => {
 
 test("returns a validated preview for a recorded write", async () => {
     vi.mocked(invoke).mockResolvedValue(restorePlan);
-    expect(await planClaudeCodeRestore(recorded.operationId)).toEqual({
+    expect(await planAgentRestore("claudeCode", recorded.operationId)).toEqual({
         kind: "desktop",
         plan: restorePlan,
     });
@@ -708,7 +709,7 @@ test("sends the reviewed digests back and returns the outcome", async () => {
     ];
     vi.mocked(invoke).mockResolvedValue(restoreOutcome);
     expect(
-        await applyClaudeCodeRestore(recorded.operationId, reviewed),
+        await applyAgentRestore("claudeCode", recorded.operationId, reviewed),
     ).toEqual(restoreOutcome);
     expect(invoke).toHaveBeenCalledExactlyOnceWith(
         "apply_claude_code_restore",
@@ -734,7 +735,7 @@ test("accepts a restore that left a conflicting file alone", async () => {
     };
     vi.mocked(invoke).mockResolvedValue(partial);
     expect(
-        await applyClaudeCodeRestore(recorded.operationId, [
+        await applyAgentRestore("claudeCode", recorded.operationId, [
             { ordinal: 0, currentDigest: null },
             { ordinal: 1, currentDigest: "a".repeat(64) },
         ]),
@@ -750,7 +751,7 @@ test("accepts a restore that reports a copy it could not remove", async () => {
     };
     vi.mocked(invoke).mockResolvedValue(withLeftover);
     expect(
-        await applyClaudeCodeRestore(recorded.operationId, [
+        await applyAgentRestore("claudeCode", recorded.operationId, [
             { ordinal: 0, currentDigest: null },
         ]),
     ).toEqual(withLeftover);
@@ -761,7 +762,7 @@ test.each(RESTORE_ERROR_CODES)(
     async (code) => {
         vi.mocked(invoke).mockRejectedValue(code);
         await expect(
-            planClaudeCodeRestore(recorded.operationId),
+            planAgentRestore("claudeCode", recorded.operationId),
         ).rejects.toMatchObject({
             name: "RestoreRequestError",
             code,
@@ -774,7 +775,7 @@ test.each(["private-refusal", new Error("private-runtime-error")])(
     "sanitizes unexpected restore failure %s",
     async (error) => {
         vi.mocked(invoke).mockRejectedValue(error);
-        await expect(listClaudeCodeOperations()).rejects.toMatchObject({
+        await expect(listAgentOperations("claudeCode")).rejects.toMatchObject({
             code: "operation_failed",
         });
     },
@@ -822,7 +823,7 @@ test.each(malformedListings)(
     "rejects malformed or contradictory listing %#",
     async (response) => {
         vi.mocked(invoke).mockResolvedValue(response);
-        await expect(listClaudeCodeOperations()).rejects.toMatchObject({
+        await expect(listAgentOperations("claudeCode")).rejects.toMatchObject({
             name: "RestoreRequestError",
             code: "invalid_response",
         });
@@ -886,7 +887,7 @@ test.each(malformedPreviews)(
     async (response) => {
         vi.mocked(invoke).mockResolvedValue(response);
         await expect(
-            planClaudeCodeRestore(recorded.operationId),
+            planAgentRestore("claudeCode", recorded.operationId),
         ).rejects.toMatchObject({
             name: "RestoreRequestError",
             code: "invalid_response",
@@ -953,7 +954,7 @@ test.each(malformedOutcomes)(
     async (response) => {
         vi.mocked(invoke).mockResolvedValue(response);
         await expect(
-            applyClaudeCodeRestore(recorded.operationId, []),
+            applyAgentRestore("claudeCode", recorded.operationId, []),
         ).rejects.toMatchObject({
             name: "RestoreRequestError",
             code: "invalid_response",

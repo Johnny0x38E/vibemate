@@ -17,6 +17,7 @@ import {
     type ApplyStep,
     type ClaudeCodeApplied,
     type ClaudeCodePlan,
+    type ConfigurableAgent,
     type PlanErrorCode,
     type PlanNotice,
     type WriteErrorCode,
@@ -39,6 +40,12 @@ import {
     reviewedPiPlan,
     type PiPlan,
 } from "../../lib/desktop/pi";
+import {
+    planGrokSettings,
+    applyGrokSettings,
+    reviewedGrokPlan,
+    type GrokPlan,
+} from "../../lib/desktop/grok";
 import styles from "./AgentList.module.css";
 import card from "./ConfigPreview.module.css";
 
@@ -64,7 +71,7 @@ type PreviewState =
     | { kind: "loading" }
     | { kind: "preview" }
     | { kind: "error"; code: PlanErrorCode }
-    | { kind: "ready"; plan: ClaudeCodePlan | PiPlan };
+    | { kind: "ready"; plan: ClaudeCodePlan | PiPlan | GrokPlan };
 
 /** The apply step's own outcome; it outlives the plan it was built from. */
 type ApplyState =
@@ -79,6 +86,8 @@ type ApplyState =
  * Preview is credential-blind; applying explicitly approves the shown files. Both
  * selections stay local to this panel, and changing either one discards the
  * shown plan, so a preview can never describe a pair the user no longer sees.
+ * Each adapter names its own file or files: Grok Build changes one TOML document,
+ * so its card shows a single file and its own restart and outcome sentences.
  */
 export function ConfigPreview({
     agent = "claudeCode",
@@ -87,7 +96,7 @@ export function ConfigPreview({
     onApplied,
     blocked = false,
 }: {
-    agent?: "claudeCode" | "pi";
+    agent?: ConfigurableAgent;
     entryPath?: string | null;
     onBusyChange?: (busy: boolean) => void;
     onApplied?: () => void;
@@ -240,10 +249,16 @@ export function ConfigPreview({
                           selectedModel.modelId,
                           entryPath,
                       )
-                    : await planClaudeCodeSettings(
-                          selectedProvider.id,
-                          selectedModel.modelId,
-                      );
+                    : agent === "grokBuild"
+                      ? await planGrokSettings(
+                            selectedProvider.id,
+                            selectedModel.modelId,
+                            entryPath,
+                        )
+                      : await planClaudeCodeSettings(
+                            selectedProvider.id,
+                            selectedModel.modelId,
+                        );
             if (!mounted.current) return;
             setPreview(
                 result.kind === "preview"
@@ -289,11 +304,18 @@ export function ConfigPreview({
                           entryPath,
                           reviewedPiPlan(plan),
                       )
-                    : await applyClaudeCodeSettings(
-                          plan.source.providerId,
-                          plan.source.modelId,
-                          reviewedPlanTokens(plan),
-                      );
+                    : plan.agent === "grokBuild"
+                      ? await applyGrokSettings(
+                            plan.source.providerId,
+                            plan.source.modelId,
+                            entryPath,
+                            reviewedGrokPlan(plan),
+                        )
+                      : await applyClaudeCodeSettings(
+                            plan.source.providerId,
+                            plan.source.modelId,
+                            reviewedPlanTokens(plan),
+                        );
             if (!mounted.current) return;
             setPreview({ kind: "idle" });
             setApply({ kind: "done", result });
@@ -540,7 +562,7 @@ function PlanCard({
     applying,
     onApply,
 }: {
-    plan: ClaudeCodePlan | PiPlan;
+    plan: ClaudeCodePlan | PiPlan | GrokPlan;
     applying: boolean;
     onApply: () => void;
 }): JSX.Element {
@@ -548,7 +570,11 @@ function PlanCard({
     const files =
         plan.agent === "pi"
             ? plan.files
-            : [{ target: plan.target, changes: plan.changes }];
+            : plan.agent === "grokBuild"
+              ? [plan.file]
+              : [{ target: plan.target, changes: plan.changes }];
+    // Pi carries its fixed sentence instead of Rust-side notices.
+    const notices = plan.agent === "pi" ? [] : plan.notices;
     return (
         <DetailPanel label={t("agents.modelConfig.planHeading")}>
             {files.map(({ target, changes }) => (
@@ -567,7 +593,9 @@ function PlanCard({
                                 {t(
                                     plan.agent === "pi"
                                         ? "agents.modelConfig.piRestartRequired"
-                                        : "agents.modelConfig.restartRequired",
+                                        : plan.agent === "grokBuild"
+                                          ? "agents.modelConfig.grokRestartRequired"
+                                          : "agents.modelConfig.restartRequired",
                                 )}
                             </span>
                         )}
@@ -612,10 +640,10 @@ function PlanCard({
                     {t("agents.modelConfig.piNotice")}
                 </p>
             )}
-            {plan.agent === "claudeCode" && plan.notices.length > 0 && (
+            {notices.length > 0 && (
                 <ul className={card["notices"]}>
-                    {plan.notices.map((notice) => (
-                        <li key={notice.code}>{noticeText(notice, t)}</li>
+                    {notices.map((entry) => (
+                        <li key={entry.code}>{noticeText(entry, t)}</li>
                     ))}
                 </ul>
             )}
@@ -641,7 +669,7 @@ function AppliedCard({
     agent,
 }: {
     result: ClaudeCodeApplied;
-    agent: "claudeCode" | "pi";
+    agent: ConfigurableAgent;
 }): JSX.Element {
     const { t } = useTranslation();
     // A failed step always carries its code; the IPC boundary refuses other shapes.
@@ -653,11 +681,11 @@ function AppliedCard({
         <DetailPanel label={t("agents.modelConfig.outcomeHeading")}>
             <div className={card["summary"]}>
                 <span className={card["path"]}>
-                    {t(
-                        agent === "pi"
-                            ? `agents.modelConfig.piOutcome.${result.state}`
-                            : `agents.modelConfig.outcome.${result.state}`,
-                    )}
+                    {agent === "grokBuild" && result.state === "applied"
+                        ? t("agents.modelConfig.grokOutcomeApplied")
+                        : agent === "pi"
+                          ? t(`agents.modelConfig.piOutcome.${result.state}`)
+                          : t(`agents.modelConfig.outcome.${result.state}`)}
                 </span>
                 {result.steps
                     .filter((step) => step.backupPath !== null)
@@ -673,7 +701,9 @@ function AppliedCard({
                         {t(
                             agent === "pi"
                                 ? "agents.modelConfig.piRestartRequired"
-                                : "agents.modelConfig.restartRequired",
+                                : agent === "grokBuild"
+                                  ? "agents.modelConfig.grokRestartRequired"
+                                  : "agents.modelConfig.restartRequired",
                         )}
                     </span>
                 )}

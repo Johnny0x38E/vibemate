@@ -20,8 +20,10 @@
 
 ## 单文件写入顺序
 
-1. 读取目标，复用 `config_plan::read_target_document`：存在性、SHA-256、符号链接标记、1 MiB 上限。
-   两边共用同一个读取器，避免「计划认为未变、写入认为已变」的分歧。
+1. 读取目标，复用 `config_plan::read_target_bytes`：存在性、SHA-256、符号链接标记、1 MiB 上限。
+   两边共用同一个读取器，避免「计划认为未变、写入认为已变」的分歧。写入器只比较精确字节，
+   **不解析文档**：解析属于各自的适配器，否则第一个适配器的 JSON 假设会变成后来者的门槛
+   （Grok Build 的设置是 TOML，按 JSON 解析会直接被当成不可读目标）。
 2. 拒绝符号链接、只读目标与非普通文件。
 3. 比对计划令牌：文件出现、消失或内容变化一律返回 `target_changed`，绝不覆盖。
 4. 新内容与现状一致时返回 `changed: false`：不写盘、不备份、不改时间戳，连续提交因此安全。
@@ -241,3 +243,56 @@ Pi 的最小配置预览、原配置备份与应用作为一个任务交付，�
 `OperationKind::PiSettings` 使用同一日志与补偿机制。凭据写入模型目录时采用私有写入模式，
 Unix 替换文件为 0600；Claude Code 原有写入模式保持既有约定。历史列表、恢复预览与恢复应用均按
 Agent 操作类型隔离；恢复结果按实际执行的倒序步骤校验，不把步骤编号当作数组位置。
+
+## Grok Build 预览（P22）
+
+Grok 把所有用户设置放在一个 `config.toml` 里，所以本适配器的计划只有一个目标文件。
+`config_plan::read_target_bytes` 从原来的 JSON 读取器里拆出「文件身份 + 精确字节」这一步，
+JSON 与 TOML 读取器共用它，避免「计划认为未变、写入认为已变」的分歧在第二种格式上重现。
+
+- **保留原文件形态**：解析与合并用 `toml_edit`（已在锁定的依赖图里，不新增 crate 版本），
+  它按文档结构改写目标字段，保留用户自己的注释、键顺序与无关表；换成纯值模型会丢掉这些。
+  解析失败的文档直接拒绝，不改写、不「修复」。
+- **合约检查跟着安装版本**：Grok 启动时把随版本发布的配置参考解包到
+  `<root>/docs/user-guide/26-config-reference.md`，并写 `<root>/.metadata_version`。适配器要求
+  下载文件名版本、`.metadata_version` 与该参考里的字段行三者一致，任一不符返回
+  `agent_version_unverified`；两个文件都按有界普通文件读取，符号链接即拒绝。
+- **别名归属**：`[model.<alias>]` 是配置身份。schema v19 `grok_model_binding` 按
+  `(config_root, model_alias)` 记录中心 Provider/模型对；没有记录的同名条目属于用户，
+  候选别名会跳过它另取一个，而不是接管。归属按配置根隔离，`GROK_HOME` 指向另一套安装
+  时不会继承另一套的声明。
+- **只写有文档依据的字段**：`model`、`base_url`、`name`、`api_backend`、`api_key` 与
+  已声明的 `context_window`，加 `[models].default`。请求参数（`temperature`、
+  `top_p`、`max_completion_tokens`）与 `reasoning_efforts` 留给 P24 的逐项核实映射。
+  已有 `env_key` 的条目保留该行不改写，但明示 `api_key` 会接管认证来源。
+- **会写但不能选中的组合先拒绝**：别名出现在 `[models].disabled_models`，或
+  `[models].allowed_models` 非空且既不含别名也不含模型 ID 时，返回 `target_conflict`。
+  这比写入后再告诉用户「写了但选不到」诚实。
+- **未核实的协议不猜**：`api_backend = "messages"` 时官方只示范把 `x-api-key` 放进
+  `extra_headers`，没有说明模型自己的 `api_key` 会被放进哪个请求头，因此
+  Anthropic Messages 路由返回 `protocol_unsupported`。
+- **覆盖来源只声明存在**：`managed_config.toml` 与 `requirements.toml` 只报告
+  「不存在 / 存在 / 不可读」，不读内容——那里可能有另一家的明文密钥。`GROK_CONFIG`
+  覆盖层与环境变量、CLI 参数在本批不探测，界面按「未读取的高优先级来源」说明。
+
+### 应用与回滚（P23）
+
+`OperationKind::GrokSettings`（`grok_settings`）复用同一份日志、私有备份与补偿实现；
+`config_operation.kind` 只限长度、由 Rust 判定合法值，因此接入第三种操作类型不需要迁移。
+应用先重建计划并逐令牌比对（路径、文件摘要、别名、Provider revision、模型摘要），任一变化
+返回 `plan_stale` 且不写字节；随后才读 OS 凭据，把预览里唯一的掩码位置换成真实密钥，其余内容与
+预览所见一致，由 `toml_edit` 负责引号与控制字符的转义。写入走私有模式（Unix 替换后为 0600），
+原内容进私有备份，重读失败或摘要不符报 `outcome_unknown`。
+
+别名归属只在步骤确实写盘（`applied`）之后记录；被拒绝或已回滚的写入不认领别名，因此下一次预览
+不会去改一个从未被本适配器写过的条目。记录后即使恢复原文件也保留该行：它描述发生过什么，
+并让后续预览沿用同一别名，而不是留下一份孤立条目和一个新名字。恢复按 Agent 隔离，
+Claude Code 与 Pi 的入口拒绝 Grok 的操作 id，反之亦然。
+
+界面侧：Grok 卡片的应用按钮与结果卡沿用 P20/P21 的机制，只有文案按 Grok 自己的说法
+（`grokOutcomeApplied` 与 `grokRestartRequired`）；`RestoreView` 的命令名改为按 Agent 查表，
+新增适配器不再往三个函数里各加一个三元分支。
+
+仍未做：`requirements.toml` / MDM 与 `GROK_CONFIG` 覆盖层的内容检查（只报告存在）、
+`[model_providers.<id>]` 共享块的接管、请求参数与推理档位映射（P24），以及本机真实 Grok
+会话的应用/恢复验收。

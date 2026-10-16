@@ -450,14 +450,14 @@ pub fn restore_file(
 /// the one this module wrote, `TargetUnreadable` when the path cannot be read,
 /// and `WriteFailed` when the removal failed.
 pub fn remove_created_file(path: &Path, applied_digest: &str) -> Result<(), WriteError> {
-    let document = read_target(path)?;
-    if document.target.symlink {
+    let current = read_target(path)?;
+    if current.symlink {
         return Err(WriteError::SymlinkRefused);
     }
-    if !document.target.exists {
+    if !current.exists {
         return Ok(());
     }
-    if document.target.content_digest.as_deref() != Some(applied_digest) {
+    if current.content_digest.as_deref() != Some(applied_digest) {
         return Err(WriteError::TargetChanged);
     }
     fs::remove_file(path).map_err(|_| WriteError::WriteFailed)
@@ -479,7 +479,7 @@ fn read_backup(backup: &Backup) -> Result<Vec<u8>, WriteError> {
 
 /// SHA-256 currently on disk, or `None` when the file is absent.
 fn current_digest(path: &Path) -> Result<Option<String>, WriteError> {
-    Ok(read_target(path)?.target.content_digest)
+    Ok(read_target(path)?.content_digest)
 }
 
 /// Classify what undoing one step would do, from the file as it is now.
@@ -505,17 +505,17 @@ fn classify(
     let Some(applied_digest) = step.applied_digest.as_deref() else {
         return Err(WriteError::InvalidStoredOperation);
     };
-    let document = match read_target(Path::new(&step.target_path)) {
-        Ok(document) => document,
+    let current = match read_target(Path::new(&step.target_path)) {
+        Ok(current) => current,
         // A file this module cannot read or that is too large cannot be replaced
         // safely; the reason travels to the interface instead of a guess.
         Err(error) => return Ok(plan.stopped(RestoreAction::Blocked, error.code())),
     };
-    plan.current_digest = document.target.content_digest.clone();
-    if document.target.symlink {
+    plan.current_digest = current.content_digest.clone();
+    if current.symlink {
         return Ok(plan.stopped(RestoreAction::Blocked, WriteError::SymlinkRefused.code()));
     }
-    match document.target.content_digest.as_deref() {
+    match current.content_digest.as_deref() {
         // The file a replacing write changed is gone. Recreating it would put
         // configuration back that the user removed, so it is a conflict.
         None if step.backup.is_some() => {

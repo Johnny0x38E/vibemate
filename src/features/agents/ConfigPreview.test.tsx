@@ -33,10 +33,22 @@ import {
     reviewedPiPlan,
     type PiPlan,
 } from "../../lib/desktop/pi";
+import {
+    planGrokSettings,
+    applyGrokSettings,
+    reviewedGrokPlan,
+    type GrokPlan,
+} from "../../lib/desktop/grok";
 vi.mock(import("../../lib/desktop/pi"), async (original) => ({
     ...(await original()),
     planPiSettings: vi.fn(),
     applyPiSettings: vi.fn(),
+}));
+
+vi.mock(import("../../lib/desktop/grok"), async (original) => ({
+    ...(await original()),
+    planGrokSettings: vi.fn(),
+    applyGrokSettings: vi.fn(),
 }));
 
 vi.mock(import("../../lib/desktop/agents"), async (original) => ({
@@ -593,6 +605,134 @@ test("Pi reviews both files and applies them once with the auth dependency", asy
     expect(
         screen.getByText(/Previous content kept at \/private\/settings.json/u),
     ).toBeTruthy();
+    expect(
+        screen.queryByText(
+            "Start a new Claude Code session for these settings to take effect.",
+        ),
+    ).toBeNull();
+});
+
+test("Grok previews its TOML file and applies it once", async () => {
+    const alias = "vibemate-deepseek-deepseek-flash";
+    const grokPlan: GrokPlan = {
+        agent: "grokBuild",
+        modelAlias: alias,
+        existingAlias: true,
+        source: plan.source,
+        restartRequired: true,
+        precedence: [
+            { name: "managed_config.toml", state: "absent" },
+            { name: "requirements.toml", state: "present" },
+        ],
+        notices: [
+            { code: "credentialFromStore", detail: null },
+            { code: "envKeyOverridden", detail: alias },
+            { code: "overridesNotChecked", detail: null },
+        ],
+        file: {
+            target: { ...plan.target, path: "/Users/test/.grok/config.toml" },
+            changes: [
+                {
+                    keyPath: `model.${alias}.model`,
+                    before: null,
+                    after: FLASH,
+                    secret: false,
+                },
+                {
+                    keyPath: `model.${alias}.api_key`,
+                    before: "••••••••",
+                    after: "••••••••",
+                    secret: true,
+                },
+                {
+                    keyPath: "models.default",
+                    before: "someone-elses",
+                    after: alias,
+                    secret: false,
+                },
+            ],
+        },
+    };
+    const grokPreview = vi.mocked(planGrokSettings);
+    grokPreview.mockReset().mockResolvedValue({
+        kind: "desktop",
+        plan: grokPlan,
+    });
+    const writeGrokPlan = vi.mocked(applyGrokSettings);
+    writeGrokPlan.mockReset();
+    let finish: ((r: ClaudeCodeApplied) => void) | undefined;
+    writeGrokPlan.mockImplementation(
+        () =>
+            new Promise((resolve) => {
+                finish = resolve;
+            }),
+    );
+    const i18n = await createAppI18n("en");
+    render(
+        <I18nextProvider i18n={i18n}>
+            <ConfigPreview agent="grokBuild" entryPath="/test/grok" />
+        </I18nextProvider>,
+    );
+    await setFieldSelectValue(
+        await screen.findByRole("combobox", { name: "Model" }),
+        FLASH,
+    );
+    await userEvent.click(
+        screen.getByRole("button", { name: "Preview changes" }),
+    );
+    await screen.findByText("/Users/test/.grok/config.toml");
+    expect(grokPreview).toHaveBeenCalledWith(deepseek.id, FLASH, "/test/grok");
+    // The planned credential is described, never carried as a value; the key it
+    // replaces is shown only as the mask.
+    const key = screen
+        .getByText(`model.${alias}.api_key`)
+        .closest("li")?.textContent;
+    expect(key).toContain(
+        "The API key from OS credential storage, written as plain text",
+    );
+    expect(key).toContain("••••••••");
+    // The default it replaces and the alias it now points at are both visible.
+    const fallback = screen.getByText("models.default").closest("li");
+    expect(fallback?.textContent).toContain("someone-elses");
+    expect(fallback?.textContent).toContain(alias);
+    expect(
+        screen.getByText(/already names an environment variable/u),
+    ).toBeTruthy();
+    expect(
+        screen.getByText(
+            "Start a new Grok Build session for this entry to take effect. CLI options, shell environment variables and policy files can override the settings file.",
+        ),
+    ).toBeTruthy();
+    // The one apply action consumes this plan; a second click must not repeat it.
+    const apply = screen.getByRole("button", { name: "Apply these settings" });
+    await userEvent.click(apply);
+    await userEvent.click(screen.getByRole("button", { name: "Applying…" }));
+    expect(writeGrokPlan).toHaveBeenCalledTimes(1);
+    expect(writeGrokPlan).toHaveBeenCalledWith(
+        deepseek.id,
+        FLASH,
+        "/test/grok",
+        reviewedGrokPlan(grokPlan),
+    );
+    finish?.({
+        ...writtenResult,
+        steps: [
+            {
+                ...writtenStep,
+                targetPath: "/Users/test/.grok/config.toml",
+                backupPath: "/private/grok/config.toml",
+            },
+        ],
+    });
+    await screen.findByText(
+        "Written. Grok Build's config.toml now holds the planned entry and default.",
+    );
+    expect(
+        screen.getByText(
+            /Previous content kept at \/private\/grok\/config.toml/u,
+        ),
+    ).toBeTruthy();
+    // The Grok card never borrows another adapter's outcome or restart sentence.
     expect(
         screen.queryByText(
             "Start a new Claude Code session for these settings to take effect.",

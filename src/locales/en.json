@@ -629,6 +629,7 @@
                 "credentialFromStore": "The API key stays out of this window. When the change is applied, vibemate reads it from OS credential storage and writes it into the settings file as plain text.",
                 "overridesNotChecked": "Managed settings, project settings and shell environment variables were not read. They can override this file.",
                 "modelKeyOverridden": "The existing \"model\" setting ({{value}}) is overridden by the environment variable.",
+                "envKeyOverridden": "The \"{{value}}\" entry already names an environment variable for its key. Grok resolves api_key ahead of env_key, so the planned key takes over that entry; the existing line is left untouched.",
                 "providerLimited": "The vendor guarantees this route only for Anthropic first-party models."
             },
             "errors": {
@@ -655,6 +656,8 @@
             },
             "piRestartRequired": "Start a new Pi session to use these defaults. Project settings, CLI options and resumed sessions can override them.",
             "piNotice": "The API key is read from OS credential storage only when you apply, then written as plain text in models.json. Existing files are backed up before replacement. Unknown model metadata uses Pi defaults; reasoning levels are unchanged.",
+            "grokRestartRequired": "Start a new Grok Build session for this entry to take effect. CLI options, shell environment variables and policy files can override the settings file.",
+            "grokOutcomeApplied": "Written. Grok Build's config.toml now holds the planned entry and default.",
             "piOutcome": {
                 "applied": "Written. Both Pi configuration files now hold the planned settings.",
                 "failed": "Nothing was written; the previous Pi configuration is intact.",

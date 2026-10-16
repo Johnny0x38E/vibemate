@@ -12,4 +12,5 @@ mod state;
 
 pub(crate) use state::CredentialLock;
 
+pub(crate) mod grok;
 pub(crate) mod pi;

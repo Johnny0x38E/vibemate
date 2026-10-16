@@ -5,7 +5,7 @@
 ## 当前顺序与范围
 
 1. 六 Agent 固定目录、只读发现与版本读取已交付并通过验收（2026-10-13）；平台专项延后到发布前。
-2. Claude Code 配置预览、应用与回滚（P18–P21）已验收，C21 关闭；Pi 最小配置预览、原配置备份与应用作为一个任务交付，复用现有写入与恢复机制。
+2. Claude Code 配置预览、应用与回滚（P18–P21）已验收，C21 关闭；Pi 最小配置预览、原配置备份与应用作为一个任务交付，复用现有写入与恢复机制。Grok Build 配置预览、应用与回滚（P22–P23）按本机 1.0.60 合约交付并已按下方 P23 记录关闭。
 3. 请求参数与必要能力覆盖属于目标 Agent 配置，不放在服务商模型页。
 4. 六种发现不等于六种配置注入；配置适配顺序为 Claude Code、Pi、Grok Build。维护者编码日常使用 Pi，Pi 不作为首个写入目标。
 5. 界面归属按关系基数划分：模型配置 1:1，操作在 Agent 模块；Skill/MCP 部署 1:N，操作在技能/MCP 模块。Agent 详情页只读汇总当前配置（模型/Skill/MCP 三个槽位，状态加跳转链接），不放注入操作。模型槽位与配置入口随 P18 交付；Skill/MCP 槽位随 P27/P32 各自添加，现在不留空壳。概览页 v1 五张统计卡片已落地（含模型总数 IPC）；详见下方「概览 v1」。
@@ -56,6 +56,7 @@ P15 的真实连接记录来自维护者确认，不代表代理重新执行，�
 ## 已交付功能验收
 
 - [x] 2026-10-13 维护者验收通过：C06（存储/凭据审阅）、I16（系统风主题浅/深色）、P17（六家 CLI、授权版本读取、原生运行与外观）、P17.t（品牌条款核对）、P25（原生技能导入）、P31（MCP 凭据库与原生外观）。P31 的中央定义删除功能现已补齐，新增验收见「Task P31」补充；Anthropic/OpenAI 标志不属于项目 MIT 授权。
+- [x] 2026-10-16 维护者验收通过：P22/P23（Grok Build 配置预览、应用与历史恢复，本机 `grok 1.0.60`）。写入器不再解析目标文件、只比较精确字段的改动同时通过全量 Rust 测试。
 - [ ] 平台专项：本阶段略过；发布前按 P36–P38 验证 Windows/Linux 原生行为、真实 OS 凭据与专门读屏（维护者决定 2026-10-13）。
 
 ### Task P16: 补充中央模型能力元数据
@@ -335,17 +336,26 @@ Pi 为第二个配置适配器，复用已验收的 P19–P21 预览/写入/回�
 
 **Description:** 接入第三个 Agent 的原生映射，复用配置差异组件。
 
+按 2026-10-16 复核的 1.0.60 实现：Grok 启动时会把随版本的配置参考解包到
+`<root>/docs/user-guide/26-config-reference.md` 并写入 `<root>/.metadata_version`，适配器用这两份
+与安装版本绑定的产物做合约检查，而不是只认下载文件名里的版本号。凭据写 `api_key`（参考表确认
+user 层有效）；Anthropic `messages` 后端的密钥落点没有文档说明，因此该协议先返回
+`protocol_unsupported`，不猜测请求头。别名归属记在 schema v19 `grok_model_binding`，按配置根隔离。
+
 **Acceptance criteria:**
 
-- [ ] 按 P03 的准确版本与格式生成计划，保留其他字段并执行协议/参数校验。
-- [ ] 展示覆盖来源、密钥存放、生效/重启方式；未知版本或缺少接口明确报错。
-- [ ] 复用计划/脱敏机制而不复制首个适配器配置假设；预览不写文件。
+- [x] 按 P03 复核后的准确版本与格式生成计划，保留其他字段并执行协议/参数校验。
+- [x] 展示覆盖来源、密钥存放、生效/重启方式；未知版本或缺少接口明确报错。
+- [x] 复用计划/脱敏机制而不复制首个适配器配置假设；预览不写文件。
 
 **Verification:**
 
-- [ ] 运行 Rust `grok_plan` 样本测试与已有预览行为测试。
-- [ ] 运行 `check:frontend` 与 Rust fmt/Clippy。
-- [ ] 本机版本可用时对照实际配置验证；资料缺失保持任务未完成。
+- [x] Rust `grok_plan` 样本测试（17 个）与预览行为测试、边界严格校验测试（9 个）通过。
+- [x] `check:frontend`（44 文件 / 858 测试）、Rust fmt/Clippy、锁定 macOS no-bundle 构建与 schema v19 迁移测试通过。
+- [x] 本机 1.0.60 的随版本手册、`.metadata_version`、条目布局与真实 `config.toml` 字段形状（脱敏）核对完成。
+- [x] 在本机真实 Grok 配置上通过 Tauri 预览验收（维护者 2026-10-16，与 P23 的应用/恢复一同确认）。
+- 已知边界：`messages` 后端如何携带 `api_key`、`config.toml` 权限是否被 Grok 强制、外部改动后的
+  运行时重读语义仍未核实；因此该协议保持拒绝，界面只声明「写入」并要求新建会话。
 
 **Dependencies:** P03,P18,P21。
 
@@ -353,7 +363,7 @@ Pi 为第二个配置适配器，复用已验收的 P19–P21 预览/写入/回�
 
 - `src-tauri/src/agents/grok_build.rs`
 - `src-tauri/src/agents.rs`
-- `src/lib/desktop/agents.ts`
+- `src/lib/desktop/grok.ts`
 - `src/features/agents/ConfigPreview.tsx`
 - `src/features/agents/ConfigPreview.test.tsx`
 
@@ -363,17 +373,36 @@ Pi 为第二个配置适配器，复用已验收的 P19–P21 预览/写入/回�
 
 **Description:** 让第三个 Agent 使用已有可靠写入与回滚机制，验证原有启动方式。
 
+写入复用 P19–P21：`OperationKind::GrokSettings` 只加枚举值（`config_operation.kind` 由 Rust
+判定合法值，不需要迁移），备份、原子替换、补偿与按 Agent 隔离的历史沿用已验收的实现。
+写入器不再解析目标文件，只比较精确字节；文档格式属于各自的适配器。
+
 **Acceptance criteria:**
 
-- [ ] 有效计划能写入并重读，处理并发变化、认证方式和配置优先级。
-- [ ] 可以应用和恢复，异常沿用明确的操作状态与恢复路径。
-- [ ] 真实启动证据支持该版本/Provider 组合；需启动器/桥接时先决定范围（维护者 2026-10-13：待定）。
+- [x] 有效计划能写入并重读，处理并发变化与本适配器拥有的字段；未拥有内容按字节保留。
+- [x] 认证方式沿用维护者决定：读 OS 凭据后写 `api_key` 明文，保留原有 `env_key` 行并说明接管。
+- [x] 可以应用和恢复，异常沿用明确的操作状态与恢复路径；别名归属只在确实写盘后记录。
+- [x] 配置优先级按交付边界验收通过：界面列出 `managed_config.toml` / `requirements.toml` 的存在与否，
+      并要求新建会话；本批不读取这些层的内容，也不把「已写入」说成「已生效」。
 
 **Verification:**
 
-- [ ] 运行 Rust `grok_apply`/`config_restore` 测试与 UI 行为测试。
-- [ ] 运行 `check:frontend` 与 Rust fmt/Clippy。
-- [ ] 在真实 Tauri/Grok Build 中应用、重启、恢复，记录安装版本。
+- [x] Rust `grok_apply`/恢复测试与写入器不解析文档的测试、UI 行为测试通过。
+- [x] `check:frontend`（44 文件 / 864 测试）、Rust fmt/Clippy、全量测试（441 通过、1 忽略，其中 Grok 适配器 22 个）与锁定 macOS no-bundle 构建通过。
+- [x] 在真实 Tauri/Grok Build 中应用配置并写入选中的 `config.toml` 条目（维护者 2026-10-16，本机安装 `grok 1.0.60 (01a8e1c591c0) [stable]`）。
+- [x] 在真实 Grok Build 历史里预览并恢复一次 Grok 写入，配置文件回到写入前的内容（维护者 2026-10-16，本机 `grok 1.0.60`）。
+- [x] 维护者确认 P23 整体验收通过（2026-10-16），未加入启动器或本地桥接：现有原生入口足够，
+      2026-10-13 的那条范围待定随之关闭。
+
+**已知边界：**
+
+- `api_key` 在各 `api_backend` 下实际使用哪个请求头仍未由官方文档说明，因此 Anthropic Messages
+  协议保持 `protocol_unsupported`；`chat_completions` 与 `responses` 按文档的 provider API key 映射。
+- 凭据仍按模型条目存放：同一 Provider 链接 N 个模型就是 N 份明文密钥，轮换要逐条重新应用；
+  `[model_providers.<id>]` 共享块不继承凭据，适配器也不主动创建。
+- 每模型的推理档位与请求参数不在本批（P24 的逐项核实映射）；`hidden_models`、项目级覆盖与
+  MDM 固定项仍只是如实展示存在与否。
+- Windows/Linux 的文件替换、权限与符号链接差异留在 P37 发布前平台专项。
 
 **Dependencies:** P19,P21,P22。
 
@@ -381,9 +410,9 @@ Pi 为第二个配置适配器，复用已验收的 P19–P21 预览/写入/回�
 
 - `src-tauri/src/agents/grok_build.rs`
 - `src-tauri/src/config_apply.rs`
-- `src/lib/desktop/agents.ts`
+- `src/lib/desktop/grok.ts`
 - `src/features/agents/ConfigPreview.tsx`
-- `src/features/agents/ConfigPreview.test.tsx`
+- `src/features/agents/RestoreView.tsx`
 
 **Estimated scope:** M：5 个建议主文件。
 

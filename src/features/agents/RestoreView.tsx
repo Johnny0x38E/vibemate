@@ -7,10 +7,8 @@ import {
     listAgentOperations,
     planAgentRestore,
     applyAgentRestore,
-    applyClaudeCodeRestore,
-    listClaudeCodeOperations,
-    planClaudeCodeRestore,
     type ClaudeCodeRestorePlan,
+    type ConfigurableAgent,
     type RecordedOperation,
     type RestoreErrorCode,
     type RestoreOutcome,
@@ -45,21 +43,22 @@ type ApplyState =
     | { kind: "done"; result: RestoreOutcome };
 
 /**
- * Settings writes vibemate recorded for Claude Code, with a preview of what
+ * Configuration writes vibemate recorded for one Agent, with a preview of what
  * undoing one would do.
  *
  * Read-only until the user confirms a preview: the list carries paths, states
  * and digests, never file content, and the restore only writes the content the
  * recorded write replaced. A file that changed after its write stays a conflict
  * the user resolves by hand, and every answer replaces the previously shown
- * preview, so a confirmation always belongs to what is on screen.
+ * preview, so a confirmation always belongs to what is on screen. Rust keeps the
+ * histories apart, so a Claude Code row can never restore a Pi or Grok file.
  */
 export function RestoreView({
     agent = "claudeCode",
     onBusyChange,
     blocked = false,
 }: {
-    agent?: "claudeCode" | "pi";
+    agent?: ConfigurableAgent;
     onBusyChange?: (busy: boolean) => void;
     blocked?: boolean;
 }): JSX.Element {
@@ -91,10 +90,7 @@ export function RestoreView({
         // discarded first request and every read that a newer one replaced.
         listGeneration.current += 1;
         const generation = listGeneration.current;
-        (agent === "pi"
-            ? listAgentOperations("pi")
-            : listClaudeCodeOperations()
-        ).then(
+        listAgentOperations(agent).then(
             (result) => {
                 if (listGeneration.current !== generation) return;
                 setList(
@@ -134,9 +130,7 @@ export function RestoreView({
         setApply({ kind: "idle" });
         setPreview({ kind: "loading", operationId });
         try {
-            const result = await (agent === "pi"
-                ? planAgentRestore("pi", operationId)
-                : planClaudeCodeRestore(operationId));
+            const result = await planAgentRestore(agent, operationId);
             if (!mounted.current) return;
             setPreview(
                 result.kind === "preview"
@@ -172,12 +166,11 @@ export function RestoreView({
         busyCallback.current?.(true);
         setApply({ kind: "applying" });
         try {
-            const result = await (agent === "pi"
-                ? applyAgentRestore("pi", plan.operationId, reviewedSteps(plan))
-                : applyClaudeCodeRestore(
-                      plan.operationId,
-                      reviewedSteps(plan),
-                  ));
+            const result = await applyAgentRestore(
+                agent,
+                plan.operationId,
+                reviewedSteps(plan),
+            );
             if (!mounted.current) return;
             setPreview({ kind: "idle" });
             setApply({ kind: "done", result });

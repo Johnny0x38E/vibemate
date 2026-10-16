@@ -1000,11 +1000,16 @@ the manual button stays available. Results live in the same window-local
 
 ## Agent model configuration
 
-`ConfigPreview` serves Claude Code and Pi through their typed desktop adapters.
-Pi previews both `models.json` and `settings.json` and binds the read-only
-`auth.json` precedence token. Applying consumes the reviewed preview, reports
-per-file backups and keeps navigation and other configuration actions blocked
-while the native operation is pending. The shared `RestoreView` lists only the
-selected Agent's recorded writes; the backend independently checks operation
-ownership before previewing or restoring any target. Provider/model selections
-stay local, and browser preview never invents a plan or a completed write.
+`ConfigPreview` serves Claude Code, Pi and Grok Build through their typed desktop
+adapters. Pi previews both `models.json` and `settings.json` and binds the read-only
+`auth.json` precedence token. Grok Build changes one TOML document, so its card
+lists the planned `[model.<alias>]` fields, `[models].default`, and the
+higher-precedence files that were located but never read. Each adapter keeps its own
+restart and outcome sentences, because "written" means a different set of files in
+each one. Applying consumes the reviewed preview, reports per-file backups and keeps
+navigation and other configuration actions blocked while the native operation is
+pending. The shared `RestoreView` lists only the selected Agent's recorded writes,
+choosing its three commands from one per-Agent table; the backend independently
+checks operation ownership before previewing or restoring any target.
+Provider/model selections stay local, and browser preview never invents a plan or a
+completed write.

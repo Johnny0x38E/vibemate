@@ -257,6 +257,7 @@ export const PLAN_NOTICE_CODES = [
     "credentialFromStore",
     "overridesNotChecked",
     "modelKeyOverridden",
+    "envKeyOverridden",
     "providerLimited",
 ] as const;
 export type PlanNoticeCode = (typeof PLAN_NOTICE_CODES)[number];
@@ -368,7 +369,8 @@ export function change(value: unknown): ConfigChange {
     return { keyPath, before, after, secret };
 }
 
-function notice(value: unknown): PlanNotice {
+/** Validate one plan notice; the interface owns the wording for `code`. */
+export function notice(value: unknown): PlanNotice {
     if (!isObject(value) || !hasExactKeys(value, ["code", "detail"]))
         return planInvalid();
     const code = PLAN_NOTICE_CODES.find((known) => known === value["code"]);
@@ -1142,21 +1144,46 @@ function restoreOutcome(
 }
 
 /**
- * List the Claude Code settings writes vibemate recorded, newest first.
+ * The commands each adapter exposes for its recorded writes and their recovery.
+ *
+ * An Agent with a preview but no write path is not listed here: the history and
+ * restore screens only appear for adapters that can record an operation.
+ */
+const AGENT_CONFIG_COMMANDS = {
+    claudeCode: {
+        list: "claude_code_operations",
+        plan: "plan_claude_code_restore",
+        apply: "apply_claude_code_restore",
+    },
+    pi: {
+        list: "pi_operations",
+        plan: "plan_pi_restore",
+        apply: "apply_pi_restore",
+    },
+    grokBuild: {
+        list: "grok_operations",
+        plan: "plan_grok_restore",
+        apply: "apply_grok_restore",
+    },
+} as const;
+
+/** An Agent whose configuration writes vibemate records and can undo. */
+export type ConfigurableAgent = keyof typeof AGENT_CONFIG_COMMANDS;
+
+/**
+ * List the settings writes vibemate recorded for one Agent, newest first.
  *
  * Read-only: the listing names files, states and digests, never file content and
  * never where a copy of it sits. Browser preview says so instead of inventing a
  * history.
  */
 export async function listAgentOperations(
-    agent: "claudeCode" | "pi",
+    agent: ConfigurableAgent,
 ): Promise<OperationListResult> {
     if (!isTauri()) return { kind: "preview" };
     let value: unknown;
     try {
-        value = await invoke<unknown>(
-            agent === "pi" ? "pi_operations" : "claude_code_operations",
-        );
+        value = await invoke<unknown>(AGENT_CONFIG_COMMANDS[agent].list);
     } catch (error: unknown) {
         throw new RestoreRequestError(
             RESTORE_ERROR_CODES.find((code) => code === error) ??
@@ -1179,18 +1206,15 @@ export async function listAgentOperations(
  * value is read into it.
  */
 export async function planAgentRestore(
-    agent: "claudeCode" | "pi",
+    agent: ConfigurableAgent,
     operationId: string,
 ): Promise<RestorePlanResult> {
     if (!isTauri()) return { kind: "preview" };
     let value: unknown;
     try {
-        value = await invoke<unknown>(
-            agent === "pi" ? "plan_pi_restore" : "plan_claude_code_restore",
-            {
-                operationId,
-            },
-        );
+        value = await invoke<unknown>(AGENT_CONFIG_COMMANDS[agent].plan, {
+            operationId,
+        });
     } catch (error: unknown) {
         throw new RestoreRequestError(
             RESTORE_ERROR_CODES.find((code) => code === error) ??
@@ -1211,19 +1235,16 @@ export async function planAgentRestore(
  * not a thrown error.
  */
 export async function applyAgentRestore(
-    agent: "claudeCode" | "pi",
+    agent: ConfigurableAgent,
     operationId: string,
     reviewed: ReviewedRestoreStep[],
 ): Promise<RestoreOutcome> {
     if (!isTauri()) throw new RestoreRequestError("desktop_required");
     let value: unknown;
     try {
-        value = await invoke<unknown>(
-            agent === "pi" ? "apply_pi_restore" : "apply_claude_code_restore",
-            {
-                input: { operationId, reviewed },
-            },
-        );
+        value = await invoke<unknown>(AGENT_CONFIG_COMMANDS[agent].apply, {
+            input: { operationId, reviewed },
+        });
     } catch (error: unknown) {
         throw new RestoreRequestError(
             RESTORE_ERROR_CODES.find((code) => code === error) ??
@@ -1233,22 +1254,4 @@ export async function applyAgentRestore(
     const result = restoreOutcome(value, reviewed);
     if (result.operationId !== operationId) return restoreInvalid();
     return result;
-}
-
-/** List only Claude Code writes; retained for existing callers. */
-export function listClaudeCodeOperations(): Promise<OperationListResult> {
-    return listAgentOperations("claudeCode");
-}
-/** Preview only a Claude Code restore, preserving the existing caller contract. */
-export function planClaudeCodeRestore(
-    operationId: string,
-): Promise<RestorePlanResult> {
-    return planAgentRestore("claudeCode", operationId);
-}
-/** Restore only Claude Code files after the reviewed tokens are checked. */
-export function applyClaudeCodeRestore(
-    operationId: string,
-    reviewed: ReviewedRestoreStep[],
-): Promise<RestoreOutcome> {
-    return applyAgentRestore("claudeCode", operationId, reviewed);
 }

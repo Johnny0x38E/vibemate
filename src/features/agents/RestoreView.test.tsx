@@ -6,9 +6,9 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { createAppI18n } from "../../i18n";
 import {
     RestoreRequestError,
-    applyClaudeCodeRestore,
-    listClaudeCodeOperations,
-    planClaudeCodeRestore,
+    applyAgentRestore,
+    listAgentOperations,
+    planAgentRestore,
     type ClaudeCodeRestorePlan,
     type RecordedOperation,
     type RestoreOutcome,
@@ -18,9 +18,9 @@ import { RestoreView } from "./RestoreView";
 
 vi.mock(import("../../lib/desktop/agents"), async (original) => ({
     ...(await original()),
-    applyClaudeCodeRestore: vi.fn(),
-    listClaudeCodeOperations: vi.fn(),
-    planClaudeCodeRestore: vi.fn(),
+    applyAgentRestore: vi.fn(),
+    listAgentOperations: vi.fn(),
+    planAgentRestore: vi.fn(),
 }));
 
 const SETTINGS = "/Users/test/.claude/settings.json";
@@ -86,9 +86,9 @@ const outcome: RestoreOutcome = {
     leftovers: [],
 };
 
-const loadHistory = vi.mocked(listClaudeCodeOperations);
-const buildPreview = vi.mocked(planClaudeCodeRestore);
-const runRestore = vi.mocked(applyClaudeCodeRestore);
+const loadHistory = vi.mocked(listAgentOperations);
+const buildPreview = vi.mocked(planAgentRestore);
+const runRestore = vi.mocked(applyAgentRestore);
 
 beforeEach(() => {
     loadHistory
@@ -116,7 +116,7 @@ async function openPreview(): Promise<void> {
         await screen.findByRole("button", { name: "Preview restore" }),
     );
     await waitFor(() => {
-        expect(buildPreview).toHaveBeenCalledWith(OPERATION_ID);
+        expect(buildPreview).toHaveBeenCalledWith("claudeCode", OPERATION_ID);
     });
 }
 
@@ -212,7 +212,7 @@ test("confirms with the digests the preview showed and reports the result", asyn
         }),
     );
     await waitFor(() => {
-        expect(runRestore).toHaveBeenCalledWith(OPERATION_ID, [
+        expect(runRestore).toHaveBeenCalledWith("claudeCode", OPERATION_ID, [
             { ordinal: 0, currentDigest: APPLIED_DIGEST },
         ]);
     });
@@ -380,4 +380,25 @@ test("a partially restored write lets the user recheck and preview again", async
         await screen.findByRole("button", { name: "Preview restore" }),
     ).toBeTruthy();
     expect(loadHistory).toHaveBeenCalledTimes(reads + 1);
+});
+
+test("each Agent asks for its own recorded writes", async () => {
+    // Rust keeps the histories apart, but the card must still name the Agent it
+    // belongs to: a Grok page that read the Claude Code list would offer to undo
+    // another adapter's file.
+    const i18n = await createAppI18n("en");
+    render(
+        <I18nextProvider i18n={i18n}>
+            <RestoreView agent="grokBuild" />
+        </I18nextProvider>,
+    );
+    await waitFor(() => {
+        expect(loadHistory).toHaveBeenCalledWith("grokBuild");
+    });
+    await userEvent.click(
+        await screen.findByRole("button", { name: "Preview restore" }),
+    );
+    await waitFor(() => {
+        expect(buildPreview).toHaveBeenCalledWith("grokBuild", OPERATION_ID);
+    });
 });

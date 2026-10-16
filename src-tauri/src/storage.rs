@@ -374,6 +374,20 @@ const MIGRATIONS: &[Migration] = &[
             PRIMARY KEY(config_root, provider_key)
         ) STRICT, WITHOUT ROWID;",
     },
+    Migration {
+        version: 19,
+        // Grok identifies a model by its TOML table alias, and the same Provider
+        // can own several aliases. Record which central pair each alias belongs
+        // to so a preview never rewrites an entry the maintainer wrote by hand.
+        // No FK: an external Agent configuration can outlive a central record.
+        sql: "CREATE TABLE grok_model_binding (
+            config_root TEXT NOT NULL,
+            model_alias TEXT NOT NULL CHECK(length(model_alias) BETWEEN 1 AND 160),
+            provider_id TEXT NOT NULL CHECK(length(provider_id) = 32 AND provider_id NOT GLOB '*[^0-9a-f]*'),
+            model_id TEXT NOT NULL CHECK(length(model_id) BETWEEN 1 AND 160),
+            PRIMARY KEY(config_root, model_alias)
+        ) STRICT, WITHOUT ROWID;",
+    },
 ];
 
 /// Errors from opening or migrating the private database.

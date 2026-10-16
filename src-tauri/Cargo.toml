@@ -36,6 +36,11 @@ sha2 = "0.10.9"
 # SKILL.md frontmatter is YAML. saphyr is a maintained, pure-Rust YAML 1.2 parser;
 # only small frontmatter blocks are parsed and every value is treated as data.
 saphyr = "0.2.1"
+# Grok Build keeps its model configuration in a TOML file. toml_edit parses and
+# writes the document back with the user's own keys, comments and ordering intact,
+# which a plain value model cannot promise. This version is already in the locked
+# graph through proc-macro-crate, so no additional crate version is introduced.
+toml_edit = "0.25.17"
 
 [dev-dependencies]
 # The mock runtime tests logging sinks without opening a native window.

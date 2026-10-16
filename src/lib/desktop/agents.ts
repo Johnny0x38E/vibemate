@@ -278,6 +278,9 @@ export interface ClaudeCodePlan {
 export const PLAN_ERROR_CODES = [
     "invalid_request",
     "gateway_unverified",
+    "agent_version_unverified",
+    "protocol_unsupported",
+    "credential_conflict",
     "base_url_unverified",
     "target_path_invalid",
     "target_unreadable",
@@ -347,13 +350,14 @@ function modelId(value: unknown): string {
     return boundedText(value, 1024);
 }
 
-function change(value: unknown): ConfigChange {
+/** Validate a shared Agent configuration payload; reject unknown or secret-bearing fields. */
+export function change(value: unknown): ConfigChange {
     if (
         !isObject(value) ||
         !hasExactKeys(value, ["keyPath", "before", "after", "secret"])
     )
         return planInvalid();
-    const keyPath = boundedText(value["keyPath"], 256);
+    const keyPath = boundedText(value["keyPath"], 2048);
     if (keyPath.length === 0 || /\s/u.test(keyPath)) return planInvalid();
     const before =
         value["before"] === null ? null : boundedText(value["before"]);
@@ -374,7 +378,8 @@ function notice(value: unknown): PlanNotice {
     return { code, detail };
 }
 
-function targetFile(value: unknown): PlanTargetFile {
+/** Validate a shared Agent configuration payload; reject unknown or secret-bearing fields. */
+export function targetFile(value: unknown): PlanTargetFile {
     if (
         !isObject(value) ||
         !hasExactKeys(value, ["path", "exists", "contentDigest", "symlink"])
@@ -393,7 +398,8 @@ function targetFile(value: unknown): PlanTargetFile {
     return { path: targetPath, exists, contentDigest, symlink };
 }
 
-function planSource(value: unknown): PlanSource {
+/** Validate a shared Agent configuration payload; reject unknown or secret-bearing fields. */
+export function planSource(value: unknown): PlanSource {
     if (
         !isObject(value) ||
         !hasExactKeys(value, [
@@ -521,6 +527,9 @@ export const APPLY_ERROR_CODES = [
     "provider_not_found",
     "model_not_found",
     "gateway_unverified",
+    "agent_version_unverified",
+    "protocol_unsupported",
+    "credential_conflict",
     "base_url_unverified",
     "target_unreadable",
     "target_conflict",
@@ -603,7 +612,8 @@ function applyStep(value: unknown, ordinal: number): ApplyStep {
     return { ordinal, targetPath, state, errorCode, backupPath };
 }
 
-function appliedResult(value: unknown): ClaudeCodeApplied {
+/** Validate a shared Agent configuration payload; reject unknown or secret-bearing fields. */
+export function appliedResult(value: unknown): ClaudeCodeApplied {
     if (
         !isObject(value) ||
         !hasExactKeys(value, [
@@ -1041,10 +1051,7 @@ function restorePlan(value: unknown): ClaudeCodeRestorePlan {
     };
 }
 
-function restoreStepOutcome(
-    value: unknown,
-    ordinal: number,
-): RestoreStepOutcome {
+function restoreStepOutcome(value: unknown): RestoreStepOutcome {
     if (
         !isObject(value) ||
         !hasExactKeys(value, [
@@ -1054,8 +1061,15 @@ function restoreStepOutcome(
             "state",
             "errorCode",
             "leftoverPath",
-        ]) ||
-        value["ordinal"] !== ordinal
+        ])
+    )
+        return restoreInvalid();
+    const ordinal = value["ordinal"];
+    if (
+        typeof ordinal !== "number" ||
+        !Number.isSafeInteger(ordinal) ||
+        ordinal < 0 ||
+        ordinal > 0xffffffff
     )
         return restoreInvalid();
     const targetPath = value["targetPath"];
@@ -1078,7 +1092,10 @@ function restoreStepOutcome(
     return { ordinal, targetPath, action, state, errorCode, leftoverPath };
 }
 
-function restoreOutcome(value: unknown): RestoreOutcome {
+function restoreOutcome(
+    value: unknown,
+    reviewed: ReviewedRestoreStep[],
+): RestoreOutcome {
     if (
         !isObject(value) ||
         !hasExactKeys(value, ["operationId", "state", "steps", "leftovers"])
@@ -1092,9 +1109,19 @@ function restoreOutcome(value: unknown): RestoreOutcome {
     const rawSteps = value["steps"];
     if (!Array.isArray(rawSteps) || rawSteps.length === 0)
         return restoreInvalid();
-    const steps = rawSteps.map((entry: unknown, index: number) =>
-        restoreStepOutcome(entry, index),
-    );
+    const steps = rawSteps.map((entry: unknown) => restoreStepOutcome(entry));
+    // Native rollback runs in reverse order and can skip settled steps. Match
+    // recorded ordinals, not array positions (a two-file result starts at 1).
+    if (
+        steps.length > reviewed.length ||
+        steps.some(
+            (step, index) =>
+                !reviewed.some((token) => token.ordinal === step.ordinal) ||
+                (index > 0 &&
+                    (steps[index - 1]?.ordinal ?? -1) <= step.ordinal),
+        )
+    )
+        return restoreInvalid();
     const rawLeftovers = value["leftovers"];
     if (!Array.isArray(rawLeftovers)) return restoreInvalid();
     const leftovers = rawLeftovers.map((entry: unknown) => {
@@ -1121,11 +1148,15 @@ function restoreOutcome(value: unknown): RestoreOutcome {
  * never where a copy of it sits. Browser preview says so instead of inventing a
  * history.
  */
-export async function listClaudeCodeOperations(): Promise<OperationListResult> {
+export async function listAgentOperations(
+    agent: "claudeCode" | "pi",
+): Promise<OperationListResult> {
     if (!isTauri()) return { kind: "preview" };
     let value: unknown;
     try {
-        value = await invoke<unknown>("claude_code_operations");
+        value = await invoke<unknown>(
+            agent === "pi" ? "pi_operations" : "claude_code_operations",
+        );
     } catch (error: unknown) {
         throw new RestoreRequestError(
             RESTORE_ERROR_CODES.find((code) => code === error) ??
@@ -1147,15 +1178,19 @@ export async function listClaudeCodeOperations(): Promise<OperationListResult> {
  * removed, or left alone because it changed. No file content and no credential
  * value is read into it.
  */
-export async function planClaudeCodeRestore(
+export async function planAgentRestore(
+    agent: "claudeCode" | "pi",
     operationId: string,
 ): Promise<RestorePlanResult> {
     if (!isTauri()) return { kind: "preview" };
     let value: unknown;
     try {
-        value = await invoke<unknown>("plan_claude_code_restore", {
-            operationId,
-        });
+        value = await invoke<unknown>(
+            agent === "pi" ? "plan_pi_restore" : "plan_claude_code_restore",
+            {
+                operationId,
+            },
+        );
     } catch (error: unknown) {
         throw new RestoreRequestError(
             RESTORE_ERROR_CODES.find((code) => code === error) ??
@@ -1175,21 +1210,45 @@ export async function planClaudeCodeRestore(
  * before the write being undone. A file-level conflict is a state in the result,
  * not a thrown error.
  */
-export async function applyClaudeCodeRestore(
+export async function applyAgentRestore(
+    agent: "claudeCode" | "pi",
     operationId: string,
     reviewed: ReviewedRestoreStep[],
 ): Promise<RestoreOutcome> {
     if (!isTauri()) throw new RestoreRequestError("desktop_required");
     let value: unknown;
     try {
-        value = await invoke<unknown>("apply_claude_code_restore", {
-            input: { operationId, reviewed },
-        });
+        value = await invoke<unknown>(
+            agent === "pi" ? "apply_pi_restore" : "apply_claude_code_restore",
+            {
+                input: { operationId, reviewed },
+            },
+        );
     } catch (error: unknown) {
         throw new RestoreRequestError(
             RESTORE_ERROR_CODES.find((code) => code === error) ??
                 "operation_failed",
         );
     }
-    return restoreOutcome(value);
+    const result = restoreOutcome(value, reviewed);
+    if (result.operationId !== operationId) return restoreInvalid();
+    return result;
+}
+
+/** List only Claude Code writes; retained for existing callers. */
+export function listClaudeCodeOperations(): Promise<OperationListResult> {
+    return listAgentOperations("claudeCode");
+}
+/** Preview only a Claude Code restore, preserving the existing caller contract. */
+export function planClaudeCodeRestore(
+    operationId: string,
+): Promise<RestorePlanResult> {
+    return planAgentRestore("claudeCode", operationId);
+}
+/** Restore only Claude Code files after the reviewed tokens are checked. */
+export function applyClaudeCodeRestore(
+    operationId: string,
+    reviewed: ReviewedRestoreStep[],
+): Promise<RestoreOutcome> {
+    return applyAgentRestore("claudeCode", operationId, reviewed);
 }

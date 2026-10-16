@@ -73,6 +73,7 @@ export function AgentList({
         Partial<Record<AgentId, AgentVersionResult>>
     >({});
     const [versionBusy, setVersionBusy] = useState(false);
+    const [configEpoch, setConfigEpoch] = useState(0);
     const [autoProbe, setAutoProbe] = useState(false);
     const [autoProbeBusy, setAutoProbeBusy] = useState(false);
     const [confirmationEpoch, setConfirmationEpoch] = useState(0);
@@ -684,8 +685,32 @@ export function AgentList({
                     {/* A configuration card leads the page where an adapter
                         exists; the remaining facts, the manual entry path and
                         the version read share one card below it. */}
-                    {id === "claudeCode" && <ConfigPreview />}
-                    {id === "claudeCode" && <RestoreView />}
+                    {(id === "claudeCode" || id === "pi") && (
+                        <ConfigPreview
+                            key={JSON.stringify([id, row?.entryPath])}
+                            onApplied={() => {
+                                setConfigEpoch((value) => value + 1);
+                            }}
+                            blocked={blocked}
+                            agent={id}
+                            entryPath={row?.entryPath ?? null}
+                            onBusyChange={(busy) => {
+                                pending.current = busy;
+                                if (mounted.current) setVersionBusy(busy);
+                            }}
+                        />
+                    )}
+                    {(id === "claudeCode" || id === "pi") && (
+                        <RestoreView
+                            key={JSON.stringify([id, configEpoch])}
+                            blocked={blocked}
+                            agent={id}
+                            onBusyChange={(busy) => {
+                                pending.current = busy;
+                                if (mounted.current) setVersionBusy(busy);
+                            }}
+                        />
+                    )}
                     <DetailPanel label={t("agents.detail.detailsHeading")}>
                         {row !== undefined && details(row)}
                         <form

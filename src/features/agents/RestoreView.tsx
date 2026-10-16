@@ -4,6 +4,9 @@ import { DetailPanel } from "../../components/DetailForm";
 import buttons from "../../components/actionButtons.module.css";
 import {
     RestoreRequestError,
+    listAgentOperations,
+    planAgentRestore,
+    applyAgentRestore,
     applyClaudeCodeRestore,
     listClaudeCodeOperations,
     planClaudeCodeRestore,
@@ -51,13 +54,26 @@ type ApplyState =
  * the user resolves by hand, and every answer replaces the previously shown
  * preview, so a confirmation always belongs to what is on screen.
  */
-export function RestoreView(): JSX.Element {
+export function RestoreView({
+    agent = "claudeCode",
+    onBusyChange,
+    blocked = false,
+}: {
+    agent?: "claudeCode" | "pi";
+    onBusyChange?: (busy: boolean) => void;
+    blocked?: boolean;
+}): JSX.Element {
     const { t, i18n } = useTranslation();
     const [list, setList] = useState<ListState>({ kind: "loading" });
     const [preview, setPreview] = useState<PreviewState>({ kind: "idle" });
     const [apply, setApply] = useState<ApplyState>({ kind: "idle" });
     const [attempt, setAttempt] = useState(0);
     const pending = useRef(false);
+    const busyCallback = useRef(onBusyChange);
+    useEffect(() => {
+        // Keep cleanup and late async completions bound to the current parent.
+        busyCallback.current = onBusyChange;
+    }, [onBusyChange]);
     const mounted = useRef(false);
     const listGeneration = useRef(0);
 
@@ -66,6 +82,7 @@ export function RestoreView(): JSX.Element {
         // A late reply must not update a view that is no longer mounted.
         return () => {
             mounted.current = false;
+            busyCallback.current?.(false);
         };
     }, []);
 
@@ -74,7 +91,10 @@ export function RestoreView(): JSX.Element {
         // discarded first request and every read that a newer one replaced.
         listGeneration.current += 1;
         const generation = listGeneration.current;
-        listClaudeCodeOperations().then(
+        (agent === "pi"
+            ? listAgentOperations("pi")
+            : listClaudeCodeOperations()
+        ).then(
             (result) => {
                 if (listGeneration.current !== generation) return;
                 setList(
@@ -97,7 +117,7 @@ export function RestoreView(): JSX.Element {
         return () => {
             listGeneration.current += 1;
         };
-    }, [attempt]);
+    }, [attempt, agent]);
 
     /**
      * Ask Rust what undoing one recorded write would do.
@@ -106,14 +126,17 @@ export function RestoreView(): JSX.Element {
      * what the write left. Nothing is written and no credential is read.
      */
     async function runPreview(operationId: string): Promise<void> {
-        if (pending.current) return;
+        if (blocked || pending.current) return;
         pending.current = true;
+        busyCallback.current?.(true);
         // A new preview replaces the previous outcome, which described another
         // write and would otherwise sit under the card it no longer belongs to.
         setApply({ kind: "idle" });
         setPreview({ kind: "loading", operationId });
         try {
-            const result = await planClaudeCodeRestore(operationId);
+            const result = await (agent === "pi"
+                ? planAgentRestore("pi", operationId)
+                : planClaudeCodeRestore(operationId));
             if (!mounted.current) return;
             setPreview(
                 result.kind === "preview"
@@ -131,6 +154,7 @@ export function RestoreView(): JSX.Element {
             });
         } finally {
             pending.current = false;
+            busyCallback.current?.(false);
         }
     }
 
@@ -143,14 +167,17 @@ export function RestoreView(): JSX.Element {
      * card described is settled, and a second click must start from a fresh one.
      */
     async function runApply(plan: ClaudeCodeRestorePlan): Promise<void> {
-        if (pending.current) return;
+        if (blocked || pending.current) return;
         pending.current = true;
+        busyCallback.current?.(true);
         setApply({ kind: "applying" });
         try {
-            const result = await applyClaudeCodeRestore(
-                plan.operationId,
-                reviewedSteps(plan),
-            );
+            const result = await (agent === "pi"
+                ? applyAgentRestore("pi", plan.operationId, reviewedSteps(plan))
+                : applyClaudeCodeRestore(
+                      plan.operationId,
+                      reviewedSteps(plan),
+                  ));
             if (!mounted.current) return;
             setPreview({ kind: "idle" });
             setApply({ kind: "done", result });
@@ -165,10 +192,18 @@ export function RestoreView(): JSX.Element {
                     : "operation_failed";
             // A stale plan cannot be applied at all; the other refusals changed
             // nothing, so the user can act on the cause and preview again.
-            if (code === "plan_stale") setPreview({ kind: "idle" });
+            if (
+                code === "plan_stale" ||
+                code === "invalid_response" ||
+                code === "operation_failed"
+            ) {
+                setPreview({ kind: "idle" });
+                setAttempt((current) => current + 1);
+            }
             setApply({ kind: "error", code });
         } finally {
             pending.current = false;
+            busyCallback.current?.(false);
         }
     }
 
@@ -182,7 +217,8 @@ export function RestoreView(): JSX.Element {
         );
     }
 
-    const busy = preview.kind === "loading" || apply.kind === "applying";
+    const busy =
+        blocked || preview.kind === "loading" || apply.kind === "applying";
 
     return (
         <>

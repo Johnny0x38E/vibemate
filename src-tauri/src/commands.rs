@@ -11,3 +11,5 @@ pub(crate) mod skills;
 mod state;
 
 pub(crate) use state::CredentialLock;
+
+pub(crate) mod pi;

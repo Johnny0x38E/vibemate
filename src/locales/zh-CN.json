@@ -645,10 +645,22 @@
                 "plan_stale": "配置在预览之后发生了变化，未写入任何内容。请重新预览。",
                 "credential_missing": "该服务商在系统凭据存储中没有保存密钥。",
                 "credential_unavailable": "无法读取系统凭据存储，请解锁后重试。",
-                "location_unavailable": "无法定位 Claude Code 的配置目录。",
+                "location_unavailable": "无法确定 Agent 配置目录。",
                 "operation_failed": "预览生成失败，请重试。",
                 "desktop_required": "应用配置需要在 vibemate 桌面应用中进行。",
-                "invalid_response": "桌面应用返回了意外的计划。"
+                "invalid_response": "桌面应用返回了意外的计划。",
+                "agent_version_unverified": "此 Pi 安装未提供兼容的模型与设置格式。请检查入口路径和安装是否完整；1.2 起的稳定版 Pi 1.x 在配置格式兼容时均可使用。",
+                "protocol_unsupported": "所选模型没有已核实的原生请求协议。",
+                "credential_conflict": "auth.json 中存在此受管服务商的凭据，会覆盖计划中的密钥。请先在 Pi 中处理，再重新预览。"
+            },
+            "piRestartRequired": "新建 Pi 会话以使用这些默认设置；项目设置、命令行参数和恢复的会话可能覆盖默认选择。",
+            "piNotice": "仅在应用时从系统凭据库读取密钥，并以明文写入 models.json。替换前会备份原文件。未知模型信息沿用 Pi 默认值，推理档位保持原设置。",
+            "piOutcome": {
+                "applied": "已写入，两个 Pi 配置文件均已保存计划中的设置。",
+                "failed": "未写入，Pi 原配置保持完整。",
+                "compensated": "写入已回滚，Pi 原配置已恢复。",
+                "partial": "部分变更无法撤销，请检查配置文件与备份后再试。",
+                "unknown": "无法核实某个文件的结果，请检查配置文件与备份后再试。"
             }
         },
         "restore": {

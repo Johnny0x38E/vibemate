@@ -37,8 +37,13 @@ Official identification marks and accessible green/gray/red status dots are
 implemented. Backend BR1–BR5 has separated commands, domain behavior,
 repositories and tests.
 
-Agent writes, skill installation/update/deployment, MCP deployment, managed Agent
-installation and the later inference checks are not implemented. Local skill
+Claude Code configuration preview, apply and restore (P18–P21) are implemented
+and have maintainer acceptance: preview/apply on 2026-10-14 and native restore
+on 2026-10-16. The shared write path provides change checks, private backups,
+atomic replacement and recoverable operation records. Pi configuration preview, backups, apply and restore are implemented for the
+compatible published Pi 1.x format (verified with 1.2.0 and 1.3.0). The maintainer accepted Pi 1.3.0 preview compatibility and readable provider names on 2026-10-16; real Provider/session acceptance remains in PI1. Grok Build
+configuration, skill installation/update/deployment, MCP deployment,
+managed Agent installation and the later compatibility checks remain pending. Local skill
 import (P25) is implemented: the system folder picker chooses a skill folder or a
 folder of skill folders, each found skill is validated and copied into the
 private library with a content digest and a source record, and the original
@@ -57,18 +62,13 @@ The six-Agent catalog, version reading and local skill import passed maintainer
 acceptance on 2026-10-13; Windows/Linux and screen-reader verification is
 deferred to the release-time platform check.
 
-1. Build the minimal Claude Code configuration preview (P18), adding only the model
-   information and stale-plan checks it needs. Full P16 is not a prerequisite.
-   Central models hold capability metadata and aliases; request settings and
-   necessary capability overrides belong to the target Agent configuration.
-   Verify the installed Agent version can express each setting. See
-   [model-parameters.md](model-parameters.md). Verify Claude Code's official
-   settings format and record it in `docs/integrations/` before implementation.
-2. Add safe writes and restore for Claude Code first, then Pi (second adapter)
-   and the independently verified Grok adapter (third): precedence, diff,
-   concurrent-change checks, private backups, atomic replacement, preservation
-   of unrelated fields and rollback. The maintainer uses Pi during coding, so
-   Pi must not be the first configuration write target.
+1. Deliver Pi preview, original-file backups and application together (PI1), as
+   requested on 2026-10-16. Reuse the accepted file writer and history restore;
+   preserve the maintainer's existing configuration. Track real Pi session
+   acceptance in [todo.md](todo.md).
+2. Verify and implement the Grok Build adapter next, reusing the same safety
+   rules. Central models hold metadata; request settings belong to the target
+   Agent and require verified native mappings.
 3. Finish the skill workflow on top of the delivered local import (P25):
    source installation, update preview and per-Agent symlink deployment, with an
    explicit copy-sync fallback and protection of local changes.

@@ -205,6 +205,8 @@ impl std::error::Error for WriteError {}
 pub enum OperationKind {
     /// Claude Code user settings, written by the model-link apply step (P20).
     ClaudeCodeSettings,
+    /// Pi provider/model definitions and default model selection.
+    PiSettings,
 }
 
 impl OperationKind {
@@ -212,6 +214,7 @@ impl OperationKind {
     fn as_str(self) -> &'static str {
         match self {
             Self::ClaudeCodeSettings => "claude_code_settings",
+            Self::PiSettings => "pi_settings",
         }
     }
 
@@ -219,6 +222,7 @@ impl OperationKind {
     fn from_stored(value: &str) -> Option<Self> {
         match value {
             "claude_code_settings" => Some(Self::ClaudeCodeSettings),
+            "pi_settings" => Some(Self::PiSettings),
             _ => None,
         }
     }
@@ -419,6 +423,26 @@ pub fn apply_file(
     content: &[u8],
     backups: &BackupStore,
 ) -> Result<AppliedFile, WriteError> {
+    apply_file_with_mode(target, content, backups, true)
+}
+
+/// Write a credential-bearing file using 0600 on Unix, including replacements.
+/// The public writer preserves existing modes; this opt-in keeps a formerly
+/// public model catalog private once an adapter adds an API key to it.
+fn apply_private_file(
+    target: &WriteTarget,
+    content: &[u8],
+    backups: &BackupStore,
+) -> Result<AppliedFile, WriteError> {
+    apply_file_with_mode(target, content, backups, false)
+}
+
+fn apply_file_with_mode(
+    target: &WriteTarget,
+    content: &[u8],
+    backups: &BackupStore,
+    preserve_mode: bool,
+) -> Result<AppliedFile, WriteError> {
     let current = read_target(&target.path)?;
     if current.target.symlink {
         return Err(WriteError::SymlinkRefused);
@@ -427,7 +451,9 @@ pub fn apply_file(
         return Err(WriteError::TargetChanged);
     }
     let new_digest = digest_hex(content);
-    if current.target.content_digest.as_deref() == Some(new_digest.as_str()) {
+    if current.target.content_digest.as_deref() == Some(new_digest.as_str())
+        && (preserve_mode || has_private_mode(&target.path)?)
+    {
         return Ok(AppliedFile {
             target: current.target,
             backup: None,
@@ -448,7 +474,12 @@ pub fn apply_file(
         Some(bytes) => Some(backups.store(&id, &file_name(&target.path), bytes)?),
         None => None,
     };
-    if let Err(error) = replace(&target.path, content, previous.is_some(), &id) {
+    if let Err(error) = replace(
+        &target.path,
+        content,
+        previous.is_some() && preserve_mode,
+        &id,
+    ) {
         // The write did not happen, so this copy is already unreferenced. A copy
         // that cannot be removed stays a private file and is not this failed
         // write's result to report; the restore path reports its own leftovers.
@@ -606,6 +637,22 @@ fn overwrite_private_file(path: &Path, bytes: &[u8]) -> Result<(), WriteError> {
         .map_err(|_| WriteError::BackupUnavailable)
 }
 
+/// Whether the existing file already has the private creation mode.
+#[cfg(unix)]
+fn has_private_mode(path: &Path) -> Result<bool, WriteError> {
+    use std::os::unix::fs::PermissionsExt;
+    fs::metadata(path)
+        .map(|m| m.permissions().mode() & 0o7777 == 0o600)
+        .map_err(|_| WriteError::WriteFailed)
+}
+
+/// Windows permissions are inherited from the user's directory; Unix mode bits
+/// are not an ACL substitute. Native Windows validation remains separate.
+#[cfg(not(unix))]
+fn has_private_mode(_: &Path) -> Result<bool, WriteError> {
+    Ok(true)
+}
+
 /// Keep the user's permission bits on the replacement file.
 ///
 /// Preserving them keeps a private file private; the create mode of 0600 covers
@@ -649,13 +696,14 @@ mod restore;
 mod service;
 
 pub use operations::{
-    begin_operation, finish_operation, operation, recent_operations, record_step_applied,
-    record_step_failed, record_step_restored, unfinished_operations,
+    begin_operation, finish_operation, has_recorded_target, operation, recent_operations,
+    record_step_applied, record_step_failed, record_step_restored, unfinished_operations,
 };
 pub use restore::{
     RestoreAction, RestoreOutcome, RestorePlan, RestoreStepOutcome, RestoreStepPlan,
     ReviewedRestoreStep, apply_restore, plan_restore, remove_created_file, restore_file,
 };
+pub(crate) use service::apply_private_files;
 pub use service::{AppliedOperation, PlannedFile, StepOutcome, apply_files, compensate_operation};
 
 #[cfg(test)]

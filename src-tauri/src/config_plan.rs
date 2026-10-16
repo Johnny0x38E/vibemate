@@ -118,6 +118,12 @@ impl PlanNotice {
 pub enum PlanError {
     /// Provider revision, model ID or model digest was malformed.
     InvalidRequest,
+    /// The installed Agent version has no verified configuration contract.
+    AgentVersionUnverified,
+    /// The selected model has no supported native protocol.
+    ProtocolUnsupported,
+    /// A stored Agent credential would override the planned key.
+    CredentialConflict,
     /// This Provider has no verified Claude Code gateway instructions.
     GatewayUnverified,
     /// The instance address is not one the vendor documents for this Provider.

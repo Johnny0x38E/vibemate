@@ -169,7 +169,7 @@ fn safe_version(value: &str) -> bool {
         && (!value.contains('-') || !suffix.is_empty())
 }
 
-fn pi_version(entry: &Path) -> Option<String> {
+pub(super) fn pi_version(entry: &Path) -> Option<String> {
     for directory in entry.parent()?.ancestors().take(8) {
         let manifest = directory.join("package.json");
         // Do not read directories, devices, FIFOs or symlinked metadata. The

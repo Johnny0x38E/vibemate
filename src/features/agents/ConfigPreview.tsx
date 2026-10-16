@@ -33,6 +33,12 @@ import {
     type ProviderErrorCode,
     type ProviderRecord,
 } from "../../lib/desktop/providers";
+import {
+    planPiSettings,
+    applyPiSettings,
+    reviewedPiPlan,
+    type PiPlan,
+} from "../../lib/desktop/pi";
 import styles from "./AgentList.module.css";
 import card from "./ConfigPreview.module.css";
 
@@ -58,7 +64,7 @@ type PreviewState =
     | { kind: "loading" }
     | { kind: "preview" }
     | { kind: "error"; code: PlanErrorCode }
-    | { kind: "ready"; plan: ClaudeCodePlan };
+    | { kind: "ready"; plan: ClaudeCodePlan | PiPlan };
 
 /** The apply step's own outcome; it outlives the plan it was built from. */
 type ApplyState =
@@ -68,14 +74,25 @@ type ApplyState =
     | { kind: "done"; result: ClaudeCodeApplied };
 
 /**
- * Read-only link between one saved Provider instance and one of its added
- * models: the panel asks Rust for a sanitized Claude Code settings plan.
+ * Preview and apply one saved Provider/model through its native Agent adapter.
  *
- * Nothing is written, no credential value is read and no request is sent. Both
+ * Preview is credential-blind; applying explicitly approves the shown files. Both
  * selections stay local to this panel, and changing either one discards the
  * shown plan, so a preview can never describe a pair the user no longer sees.
  */
-export function ConfigPreview(): JSX.Element {
+export function ConfigPreview({
+    agent = "claudeCode",
+    entryPath = null,
+    onBusyChange,
+    onApplied,
+    blocked = false,
+}: {
+    agent?: "claudeCode" | "pi";
+    entryPath?: string | null;
+    onBusyChange?: (busy: boolean) => void;
+    onApplied?: () => void;
+    blocked?: boolean;
+}): JSX.Element {
     const { t } = useTranslation();
     const [providers, setProviders] = useState<ProvidersState>({
         kind: "loading",
@@ -88,6 +105,11 @@ export function ConfigPreview(): JSX.Element {
     const [providersAttempt, setProvidersAttempt] = useState(0);
     const [modelsAttempt, setModelsAttempt] = useState(0);
     const pending = useRef(false);
+    const busyCallback = useRef(onBusyChange);
+    useEffect(() => {
+        // Keep cleanup and late async completions bound to the current parent.
+        busyCallback.current = onBusyChange;
+    }, [onBusyChange]);
     const mounted = useRef(false);
     const providersGeneration = useRef(0);
     const modelsGeneration = useRef(0);
@@ -97,6 +119,7 @@ export function ConfigPreview(): JSX.Element {
         // A late reply must not update a view that is no longer mounted.
         return () => {
             mounted.current = false;
+            busyCallback.current?.(false);
         };
     }, []);
 
@@ -194,23 +217,33 @@ export function ConfigPreview(): JSX.Element {
             ? (answer.models.find((model) => model.modelId === modelId) ?? null)
             : null;
     const canPreview =
+        !blocked &&
         selectedProvider !== null &&
         selectedModel !== null &&
-        preview.kind !== "loading";
+        preview.kind !== "loading" &&
+        apply.kind !== "applying";
 
     async function runPreview(): Promise<void> {
         // `canPreview` already proves both selections exist for this render.
         if (!canPreview || pending.current) return;
         pending.current = true;
+        busyCallback.current?.(true);
         // A new preview replaces the previous outcome, which described another
         // plan and would otherwise sit under the card it no longer belongs to.
         setApply({ kind: "idle" });
         setPreview({ kind: "loading" });
         try {
-            const result = await planClaudeCodeSettings(
-                selectedProvider.id,
-                selectedModel.modelId,
-            );
+            const result =
+                agent === "pi"
+                    ? await planPiSettings(
+                          selectedProvider.id,
+                          selectedModel.modelId,
+                          entryPath,
+                      )
+                    : await planClaudeCodeSettings(
+                          selectedProvider.id,
+                          selectedModel.modelId,
+                      );
             if (!mounted.current) return;
             setPreview(
                 result.kind === "preview"
@@ -228,6 +261,7 @@ export function ConfigPreview(): JSX.Element {
             });
         } finally {
             pending.current = false;
+            busyCallback.current?.(false);
         }
     }
 
@@ -241,19 +275,29 @@ export function ConfigPreview(): JSX.Element {
      * this write.
      */
     async function runApply(): Promise<void> {
-        if (preview.kind !== "ready" || pending.current) return;
+        if (blocked || preview.kind !== "ready" || pending.current) return;
         const plan = preview.plan;
         pending.current = true;
+        busyCallback.current?.(true);
         setApply({ kind: "applying" });
         try {
-            const result = await applyClaudeCodeSettings(
-                plan.source.providerId,
-                plan.source.modelId,
-                reviewedPlanTokens(plan),
-            );
+            const result =
+                plan.agent === "pi"
+                    ? await applyPiSettings(
+                          plan.source.providerId,
+                          plan.source.modelId,
+                          entryPath,
+                          reviewedPiPlan(plan),
+                      )
+                    : await applyClaudeCodeSettings(
+                          plan.source.providerId,
+                          plan.source.modelId,
+                          reviewedPlanTokens(plan),
+                      );
             if (!mounted.current) return;
             setPreview({ kind: "idle" });
             setApply({ kind: "done", result });
+            onApplied?.();
         } catch (error: unknown) {
             if (!mounted.current) return;
             const code =
@@ -262,10 +306,16 @@ export function ConfigPreview(): JSX.Element {
                     : "operation_failed";
             // A stale plan cannot be applied at all; the other refusals leave the
             // file untouched, so the user can fix the cause and preview again.
-            if (code === "plan_stale") setPreview({ kind: "idle" });
+            if (
+                code === "plan_stale" ||
+                code === "invalid_response" ||
+                code === "operation_failed"
+            )
+                setPreview({ kind: "idle" });
             setApply({ kind: "error", code });
         } finally {
             pending.current = false;
+            busyCallback.current?.(false);
         }
     }
 
@@ -349,7 +399,11 @@ export function ConfigPreview(): JSX.Element {
                                     value={providerId}
                                     options={providerOptions}
                                     size="fill"
-                                    blocked={preview.kind === "loading"}
+                                    blocked={
+                                        blocked ||
+                                        preview.kind === "loading" ||
+                                        apply.kind === "applying"
+                                    }
                                     onChange={(value) => {
                                         setProviderId(value);
                                         setModelId("");
@@ -415,7 +469,9 @@ export function ConfigPreview(): JSX.Element {
                                                 options={modelOptions}
                                                 size="fill"
                                                 blocked={
-                                                    preview.kind === "loading"
+                                                    preview.kind ===
+                                                        "loading" ||
+                                                    apply.kind === "applying"
                                                 }
                                                 onChange={(value) => {
                                                     setModelId(value);
@@ -460,13 +516,15 @@ export function ConfigPreview(): JSX.Element {
             {preview.kind === "ready" && (
                 <PlanCard
                     plan={preview.plan}
-                    applying={apply.kind === "applying"}
+                    applying={blocked || apply.kind === "applying"}
                     onApply={() => {
                         void runApply();
                     }}
                 />
             )}
-            {apply.kind === "done" && <AppliedCard result={apply.result} />}
+            {apply.kind === "done" && (
+                <AppliedCard result={apply.result} agent={agent} />
+            )}
             {apply.kind === "error" && (
                 <p className={styles["error"]} role="alert">
                     {t(`agents.modelConfig.errors.${apply.code}`)}
@@ -482,57 +540,79 @@ function PlanCard({
     applying,
     onApply,
 }: {
-    plan: ClaudeCodePlan;
+    plan: ClaudeCodePlan | PiPlan;
     applying: boolean;
     onApply: () => void;
 }): JSX.Element {
     const { t } = useTranslation();
-    const fileState = plan.target.exists
-        ? plan.target.symlink
-            ? t("agents.modelConfig.fileStateSymlink")
-            : t("agents.modelConfig.fileStateExists")
-        : t("agents.modelConfig.fileStateNew");
+    const files =
+        plan.agent === "pi"
+            ? plan.files
+            : [{ target: plan.target, changes: plan.changes }];
     return (
         <DetailPanel label={t("agents.modelConfig.planHeading")}>
-            <div className={card["summary"]}>
-                <span className={card["path"]}>{plan.target.path}</span>
-                <span className={card["fileState"]}>{fileState}</span>
-                {plan.restartRequired && (
-                    <span className={card["note"]}>
-                        {t("agents.modelConfig.restartRequired")}
-                    </span>
-                )}
-            </div>
-            <ul className={card["changes"]}>
-                {plan.changes.map((change) => (
-                    <li key={change.keyPath} className={card["change"]}>
-                        <span className={card["key"]}>{change.keyPath}</span>
-                        <span className={card["transition"]}>
-                            {change.before !== null && (
-                                <>
-                                    <span className={card["before"]}>
-                                        {valueText(change.before, t)}
-                                    </span>
-                                    {/* Decorative: the two values already read
-                                        as "previous" and "planned". */}
-                                    <span
-                                        className={card["arrow"]}
-                                        aria-hidden="true"
-                                    >
-                                        →
-                                    </span>
-                                </>
-                            )}
-                            <span className={card["after"]}>
-                                {change.secret
-                                    ? t("agents.modelConfig.secretValue")
-                                    : valueText(change.after, t)}
-                            </span>
+            {files.map(({ target, changes }) => (
+                <div key={target.path}>
+                    <div className={card["summary"]}>
+                        <span className={card["path"]}>{target.path}</span>
+                        <span className={card["fileState"]}>
+                            {target.exists
+                                ? target.symlink
+                                    ? t("agents.modelConfig.fileStateSymlink")
+                                    : t("agents.modelConfig.fileStateExists")
+                                : t("agents.modelConfig.fileStateNew")}
                         </span>
-                    </li>
-                ))}
-            </ul>
-            {plan.notices.length > 0 && (
+                        {plan.restartRequired && (
+                            <span className={card["note"]}>
+                                {t(
+                                    plan.agent === "pi"
+                                        ? "agents.modelConfig.piRestartRequired"
+                                        : "agents.modelConfig.restartRequired",
+                                )}
+                            </span>
+                        )}
+                    </div>
+                    <ul className={card["changes"]}>
+                        {changes.map((change) => (
+                            <li key={change.keyPath} className={card["change"]}>
+                                <span className={card["key"]}>
+                                    {change.keyPath}
+                                </span>
+                                <span className={card["transition"]}>
+                                    {change.before !== null && (
+                                        <>
+                                            <span className={card["before"]}>
+                                                {valueText(change.before, t)}
+                                            </span>
+                                            {/* Decorative: the two values already read
+                                        as "previous" and "planned". */}
+                                            <span
+                                                className={card["arrow"]}
+                                                aria-hidden="true"
+                                            >
+                                                →
+                                            </span>
+                                        </>
+                                    )}
+                                    <span className={card["after"]}>
+                                        {change.secret
+                                            ? t(
+                                                  "agents.modelConfig.secretValue",
+                                              )
+                                            : valueText(change.after, t)}
+                                    </span>
+                                </span>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            ))}
+            {plan.agent === "pi" && (
+                <p className={styles["hint"]}>
+                    {t("agents.modelConfig.piNotice")}
+                </p>
+            )}
+            {plan.agent === "claudeCode" && plan.notices.length > 0 && (
                 <ul className={card["notices"]}>
                     {plan.notices.map((notice) => (
                         <li key={notice.code}>{noticeText(notice, t)}</li>
@@ -556,7 +636,13 @@ function PlanCard({
 }
 
 /** What an apply call did: the settled state, failed files and the backup. */
-function AppliedCard({ result }: { result: ClaudeCodeApplied }): JSX.Element {
+function AppliedCard({
+    result,
+    agent,
+}: {
+    result: ClaudeCodeApplied;
+    agent: "claudeCode" | "pi";
+}): JSX.Element {
     const { t } = useTranslation();
     // A failed step always carries its code; the IPC boundary refuses other shapes.
     const failed = result.steps.filter(
@@ -567,18 +653,28 @@ function AppliedCard({ result }: { result: ClaudeCodeApplied }): JSX.Element {
         <DetailPanel label={t("agents.modelConfig.outcomeHeading")}>
             <div className={card["summary"]}>
                 <span className={card["path"]}>
-                    {t(`agents.modelConfig.outcome.${result.state}`)}
+                    {t(
+                        agent === "pi"
+                            ? `agents.modelConfig.piOutcome.${result.state}`
+                            : `agents.modelConfig.outcome.${result.state}`,
+                    )}
                 </span>
-                {result.backupPath !== null && (
-                    <span className={card["note"]}>
-                        {t("agents.modelConfig.backupAt", {
-                            path: result.backupPath,
-                        })}
-                    </span>
-                )}
+                {result.steps
+                    .filter((step) => step.backupPath !== null)
+                    .map((step) => (
+                        <span className={card["note"]} key={step.ordinal}>
+                            {t("agents.modelConfig.backupAt", {
+                                path: step.backupPath,
+                            })}
+                        </span>
+                    ))}
                 {result.restartRequired && (
                     <span className={card["note"]}>
-                        {t("agents.modelConfig.restartRequired")}
+                        {t(
+                            agent === "pi"
+                                ? "agents.modelConfig.piRestartRequired"
+                                : "agents.modelConfig.restartRequired",
+                        )}
                     </span>
                 )}
             </div>

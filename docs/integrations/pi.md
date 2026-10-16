@@ -1,10 +1,24 @@
 # Pi 配置接入约定
 
-核实日期：2026-10-09。对应 P02；本机验证平台为 macOS Apple Silicon。
+最新核实：2026-10-16，当前托管安装为 Pi 1.3.0；本机平台为 macOS Apple Silicon。P02 的 1.1.0 历史证据保留在下文，配置写入适配以本节的现行规则为准。
 
-## 发行身份与证据
+## Pi 1.x 模型配置
 
-本机 `pi --version` 返回 `1.1.0`。命令由 `~/.local/bin/pi` 链接到托管安装的
+重新核对 [官方模型文档](https://pi.dev/docs/latest/models)、[配置文档](https://pi.dev/docs/latest/configuration) 与已安装 1.2.0、1.3.0 包中的 `model-config.js`、`provider-composer.js`、`resolve-config-value.js`、`settings-manager.js` 和 `model-resolver.js`。
+
+- 用户目录使用桌面进程的 `PI_CODING_AGENT_DIR`，未设置时为 `~/.pi/agent`；无效覆盖不回退。配置操作验证包入口或官方托管安装布局，并读取当前激活版本；稳定 1.x（1.2 起）检查包内 `models.schema.json`、`settings.schema.json` 的所用字段与兼容选项，不因小版本号变化直接拒绝。预览不启动 Pi。
+- 每个服务商实例使用 `vibemate-<可读配置名称>`；空格和分隔符转为连字符，同名冲突才加 ID 短后缀。Pi 1.2/1.3 的模型选择器直接显示配置键，单独设置 Provider `name` 不能替代该键。SQLite v18 按配置目录记录当前及历史别名所有权；旧 UUID 条目只有已记录的写入才允许迁移，复制全部模型并同步 `enabledModels`、`modelThinkingLevels` 引用。`models.json` 保存原生 API、地址、密钥、所选模型及已声明元数据；`settings.json` 只更新 `defaultProvider/defaultModel`。其他 Provider、模型及字段保留。同名条目没有 vibemate 的写入记录时拒绝接管。
+- 已保存模型的 `resolvedProtocol` 分别映射 `openai-completions`、`openai-responses` 和 `anthropic-messages`。需要不同官方地址时按已核实的模板选择；自定义地址不猜测另一协议的路径。DeepSeek/OpenRouter Chat 的兼容字段仅用于各自官方地址。
+- `auth.json` 高于 `models.json.apiKey`。预览只读其结构和摘要；有同名凭据则拒绝应用，不执行其中的凭据命令，不修改凭据文件。应用重新检查其摘要。
+- 应用时从 OS 凭据存储读取密钥，写入模型定义。Pi 会解释 `!command` 与 `$VAR`，因此按 1.2.0 的 `$$`/`$!` 规则转义，保证按原文使用密钥；预览的旧密钥和新密钥均为掩码。
+- 两个文件通过共享写入日志、私有备份、摘要检查、同目录临时文件和原子替换写入；多文件不是单次原子事务，后续文件失败时补偿已写文件。Unix 替换后为 0600，避免在原本 0644 的模型文件中暴露新密钥。历史恢复按 Agent 类型隔离，并检查应用后的手工改动。
+- 新建会话读取默认选择。项目设置、CLI 参数和恢复会话可能覆盖它；未知元数据沿用 Pi 默认值，不新增推理档位与请求参数。当前解析接受 JSON 对象；含 JSON 注释等不可解析内容会拒绝写入。
+
+验证与验收状态以 [PI1](../plans/todo.md) 为准；写入成功不代表真实推理或其他平台已经通过。
+
+## P02 发行身份与证据（1.1.0 历史）
+
+P02 核实时，`pi --version` 返回 `1.1.0`。命令由 `~/.local/bin/pi` 链接到托管安装的
 `~/.pi/agent/bin/pi`，再转发到 `install/releases/1.1.0/node_modules/.bin/pi`。
 安装包 metadata 确认包名为 `@earendil-works/pi-coding-agent`、版本 `1.1.0`，
 官方仓库为 [earendil-works/pi](https://github.com/earendil-works/pi)，许可证 MIT。
@@ -75,7 +89,7 @@ OpenRouter 可使用自己的 thinking 格式和 routing 设置。Claude 使用
 Pi 的 `auth.json` 是明文凭据存储，而非 vibemate 的 OS 凭据引用。安装源码创建
 凭据文件时使用 `0600`、新建父目录时使用 `0700`；已有文件权限与 ACL 不自动更改。
 需要明确区分中央 OS 凭据、目标 Agent 私有凭据及其备份，不声称外部 Agent 能直接
-读取 vibemate 引用。真实凭据注入尚未实施。
+读取 vibemate 引用。Pi 1.2.0 的 OS 凭据注入已实现，目标文件明文限制见上文。
 
 ## Skill 部署与关闭
 
@@ -118,7 +132,7 @@ Settings 的资源数组支持 `!pattern`、`+path`、`-path`。Skill 停用可�
 | Skill → Pi          | 精确排除或撤销自己的链接/复制，之后重载                                | 不修改共享 Skill 文档来停用某个 Agent，不清理用户自有资源                          |
 | MCP → Pi            | 原生 enabled；识别全局/项目覆盖与内置实现是否被替换                    | 停用定义可保留；当前会话的连接状态仍需确认                                         |
 
-这些是后续实现约定，当前尚未写入任何用户配置。中央停用需要给出受影响目标的
+模型配置的 Pi 1.2.0 实现见上文；Skill/MCP 部署仍为后续实现约定。中央停用需要给出受影响目标的
 差异、应用结果和逐目标失败状态；不把多个文件操作描述为一个原子事务。
 
 ## 脱敏格式示例
@@ -158,7 +172,7 @@ Settings 的资源数组支持 `!pattern`、`+path`、`-path`。Skill 停用可�
 }
 ```
 
-## 实际验证与限制
+## P02 历史验证与限制（1.1.0）
 
 - `pi --version`、托管 launcher、安装 metadata 与本机附带文档/源码核对完成。
 - 临时目录调用 `ModelConfig.load`：接受上述模型配置，未解析环境变量引用。
@@ -167,3 +181,18 @@ Settings 的资源数组支持 `!pattern`、`+path`、`-path`。Skill 停用可�
 - `pnpm run format:check` 与 JSON 示例解析检查通过。
 - 未启动 Agent 会话、MCP Server、Skill 脚本或推理请求；未读写真实凭据/配置。
 - Windows/Linux、有效会话重载、实际协议请求、复制同步与 OS 凭据注入留待后续任务验证。
+
+## Pi 1.2.0 本次验证
+
+- `check:frontend`、Rust fmt/Clippy/全量测试与锁定 macOS no-bundle 构建通过。
+- 独立应用标识和临时 `PI_CODING_AGENT_DIR` 下，Tauri 实测预览、应用、两份原文件备份、重启后历史读取、预览后修改导致恢复拒绝，以及恢复后字节与原文件一致；测试合成凭据已删除。
+- 调用已安装 Pi 1.2.0 的 `ModelConfig` / `ModelRuntime`，禁用目录联网，确认生成的模型 ID、原生 API、地址、上下文信息和合成认证可读取，并核对密钥转义与 Unix 0600 权限。
+- 浏览器预览明确显示无法读写配置及历史；Chrome 中检查中文显示和键盘焦点。真实 Provider 消息请求、维护者界面验收及 Windows/Linux 行为仍单独确认。
+
+## 1.3.0 升级与名称修复验证
+
+本机已升级至 1.3.0；该版 `model-config.js` 和 `resolve-config-value.js` 与安装的 1.2.0 相同，所用模型/默认选择 schema 字段一致。新版原生兼容入口在隔离目录中通过了当前 1.3.0 安装检查；真实 Tauri 窗口成功生成旧 UUID 到可读名称的双文件迁移预览，含模型范围与推理档位引用。
+
+同一份由 Rust 适配器生成、从 UUID 条目迁移的临时配置分别交给已安装的 1.2.0 与 1.3.0 `ModelRuntime` 离线加载，并用各自的 `ModelSelectorComponent` 渲染：服务商徽标显示可读键，旧 UUID 条目已移除，额外模型和合成认证可读取。回滚后再次预览仍正确识别别名。没有启动 Agent 会话或发送 Provider 请求。
+
+维护者于 2026-10-16 确认 Pi 1.3.0 升级后的配置预览与可读 Provider 名称验收通过。真实 Provider 消息请求及 Windows/Linux 行为仍待单独确认。

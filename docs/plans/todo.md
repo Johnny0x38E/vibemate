@@ -6,7 +6,7 @@
 
 1. 六 Agent 固定目录、只读发现与版本读取已交付并通过验收（2026-10-13）；平台专项延后到发布前。
 2. Claude Code 配置预览、应用与回滚（P18–P21）已验收，C21 关闭；Pi 最小配置预览、原配置备份与应用作为一个任务交付，复用现有写入与恢复机制。Grok Build 配置预览、应用与回滚（P22–P23）按本机 1.0.60 合约交付并已按下方 P23 记录关闭。
-3. 请求参数与必要能力覆盖属于目标 Agent 配置，不放在服务商模型页。
+3. 请求参数与必要能力覆盖属于目标 Agent 配置，不放在服务商模型页。后续先补 H1–H3（逐次快照、任意历史版本恢复、界面删除），再按 P24.a–P24.d 补各 Agent 的推理档位、上下文窗口、输出等信息映射；这些功能尚未实现，不因 P18–P23 的最小路径验收而视为完成。
 4. 六种发现不等于六种配置注入；配置适配顺序为 Claude Code、Pi、Grok Build。维护者编码日常使用 Pi，Pi 不作为首个写入目标。
 5. 界面归属按关系基数划分：模型配置 1:1，操作在 Agent 模块；Skill/MCP 部署 1:N，操作在技能/MCP 模块。Agent 详情页只读汇总当前配置（模型/Skill/MCP 三个槽位，状态加跳转链接），不放注入操作。模型槽位与配置入口随 P18 交付；Skill/MCP 槽位随 P27/P32 各自添加，现在不留空壳。概览页 v1 五张统计卡片已落地（含模型总数 IPC）；详见下方「概览 v1」。
 
@@ -31,6 +31,7 @@
 - Verification 使用 `AGENTS.md` 的适用命令；Rust 过滤测试必须实际运行非零用例。
 - 勾选表示该项已验证；代码完成不等于真实安装、推理或其他平台验收完成。
 - 任务完成后删除详细执行过程，保留仍未解决的限制；未来路径是建议，不提前创建空壳。
+- 之后所有配置写入/恢复预览统一采用两层展示：界面先按文件列出字段路径、增删替换类型及脱敏旧值/新值；再提供“查看详细配置”入口，以弹窗展示完整写入前/后原生 JSON/TOML 文本及差异。格式取决于目标 Agent 文件，摘要/详情/应用绑定同一计划，不由前端另拼配置。只读快照没有比较对象时不虚构差异。详见 [config-apply.md](config-apply.md#所有预览采用字段摘要与详情弹窗两层展示)。
 
 ## 已完成摘要
 
@@ -416,9 +417,99 @@ user 层有效）；Anthropic `messages` 后端的密钥落点没有文档说明
 
 **Estimated scope:** M：5 个建议主文件。
 
+### Task H1: 保留每次改写快照并浏览完整历史
+
+**Description:** 扩展现有共享写入与回滚机制，要求见 [config-apply.md](config-apply.md#后续要求逐次备份与界面历史管理)。
+
+**Acceptance criteria:**
+
+- [ ] 所有实际改写路径（含恢复、删除目标和补偿）可靠保存改写前完整字节/不存在状态；快照独立保留，失败不得继续写入。
+- [ ] 持久记录手动恢复与原版本关系、补偿关系，升级旧日志并兼容 P34；不错误重放恢复操作。
+- [ ] 三个已支持 Agent 的界面可访问全部历史，含首次原内容、结果、文件、备份状态与操作入口，不局限最近 10 条；当前配置按实际文件摘要核对并固定在第一条，其余历史倒序。恢复不消耗快照，外部修改/读取失败/多文件部分匹配不误标当前版本；删除当前版本的备份不移除当前状态或配置文件。
+
+**Verification:** 多次写入、无变化、新建、多文件部分失败、日志/备份失败、重启与分页测试；完整适用检查和桌面人工验收。
+
+**Dependencies:** P21,PI1,P23。
+
+**Files likely touched:** `src-tauri/src/config_apply/`、`src-tauri/src/storage.rs`、`src/features/agents/RestoreView.tsx`、相关 IPC 与翻译。
+
+**Estimated scope:** L；按持久化规则和完整历史界面分批交付。
+
+### Task H2: 从界面恢复任意历史快照
+
+**Description:** 让用户直接选择任一保留版本并恢复到那次写入前，不要求逆序逐条撤销。
+
+**Acceptance criteria:**
+
+- [ ] 交付共享的两层预览：默认按文件展示字段路径、增删替换及脱敏旧值/新值；“查看详细配置”再弹窗展示完整前/后 JSON/TOML、差异、多文件切换及只读语法高亮。当前配置与任意历史记录（含已恢复记录）可查看完整文本；恢复按当前→快照展示并确认，提示将撤销后续修改，首次原状态可直接恢复。摘要、详情与应用绑定同一计划，并将该规则接入现有已支持的配置预览。
+- [ ] 以预览时当前文件摘要防并发覆盖；校验快照、路径与 Agent/配置根归属；恢复前仍留独立快照，可撤销恢复。
+- [ ] UI 展示多文件与失败状态、旧密钥风险和会话生效提示；损坏/缺失备份及不可证明的旧状态明确阻止恢复。文本经 Rust 脱敏后才进入 IPC，不能安全脱敏则拒绝原文展示；弹窗具备读取/失败/重试、显式大小限制、键盘与焦点管理。
+
+**Verification:** A→B→C 后直接恢复 A，再回到 C；无文件状态、并发过期、权限、损坏、重试及跨 Agent 隔离测试；完整适用检查和桌面人工验收。
+
+**Dependencies:** H1。
+
+**Files likely touched:** `src-tauri/src/config_apply/restore.rs`、共享操作服务、`src/features/agents/RestoreView.tsx`、相关 IPC 与翻译。
+
+**Estimated scope:** M–L；按恢复规则与确认界面分批交付。
+
+### Task H3: 从界面删除历史记录及备份
+
+**Description:** 提供用户主动清理入口；删除不可恢复，但不修改当前 Agent 配置或模型归属。
+
+**Acceptance criteria:**
+
+- [ ] 每条可删除记录（含最早/中间/已恢复版本）提供二次确认和删除入口，明确范围、不可撤销；不自动过期。
+- [ ] 正确处理备份引用、别名所有权和活动/未完成操作保护；删除一条不破坏其它独立快照。
+- [ ] 删除文件和数据库记录有持久状态、幂等重试及界面错误反馈；中断后仍能处理残留，不仅隐藏记录。
+
+**Verification:** 取消、确认、并发恢复/写入/删除、共享引用、权限失败、重启重试与密钥不泄漏测试；完整适用检查和桌面人工验收。
+
+**Dependencies:** H1,H2。
+
+**Files likely touched:** `src-tauri/src/config_apply/`、`src-tauri/src/storage.rs`、`src/features/agents/RestoreView.tsx`、相关 IPC 与翻译。
+
+**Estimated scope:** M–L；按删除事务和界面分批交付。
+
+### Task P24.a: 核实模型字段与 Agent 参数映射
+
+**Description:** 建立三个写入适配器的逐字段证据矩阵，要求见 [model-parameters.md](model-parameters.md#p24-后续模型信息和使用设置写入-agent)。这是开发前置任务，不替代 P24.b–P24.d 的实际实现。
+
+**Acceptance criteria:**
+
+- [ ] 核对官方文档与安装版本，覆盖上下文、最大输出能力、请求输出限制、推理支持/可选档/默认档/选用档及其它使用设置。
+- [ ] 记录每个 Agent/协议的目标字段、优先级、来源、限制及 supported/unsupported/unverified；区分 Provider API ID 与 Agent alias。
+- [ ] 给出各 Agent 最小可交付字段与拒绝原因，不猜测 effort 与 token 数量转换或未知档位。
+
+**Verification:** 复核文档与安装 schema/随版本手册；不读取或输出真实凭据，不启动推理。
+
+**Dependencies:** P16,P23。
+
+**Files likely touched:** `docs/integrations/`、`docs/plans/model-parameters.md`。
+
+**Estimated scope:** M。
+
+### Tasks P24.b–P24.d: 分 Agent 交付模型信息与使用设置
+
+P24.b = Claude Code；P24.c = Pi；P24.d = Grok Build。每个任务单独实施和验收，必要时按字段继续拆批。
+
+**Acceptance criteria（每个 Agent 分别满足）:**
+
+- [ ] 将 P24.a 已核实支持的上下文、最大输出能力、推理声明/档位等映射到原生配置；明确不能表达的字段，不静默丢失。
+- [ ] 配置界面查看来源、编辑已支持的 Agent 局部设置并选择推理档位/输出限制；支持不覆盖/继承，预览准确，未知/不支持给出原因。
+- [ ] 完成 Rust/IPC/双语 UI、过期保护、保留未拥有字段以及 H1–H3 历史操作；同名跨 Provider 模型与原生别名隔离。
+
+**Verification:** 各 Agent 分别运行映射与 UI 行为测试、完整前端/Rust 检查和锁定桌面构建；人工验收界面与实际 Agent，真实调用和跨平台验证单独记录。
+
+**Dependencies:** P24.a,H1,H2,H3；按 P24.b → P24.c → P24.d 顺序交付。
+
+**Files likely touched:** 对应 `src-tauri/src/agents/` 适配器及测试、`src/features/agents/`、IPC、翻译和集成文档。
+
+**Estimated scope:** 每个 Agent 为 L；实施前按能力声明、档位选择、输出等已核实字段拆成可 review 批次。
+
 ### Task P24: 验证 Provider 与 Agent 组合
 
-**Description:** 检查三家 Provider × 两个 Agent 的实际兼容矩阵与切换行为，不承诺不存在的协议转换。
+**Description:** 在 P24.a–P24.d 实现后，检查三家 Provider × 已支持写入的三个 Agent（Claude Code、Pi、Grok Build）的实际兼容矩阵与切换行为，不承诺不存在的协议转换。
 
 **Acceptance criteria:**
 
@@ -432,7 +523,7 @@ user 层有效）；Anthropic `messages` 后端的密钥落点没有文档说明
 - [ ] 运行 Rust `compatibility` 映射样本测试与 UI 切换测试。
 - [ ] 运行完整项目检查；真实用例仅使用许可的测试凭据。
 
-**Dependencies:** P12,P15,P16,P20,P23。
+**Dependencies:** P12,P15,P16,P20,P23,P24.b,P24.c,P24.d。
 
 **Files likely touched:**
 
@@ -445,7 +536,7 @@ user 层有效）；Anthropic `messages` 后端的密钥落点没有文档说明
 
 ### Checkpoint C24（P22–P24）
 
-- [ ] P22–P24 均已勾选。
+- [ ] H1–H3、P24.a–P24.d 与 P22–P24 均已勾选；最小写入已验收不等于历史管理与参数映射完成。
 
 ## 阶段 F：Skill
 

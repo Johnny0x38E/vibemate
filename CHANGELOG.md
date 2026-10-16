@@ -6,6 +6,10 @@ GitHub release notes are extracted from the matching version section only.
 
 ## [Unreleased]
 
+### Documentation
+
+- Clarified pending configuration-history requirements: independent pre-write snapshots, including restores, full history browsing, direct restoration of any retained version, and confirmed record/backup deletion with retryable cleanup. Added explicit follow-up tasks for verified Agent mappings and UI for reasoning efforts, context windows, output metadata and supported request settings. These are plans, not newly implemented application features.
+
 ### Fixed
 
 - Pi preview no longer refuses a compatible installation just because it was updated from 1.2.0 to 1.3.0. Stable Pi 1.x releases from 1.2 use bounded checks of the selected package's published models/settings schemas, including required native field types and compatibility options; the managed launcher follows its active release instead of a fixed release directory. Pi provider keys now use readable saved configuration names, such as `vibemate-OpenRouter`, with a short suffix only on a collision. Recorded UUID entries migrate through the reviewed backup/write flow, retaining all models, scoped-model patterns and per-model reasoning levels. Schema v18 records current and historical alias ownership so renames, duplicate labels and restores cannot silently adopt another account's entry.

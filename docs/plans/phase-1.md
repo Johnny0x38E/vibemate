@@ -76,12 +76,20 @@ deferred to the release-time platform check.
    belong to the target Agent and require verified native mappings, and the
    Anthropic Messages backend stays refused until Grok documents how it sends a
    per-model key.
-3. Finish the skill workflow on top of the delivered local import (P25):
+3. Complete the follow-up configuration work before advancing to Skill/MCP deployment:
+   H1–H3 add durable snapshots before every actual rewrite (including restores),
+   full history browsing, direct restoration of any retained pre-write version,
+   and confirmed deletion of a record with its backups. P24.a–P24.d explicitly
+   deliver verified per-Agent mappings and UI for reasoning capabilities/efforts,
+   context windows, output metadata and supported request settings. These remain
+   pending despite acceptance of the minimal write adapters; see [todo.md](todo.md),
+   [config-apply.md](config-apply.md) and [model-parameters.md](model-parameters.md).
+4. Finish the skill workflow on top of the delivered local import (P25):
    source installation, update preview and per-Agent symlink deployment, with an
    explicit copy-sync fallback and protection of local changes.
-4. Deploy central MCP definitions only to verified Agent features, using the
+5. Deploy central MCP definitions only to verified Agent features, using the
    safe write/restore path. Unsupported features remain explicit.
-5. Complete native platform and real-integration acceptance, then prepare reviewed
+6. Complete native platform and real-integration acceptance, then prepare reviewed
    draft release assets; do not publish automatically.
 
 Architecture and dependency details are in [development-plan.md](development-plan.md)

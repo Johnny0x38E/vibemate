@@ -5,6 +5,7 @@ import {
     PLAN_ERROR_CODES,
     RESTORE_ERROR_CODES,
     applyClaudeCodeRestore,
+    applyAgentRestore,
     applyClaudeCodeSettings,
     listClaudeCodeOperations,
     planClaudeCodeRestore,
@@ -720,7 +721,6 @@ test("accepts a restore that left a conflicting file alone", async () => {
         ...restoreOutcome,
         state: "partial",
         steps: [
-            restoredStep,
             {
                 ordinal: 1,
                 targetPath: "/home/test/.claude/other.json",
@@ -729,12 +729,14 @@ test("accepts a restore that left a conflicting file alone", async () => {
                 errorCode: "target_changed",
                 leftoverPath: null,
             },
+            restoredStep,
         ],
     };
     vi.mocked(invoke).mockResolvedValue(partial);
     expect(
         await applyClaudeCodeRestore(recorded.operationId, [
             { ordinal: 0, currentDigest: null },
+            { ordinal: 1, currentDigest: "a".repeat(64) },
         ]),
     ).toEqual(partial);
 });
@@ -747,9 +749,11 @@ test("accepts a restore that reports a copy it could not remove", async () => {
         leftovers: [leftover],
     };
     vi.mocked(invoke).mockResolvedValue(withLeftover);
-    expect(await applyClaudeCodeRestore(recorded.operationId, [])).toEqual(
-        withLeftover,
-    );
+    expect(
+        await applyClaudeCodeRestore(recorded.operationId, [
+            { ordinal: 0, currentDigest: null },
+        ]),
+    ).toEqual(withLeftover);
 });
 
 test.each(RESTORE_ERROR_CODES)(
@@ -956,3 +960,46 @@ test.each(malformedOutcomes)(
         });
     },
 );
+
+test("Pi restore accepts native reverse-order results and refuses repeated or unreviewed steps", async () => {
+    vi.mocked(isTauri).mockReturnValue(true);
+    const steps = [
+        {
+            ...restoreOutcome.steps[0],
+            ordinal: 1,
+            targetPath: "/test/pi/settings.json",
+        },
+        {
+            ...restoreOutcome.steps[0],
+            ordinal: 0,
+            targetPath: "/test/pi/models.json",
+        },
+    ];
+    const result = { ...restoreOutcome, steps };
+    vi.mocked(invoke).mockResolvedValue(result);
+    const reviewed = [
+        { ordinal: 0, currentDigest: "a".repeat(64) },
+        { ordinal: 1, currentDigest: "b".repeat(64) },
+    ];
+    expect(await applyAgentRestore("pi", result.operationId, reviewed)).toEqual(
+        result,
+    );
+    expect(invoke).toHaveBeenLastCalledWith("apply_pi_restore", {
+        input: { operationId: result.operationId, reviewed },
+    });
+    // A continued restore may attempt only the later still-pending file.
+    vi.mocked(invoke).mockResolvedValue({ ...result, steps: [steps[0]] });
+    await expect(
+        applyAgentRestore("pi", result.operationId, reviewed),
+    ).resolves.toMatchObject({ steps: [steps[0]] });
+    for (const invalidSteps of [
+        [steps[0], steps[0]],
+        [steps[1], steps[0]],
+        [{ ...steps[0], ordinal: 2 }],
+    ]) {
+        vi.mocked(invoke).mockResolvedValue({ ...result, steps: invalidSteps });
+        await expect(
+            applyAgentRestore("pi", result.operationId, reviewed),
+        ).rejects.toMatchObject({ code: "invalid_response" });
+    }
+});

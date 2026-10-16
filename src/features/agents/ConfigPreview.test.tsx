@@ -27,6 +27,17 @@ import {
 } from "../../lib/desktop/providers";
 import { fieldSelectValue, setFieldSelectValue } from "../../test/fieldSelect";
 import { ConfigPreview } from "./ConfigPreview";
+import {
+    planPiSettings,
+    applyPiSettings,
+    reviewedPiPlan,
+    type PiPlan,
+} from "../../lib/desktop/pi";
+vi.mock(import("../../lib/desktop/pi"), async (original) => ({
+    ...(await original()),
+    planPiSettings: vi.fn(),
+    applyPiSettings: vi.fn(),
+}));
 
 vi.mock(import("../../lib/desktop/agents"), async (original) => ({
     ...(await original()),
@@ -492,4 +503,99 @@ test("ignores a second apply while the first is in flight", async () => {
     expect(
         await screen.findByText(/Written\. The settings file now holds/u),
     ).toBeTruthy();
+});
+
+test("Pi reviews both files and applies them once with the auth dependency", async () => {
+    const piPlan: PiPlan = {
+        agent: "pi",
+        providerKey: "vibemate-DeepSeek",
+        previousProviderKey: null,
+        source: plan.source,
+        restartRequired: true,
+        authTarget: { ...plan.target, path: "/test/pi/auth.json" },
+        files: [
+            {
+                target: { ...plan.target, path: "/test/pi/models.json" },
+                changes: [
+                    {
+                        keyPath: "apiKey",
+                        before: null,
+                        after: "••••••••",
+                        secret: true,
+                    },
+                ],
+            },
+            {
+                target: { ...plan.target, path: "/test/pi/settings.json" },
+                changes: [
+                    {
+                        keyPath: "defaultModel",
+                        before: "previous",
+                        after: FLASH,
+                        secret: false,
+                    },
+                ],
+            },
+        ],
+    };
+    vi.mocked(planPiSettings).mockResolvedValue({
+        kind: "desktop",
+        plan: piPlan,
+    });
+    let finish: ((r: ClaudeCodeApplied) => void) | undefined;
+    vi.mocked(applyPiSettings).mockImplementation(
+        () =>
+            new Promise((resolve) => {
+                finish = resolve;
+            }),
+    );
+    const i18n = await createAppI18n("en");
+    render(
+        <I18nextProvider i18n={i18n}>
+            <ConfigPreview agent="pi" entryPath="/test/pi" />
+        </I18nextProvider>,
+    );
+    await setFieldSelectValue(
+        await screen.findByRole("combobox", { name: "Model" }),
+        FLASH,
+    );
+    await userEvent.click(
+        screen.getByRole("button", { name: "Preview changes" }),
+    );
+    await screen.findByText("/test/pi/models.json");
+    await screen.findByText("/test/pi/settings.json");
+    expect(planPiSettings).toHaveBeenCalledWith(deepseek.id, FLASH, "/test/pi");
+    const apply = screen.getByRole("button", { name: "Apply these settings" });
+    await userEvent.click(apply);
+    await userEvent.click(screen.getByRole("button", { name: "Applying…" }));
+    expect(applyPiSettings).toHaveBeenCalledTimes(1);
+    expect(applyPiSettings).toHaveBeenCalledWith(
+        deepseek.id,
+        FLASH,
+        "/test/pi",
+        reviewedPiPlan(piPlan),
+    );
+    finish?.({
+        ...writtenResult,
+        steps: [
+            { ...writtenStep, targetPath: "/test/pi/models.json" },
+            {
+                ...writtenStep,
+                ordinal: 1,
+                targetPath: "/test/pi/settings.json",
+                backupPath: "/private/settings.json",
+            },
+        ],
+    });
+    await screen.findByText(
+        "Written. Both Pi configuration files now hold the planned settings.",
+    );
+    expect(
+        screen.getByText(/Previous content kept at \/private\/settings.json/u),
+    ).toBeTruthy();
+    expect(
+        screen.queryByText(
+            "Start a new Claude Code session for these settings to take effect.",
+        ),
+    ).toBeNull();
 });

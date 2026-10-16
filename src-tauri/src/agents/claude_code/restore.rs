@@ -244,11 +244,16 @@ impl ApplyClaudeCodeRestoreRequest {
 pub fn list_claude_code_operations(
     storage: &Storage,
 ) -> Result<Vec<ClaudeCodeOperation>, ClaudeCodeRestoreError> {
-    let records = recent_operations(
-        storage,
-        OperationKind::ClaudeCodeSettings,
-        LISTED_OPERATIONS,
-    )?;
+    list_config_operations(storage, OperationKind::ClaudeCodeSettings)
+}
+
+/// List only writes owned by one adapter. No file contents are returned.
+/// Returns safe storage/restore errors when the recorded state cannot be read.
+pub fn list_config_operations(
+    storage: &Storage,
+    kind: OperationKind,
+) -> Result<Vec<ClaudeCodeOperation>, ClaudeCodeRestoreError> {
+    let records = recent_operations(storage, kind, LISTED_OPERATIONS)?;
     let mut listed = Vec::with_capacity(records.len());
     for record in records {
         // The listing says whether a restore is worth offering; whether a
@@ -291,6 +296,17 @@ pub fn plan_claude_code_restore(
     storage: &Storage,
     operation_id: &str,
 ) -> Result<ClaudeCodeRestorePlan, ClaudeCodeRestoreError> {
+    plan_config_restore(storage, operation_id, OperationKind::ClaudeCodeSettings)
+}
+
+/// Preview only a write owned by this adapter; IDs from another adapter are refused.
+/// Returns operation-not-found before reading another adapter's target files.
+pub fn plan_config_restore(
+    storage: &Storage,
+    operation_id: &str,
+    kind: OperationKind,
+) -> Result<ClaudeCodeRestorePlan, ClaudeCodeRestoreError> {
+    require_kind(storage, operation_id, kind)?;
     let plan =
         plan_restore(storage, operation_id)?.ok_or(ClaudeCodeRestoreError::OperationNotFound)?;
     Ok(restore_view(storage, plan))
@@ -311,9 +327,38 @@ pub fn apply_claude_code_restore(
     request: &ApplyClaudeCodeRestoreRequest,
     backups_root: &Path,
 ) -> Result<RestoreOutcome, ClaudeCodeRestoreError> {
+    apply_config_restore(
+        storage,
+        request,
+        backups_root,
+        OperationKind::ClaudeCodeSettings,
+    )
+}
+
+/// Restore only this adapter's recorded files after checking the reviewed tokens.
+/// Returns operation-not-found for other adapters; never reads OS credentials.
+pub fn apply_config_restore(
+    storage: &Storage,
+    request: &ApplyClaudeCodeRestoreRequest,
+    backups_root: &Path,
+    kind: OperationKind,
+) -> Result<RestoreOutcome, ClaudeCodeRestoreError> {
     let reviewed = request.reviewed_steps()?;
+    require_kind(storage, &request.operation_id, kind)?;
     let backups = BackupStore::new(PathBuf::from(backups_root));
     apply_restore(storage, &request.operation_id, &reviewed, &backups).map_err(Into::into)
+}
+
+/// Check ownership before the shared restore layer reads any target file.
+fn require_kind(
+    storage: &Storage,
+    id: &str,
+    kind: OperationKind,
+) -> Result<(), ClaudeCodeRestoreError> {
+    match crate::config_apply::operation(storage, id)? {
+        Some(record) if record.kind == kind => Ok(()),
+        _ => Err(ClaudeCodeRestoreError::OperationNotFound),
+    }
 }
 
 /// Name the Provider a reference points at, when that Provider still exists.

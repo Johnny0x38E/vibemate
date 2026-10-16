@@ -645,10 +645,22 @@
                 "plan_stale": "The configuration changed since the preview, so nothing was written. Preview again.",
                 "credential_missing": "No API key is saved for this provider in OS credential storage.",
                 "credential_unavailable": "The OS credential store could not be read. Unlock it and try again.",
-                "location_unavailable": "The Claude Code settings directory could not be located.",
+                "location_unavailable": "The Agent configuration directory could not be located.",
                 "operation_failed": "The preview could not be built. Try again.",
                 "desktop_required": "Applying configuration needs the vibemate desktop app.",
-                "invalid_response": "The desktop app returned an unexpected plan."
+                "invalid_response": "The desktop app returned an unexpected plan.",
+                "agent_version_unverified": "This Pi installation does not expose the compatible model/settings format. Check its entry path and installation; stable Pi 1.x releases from 1.2 are supported when their configuration schemas match.",
+                "protocol_unsupported": "The selected model has no verified native request protocol.",
+                "credential_conflict": "auth.json contains a credential for this managed provider that would override the planned key. Resolve it in Pi and preview again."
+            },
+            "piRestartRequired": "Start a new Pi session to use these defaults. Project settings, CLI options and resumed sessions can override them.",
+            "piNotice": "The API key is read from OS credential storage only when you apply, then written as plain text in models.json. Existing files are backed up before replacement. Unknown model metadata uses Pi defaults; reasoning levels are unchanged.",
+            "piOutcome": {
+                "applied": "Written. Both Pi configuration files now hold the planned settings.",
+                "failed": "Nothing was written; the previous Pi configuration is intact.",
+                "compensated": "The write was rolled back; the previous Pi configuration is restored.",
+                "partial": "Some changes could not be undone. Review the files and backups before retrying.",
+                "unknown": "A file result could not be verified. Review the files and backups before retrying."
             }
         },
         "restore": {

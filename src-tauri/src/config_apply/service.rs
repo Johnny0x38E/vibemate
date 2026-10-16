@@ -87,6 +87,29 @@ pub fn apply_files(
     files: &[PlannedFile],
     backups: &BackupStore,
 ) -> Result<AppliedOperation, WriteError> {
+    apply_with_mode(storage, kind, owner, files, backups, false)
+}
+
+/// Apply a credential-bearing file set, keeping Unix replacements at 0600.
+/// All other recording, backup, conflict and compensation behavior is shared.
+pub(crate) fn apply_private_files(
+    storage: &Storage,
+    kind: OperationKind,
+    owner: Option<&str>,
+    files: &[PlannedFile],
+    backups: &BackupStore,
+) -> Result<AppliedOperation, WriteError> {
+    apply_with_mode(storage, kind, owner, files, backups, true)
+}
+
+fn apply_with_mode(
+    storage: &Storage,
+    kind: OperationKind,
+    owner: Option<&str>,
+    files: &[PlannedFile],
+    backups: &BackupStore,
+    private: bool,
+) -> Result<AppliedOperation, WriteError> {
     if files.is_empty() {
         return Err(WriteError::InvalidRequest);
     }
@@ -96,7 +119,12 @@ pub fn apply_files(
     for (index, file) in files.iter().enumerate() {
         let ordinal = u32::try_from(index).map_err(|_| WriteError::InvalidRequest)?;
         let target_path = path_text(&file.target.path)?;
-        match apply_file(&file.target, &file.content, backups) {
+        let result = if private {
+            super::apply_private_file(&file.target, &file.content, backups)
+        } else {
+            apply_file(&file.target, &file.content, backups)
+        };
+        match result {
             Ok(applied) => {
                 let digest = applied
                     .target

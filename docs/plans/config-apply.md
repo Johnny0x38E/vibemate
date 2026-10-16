@@ -123,8 +123,7 @@ SQLite schema v16 新增 `config_operation` 与 `config_operation_step`，仓储
 命令层与应用步骤共用应用级凭据锁，因此密钥替换与配置应用不会交错；界面明示密钥将以明文写入
 `~/.claude/settings.json`（预览已有该提示），且不依赖 vibemate 启动 Agent。
 
-仍未验证：真实 Tauri/Claude Code 中的原生应用与启动选择模型（维护者验收），以及 Windows/Linux 行为
-（P37）。
+维护者已于 2026-10-14 验收真实 Tauri/Claude Code 中的原生应用与模型使用；Windows/Linux 行为仍在 P37 验证。
 
 ## P21：回滚 Claude Code 配置
 
@@ -218,7 +217,7 @@ SQLite schema v16 新增 `config_operation` 与 `config_operation_step`，仓储
 - P21.c 三个命令（`claude_code_operations`、`plan_claude_code_restore`、`apply_claude_code_restore`）、
   `with_restore_storage`、前端边界与双端测试（2026-10-14 交付；无界面，CHANGELOG 未新增条目）。
 - P21.d RestoreView、双语文案与行为测试（2026-10-14 交付）。
-- P21.e 维护者原生验收：临时配置 apply → restore → 原生启动。
+- P21.e 原生验收已通过（维护者 2026-10-16 确认）：临时配置 apply → restore → 原生启动。
 
 已知边界：恢复只覆盖 vibemate 记录过的操作；`planned` 操作可能从未写盘，预览按步骤状态如实显示；
 写入失败时 apply 阶段为被替换内容留下的那份副本不再被任何步骤引用，清理失败也不会进入恢复结果
@@ -234,4 +233,11 @@ SQLite schema v16 新增 `config_operation` 与 `config_operation_step`，仓储
 
 - P21 的预览、冲突判定、逐步骤回滚状态与残留清理结果都有故障注入测试。
 - 恢复预览与结果不包含文件内容；过期预览被拒绝且不写盘。
-- 维护者在真实 Tauri/Claude Code 中完成 apply → restore → 原生启动验收；跨平台差异在 P37 记录。
+- 维护者于 2026-10-16 确认在真实 Tauri/Claude Code 中的 apply → restore → 原生启动验收通过，C21 关闭；跨平台差异仍在 P37 验证。
+
+## Pi 复用（PI1）
+
+Pi 的最小配置预览、原配置备份与应用作为一个任务交付，状态见 `todo.md`。
+`OperationKind::PiSettings` 使用同一日志与补偿机制。凭据写入模型目录时采用私有写入模式，
+Unix 替换文件为 0600；Claude Code 原有写入模式保持既有约定。历史列表、恢复预览与恢复应用均按
+Agent 操作类型隔离；恢复结果按实际执行的倒序步骤校验，不把步骤编号当作数组位置。

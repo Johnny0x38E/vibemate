@@ -362,6 +362,18 @@ const MIGRATIONS: &[Migration] = &[
                 (state = 'applied' AND restore_state IN
                     ('restored','conflict','unavailable','failed','unknown')));",
     },
+    Migration {
+        version: 18,
+        // Pi shows provider keys directly. Remember readable aliases separately
+        // from central IDs, including former aliases needed after a restore.
+        // No FK: an external Agent configuration can outlive a central record.
+        sql: "CREATE TABLE pi_provider_binding (
+            config_root TEXT NOT NULL,
+            provider_key TEXT NOT NULL CHECK(length(provider_key) BETWEEN 1 AND 160),
+            provider_id TEXT NOT NULL CHECK(length(provider_id) = 32 AND provider_id NOT GLOB '*[^0-9a-f]*'),
+            PRIMARY KEY(config_root, provider_key)
+        ) STRICT, WITHOUT ROWID;",
+    },
 ];
 
 /// Errors from opening or migrating the private database.

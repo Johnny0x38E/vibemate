@@ -3,6 +3,9 @@
 //! the launched program can have side effects outside vibemate's control.
 
 mod claude_code;
+mod configuration;
+pub mod pi;
+pub use configuration::{ConfigApplied, ConfigApplyError};
 mod discovery;
 mod version_probe;
 pub use claude_code::{
@@ -10,8 +13,9 @@ pub use claude_code::{
     ClaudeCodeOperation, ClaudeCodeOperationStep, ClaudeCodePlanInput, ClaudeCodeRestoreError,
     ClaudeCodeRestorePlan, ClaudeCodeRestoreStep, GatewayStatus, ModelFacts, ProviderFacts,
     ReviewedPlan, ReviewedRestoreStepRequest, apply_claude_code_restore,
-    apply_claude_code_settings, gateway_status, list_claude_code_operations,
-    plan_claude_code_restore, plan_claude_code_settings,
+    apply_claude_code_settings, apply_config_restore, gateway_status, list_claude_code_operations,
+    list_config_operations, plan_claude_code_restore, plan_claude_code_settings,
+    plan_config_restore,
 };
 pub use version_probe::{
     AgentVersionResult, VersionProbeError, VersionProbeGate, VersionProbeInput, probe_agent_version,

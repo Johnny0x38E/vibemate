@@ -340,6 +340,29 @@ pub fn unfinished_operations(storage: &Storage) -> Result<Vec<OperationRecord>, 
     Ok(records)
 }
 
+/// Whether this adapter previously wrote a target for the given owner.
+///
+/// Used before adopting a namespaced Pi provider entry: a coincidentally named
+/// user entry must not be overwritten merely because its name has our prefix.
+/// Returns storage/log errors without exposing database diagnostics.
+pub fn has_recorded_target(
+    storage: &Storage,
+    kind: OperationKind,
+    owner: &str,
+    target: &str,
+) -> Result<bool, WriteError> {
+    lock(storage)?
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM config_operation o
+         JOIN config_operation_step s ON s.operation_id = o.id
+         WHERE o.kind = ?1 AND o.owner_ref = ?2 AND s.target_path = ?3
+           AND s.applied_digest IS NOT NULL)",
+            params![kind.as_str(), owner, target],
+            |row| row.get(0),
+        )
+        .map_err(|_| WriteError::LogReadFailed)
+}
+
 /// Recent operations of one kind, newest first.
 ///
 /// `limit` is clamped to [`MAX_RECENT_OPERATIONS`]; the listing is what the

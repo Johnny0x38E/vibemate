@@ -22,7 +22,7 @@ use crate::models::{GetModelSnapshotRequest, ModelError};
 use crate::providers::ProviderError;
 use tauri::Manager;
 
-fn environment(app: &tauri::AppHandle) -> Result<DiscoveryEnvironment, ()> {
+pub(super) fn environment(app: &tauri::AppHandle) -> Result<DiscoveryEnvironment, ()> {
     let home = app.path().home_dir().map_err(|_| ())?;
     Ok(DiscoveryEnvironment {
         home,
@@ -255,7 +255,7 @@ pub(crate) async fn apply_claude_code_restore(
 }
 
 /// Map a Provider read failure onto the preview's error namespace.
-fn provider_failure(error: ProviderError) -> PlanError {
+pub(super) fn provider_failure(error: ProviderError) -> PlanError {
     match error {
         ProviderError::NotFound => PlanError::ProviderNotFound,
         ProviderError::InvalidRequest => PlanError::InvalidRequest,
@@ -267,7 +267,7 @@ fn provider_failure(error: ProviderError) -> PlanError {
 }
 
 /// Map a model read failure onto the preview's error namespace.
-fn model_failure(error: ModelError) -> PlanError {
+pub(super) fn model_failure(error: ModelError) -> PlanError {
     match error {
         ModelError::NotFound => PlanError::ProviderNotFound,
         ModelError::ModelNotFound => PlanError::ModelNotFound,
@@ -280,7 +280,7 @@ fn model_failure(error: ModelError) -> PlanError {
 }
 
 /// Map a Provider read failure onto the apply step's error namespace.
-fn apply_provider_failure(error: ProviderError) -> ClaudeCodeApplyError {
+pub(super) fn apply_provider_failure(error: ProviderError) -> ClaudeCodeApplyError {
     match error {
         ProviderError::NotFound => ClaudeCodeApplyError::ProviderNotFound,
         ProviderError::InvalidRequest => ClaudeCodeApplyError::InvalidRequest,
@@ -292,7 +292,7 @@ fn apply_provider_failure(error: ProviderError) -> ClaudeCodeApplyError {
 }
 
 /// Map a model read failure onto the apply step's error namespace.
-fn apply_model_failure(error: ModelError) -> ClaudeCodeApplyError {
+pub(super) fn apply_model_failure(error: ModelError) -> ClaudeCodeApplyError {
     match error {
         ModelError::NotFound => ClaudeCodeApplyError::ProviderNotFound,
         ModelError::ModelNotFound => ClaudeCodeApplyError::ModelNotFound,

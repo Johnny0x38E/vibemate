@@ -24,7 +24,10 @@ use serde::Serialize;
 use super::{
     AppliedFile, Backup, BackupStore, MAX_TARGET_BYTES, OperationKind, OperationRecord,
     OperationState, RestoreState, StepRecord, StepState, WriteError, WriteTarget, apply_file,
-    digest_hex, finish_operation, operation, read_target, record_step_restored,
+    apply_recorded_file, digest_hex, file_name, finish_operation, is_read_only, operation,
+    operation_id, read_replaced_bytes, read_target, record_step_restored,
+    revisions::{RevisionContext, RevisionIntent},
+    sync_directory,
 };
 use crate::storage::Storage;
 
@@ -123,7 +126,8 @@ pub struct RestoreStepOutcome {
     pub state: RestoreState,
     /// Stable code of a write that did not complete in this attempt.
     pub error_code: Option<String>,
-    /// Copy this attempt made and could not remove, when one stayed behind.
+    /// Legacy cleanup field retained for IPC compatibility. Journaled snapshots
+    /// are retained versions, not temporary copies awaiting deletion.
     pub leftover_path: Option<String>,
 }
 
@@ -137,7 +141,8 @@ pub struct RestoreOutcome {
     pub state: OperationState,
     /// One entry per step that was attempted, newest first.
     pub steps: Vec<RestoreStepOutcome>,
-    /// Copies this rollback could not remove, by absolute path.
+    /// Legacy cleanup paths, kept for IPC compatibility; new snapshots are
+    /// retained in the revision log instead of being reported as leftovers.
     pub leftovers: Vec<String>,
 }
 
@@ -200,6 +205,7 @@ pub fn apply_restore(
     backups: &BackupStore,
 ) -> Result<RestoreOutcome, WriteError> {
     let record = operation(storage, operation_id)?.ok_or(WriteError::InvalidRequest)?;
+    super::revisions::require_known_revisions(storage, operation_id)?;
     let plan = plan_record(storage, &record)?;
     let planned: Vec<&RestoreStepPlan> = plan
         .steps
@@ -212,7 +218,13 @@ pub fn apply_restore(
         return Err(WriteError::PlanStale);
     }
     let ordinals: Vec<u32> = planned.iter().map(|step| step.ordinal).collect();
-    let outcome = roll_back_operation(storage, &record, &ordinals, backups)?;
+    let outcome = roll_back_operation(
+        storage,
+        &record,
+        &ordinals,
+        backups,
+        RevisionIntent::Restore,
+    )?;
     finish_operation(storage, &record.id, outcome.state)?;
     Ok(outcome)
 }
@@ -259,7 +271,10 @@ pub(crate) fn roll_back_operation(
     record: &OperationRecord,
     ordinals: &[u32],
     backups: &BackupStore,
+    intent: RevisionIntent,
 ) -> Result<RestoreOutcome, WriteError> {
+    super::revisions::require_known_revisions(storage, &record.id)?;
+    let batch_id = operation_id();
     let mut attempted = Vec::new();
     let mut leftovers = Vec::new();
     for step in record.steps.iter().rev() {
@@ -269,7 +284,14 @@ pub(crate) fn roll_back_operation(
         {
             continue;
         }
-        let outcome = roll_back_step(step, backups)?;
+        let revision = RevisionContext {
+            storage,
+            operation_id: &record.id,
+            ordinal: step.ordinal,
+            batch_id: &batch_id,
+            intent,
+        };
+        let outcome = roll_back_step(step, backups, &revision)?;
         if let Some(path) = &outcome.leftover_path {
             leftovers.push(path.clone());
         }
@@ -289,6 +311,7 @@ pub(crate) fn roll_back_operation(
 fn roll_back_step(
     step: &StepRecord,
     backups: &BackupStore,
+    revision: &RevisionContext<'_>,
 ) -> Result<RestoreStepOutcome, WriteError> {
     let digest = step
         .applied_digest
@@ -296,8 +319,8 @@ fn roll_back_step(
         .ok_or(WriteError::InvalidStoredOperation)?;
     let path = Path::new(&step.target_path);
     let attempt = match &step.backup {
-        Some(backup) => restore_from_copy(path, digest, backup, backups)?,
-        None => remove_created(path, digest)?,
+        Some(backup) => restore_from_copy(path, digest, backup, backups, revision)?,
+        None => remove_created(path, digest, backups, revision)?,
     };
     Ok(RestoreStepOutcome {
         ordinal: step.ordinal,
@@ -358,19 +381,24 @@ impl RollbackAttempt {
     }
 }
 
-/// Put the content a recorded step replaced back, and drop the copy it makes.
+/// Put the content back while retaining an independently journaled pre-image.
 fn restore_from_copy(
     path: &Path,
     applied_digest: &str,
     backup: &Backup,
     backups: &BackupStore,
+    revision: &RevisionContext<'_>,
 ) -> Result<RollbackAttempt, WriteError> {
-    match restore_file(path, applied_digest, backup, backups) {
-        Ok(applied) => Ok(RollbackAttempt {
-            state: RestoreState::Restored,
-            error_code: None,
-            leftover: discard_copy(backups, applied.backup.as_ref()),
-        }),
+    let bytes = match read_backup(backup) {
+        Ok(bytes) => bytes,
+        Err(error) => return RollbackAttempt::from_error(error),
+    };
+    let target = WriteTarget {
+        path: path.to_path_buf(),
+        expected_digest: Some(applied_digest.to_owned()),
+    };
+    match apply_recorded_file(&target, &bytes, backups, false, revision) {
+        Ok(_) => Ok(RollbackAttempt::restored()),
         Err(WriteError::TargetChanged) => {
             // Another restore may already have put this content back. That is the
             // state this step wanted, not a file the user changed to something
@@ -391,24 +419,62 @@ fn restore_from_copy(
 }
 
 /// Remove a file the recorded step created, when it still holds that content.
-fn remove_created(path: &Path, applied_digest: &str) -> Result<RollbackAttempt, WriteError> {
-    match remove_created_file(path, applied_digest) {
+fn remove_created(
+    path: &Path,
+    applied_digest: &str,
+    backups: &BackupStore,
+    revision: &RevisionContext<'_>,
+) -> Result<RollbackAttempt, WriteError> {
+    match remove_recorded_file(path, applied_digest, backups, revision) {
         Ok(()) => Ok(RollbackAttempt::restored()),
         Err(error) => RollbackAttempt::from_error(error),
     }
 }
 
-/// Remove the copy a rollback made of the content it replaced.
-///
-/// The copy has no operation that refers to it — the log already says what the
-/// operation did — so it is deleted. A copy that stays behind is reported by its
-/// path instead of being hidden.
-pub(super) fn discard_copy(backups: &BackupStore, copy: Option<&Backup>) -> Option<String> {
-    let copy = copy?;
-    match backups.discard(copy) {
-        Ok(()) => None,
-        Err(()) => Some(copy.path.clone()),
+/// Preserve the complete current file before restoring an absent-file state.
+fn remove_recorded_file(
+    path: &Path,
+    applied_digest: &str,
+    backups: &BackupStore,
+    revision: &RevisionContext<'_>,
+) -> Result<(), WriteError> {
+    let current = read_target(path)?;
+    if current.symlink {
+        return Err(WriteError::SymlinkRefused);
     }
+    if !current.exists {
+        return Ok(());
+    }
+    if current.content_digest.as_deref() != Some(applied_digest) {
+        return Err(WriteError::TargetChanged);
+    }
+    if is_read_only(path)? {
+        return Err(WriteError::TargetReadOnly);
+    }
+    let bytes = read_replaced_bytes(path)?;
+    if digest_hex(&bytes) != applied_digest {
+        return Err(WriteError::TargetChanged);
+    }
+    let id = operation_id();
+    let backup = backups.store(&id, &file_name(path), &bytes)?;
+    let target = WriteTarget {
+        path: path.to_path_buf(),
+        expected_digest: Some(applied_digest.to_owned()),
+    };
+    revision.prepare(&id, &target, Some(&backup), None)?;
+    let result = (|| {
+        remove_created_file(path, applied_digest)?;
+        if let Some(parent) = path.parent() {
+            sync_directory(parent)?;
+        }
+        let after = read_target(path).map_err(|_| WriteError::OutcomeUnknown)?;
+        if after.exists || after.symlink {
+            return Err(WriteError::OutcomeUnknown);
+        }
+        Ok(())
+    })();
+    revision.finish(&id, &result)?;
+    result
 }
 
 /// Put back the content a recorded step replaced.

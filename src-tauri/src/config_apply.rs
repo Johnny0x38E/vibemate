@@ -74,7 +74,13 @@ impl BackupStore {
         let directory = self.root.join(id);
         create_private_directory(&directory)?;
         let path = directory.join(name);
-        overwrite_private_file(&path, bytes)?;
+        create_private_file(&path, bytes)?;
+        // Flush directory entries before a database row can rely on this copy.
+        sync_directory(&directory).map_err(|_| WriteError::BackupUnavailable)?;
+        sync_directory(&self.root).map_err(|_| WriteError::BackupUnavailable)?;
+        if let Some(parent) = self.root.parent() {
+            sync_directory(parent).map_err(|_| WriteError::BackupUnavailable)?;
+        }
         Ok(Backup {
             id: id.to_owned(),
             path: path_text(&path)?,
@@ -85,8 +91,8 @@ impl BackupStore {
     /// Remove a copy whose write did not happen, keeping the store free of
     /// entries no operation refers to.
     ///
-    /// Returns whether the copy is gone. A caller that must not hide a leftover
-    /// (the restore path) reports the path instead of discarding this result.
+    /// Only the unjournaled low-level writer may discard an unreferenced copy.
+    /// Recorded writes, restores and compensations retain their snapshots.
     fn discard(&self, backup: &Backup) -> Result<(), ()> {
         match fs::remove_dir_all(self.root.join(&backup.id)) {
             Ok(()) => Ok(()),
@@ -425,18 +431,18 @@ pub fn apply_file(
     content: &[u8],
     backups: &BackupStore,
 ) -> Result<AppliedFile, WriteError> {
-    apply_file_with_mode(target, content, backups, true)
+    apply_file_with_mode(target, content, backups, true, None)
 }
 
-/// Write a credential-bearing file using 0600 on Unix, including replacements.
-/// The public writer preserves existing modes; this opt-in keeps a formerly
-/// public model catalog private once an adapter adds an API key to it.
-fn apply_private_file(
+/// Recorded service path; private writes replace Unix permissions with 0600.
+fn apply_recorded_file(
     target: &WriteTarget,
     content: &[u8],
     backups: &BackupStore,
+    private: bool,
+    revision: &revisions::RevisionContext<'_>,
 ) -> Result<AppliedFile, WriteError> {
-    apply_file_with_mode(target, content, backups, false)
+    apply_file_with_mode(target, content, backups, !private, Some(revision))
 }
 
 fn apply_file_with_mode(
@@ -444,6 +450,7 @@ fn apply_file_with_mode(
     content: &[u8],
     backups: &BackupStore,
     preserve_mode: bool,
+    revision: Option<&revisions::RevisionContext<'_>>,
 ) -> Result<AppliedFile, WriteError> {
     let current = read_target(&target.path)?;
     if current.symlink {
@@ -471,31 +478,49 @@ fn apply_file_with_mode(
         }
         false => None,
     };
+    // A second read must not silently back up bytes different from the approved
+    // token. A concurrent external writer still cannot be locked by this app.
+    if previous.as_ref().map(|bytes| digest_hex(bytes)) != target.expected_digest {
+        return Err(WriteError::TargetChanged);
+    }
     let id = operation_id();
     let backup = match &previous {
         Some(bytes) => Some(backups.store(&id, &file_name(&target.path), bytes)?),
         None => None,
     };
-    if let Err(error) = replace(
-        &target.path,
-        content,
-        previous.is_some() && preserve_mode,
-        &id,
-    ) {
-        // The write did not happen, so this copy is already unreferenced. A copy
-        // that cannot be removed stays a private file and is not this failed
-        // write's result to report; the restore path reports its own leftovers.
-        if let Some(backup) = &backup {
-            let _ = backups.discard(backup);
-        }
-        return Err(error);
+    if let Some(revision) = revision {
+        revision.prepare(&id, target, backup.as_ref(), Some(&new_digest))?;
     }
-    let after = read_target(&target.path).map_err(|_| WriteError::OutcomeUnknown)?;
-    if after.content_digest.as_deref() != Some(new_digest.as_str()) {
-        return Err(WriteError::OutcomeUnknown);
+    let result = (|| {
+        // Recheck after backup/database I/O as well as before collecting bytes.
+        let checked = read_target(&target.path)?;
+        if checked.symlink || checked.content_digest != target.expected_digest {
+            return Err(WriteError::TargetChanged);
+        }
+        replace(
+            &target.path,
+            content,
+            previous.is_some() && preserve_mode,
+            &id,
+        )?;
+        let after = read_target(&target.path).map_err(|_| WriteError::OutcomeUnknown)?;
+        if after.content_digest.as_deref() != Some(new_digest.as_str()) {
+            return Err(WriteError::OutcomeUnknown);
+        }
+        Ok(after)
+    })();
+    if let Some(revision) = revision {
+        // Even failed writes retain the referenced snapshot. In particular an
+        // uncertain rename must never discard its only recoverable pre-image.
+        revision.finish(&id, &result)?;
+    } else if result.is_err()
+        && result != Err(WriteError::OutcomeUnknown)
+        && let Some(backup) = &backup
+    {
+        let _ = backups.discard(backup);
     }
     Ok(AppliedFile {
-        target: after,
+        target: result?,
         backup,
         changed: true,
     })
@@ -631,9 +656,11 @@ fn create_private_directory(directory: &Path) -> Result<(), WriteError> {
 }
 
 /// Store bytes in a private file of the backup directory.
-fn overwrite_private_file(path: &Path, bytes: &[u8]) -> Result<(), WriteError> {
+fn create_private_file(path: &Path, bytes: &[u8]) -> Result<(), WriteError> {
     let mut options = OpenOptions::new();
-    options.write(true).create(true).truncate(true);
+    // A reused identifier must fail rather than overwrite a retained version or
+    // follow a link that unexpectedly appeared inside the backup directory.
+    options.write(true).create_new(true);
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
@@ -701,13 +728,22 @@ fn sync_directory(_: &Path) -> Result<(), WriteError> {
     Ok(())
 }
 
+mod inspection;
 mod operations;
+mod resolution;
 mod restore;
+mod revisions;
 mod service;
 
+pub use inspection::{
+    RevisionBackupState, RevisionInspection, RevisionMatch, inspect_interrupted_revisions,
+};
 pub use operations::{
     begin_operation, finish_operation, has_recorded_target, operation, recent_operations,
     record_step_applied, record_step_failed, record_step_restored, unfinished_operations,
+};
+pub use resolution::{
+    RevisionResolutionPlan, plan_revision_resolution, resolve_interrupted_revisions,
 };
 pub use restore::{
     RestoreAction, RestoreOutcome, RestorePlan, RestoreStepOutcome, RestoreStepPlan,
@@ -720,6 +756,8 @@ pub use service::{AppliedOperation, PlannedFile, StepOutcome, apply_files, compe
 mod operation_tests;
 #[cfg(test)]
 mod restore_tests;
+#[cfg(test)]
+mod revision_tests;
 #[cfg(test)]
 mod service_tests;
 #[cfg(test)]

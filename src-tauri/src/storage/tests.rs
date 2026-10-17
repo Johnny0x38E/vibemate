@@ -721,6 +721,98 @@ fn model_rows_are_constrained_and_follow_their_provider() {
 }
 
 #[test]
+fn resolution_migration_preserves_v20_snapshots_without_inventing_resolutions() {
+    use crate::config_apply::{
+        BackupStore, OperationKind, PlannedFile, WriteTarget, apply_files, operation,
+    };
+    let directory = TestDirectory::new("resolution-upgrade");
+    let path = directory.path.join(DATABASE_FILE_NAME);
+    let old = Storage::open_file(&path, &MIGRATIONS[..20]).unwrap();
+    let target = directory.path.join("settings.json");
+    std::fs::write(&target, b"original").unwrap();
+    let file = PlannedFile {
+        target: WriteTarget {
+            path: target.clone(),
+            expected_digest: Some(crate::config_plan::digest_hex(b"original")),
+        },
+        content: b"changed".to_vec(),
+    };
+    let applied = apply_files(
+        &old,
+        OperationKind::PiSettings,
+        None,
+        &[file],
+        &BackupStore::new(directory.path.join("backups")),
+    )
+    .unwrap();
+    let before = operation(&old, &applied.operation_id).unwrap().unwrap();
+    drop(old);
+    let upgraded = Storage::open_in_directory(&directory.path).unwrap();
+    assert_eq!(
+        operation(&upgraded, &applied.operation_id)
+            .unwrap()
+            .unwrap(),
+        before
+    );
+    let connection = upgraded.lock().unwrap();
+    let (state, digest): (String, String) = connection
+        .query_row(
+            "SELECT state, previous_digest FROM config_file_revision",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(state, "completed");
+    assert_eq!(digest, crate::config_plan::digest_hex(b"original"));
+    let count: i64 = connection
+        .query_row(
+            "SELECT count(*) FROM config_revision_resolution",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(count, 0);
+    assert_eq!(std::fs::read(target).unwrap(), b"changed");
+}
+
+#[test]
+fn revision_migration_preserves_legacy_operations_without_fabricating_snapshots() {
+    use crate::config_apply::{
+        OperationKind, OperationState, StepState, WriteTarget, begin_operation, finish_operation,
+        operation, record_step_applied,
+    };
+    let directory = TestDirectory::new("revision-upgrade");
+    let path = directory.path.join(DATABASE_FILE_NAME);
+    let old = Storage::open_file(&path, &MIGRATIONS[..19]).expect("v19 database");
+    let target = WriteTarget {
+        path: directory.path.join("settings.json"),
+        expected_digest: None,
+    };
+    let id = begin_operation(&old, OperationKind::ClaudeCodeSettings, None, &[target]).unwrap();
+    record_step_applied(&old, &id, 0, None, &"a".repeat(64), false).unwrap();
+    finish_operation(&old, &id, OperationState::Applied).unwrap();
+    drop(old);
+
+    let upgraded = Storage::open_in_directory(&directory.path).unwrap();
+    let record = operation(&upgraded, &id).unwrap().unwrap();
+    assert_eq!(record.state, OperationState::Applied);
+    assert_eq!(record.steps[0].state, StepState::Applied);
+    assert_eq!(record.steps[0].previous_existed, Some(false));
+    assert_eq!(record.steps[0].restore_state, None);
+    let count: i64 = upgraded
+        .lock()
+        .unwrap()
+        .query_row("SELECT count(*) FROM config_file_revision", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    assert_eq!(count, 0);
+    drop(upgraded);
+    let reopened = Storage::open_in_directory(&directory.path).unwrap();
+    assert_eq!(operation(&reopened, &id).unwrap().unwrap(), record);
+}
+
+#[test]
 fn operation_log_migration_keeps_earlier_rows_and_starts_empty() {
     let directory = TestDirectory::new("operation-log-upgrade");
     let path = directory.path.join(DATABASE_FILE_NAME);

@@ -232,15 +232,16 @@ fn a_restore_puts_the_previous_bytes_back_and_keeps_the_original_copy() {
     assert_eq!(record.state, OperationState::Compensated);
     assert_eq!(record.steps[0].restore_state, Some(RestoreState::Restored));
     assert!(Path::new(&original_copy.path).exists());
-    // The rollback's own copy of what it replaced has no referent, so it is gone.
-    let directories: Vec<_> = fs::read_dir(fixture.backups().root())
-        .unwrap()
-        .map(|entry| entry.unwrap().path())
-        .collect();
+    // The restore's pre-image is a retained version, not an orphan to discard.
+    let restored_copy: String = fixture.storage.lock().unwrap().query_row(
+        "SELECT backup_path FROM config_file_revision WHERE intent = 'restore' AND state = 'completed'",
+        [], |row| row.get(0),
+    ).unwrap();
     assert_eq!(
-        directories,
-        vec![fixture.backups().root().join(&original_copy.id)]
+        fs::read_to_string(restored_copy).unwrap(),
+        "{\"model\":\"two\"}\n"
     );
+    assert_eq!(fs::read_dir(fixture.backups().root()).unwrap().count(), 2);
 }
 
 #[test]
@@ -522,41 +523,24 @@ fn a_malformed_applied_step_is_refused_instead_of_classified() {
     );
 }
 
-#[cfg(unix)]
 #[test]
-fn a_copy_that_cannot_be_removed_is_reported_instead_of_hidden() {
-    // Imported here because only this Unix-only test uses it: on Windows a
-    // read-only directory does not block removal, so the case cannot be built.
-    use crate::config_apply::restore::discard_copy;
-    use std::os::unix::fs::PermissionsExt;
-
+fn restoring_absence_refuses_to_delete_when_the_snapshot_cannot_be_stored() {
     let fixture = Fixture::new();
-    let backups = fixture.backups();
-    let copy = Backup {
-        id: "1700000000000-1-0".to_owned(),
-        path: backups
-            .root()
-            .join("1700000000000-1-0")
-            .join("settings.json")
-            .to_str()
-            .unwrap()
-            .to_owned(),
-        content_digest: "abababababababababababababababababababababababababababababababab"
-            .to_owned(),
-    };
-    fs::create_dir_all(Path::new(&copy.path).parent().unwrap()).unwrap();
-    fs::write(&copy.path, "{}").unwrap();
-    // A nested directory without write permission is what makes the removal fail:
-    // the copy cannot be emptied, so the directory stays behind.
-    let nested = Path::new(&copy.path).parent().unwrap().join("nested");
-    fs::create_dir_all(&nested).unwrap();
-    fs::write(nested.join("kept.json"), "{}").unwrap();
-    fs::set_permissions(&nested, fs::Permissions::from_mode(0o500)).unwrap();
-
-    assert_eq!(discard_copy(&backups, Some(&copy)), Some(copy.path.clone()));
-    assert!(Path::new(&copy.path).parent().unwrap().exists());
-
-    fs::set_permissions(&nested, fs::Permissions::from_mode(0o700)).unwrap();
-    assert_eq!(discard_copy(&backups, Some(&copy)), None);
-    assert!(!Path::new(&copy.path).parent().unwrap().exists());
+    let applied = fixture.apply("settings.json", "{}", None);
+    let plan = fixture.plan(&applied.operation_id);
+    let bad_root = fixture.path("not-a-directory");
+    fs::write(&bad_root, "occupied").unwrap();
+    let outcome = apply_restore(
+        &fixture.storage,
+        &applied.operation_id,
+        &reviewed(&plan),
+        &BackupStore::new(bad_root),
+    )
+    .unwrap();
+    assert_eq!(fixture.content("settings.json"), "{}");
+    assert_eq!(outcome.steps[0].state, RestoreState::Unavailable);
+    assert_eq!(
+        outcome.steps[0].error_code.as_deref(),
+        Some("backup_unavailable")
+    );
 }

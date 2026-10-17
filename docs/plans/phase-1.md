@@ -79,10 +79,23 @@ deferred to the release-time platform check.
 3. Complete the follow-up configuration work before advancing to Skill/MCP deployment:
    H1–H3 add durable snapshots before every actual rewrite (including restores),
    full history browsing, direct restoration of any retained pre-write version,
-   and confirmed deletion of a record with its backups. P24.a–P24.d explicitly
+   and confirmed deletion of a record with its backups. The first H1 backend slice
+   now retains independent pre-mutation snapshots for apply, restore and
+   compensation (schema v20), without changing the history UI. Read-only backend
+   inspection now compares interrupted mutations with actual files and verifies
+   their backups; inspection alone neither settles records nor unlocks recovery.
+   Explicit backend resolution now atomically records reviewed observations and
+   repairs legacy results (schema v21), including completed file results whose
+   legacy step result was lost. Shared cross-instance file locking excludes live
+   mutations; ambiguous, changed or unreadable observations remain blocked. These
+   APIs have no IPC/UI entry yet. Next, manage unreferenced private copies before
+   adding resolution/recovery entry points, complete history browsing and
+   current-version detection. H1 as a whole is not accepted.
+   P24.a–P24.d explicitly
    deliver verified per-Agent mappings and UI for reasoning capabilities/efforts,
-   context windows, output metadata and supported request settings. These remain
-   pending despite acceptance of the minimal write adapters; see [todo.md](todo.md),
+   context windows, output metadata and supported request settings. The remaining
+   history work and parameter mappings are still pending despite acceptance of
+   the minimal write adapters; see [todo.md](todo.md),
    [config-apply.md](config-apply.md) and [model-parameters.md](model-parameters.md).
 4. Finish the skill workflow on top of the delivered local import (P25):
    source installation, update preview and per-Agent symlink deployment, with an

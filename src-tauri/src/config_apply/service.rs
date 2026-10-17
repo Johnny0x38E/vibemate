@@ -11,10 +11,11 @@
 use serde::Serialize;
 
 use super::{
-    BackupStore, OperationKind, OperationState, StepState, WriteError, WriteTarget, apply_file,
-    begin_operation, finish_operation, operation, path_text, record_step_applied,
-    record_step_failed,
+    BackupStore, OperationKind, OperationState, StepState, WriteError, WriteTarget,
+    apply_recorded_file, begin_operation, finish_operation, operation, path_text,
+    record_step_applied, record_step_failed,
     restore::{pending_ordinals, roll_back_operation},
+    revisions::{RevisionContext, RevisionIntent},
 };
 use crate::storage::Storage;
 
@@ -110,6 +111,9 @@ fn apply_with_mode(
     backups: &BackupStore,
     private: bool,
 ) -> Result<AppliedOperation, WriteError> {
+    let _mutation_lock = storage
+        .lock_configuration()
+        .map_err(|_| WriteError::StorageUnavailable)?;
     if files.is_empty() {
         return Err(WriteError::InvalidRequest);
     }
@@ -119,11 +123,14 @@ fn apply_with_mode(
     for (index, file) in files.iter().enumerate() {
         let ordinal = u32::try_from(index).map_err(|_| WriteError::InvalidRequest)?;
         let target_path = path_text(&file.target.path)?;
-        let result = if private {
-            super::apply_private_file(&file.target, &file.content, backups)
-        } else {
-            apply_file(&file.target, &file.content, backups)
+        let revision = RevisionContext {
+            storage,
+            operation_id: &operation_id,
+            ordinal,
+            batch_id: &operation_id,
+            intent: RevisionIntent::Apply,
         };
+        let result = apply_recorded_file(&file.target, &file.content, backups, private, &revision);
         match result {
             Ok(applied) => {
                 let digest = applied
@@ -152,6 +159,16 @@ fn apply_with_mode(
                     backup_path,
                 });
             }
+            Err(
+                error @ (WriteError::LogWriteFailed
+                | WriteError::StorageUnavailable
+                | WriteError::OutcomeUnknown),
+            ) => {
+                // A post-write journal failure may leave changed bytes and a
+                // prepared revision. Do not classify that as an untouched step
+                // or automatically compensate using an incomplete legacy row.
+                return Err(error);
+            }
             Err(error) => {
                 record_step_failed(storage, &operation_id, ordinal, error)?;
                 steps.push(StepOutcome {
@@ -166,8 +183,13 @@ fn apply_with_mode(
                 // record is read again so the rollback sees the recorded steps.
                 let recorded =
                     operation(storage, &operation_id)?.ok_or(WriteError::InvalidStoredOperation)?;
-                let rolled_back =
-                    roll_back_operation(storage, &recorded, &pending_ordinals(&recorded), backups)?;
+                let rolled_back = roll_back_operation(
+                    storage,
+                    &recorded,
+                    &pending_ordinals(&recorded),
+                    backups,
+                    RevisionIntent::Compensation,
+                )?;
                 // The rollback records each step; this call settles the operation
                 // itself, exactly like a user-confirmed restore does.
                 finish_operation(storage, &operation_id, rolled_back.state)?;
@@ -209,11 +231,20 @@ pub fn compensate_operation(
     operation_id: &str,
     backups: &BackupStore,
 ) -> Result<OperationState, WriteError> {
+    let _mutation_lock = storage
+        .lock_configuration()
+        .map_err(|_| WriteError::StorageUnavailable)?;
     let record = operation(storage, operation_id)?.ok_or(WriteError::InvalidRequest)?;
     if !record.state.is_unfinished() {
         return Err(WriteError::InvalidRequest);
     }
-    let outcome = roll_back_operation(storage, &record, &pending_ordinals(&record), backups)?;
+    let outcome = roll_back_operation(
+        storage,
+        &record,
+        &pending_ordinals(&record),
+        backups,
+        RevisionIntent::Compensation,
+    )?;
     finish_operation(storage, operation_id, outcome.state)?;
     Ok(outcome.state)
 }

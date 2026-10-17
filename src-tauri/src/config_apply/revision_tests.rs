@@ -1,6 +1,9 @@
 //! Integration tests for pre-mutation snapshots using temporary files and the
 //! real SQLite log. Fault injection uses local triggers, never real credentials.
 
+#[path = "resolution_tests.rs"]
+mod resolution_tests;
+
 use super::*;
 use crate::{config_plan::read_target_bytes, storage::Storage};
 use std::{
@@ -416,11 +419,316 @@ fn uncertain_mutations_retain_their_snapshot_and_require_reconciliation() {
         .finish::<()>("uncertain", &Err(WriteError::OutcomeUnknown))
         .unwrap();
     assert_eq!(fixture.revisions()[0].state, "unknown");
+    let inspected = inspect_interrupted_revisions(&fixture.storage, &source, &fixture.backups())
+        .unwrap()
+        .unwrap();
+    assert_eq!(inspected[0].state, "unknown");
+    assert_eq!(inspected[0].current_match, RevisionMatch::Previous);
+    assert_eq!(inspected[0].backup_state, RevisionBackupState::Available);
     assert_eq!(fs::read(&backup.path).unwrap(), b"old");
     assert_eq!(
         require_known_revisions(&fixture.storage, &source),
         Err(WriteError::OutcomeUnknown)
     );
+}
+
+/// Leave a real snapshot at the crash boundary after the target changed but
+/// before its result could be committed. No hand-built log rows are needed.
+fn interrupted_apply(fixture: &Fixture, existed: bool) -> String {
+    if existed {
+        fs::write(fixture.root.join("a"), b"old").unwrap();
+    }
+    fixture.sql("CREATE TRIGGER refuse_result BEFORE UPDATE ON config_file_revision BEGIN SELECT RAISE(ABORT, 'injected'); END;");
+    assert_eq!(
+        fixture
+            .apply(OperationKind::PiSettings, &[fixture.file("a", b"new")])
+            .unwrap_err(),
+        WriteError::LogWriteFailed
+    );
+    fixture.sql("DROP TRIGGER refuse_result;");
+    fixture.revisions()[0].operation.clone()
+}
+
+fn inspect(fixture: &Fixture, id: &str) -> Vec<RevisionInspection> {
+    inspect_interrupted_revisions(&fixture.storage, id, &fixture.backups())
+        .unwrap()
+        .unwrap()
+}
+
+#[test]
+fn inspection_after_restart_reports_intended_bytes_without_settling_or_exposing_them() {
+    let fixture = Fixture::new();
+    let id = interrupted_apply(&fixture, true);
+    let before = operation(&fixture.storage, &id).unwrap();
+    let reopened = Storage::open_in_directory(&fixture.root).unwrap();
+    let results = inspect_interrupted_revisions(&reopened, &id, &fixture.backups())
+        .unwrap()
+        .unwrap();
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].current_match, RevisionMatch::Intended);
+    assert_eq!(results[0].backup_state, RevisionBackupState::Available);
+    assert_eq!(results[0].current_digest, Some(digest_hex(b"new")));
+    assert_eq!(results[0].error_code, None);
+    assert_eq!(operation(&fixture.storage, &id).unwrap(), before);
+    assert_eq!(fixture.revisions()[0].state, "prepared");
+    assert_eq!(
+        compensate_operation(&fixture.storage, &id, &fixture.backups()).unwrap_err(),
+        WriteError::OutcomeUnknown
+    );
+    let serialized = serde_json::to_string(&results).unwrap();
+    assert!(!serialized.contains("\"old\""));
+    assert!(!serialized.contains("\"new\""));
+    assert_eq!(fs::read(fixture.root.join("a")).unwrap(), b"new");
+}
+
+#[test]
+fn inspection_distinguishes_previous_diverged_absence_and_empty_content() {
+    for existed in [false, true] {
+        let fixture = Fixture::new();
+        let id = interrupted_apply(&fixture, existed);
+        if existed {
+            fs::write(fixture.root.join("a"), b"old").unwrap();
+        } else {
+            fs::remove_file(fixture.root.join("a")).unwrap();
+        }
+        assert_eq!(
+            inspect(&fixture, &id)[0].current_match,
+            RevisionMatch::Previous
+        );
+        assert_eq!(
+            inspect(&fixture, &id)[0].backup_state,
+            if existed {
+                RevisionBackupState::Available
+            } else {
+                RevisionBackupState::NotNeeded
+            }
+        );
+        fs::write(fixture.root.join("a"), b"").unwrap();
+        assert_eq!(
+            inspect(&fixture, &id)[0].current_match,
+            RevisionMatch::Diverged
+        );
+        assert_eq!(
+            inspect(&fixture, &id)[0].current_digest,
+            Some(digest_hex(b""))
+        );
+    }
+}
+
+#[test]
+fn inspection_checks_copy_integrity_independently_of_target_matching() {
+    let fixture = Fixture::new();
+    let id = interrupted_apply(&fixture, true);
+    let path = fixture.revisions()[0].backup.clone().unwrap();
+    fs::write(&path, b"damaged").unwrap();
+    let result = inspect(&fixture, &id);
+    assert_eq!(result[0].current_match, RevisionMatch::Intended);
+    assert_eq!(result[0].backup_state, RevisionBackupState::Unavailable);
+    fs::remove_file(&path).unwrap();
+    assert_eq!(
+        inspect(&fixture, &id)[0].backup_state,
+        RevisionBackupState::Unavailable
+    );
+}
+
+#[test]
+fn inspection_reports_oversized_and_non_regular_targets_without_hiding_the_copy() {
+    let fixture = Fixture::new();
+    let id = interrupted_apply(&fixture, true);
+    let target = fixture.root.join("a");
+    fs::OpenOptions::new()
+        .write(true)
+        .open(&target)
+        .unwrap()
+        .set_len(MAX_TARGET_BYTES + 1)
+        .unwrap();
+    let result = inspect(&fixture, &id);
+    assert_eq!(result[0].current_match, RevisionMatch::Unreadable);
+    assert_eq!(result[0].error_code.as_deref(), Some("target_too_large"));
+    assert_eq!(result[0].backup_state, RevisionBackupState::Available);
+    fs::remove_file(&target).unwrap();
+    fs::create_dir(&target).unwrap();
+    assert_eq!(
+        inspect(&fixture, &id)[0].current_match,
+        RevisionMatch::Unreadable
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn inspection_refuses_target_and_backup_directory_symlinks() {
+    use std::os::unix::fs::symlink;
+    let fixture = Fixture::new();
+    let id = interrupted_apply(&fixture, true);
+    let target = fixture.root.join("a");
+    let outside = fixture.root.join("outside");
+    fs::write(&outside, b"new").unwrap();
+    fs::remove_file(&target).unwrap();
+    symlink(&outside, &target).unwrap();
+    let result = inspect(&fixture, &id);
+    assert_eq!(result[0].current_match, RevisionMatch::Unreadable);
+    assert_eq!(result[0].error_code.as_deref(), Some("symlink_refused"));
+    let copy = PathBuf::from(fixture.revisions()[0].backup.clone().unwrap());
+    let directory = copy.parent().unwrap();
+    let moved = fixture.root.join("moved-copy");
+    fs::rename(directory, &moved).unwrap();
+    symlink(&moved, directory).unwrap();
+    assert_eq!(
+        inspect(&fixture, &id)[0].backup_state,
+        RevisionBackupState::Unavailable
+    );
+    assert_eq!(fs::read(outside).unwrap(), b"new");
+}
+
+#[test]
+fn inspection_keeps_each_file_result_when_a_multi_file_attempt_is_partly_observable() {
+    let fixture = Fixture::new();
+    fs::write(fixture.root.join("a"), b"old a").unwrap();
+    fs::write(fixture.root.join("b"), b"old b").unwrap();
+    let applied = fixture
+        .apply(
+            OperationKind::PiSettings,
+            &[fixture.file("a", b"new a"), fixture.file("b", b"new b")],
+        )
+        .unwrap();
+    // Reproduce durable rows whose result commits were lost at interruption.
+    fixture.sql("UPDATE config_file_revision SET state = 'prepared';");
+    fs::remove_file(fixture.root.join("b")).unwrap();
+    fs::create_dir(fixture.root.join("b")).unwrap();
+    let results = inspect(&fixture, &applied.operation_id);
+    assert_eq!(results.len(), 2);
+    let first = results.iter().find(|result| result.ordinal == 0).unwrap();
+    let second = results.iter().find(|result| result.ordinal == 1).unwrap();
+    assert_eq!(first.current_match, RevisionMatch::Intended);
+    assert_eq!(second.current_match, RevisionMatch::Unreadable);
+    assert!(
+        results
+            .iter()
+            .all(|result| result.backup_state == RevisionBackupState::Available)
+    );
+    assert_eq!(first.batch_id, second.batch_id);
+}
+
+#[test]
+fn inspection_handles_missing_operations_and_ignores_resolved_revisions() {
+    let fixture = Fixture::new();
+    assert!(
+        inspect_interrupted_revisions(&fixture.storage, &"a".repeat(32), &fixture.backups())
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(
+        inspect_interrupted_revisions(&fixture.storage, "bad", &fixture.backups()).unwrap_err(),
+        WriteError::InvalidRequest
+    );
+    let applied = fixture
+        .apply(OperationKind::PiSettings, &[fixture.file("a", b"new")])
+        .unwrap();
+    assert!(inspect(&fixture, &applied.operation_id).is_empty());
+}
+
+#[test]
+fn inspection_rejects_mismatched_targets_and_invalid_revision_metadata() {
+    for change in [
+        "UPDATE config_file_revision SET target_path = target_path || '-other'",
+        "UPDATE config_file_revision SET id = '../escape'",
+        "UPDATE config_file_revision SET id = 'C:escape'",
+        "UPDATE config_file_revision SET id = '..\\escape'",
+        "UPDATE config_file_revision SET error_code = 'outcome_unknown'",
+        "UPDATE config_file_revision SET intent = 'other'",
+        "UPDATE config_file_revision SET previous_digest = 'bad'",
+    ] {
+        let fixture = Fixture::new();
+        let id = interrupted_apply(&fixture, true);
+        fixture.sql("PRAGMA ignore_check_constraints = ON;");
+        fixture.sql(change);
+        assert_eq!(
+            inspect_interrupted_revisions(&fixture.storage, &id, &fixture.backups()).unwrap_err(),
+            WriteError::InvalidStoredOperation
+        );
+        assert_eq!(fs::read(fixture.root.join("a")).unwrap(), b"new");
+    }
+}
+
+#[test]
+fn inspection_never_reads_an_out_of_store_copy_named_in_the_log() {
+    let fixture = Fixture::new();
+    let id = interrupted_apply(&fixture, true);
+    let outside = fixture.root.join("outside");
+    fs::write(&outside, b"old").unwrap();
+    fixture
+        .storage
+        .lock()
+        .unwrap()
+        .execute(
+            "UPDATE config_file_revision SET backup_path = ?1",
+            [outside.to_str().unwrap()],
+        )
+        .unwrap();
+    assert_eq!(
+        inspect(&fixture, &id)[0].backup_state,
+        RevisionBackupState::Unavailable
+    );
+}
+
+#[test]
+fn inspection_recognizes_interrupted_restore_and_compensation_without_reversing_them() {
+    for existed in [false, true] {
+        for intent in ["restore", "compensation"] {
+            let fixture = Fixture::new();
+            if existed {
+                fs::write(fixture.root.join("a"), b"old").unwrap();
+            }
+            let applied = fixture
+                .apply(OperationKind::PiSettings, &[fixture.file("a", b"new")])
+                .unwrap();
+            fixture.sql("CREATE TRIGGER refuse_result BEFORE UPDATE ON config_file_revision WHEN OLD.intent != 'apply' BEGIN SELECT RAISE(ABORT, 'injected'); END;");
+            let result = if intent == "restore" {
+                fixture.restore(&applied.operation_id).map(|_| ())
+            } else {
+                finish_operation(
+                    &fixture.storage,
+                    &applied.operation_id,
+                    OperationState::Partial,
+                )
+                .unwrap();
+                compensate_operation(&fixture.storage, &applied.operation_id, &fixture.backups())
+                    .map(|_| ())
+            };
+            assert_eq!(result.unwrap_err(), WriteError::LogWriteFailed);
+            let rows = inspect(&fixture, &applied.operation_id);
+            assert_eq!(rows.len(), 1);
+            assert_eq!(rows[0].intent, intent);
+            assert_eq!(rows[0].current_match, RevisionMatch::Intended);
+            assert_eq!(rows[0].backup_state, RevisionBackupState::Available);
+            assert_eq!(rows[0].intended_digest, existed.then(|| digest_hex(b"old")));
+            assert_eq!(fixture.root.join("a").exists(), existed);
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn inspection_does_not_infer_permission_change_from_equal_digests() {
+    use std::os::unix::fs::PermissionsExt;
+    let fixture = Fixture::new();
+    fs::write(fixture.root.join("a"), b"same").unwrap();
+    fs::set_permissions(fixture.root.join("a"), fs::Permissions::from_mode(0o644)).unwrap();
+    fixture.sql("CREATE TRIGGER refuse_result BEFORE UPDATE ON config_file_revision BEGIN SELECT RAISE(ABORT, 'injected'); END;");
+    assert_eq!(
+        apply_private_files(
+            &fixture.storage,
+            OperationKind::PiSettings,
+            None,
+            &[fixture.file("a", b"same")],
+            &fixture.backups()
+        )
+        .unwrap_err(),
+        WriteError::LogWriteFailed
+    );
+    let id = fixture.revisions()[0].operation.clone();
+    assert_eq!(inspect(&fixture, &id)[0].current_match, RevisionMatch::Both);
+    assert_eq!(fixture.revisions()[0].state, "prepared");
 }
 
 #[test]

@@ -111,6 +111,9 @@ fn apply_with_mode(
     backups: &BackupStore,
     private: bool,
 ) -> Result<AppliedOperation, WriteError> {
+    let _mutation_lock = storage
+        .lock_configuration()
+        .map_err(|_| WriteError::StorageUnavailable)?;
     if files.is_empty() {
         return Err(WriteError::InvalidRequest);
     }
@@ -228,6 +231,9 @@ pub fn compensate_operation(
     operation_id: &str,
     backups: &BackupStore,
 ) -> Result<OperationState, WriteError> {
+    let _mutation_lock = storage
+        .lock_configuration()
+        .map_err(|_| WriteError::StorageUnavailable)?;
     let record = operation(storage, operation_id)?.ok_or(WriteError::InvalidRequest)?;
     if !record.state.is_unfinished() {
         return Err(WriteError::InvalidRequest);

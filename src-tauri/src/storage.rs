@@ -9,7 +9,7 @@
 //! makes later backup and restore steps simpler than with a write-ahead log.
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
 
@@ -418,6 +418,19 @@ const MIGRATIONS: &[Migration] = &[
             ON config_file_revision(operation_id, ordinal, created_at, id);
         CREATE INDEX config_file_revision_batch ON config_file_revision(batch_id);",
     },
+    Migration {
+        version: 21,
+        // A user-approved observation is not proof of the original write's
+        // execution. Preserve that distinction alongside the repaired log.
+        sql: "CREATE TABLE config_revision_resolution (
+            revision_id TEXT PRIMARY KEY REFERENCES config_file_revision(id) ON DELETE RESTRICT,
+            previous_state TEXT NOT NULL CHECK(previous_state IN ('prepared','unknown','completed')),
+            observed_digest TEXT CHECK(observed_digest IS NULL OR (
+                length(observed_digest)=64 AND observed_digest NOT GLOB '*[^0-9a-f]*')),
+            matched_state TEXT NOT NULL CHECK(matched_state IN ('previous','intended')),
+            resolved_at INTEGER NOT NULL CHECK(resolved_at >= 0)
+        ) STRICT;",
+    },
 ];
 
 /// Errors from opening or migrating the private database.
@@ -487,6 +500,7 @@ impl std::error::Error for StorageError {
 /// `BUSY_TIMEOUT` lets a second app instance wait for its turn.
 pub struct Storage {
     connection: Mutex<Connection>,
+    configuration_lock_path: PathBuf,
 }
 
 impl Storage {
@@ -534,7 +548,43 @@ impl Storage {
         apply_migrations(&mut connection, migrations)?;
         Ok(Self {
             connection: Mutex::new(connection),
+            configuration_lock_path: path.with_extension("config-lock"),
         })
+    }
+
+    /// Serialize configuration mutations across threads and app instances.
+    ///
+    /// Opens a persistent companion file beside SQLite, creating it privately
+    /// on Unix. The returned handle owns the exclusive OS lock until dropped.
+    /// The file must never be unlinked during normal use: replacing its inode
+    /// would let another instance acquire a different lock at the same path.
+    /// Always acquire this before the database mutex; it is not reentrant.
+    /// This coordinates vibemate, not external Agent/editor writes.
+    ///
+    /// # Errors
+    /// Returns an I/O error when the companion path is linked/non-regular,
+    /// unavailable, or locking is unsupported. Callers must refuse mutation.
+    pub(crate) fn lock_configuration(&self) -> std::io::Result<fs::File> {
+        match fs::symlink_metadata(&self.configuration_lock_path) {
+            Ok(metadata) if !metadata.is_file() || metadata.is_symlink() => {
+                return Err(std::io::Error::other("Invalid configuration lock file"));
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error),
+        }
+        let mut options = fs::OpenOptions::new();
+        options.read(true).write(true).create(true).truncate(false);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let file = options.open(&self.configuration_lock_path)?;
+        // File::lock uses flock on macOS/Linux and LockFileEx on Windows.
+        // Separate handles contend even when two Storage values share a DB.
+        file.lock()?;
+        Ok(file)
     }
 
     /// Lock the shared connection for one short operation.

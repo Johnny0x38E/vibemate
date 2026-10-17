@@ -438,7 +438,7 @@ fn touch_operation(
 ///
 /// A well-formed identity with no row is `Ok(None)`; a malformed identity, or a
 /// row whose fields cannot be trusted, is an error.
-fn read_operation(
+pub(super) fn read_operation(
     connection: &Connection,
     id: &str,
 ) -> Result<Option<OperationRecord>, WriteError> {

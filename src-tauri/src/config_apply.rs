@@ -728,14 +728,22 @@ fn sync_directory(_: &Path) -> Result<(), WriteError> {
     Ok(())
 }
 
+mod inspection;
 mod operations;
+mod resolution;
 mod restore;
 mod revisions;
 mod service;
 
+pub use inspection::{
+    RevisionBackupState, RevisionInspection, RevisionMatch, inspect_interrupted_revisions,
+};
 pub use operations::{
     begin_operation, finish_operation, has_recorded_target, operation, recent_operations,
     record_step_applied, record_step_failed, record_step_restored, unfinished_operations,
+};
+pub use resolution::{
+    RevisionResolutionPlan, plan_revision_resolution, resolve_interrupted_revisions,
 };
 pub use restore::{
     RestoreAction, RestoreOutcome, RestorePlan, RestoreStepOutcome, RestoreStepPlan,

@@ -204,6 +204,9 @@ pub fn apply_restore(
     reviewed: &[ReviewedRestoreStep],
     backups: &BackupStore,
 ) -> Result<RestoreOutcome, WriteError> {
+    let _mutation_lock = storage
+        .lock_configuration()
+        .map_err(|_| WriteError::StorageUnavailable)?;
     let record = operation(storage, operation_id)?.ok_or(WriteError::InvalidRequest)?;
     super::revisions::require_known_revisions(storage, operation_id)?;
     let plan = plan_record(storage, &record)?;
@@ -707,7 +710,7 @@ fn effective_restore_state(
 /// step is back to its pre-operation content, `Unknown` means at least one
 /// outcome could not be verified, and `Partial` covers everything else, including
 /// a conflict the user still has to resolve.
-fn settle(record: &OperationRecord, attempted: &[RestoreStepOutcome]) -> OperationState {
+pub(super) fn settle(record: &OperationRecord, attempted: &[RestoreStepOutcome]) -> OperationState {
     let applied: Vec<&StepRecord> = record
         .steps
         .iter()

@@ -46,7 +46,8 @@ pub(super) struct RevisionContext<'a> {
 }
 
 /// Do not let legacy recovery reinterpret an interrupted mutation as an undo
-/// request. A future reconciliation flow must inspect these targets explicitly.
+/// request. Explicit resolution must inspect these targets and repair the old
+/// step results, including completed revisions whose legacy result is missing.
 ///
 /// Returns `OutcomeUnknown` for an unresolved revision and storage/log errors
 /// when the query cannot be trusted. Does not modify files or the log.
@@ -55,14 +56,7 @@ pub(super) fn require_known_revisions(
     operation_id: &str,
 ) -> Result<(), WriteError> {
     let connection = storage.lock().map_err(|_| WriteError::StorageUnavailable)?;
-    let unresolved: bool = connection
-        .query_row(
-            "SELECT EXISTS(SELECT 1 FROM config_file_revision
-            WHERE operation_id = ?1 AND state IN ('prepared', 'unknown'))",
-            [operation_id],
-            |row| row.get(0),
-        )
-        .map_err(|_| WriteError::LogReadFailed)?;
+    let unresolved = super::inspection::has_interrupted_revisions(&connection, operation_id)?;
     if unresolved {
         return Err(WriteError::OutcomeUnknown);
     }

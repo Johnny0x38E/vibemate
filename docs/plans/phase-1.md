@@ -81,9 +81,16 @@ deferred to the release-time platform check.
    full history browsing, direct restoration of any retained pre-write version,
    and confirmed deletion of a record with its backups. The first H1 backend slice
    now retains independent pre-mutation snapshots for apply, restore and
-   compensation (schema v20), without changing the history UI. Next, reconcile
-   interrupted mutations and unreferenced private copies before adding complete
-   history browsing and current-version detection. H1 as a whole is not accepted.
+   compensation (schema v20), without changing the history UI. Read-only backend
+   inspection now compares interrupted mutations with actual files and verifies
+   their backups; inspection alone neither settles records nor unlocks recovery.
+   Explicit backend resolution now atomically records reviewed observations and
+   repairs legacy results (schema v21), including completed file results whose
+   legacy step result was lost. Shared cross-instance file locking excludes live
+   mutations; ambiguous, changed or unreadable observations remain blocked. These
+   APIs have no IPC/UI entry yet. Next, manage unreferenced private copies before
+   adding resolution/recovery entry points, complete history browsing and
+   current-version detection. H1 as a whole is not accepted.
    P24.a–P24.d explicitly
    deliver verified per-Agent mappings and UI for reasoning capabilities/efforts,
    context windows, output metadata and supported request settings. The remaining

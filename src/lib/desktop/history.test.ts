@@ -662,13 +662,15 @@ test.each([
         ...current("matched"),
         modelId: "has space",
     },
-])("rejects contradictory or unsafe current provider/model fields %#", async (badCurrent) => {
-    vi.mocked(invoke).mockResolvedValue({
-        ...page(entry(), "matched"),
-        current: badCurrent,
-    });
-    await expect(readConfigurationHistory("pi")).rejects.toMatchObject({
-        code: "invalid_response",
-    });
-});
-
+])(
+    "rejects contradictory or unsafe current provider/model fields %#",
+    async (badCurrent) => {
+        vi.mocked(invoke).mockResolvedValue({
+            ...page(entry(), "matched"),
+            current: badCurrent,
+        });
+        await expect(readConfigurationHistory("pi")).rejects.toMatchObject({
+            code: "invalid_response",
+        });
+    },
+);

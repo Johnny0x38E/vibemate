@@ -61,7 +61,7 @@ beforeEach(() => {
             kind: "desktop",
             files: files.map((file, i) => ({
                 ...file,
-                text: i === index ? files[0]!.text : null,
+                text: i === index ? (files[0]?.text ?? null) : null,
             })),
         }),
     );

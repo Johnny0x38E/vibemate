@@ -189,11 +189,7 @@ const currentSchema = z
             .string()
             .min(1)
             .max(256)
-            .refine(
-                (value) =>
-                    isSafeLabel(value) &&
-                    ![...value].some((character) => character.trim() === ""),
-            )
+            .refine((value) => isSafeLabel(value) && !/\s/u.test(value))
             .nullable(),
         // Alias when saved, else model id — list-card right side (`modelAliasOrId`).
         modelLabel: z.string().min(1).max(256).refine(isSafeLabel).nullable(),
@@ -206,7 +202,8 @@ const currentSchema = z
         }
         if (!current.files.every((file) => file.readable)) return false;
         // modelLabel requires modelId; neither is invented off a non-match.
-        if (current.modelLabel !== null && current.modelId === null) return false;
+        if (current.modelLabel !== null && current.modelId === null)
+            return false;
         if (
             !matched &&
             (current.providerLabel !== null ||

@@ -975,6 +975,8 @@ test("Agent discovery starts on first visit and preserves paths across navigatio
     fireEvent.click(
         await screen.findByRole("button", { name: "Open Pi details" }),
     );
+    // Manual path lives on Install & paths; Write is the default segment.
+    fireEvent.click(screen.getByRole("tab", { name: "Install & paths" }));
     const input = screen.getByRole("textbox", { name: "Pi entry path" });
     fireEvent.change(input, { target: { value: "/home/test/manual-pi" } });
     const callsBeforeOverview = vi.mocked(discoverAgents).mock.calls.length;
@@ -987,6 +989,7 @@ test("Agent discovery starts on first visit and preserves paths across navigatio
     fireEvent.click(screen.getByRole("button", { name: "Agents" }));
     expect(screen.queryByRole("textbox", { name: "Pi entry path" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Open Pi details" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Install & paths" }));
     expect(
         screen.getByRole("textbox", { name: "Pi entry path" }),
     ).toHaveProperty("value", "/home/test/manual-pi");

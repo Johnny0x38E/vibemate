@@ -16,6 +16,12 @@
 .button svg {
     width: 16px;
     height: 16px;
+    transition: transform 120ms ease;
+}
+
+/* Disclosure chevrons point into the open region when expanded. */
+.button[aria-expanded="true"] svg {
+    transform: rotate(90deg);
 }
 
 .button:hover:not([aria-disabled="true"]) {

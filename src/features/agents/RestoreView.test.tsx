@@ -342,9 +342,7 @@ test("a recorded write shows its intent, state, time, provider and file", async 
     expect(screen.getByText("DeepSeek Work")).toBeTruthy();
     expect(screen.getByText("Available")).toBeTruthy();
     expect(screen.getByText("1 file")).toBeTruthy();
-    expect(
-        screen.getByRole("button", { name: "Show details" }),
-    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Show details" })).toBeTruthy();
     // The current-config pin always lists managed paths; long backup sentences
     // on the history row stay collapsed until expanded.
     expect(screen.getByText(SETTINGS)).toBeTruthy();
@@ -607,12 +605,8 @@ test("a version preview read failure is reported and can be retried", async () =
         await screen.findByText(/Local configuration storage is unavailable/u),
     ).toBeTruthy();
     // Collapse (dismisses the failed plan) then expand to retry the preview.
-    await userEvent.click(
-        screen.getByRole("button", { name: "Hide details" }),
-    );
-    await userEvent.click(
-        screen.getByRole("button", { name: "Show details" }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: "Hide details" }));
+    await userEvent.click(screen.getByRole("button", { name: "Show details" }));
     expect(
         await screen.findByRole("region", {
             name: "Version restore preview",
@@ -644,9 +638,7 @@ test("restore and compensation batches offer the version preview", async () => {
     expect(
         await screen.findByText("Restore · File result recorded"),
     ).toBeTruthy();
-    await userEvent.click(
-        screen.getByRole("button", { name: "Show details" }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: "Show details" }));
     await waitFor(() => {
         expect(previewVersion).toHaveBeenCalledWith(
             "claudeCode",

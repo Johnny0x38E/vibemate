@@ -176,53 +176,21 @@
     line-height: 1.4;
 }
 
-/* Leading chevron + summary; the whole control toggles expand. */
+/* Leading IconButton disclosure + summary; IconButton owns the click target. */
 .rowToggle {
     display: flex;
     flex: 1 1 auto;
     align-items: center;
     gap: 6px;
     min-width: 0;
-    margin: 0;
-    padding: 0;
-    border: 0;
-    background: none;
-    color: inherit;
-    font: inherit;
-    text-align: start;
-    cursor: pointer;
 }
 
-.rowToggle:focus-visible {
-    outline: 2px solid var(--color-focus);
-    outline-offset: 2px;
-}
-
-.expandIcon {
-    display: inline-flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-    width: 1.25rem;
-    height: 1.25rem;
-    color: var(--color-summary);
-    transition: transform 120ms ease;
-}
-
-.expandIcon[data-expanded="true"] {
-    transform: rotate(90deg);
-}
-
-.rowToggle:hover .expandIcon {
-    color: var(--color-text);
-}
-
-/* Indent expanded body so hierarchy vs the summary row is clear. */
+/* Indent under the summary text beside the 36px disclosure IconButton. */
 .expandedBody {
     display: grid;
     gap: 2px;
     margin: 2px 0 0;
-    padding-inline-start: calc(1.25rem + 6px);
+    padding-inline-start: calc(36px + 6px);
 }
 
 .rowActions {

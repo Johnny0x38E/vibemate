@@ -1,10 +1,9 @@
-import { useEffect, useRef, useState, type JSX } from "react";
+import { useEffect, useId, useRef, useState, type JSX } from "react";
 import { Dialog } from "@base-ui/react/dialog";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { DetailPanel } from "../../components/DetailForm";
 import buttons from "../../components/actionButtons.module.css";
-import { Icon } from "../../components/Icon";
 import { IconButton } from "../../components/IconButton";
 import listActions from "../../components/listActions.module.css";
 import {
@@ -742,11 +741,6 @@ export function RestoreView({
                                                 entry.operationId,
                                             );
                                         }}
-                                        versionPreviewing={
-                                            versionPlan.kind === "loading" &&
-                                            versionPlan.entryKey ===
-                                                entry.entryKey
-                                        }
                                         versionPlan={
                                             versionPlan.kind === "ready" &&
                                             versionPlan.plan.entryKey ===
@@ -976,20 +970,28 @@ export function CurrentConfigPin({
                     {t("agents.version.textTitle")}
                 </button>
             </div>
-            {open && canOpen && agent !== null && textSource !== null && (
-                <CurrentConfigurationDialog
-                    agent={agent}
-                    entryKey={textSource.entryKey}
-                    files={textSource.files}
-                    initialRevisionId={textSource.files[0]?.revisionId ?? ""}
-                    onClose={() => {
-                        setOpen(false);
-                    }}
-                    returnFocus={() =>
-                        trigger.current?.isConnected ? trigger.current : null
-                    }
-                />
-            )}
+            {/* Inline null checks (not `canOpen`) so TypeScript narrows the props. */}
+            {open &&
+                agent !== null &&
+                textSource !== null &&
+                textSource.files.length > 0 && (
+                    <CurrentConfigurationDialog
+                        agent={agent}
+                        entryKey={textSource.entryKey}
+                        files={textSource.files}
+                        initialRevisionId={
+                            textSource.files[0]?.revisionId ?? ""
+                        }
+                        onClose={() => {
+                            setOpen(false);
+                        }}
+                        returnFocus={() =>
+                            trigger.current?.isConnected
+                                ? trigger.current
+                                : null
+                        }
+                    />
+                )}
         </div>
     );
 }
@@ -1030,7 +1032,6 @@ function OperationRow({
     onPreview,
     inspecting,
     onInspect,
-    versionPreviewing,
     versionPlan,
     versionRestoring,
     versionForceExpanded,
@@ -1053,8 +1054,6 @@ function OperationRow({
     onPreview: () => void;
     inspecting: boolean;
     onInspect: () => void;
-    /** This row's retained-version preview is being built. */
-    versionPreviewing: boolean;
     /** Inline version plan for this row, when reviewed. */
     versionPlan: VersionRestorePlan | null;
     versionRestoring: boolean;
@@ -1067,6 +1066,7 @@ function OperationRow({
     onDeleteBusy: (busy: boolean) => void;
 }): JSX.Element {
     const { t } = useTranslation();
+    const expandedBodyId = useId();
     const [expanded, setExpanded] = useState(false);
     const showExpand = expanded || versionForceExpanded || versionPlan !== null;
     const state = entryState(entry);
@@ -1110,24 +1110,18 @@ function OperationRow({
         <li className={restore["row"]}>
             <div className={restore["rowSummary"]}>
                 {canExpand ? (
-                    <button
-                        type="button"
-                        className={restore["rowToggle"]}
-                        aria-expanded={showExpand}
-                        aria-label={
-                            showExpand
-                                ? t("agents.restore.collapseRow")
-                                : t("agents.restore.expandRow")
-                        }
-                        onClick={toggleExpand}
-                    >
-                        <span
-                            className={restore["expandIcon"]}
-                            data-expanded={showExpand ? "true" : undefined}
-                            aria-hidden="true"
-                        >
-                            <Icon name="chevron" />
-                        </span>
+                    <div className={restore["rowToggle"]}>
+                        <IconButton
+                            icon="chevron"
+                            label={
+                                showExpand
+                                    ? t("agents.restore.collapseRow")
+                                    : t("agents.restore.expandRow")
+                            }
+                            expanded={showExpand}
+                            controls={expandedBodyId}
+                            onClick={toggleExpand}
+                        />
                         <span className={restore["rowMain"]}>
                             <span className={restore["state"]}>
                                 {t(`agents.restore.intents.${entry.intent}`)}
@@ -1167,7 +1161,7 @@ function OperationRow({
                                 </span>
                             )}
                         </span>
-                    </button>
+                    </div>
                 ) : (
                     <div className={restore["rowMain"]}>
                         <span className={restore["state"]}>
@@ -1193,9 +1187,7 @@ function OperationRow({
                         </span>
                         {backupShort !== null && (
                             <span className={restore["meta"]}>
-                                {t(
-                                    `agents.restore.backupShort.${backupShort}`,
-                                )}
+                                {t(`agents.restore.backupShort.${backupShort}`)}
                             </span>
                         )}
                     </div>
@@ -1238,7 +1230,7 @@ function OperationRow({
                 </div>
             </div>
             {showExpand && (
-                <div className={restore["expandedBody"]}>
+                <div id={expandedBodyId} className={restore["expandedBody"]}>
                     <ul className={restore["files"]}>
                         {files.map((file) => (
                             <li key={file.key} className={restore["file"]}>
@@ -1289,7 +1281,6 @@ function OperationRow({
                 </div>
             )}
         </li>
-
     );
 }
 

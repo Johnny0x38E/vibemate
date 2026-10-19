@@ -16,6 +16,10 @@ export interface IconButtonProps {
     destructive?: boolean;
     /** Identifies the provider row that owns this control. */
     dataProviderId?: string;
+    /** When set, exposes expand/collapse state for disclosure controls. */
+    expanded?: boolean;
+    /** Element id of the region this disclosure controls (`aria-controls`). */
+    controls?: string;
 }
 
 /**
@@ -33,6 +37,8 @@ export function IconButton({
     blocked = false,
     destructive = false,
     dataProviderId,
+    expanded,
+    controls,
 }: IconButtonProps): JSX.Element {
     return (
         <Tooltip.Provider delay={300}>
@@ -44,6 +50,12 @@ export function IconButton({
                     aria-disabled={blocked}
                     {...(dataProviderId !== undefined
                         ? { "data-provider-id": dataProviderId }
+                        : {})}
+                    {...(expanded !== undefined
+                        ? { "aria-expanded": expanded }
+                        : {})}
+                    {...(controls !== undefined
+                        ? { "aria-controls": controls }
                         : {})}
                     data-destructive={destructive || undefined}
                     onClick={(event) => {

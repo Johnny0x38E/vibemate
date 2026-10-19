@@ -526,7 +526,85 @@
         "pathPlaceholder": "填写绝对入口路径；留空则自动发现",
         "entry": "入口：{{path}}",
         "target": "解析目标：{{path}}",
-        "version": "版本：{{version}}",
+        "version": {
+            "review": "查看版本",
+            "reviewing": "正在生成版本预览…",
+            "previewHeading": "版本恢复预览",
+            "previewFor": "将配置恢复到 {{time}} 的“{{kind}}”之前状态",
+            "ownerRef": "记录的归属引用：{{id}}",
+            "actions": {
+                "restore": "写回这个保留版本",
+                "remove": "当时文件不存在，恢复将删除该文件",
+                "skip": "已与这个版本一致",
+                "blocked": "无法安全恢复"
+            },
+            "reasons": {
+                "symlink_refused": "路径是符号链接",
+                "target_read_only": "文件为只读",
+                "target_path_invalid": "路径无法使用",
+                "target_unreadable": "文件无法读取",
+                "target_too_large": "文件超过预览上限",
+                "backup_unavailable": "保留副本缺失、损坏或摘要不符",
+                "snapshot_unavailable": "该文件没有保留副本，写入后已发生变化",
+                "text_unavailable": "文档无法安全解析，因此不显示文本",
+                "target_changed": "文件在预览后发生变化",
+                "outcome_unknown": "结果无法确认",
+                "write_failed": "写入未完成",
+                "invalid_request": "请求不合法",
+                "invalid_stored_operation": "已记录的版本不合法"
+            },
+            "kinds": {
+                "added": "新增",
+                "removed": "删除",
+                "replaced": "已替换"
+            },
+            "noChanges": "没有字段变化；文件已与这个版本一致。",
+            "summaryUnavailable": "无法显示字段摘要：{{reason}}",
+            "credentialMasked": "凭据值已隐藏",
+            "absent": "不存在",
+            "empty": "空字符串",
+            "truncated": "仅显示前 200 项变化。请打开详细配置查看完整文本。",
+            "viewDetailsFor": "查看 {{path}} 的详细配置",
+            "blockedHint": "这个版本无法安全恢复。请先处理列出的文件原因，再重新预览。",
+            "keyNotice": "恢复后的文件会回到当时的内容，其中可能包含明文 API 密钥。系统凭据存储不会改动。",
+            "sessionNotice": "新建 Agent 会话后才会读取恢复后的配置；运行中的会话保留已加载的值。",
+            "confirm": "恢复这个版本",
+            "restoring": "正在恢复这个版本…",
+            "nothingToRestore": "这个版本已与当前文件一致。",
+            "planReasons": {
+                "history_unresolved": "该条目存在中断写入。请先核对并记录，再恢复版本。"
+            },
+            "outcomeHeading": "版本恢复结果",
+            "outcomeFile": "{{path}}：{{state}}",
+            "states": {
+                "restored": "已恢复",
+                "conflict": "保持原样：恢复期间文件发生变化",
+                "unavailable": "保留副本不可用",
+                "failed": "恢复未完成",
+                "unknown": "结果未确认"
+            },
+            "resultHint": "重新检查历史可看到新的恢复记录；它保留了被替换的内容，因此可从同一列表撤销。",
+            "textTitle": "详细配置",
+            "textClose": "关闭",
+            "textFiles": "此版本涉及的文件",
+            "textCurrent": "当前配置",
+            "textRetained": "保留版本",
+            "textPlanned": "计划写入配置",
+            "textAbsent": "此时该文件不存在。",
+            "textUnavailable": "无法安全显示文本：{{reason}}",
+            "textBytes": "原始大小：{{bytes}} 字节",
+            "textLoading": "正在读取并脱敏配置…",
+            "textRetry": "重试",
+            "textDiff": "差异",
+            "textNoDiff": "没有行级差异。",
+            "textNoComparison": "只有两侧都存在文本时才能生成行级差异；请查看上方的文本或不存在状态。",
+            "textDiffTooLarge": "文件过大，无法生成行级差异；请直接对比两个窗格。",
+            "textPreviewMode": "浏览器预览无法读取配置文件，请在 vibemate 桌面应用中查看。",
+            "textMaskedNotice": "凭据类键下的值会在文本离开 Rust 前被替换。",
+            "lineAdded": "新增行",
+            "lineRemoved": "删除行",
+            "lineSame": "未变更行"
+        },
         "directory": "用户配置路径：{{path}}",
         "states": {
             "found": "已发现",
@@ -739,14 +817,19 @@
                 },
                 "fileReadable": "可读",
                 "fileAbsent": "不存在",
-                "fileUnreadable": "不可读"
+                "fileUnreadable": "不可读",
+                "statusShort": {
+                    "matched": "完整匹配",
+                    "unrecorded": "未记录",
+                    "partial": "部分匹配",
+                    "unreadable": "不可读"
+                }
             },
             "backups": {
                 "not_needed": "改写前文件不存在，无需备份。",
                 "available": "独立的改写前备份可用，摘要一致。",
                 "unavailable": "独立的改写前备份缺失、损坏或无法读取。"
             },
-
             "intents": {
                 "apply": "应用配置",
                 "restore": "手动恢复",
@@ -833,86 +916,73 @@
                 "operation_failed": "恢复未能完成，请重试。",
                 "desktop_required": "恢复配置需要在 vibemate 桌面应用中进行。",
                 "invalid_response": "桌面应用返回了意外的恢复结果。"
+            },
+            "fileCount_one": "{{count}} 个文件",
+            "fileCount_other": "{{count}} 个文件",
+            "backupShort": {
+                "available": "可用",
+                "unavailable": "不可用",
+                "not_needed": "无需"
+            },
+            "expandRow": "展开文件详情",
+            "collapseRow": "收起文件详情",
+            "showFiles": "展开受管文件",
+            "hideFiles": "收起受管文件",
+            "delete": {
+                "label": "删除此记录及备份",
+                "title": "删除配置历史记录？",
+                "body": "将永久删除这条历史记录及其独占的改写前备份，不可恢复。不会改动 Agent 当前配置文件，不会删除服务商或凭据，也不会丢失模型别名归属。",
+                "confirm": "删除记录",
+                "cancel": "取消",
+                "deleting": "正在删除…",
+                "retry": "重试删除",
+                "leftoversHeading": "以下私有副本未能删除：",
+                "leftoverHint": "记录可能仍在。修好权限后可重试；不要先假设记录已消失。",
+                "blocked": {
+                    "history_active": "操作尚未完成，无法删除。",
+                    "history_unresolved": "存在未解决的中断写入，请先核对。",
+                    "history_referenced": "仍有其他历史依赖此记录，无法删除。"
+                },
+                "errors": {
+                    "operation_not_found": "这条历史记录已不存在，请重新检查列表。",
+                    "plan_stale": "状态已变化，未删除任何内容。请重新检查。",
+                    "invalid_request": "删除请求不合法。",
+                    "storage_unavailable": "本地配置存储不可用，请重启 vibemate。",
+                    "operation_failed": "删除未能完成，请重试。",
+                    "history_active": "操作尚未完成，无法删除。",
+                    "history_unresolved": "存在未解决的中断写入，请先核对。",
+                    "history_referenced": "仍有其他历史依赖此记录，无法删除。",
+                    "desktop_required": "删除配置历史需要在 vibemate 桌面应用中进行。",
+                    "invalid_response": "桌面应用返回了意外的删除结果。"
+                }
             }
         },
-        "version": {
-            "review": "查看版本",
-            "reviewing": "正在生成版本预览…",
-            "previewHeading": "版本恢复预览",
-            "previewFor": "将配置恢复到 {{time}} 的“{{kind}}”之前状态",
-            "ownerRef": "记录的归属引用：{{id}}",
-            "actions": {
-                "restore": "写回这个保留版本",
-                "remove": "当时文件不存在，恢复将删除该文件",
-                "skip": "已与这个版本一致",
-                "blocked": "无法安全恢复"
-            },
-            "reasons": {
-                "symlink_refused": "路径是符号链接",
-                "target_read_only": "文件为只读",
-                "target_path_invalid": "路径无法使用",
-                "target_unreadable": "文件无法读取",
-                "target_too_large": "文件超过预览上限",
-                "backup_unavailable": "保留副本缺失、损坏或摘要不符",
-                "snapshot_unavailable": "该文件没有保留副本，写入后已发生变化",
-                "text_unavailable": "文档无法安全解析，因此不显示文本",
-                "target_changed": "文件在预览后发生变化",
-                "outcome_unknown": "结果无法确认",
-                "write_failed": "写入未完成",
-                "invalid_request": "请求不合法",
-                "invalid_stored_operation": "已记录的版本不合法"
-            },
-            "kinds": {
-                "added": "新增",
-                "removed": "删除",
-                "replaced": "已替换"
-            },
-            "noChanges": "没有字段变化；文件已与这个版本一致。",
-            "summaryUnavailable": "无法显示字段摘要：{{reason}}",
-            "credentialMasked": "凭据值已隐藏",
-            "absent": "不存在",
-            "empty": "空字符串",
-            "truncated": "仅显示前 200 项变化。请打开详细配置查看完整文本。",
-            "viewDetailsFor": "查看 {{path}} 的详细配置",
-            "blockedHint": "这个版本无法安全恢复。请先处理列出的文件原因，再重新预览。",
-            "keyNotice": "恢复后的文件会回到当时的内容，其中可能包含明文 API 密钥。系统凭据存储不会改动。",
-            "sessionNotice": "新建 Agent 会话后才会读取恢复后的配置；运行中的会话保留已加载的值。",
-            "confirm": "恢复这个版本",
-            "restoring": "正在恢复这个版本…",
-            "nothingToRestore": "这个版本已与当前文件一致。",
-            "planReasons": {
-                "history_unresolved": "该条目存在中断写入。请先核对并记录，再恢复版本。"
-            },
-            "outcomeHeading": "版本恢复结果",
-            "outcomeFile": "{{path}}：{{state}}",
-            "states": {
-                "restored": "已恢复",
-                "conflict": "保持原样：恢复期间文件发生变化",
-                "unavailable": "保留副本不可用",
-                "failed": "恢复未完成",
-                "unknown": "结果未确认"
-            },
-            "resultHint": "重新检查历史可看到新的恢复记录；它保留了被替换的内容，因此可从同一列表撤销。",
-            "textTitle": "详细配置",
-            "textClose": "关闭",
-            "textFiles": "此版本涉及的文件",
-            "textCurrent": "当前配置",
-            "textRetained": "保留版本",
-            "textPlanned": "计划写入配置",
-            "textAbsent": "此时该文件不存在。",
-            "textUnavailable": "无法安全显示文本：{{reason}}",
-            "textBytes": "原始大小：{{bytes}} 字节",
-            "textLoading": "正在读取并脱敏配置…",
-            "textRetry": "重试",
-            "textDiff": "差异",
-            "textNoDiff": "没有行级差异。",
-            "textNoComparison": "只有两侧都存在文本时才能生成行级差异；请查看上方的文本或不存在状态。",
-            "textDiffTooLarge": "文件过大，无法生成行级差异；请直接对比两个窗格。",
-            "textPreviewMode": "浏览器预览无法读取配置文件，请在 vibemate 桌面应用中查看。",
-            "textMaskedNotice": "凭据类键下的值会在文本离开 Rust 前被替换。",
-            "lineAdded": "新增行",
-            "lineRemoved": "删除行",
-            "lineSame": "未变更行"
+        "segments": {
+            "ariaLabel": "Agent 内容分段",
+            "write": "写入",
+            "history": "历史",
+            "skill": "Skill",
+            "mcp": "MCP"
+        },
+        "summary": {
+            "dash": "—",
+            "provider": "Provider {{value}}",
+            "model": "模型 {{value}}",
+            "skill": "Skill {{value}}",
+            "mcp": "MCP {{value}}",
+            "none": "暂无配置摘要",
+            "separator": " · "
+        },
+        "skillPanel": {
+            "empty": "即将在技能模块管理；此处稍后显示只读状态。"
+        },
+        "mcpPanel": {
+            "empty": "即将在 MCP 模块管理；此处稍后显示只读状态。"
+        },
+        "installPaths": {
+            "heading": "安装与路径",
+            "expand": "展开安装与路径",
+            "collapse": "收起安装与路径"
         }
     },
     "skills": {

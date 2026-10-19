@@ -526,7 +526,85 @@
         "pathPlaceholder": "Absolute entry path; leave empty for automatic discovery",
         "entry": "Entry: {{path}}",
         "target": "Resolved target: {{path}}",
-        "version": "Version: {{version}}",
+        "version": {
+            "review": "Review version",
+            "reviewing": "Building the version preview…",
+            "previewHeading": "Version restore preview",
+            "previewFor": "Restore the configuration to its state before {{kind}} from {{time}}",
+            "ownerRef": "Recorded owner reference: {{id}}",
+            "actions": {
+                "restore": "Write this retained content back",
+                "remove": "Remove the file because it did not exist then",
+                "skip": "Already matches this version",
+                "blocked": "Cannot be restored safely"
+            },
+            "reasons": {
+                "symlink_refused": "the path is a symbolic link",
+                "target_read_only": "the file is read-only",
+                "target_path_invalid": "the path cannot be used",
+                "target_unreadable": "the file could not be read",
+                "target_too_large": "the file is larger than the preview limit",
+                "backup_unavailable": "the retained copy is missing, damaged or no longer matches its digest",
+                "snapshot_unavailable": "no retained copy exists for this file; it changed after the write",
+                "text_unavailable": "the document could not be parsed safely, so its text is not shown",
+                "target_changed": "the file changed since the preview",
+                "outcome_unknown": "the result could not be verified",
+                "write_failed": "the write did not complete",
+                "invalid_request": "the request was not valid",
+                "invalid_stored_operation": "a recorded version is not valid"
+            },
+            "kinds": {
+                "added": "Added",
+                "removed": "Removed",
+                "replaced": "Replaced"
+            },
+            "noChanges": "No field changes; the file already matches this version.",
+            "summaryUnavailable": "The field summary cannot be shown: {{reason}}",
+            "credentialMasked": "credential value hidden",
+            "absent": "absent",
+            "empty": "empty string",
+            "truncated": "Only the first 200 changes are shown. Open the detailed configuration for the complete text.",
+            "viewDetailsFor": "View detailed configuration for {{path}}",
+            "blockedHint": "This version cannot be restored safely. Resolve the listed file reasons and review again.",
+            "keyNotice": "The restored files get back whatever they held at that time, including plain text API keys if they contained one. OS credential storage is not changed.",
+            "sessionNotice": "Start a new Agent session for the restored configuration to be read; running sessions keep the values they loaded.",
+            "confirm": "Restore this version",
+            "restoring": "Restoring this version…",
+            "nothingToRestore": "This version already matches the current files.",
+            "planReasons": {
+                "history_unresolved": "This entry has interrupted writes. Inspect and record them before restoring a version."
+            },
+            "outcomeHeading": "Version restore result",
+            "outcomeFile": "{{path}} — {{state}}",
+            "states": {
+                "restored": "restored",
+                "conflict": "left alone: the file changed during the restore",
+                "unavailable": "retained copy unavailable",
+                "failed": "restore did not finish",
+                "unknown": "result unverified"
+            },
+            "resultHint": "Recheck history to see the new restore entry. It retains what it replaced, so it can be undone from the same list.",
+            "textTitle": "Detailed configuration",
+            "textClose": "Close",
+            "textFiles": "Files in this version",
+            "textCurrent": "Current configuration",
+            "textRetained": "Retained version",
+            "textPlanned": "Planned configuration",
+            "textAbsent": "The file did not exist at this point.",
+            "textUnavailable": "This text cannot be shown safely: {{reason}}",
+            "textBytes": "Original size: {{bytes}} bytes",
+            "textLoading": "Reading and sanitizing configuration…",
+            "textRetry": "Try again",
+            "textDiff": "Differences",
+            "textNoDiff": "No line differences.",
+            "textNoComparison": "A line diff needs both sides to be present; see the text or absence above.",
+            "textDiffTooLarge": "The files are too large for a line diff; compare the two panes directly.",
+            "textPreviewMode": "The browser preview cannot read configuration files. Open the vibemate desktop app.",
+            "textMaskedNotice": "Values under credential-like keys are masked before this text leaves Rust.",
+            "lineAdded": "Added line",
+            "lineRemoved": "Removed line",
+            "lineSame": "Unchanged line"
+        },
         "directory": "User configuration directory: {{path}}",
         "states": {
             "found": "Found",
@@ -739,14 +817,19 @@
                 },
                 "fileReadable": "Readable",
                 "fileAbsent": "Absent",
-                "fileUnreadable": "Unreadable"
+                "fileUnreadable": "Unreadable",
+                "statusShort": {
+                    "matched": "Matched",
+                    "unrecorded": "Unrecorded",
+                    "partial": "Partial",
+                    "unreadable": "Unreadable"
+                }
             },
             "backups": {
                 "not_needed": "Pre-mutation absence; no backup file is needed.",
                 "available": "Independent pre-mutation backup is available and matches its digest.",
                 "unavailable": "Independent pre-mutation backup is missing, damaged or unreadable."
             },
-
             "intents": {
                 "apply": "Apply",
                 "restore": "Restore",
@@ -833,86 +916,73 @@
                 "operation_failed": "The restore could not be completed. Try again.",
                 "desktop_required": "Restoring configuration needs the vibemate desktop app.",
                 "invalid_response": "The desktop app returned an unexpected restore answer."
+            },
+            "fileCount_one": "{{count}} file",
+            "fileCount_other": "{{count}} files",
+            "backupShort": {
+                "available": "Available",
+                "unavailable": "Unavailable",
+                "not_needed": "Not needed"
+            },
+            "expandRow": "Show file details",
+            "collapseRow": "Hide file details",
+            "showFiles": "Show managed files",
+            "hideFiles": "Hide managed files",
+            "delete": {
+                "label": "Delete this record and its backups",
+                "title": "Delete configuration history entry?",
+                "body": "This permanently removes the history entry and its exclusive pre-mutation backups. It cannot be undone. It does not change the Agent’s current configuration files, does not delete Providers or credentials, and does not drop model alias ownership.",
+                "confirm": "Delete record",
+                "cancel": "Cancel",
+                "deleting": "Deleting…",
+                "retry": "Retry delete",
+                "leftoversHeading": "These private copies could not be removed:",
+                "leftoverHint": "The history row may still exist. Fix permissions and retry; do not assume the record is gone.",
+                "blocked": {
+                    "history_active": "This operation is still unfinished, so it cannot be deleted.",
+                    "history_unresolved": "Interrupted writes still need review before deletion.",
+                    "history_referenced": "Other history still depends on this entry, so it cannot be deleted."
+                },
+                "errors": {
+                    "operation_not_found": "This history entry is already gone. Recheck the list.",
+                    "plan_stale": "Something changed since the attempt, so nothing was deleted. Recheck.",
+                    "invalid_request": "The delete request is not valid.",
+                    "storage_unavailable": "Local configuration storage is unavailable. Restart vibemate.",
+                    "operation_failed": "The delete could not finish. Try again.",
+                    "history_active": "This operation is still unfinished, so it cannot be deleted.",
+                    "history_unresolved": "Interrupted writes still need review before deletion.",
+                    "history_referenced": "Other history still depends on this entry, so it cannot be deleted.",
+                    "desktop_required": "Deleting configuration history requires the vibemate desktop app.",
+                    "invalid_response": "The desktop app returned an unexpected delete result."
+                }
             }
         },
-        "version": {
-            "review": "Review version",
-            "reviewing": "Building the version preview…",
-            "previewHeading": "Version restore preview",
-            "previewFor": "Restore the configuration to its state before {{kind}} from {{time}}",
-            "ownerRef": "Recorded owner reference: {{id}}",
-            "actions": {
-                "restore": "Write this retained content back",
-                "remove": "Remove the file because it did not exist then",
-                "skip": "Already matches this version",
-                "blocked": "Cannot be restored safely"
-            },
-            "reasons": {
-                "symlink_refused": "the path is a symbolic link",
-                "target_read_only": "the file is read-only",
-                "target_path_invalid": "the path cannot be used",
-                "target_unreadable": "the file could not be read",
-                "target_too_large": "the file is larger than the preview limit",
-                "backup_unavailable": "the retained copy is missing, damaged or no longer matches its digest",
-                "snapshot_unavailable": "no retained copy exists for this file; it changed after the write",
-                "text_unavailable": "the document could not be parsed safely, so its text is not shown",
-                "target_changed": "the file changed since the preview",
-                "outcome_unknown": "the result could not be verified",
-                "write_failed": "the write did not complete",
-                "invalid_request": "the request was not valid",
-                "invalid_stored_operation": "a recorded version is not valid"
-            },
-            "kinds": {
-                "added": "Added",
-                "removed": "Removed",
-                "replaced": "Replaced"
-            },
-            "noChanges": "No field changes; the file already matches this version.",
-            "summaryUnavailable": "The field summary cannot be shown: {{reason}}",
-            "credentialMasked": "credential value hidden",
-            "absent": "absent",
-            "empty": "empty string",
-            "truncated": "Only the first 200 changes are shown. Open the detailed configuration for the complete text.",
-            "viewDetailsFor": "View detailed configuration for {{path}}",
-            "blockedHint": "This version cannot be restored safely. Resolve the listed file reasons and review again.",
-            "keyNotice": "The restored files get back whatever they held at that time, including plain text API keys if they contained one. OS credential storage is not changed.",
-            "sessionNotice": "Start a new Agent session for the restored configuration to be read; running sessions keep the values they loaded.",
-            "confirm": "Restore this version",
-            "restoring": "Restoring this version…",
-            "nothingToRestore": "This version already matches the current files.",
-            "planReasons": {
-                "history_unresolved": "This entry has interrupted writes. Inspect and record them before restoring a version."
-            },
-            "outcomeHeading": "Version restore result",
-            "outcomeFile": "{{path}} — {{state}}",
-            "states": {
-                "restored": "restored",
-                "conflict": "left alone: the file changed during the restore",
-                "unavailable": "retained copy unavailable",
-                "failed": "restore did not finish",
-                "unknown": "result unverified"
-            },
-            "resultHint": "Recheck history to see the new restore entry. It retains what it replaced, so it can be undone from the same list.",
-            "textTitle": "Detailed configuration",
-            "textClose": "Close",
-            "textFiles": "Files in this version",
-            "textCurrent": "Current configuration",
-            "textRetained": "Retained version",
-            "textPlanned": "Planned configuration",
-            "textAbsent": "The file did not exist at this point.",
-            "textUnavailable": "This text cannot be shown safely: {{reason}}",
-            "textBytes": "Original size: {{bytes}} bytes",
-            "textLoading": "Reading and sanitizing configuration…",
-            "textRetry": "Try again",
-            "textDiff": "Differences",
-            "textNoDiff": "No line differences.",
-            "textNoComparison": "A line diff needs both sides to be present; see the text or absence above.",
-            "textDiffTooLarge": "The files are too large for a line diff; compare the two panes directly.",
-            "textPreviewMode": "The browser preview cannot read configuration files. Open the vibemate desktop app.",
-            "textMaskedNotice": "Values under credential-like keys are masked before this text leaves Rust.",
-            "lineAdded": "Added line",
-            "lineRemoved": "Removed line",
-            "lineSame": "Unchanged line"
+        "segments": {
+            "ariaLabel": "Agent content sections",
+            "write": "Write",
+            "history": "History",
+            "skill": "Skill",
+            "mcp": "MCP"
+        },
+        "summary": {
+            "dash": "—",
+            "provider": "Provider {{value}}",
+            "model": "Model {{value}}",
+            "skill": "Skill {{value}}",
+            "mcp": "MCP {{value}}",
+            "none": "No configuration summary",
+            "separator": " · "
+        },
+        "skillPanel": {
+            "empty": "Managed in the Skills module soon; a read-only status will appear here later."
+        },
+        "mcpPanel": {
+            "empty": "Managed in the MCP module soon; a read-only status will appear here later."
+        },
+        "installPaths": {
+            "heading": "Install & paths",
+            "expand": "Expand install and paths",
+            "collapse": "Collapse install and paths"
         }
     },
     "skills": {

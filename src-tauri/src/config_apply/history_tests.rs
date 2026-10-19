@@ -28,11 +28,16 @@ fn apply_at(
     fixture.apply(kind, &files).unwrap().operation_id
 }
 
-fn all_pages(storage: &Storage, scope: &HistoryScope, limit: u32) -> Vec<HistoryEntry> {
+fn all_pages(
+    storage: &Storage,
+    scope: &HistoryScope,
+    limit: u32,
+    backups: &BackupStore,
+) -> Vec<HistoryEntry> {
     let mut cursor = None;
     let mut entries = Vec::new();
     for _ in 0..200 {
-        let page = configuration_history(storage, scope, cursor.as_ref(), limit).unwrap();
+        let page = configuration_history(storage, scope, cursor.as_ref(), limit, backups).unwrap();
         assert!(page.entries.len() <= limit as usize);
         assert!(page.next_cursor.is_none() || !page.entries.is_empty());
         entries.extend(page.entries);
@@ -68,7 +73,7 @@ fn all_agents_page_beyond_ten_and_fifty_with_timestamp_ties_without_duplicates()
         expected.sort_by(|left, right| right.cmp(left));
         let scope = scope(&fixture, kind, "agent", &["settings"]);
         for limit in [1, 7, 50] {
-            let entries = all_pages(&fixture.storage, &scope, limit);
+            let entries = all_pages(&fixture.storage, &scope, limit, &fixture.backups());
             assert_eq!(
                 entries
                     .iter()
@@ -133,7 +138,7 @@ fn exact_scope_excludes_other_agents_prefix_roots_unowned_files_and_mixed_root_o
         .operation_id;
     for (kind, directory, id) in expected {
         let scope = scope(&fixture, kind, directory, &["settings"]);
-        let entries = all_pages(&fixture.storage, &scope, 2);
+        let entries = all_pages(&fixture.storage, &scope, 2, &fixture.backups());
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].operation_id, id);
         assert_ne!(entries[0].operation_id, mixed);
@@ -177,7 +182,7 @@ fn restores_and_compensations_are_separate_whole_multi_file_entries_not_new_lega
         UPDATE config_file_revision SET created_at = 999 WHERE rowid = (
             SELECT max(rowid) FROM config_file_revision WHERE intent = 'restore');",
     );
-    let entries = all_pages(&fixture.storage, &scope, 1);
+    let entries = all_pages(&fixture.storage, &scope, 1, &fixture.backups());
     assert_eq!(entries.len(), 4);
     for entry in &entries {
         assert_eq!(entry.revisions.len(), 2);
@@ -269,7 +274,7 @@ fn legacy_failed_pending_and_unchanged_attempts_remain_visible_without_invented_
     finish_operation(&fixture.storage, &failed, OperationState::Failed).unwrap();
     let unchanged = apply_at(&fixture, kind, "legacy", &[("settings", b"legacy-value")]);
     let scope = scope(&fixture, kind, "legacy", &["settings"]);
-    let entries = all_pages(&fixture.storage, &scope, 2);
+    let entries = all_pages(&fixture.storage, &scope, 2, &fixture.backups());
     assert_eq!(entries.len(), 4);
     assert!(
         entries
@@ -319,8 +324,9 @@ fn restart_updates_newer_insertions_and_removed_cursor_anchors_do_not_shift_late
         );
     }
     fixture.sql("UPDATE config_operation SET created_at = 1000;");
-    let original = all_pages(&fixture.storage, &scope, 50);
-    let first = configuration_history(&fixture.storage, &scope, None, 2).unwrap();
+    let original = all_pages(&fixture.storage, &scope, 50, &fixture.backups());
+    let first =
+        configuration_history(&fixture.storage, &scope, None, 2, &fixture.backups()).unwrap();
     let cursor = first.next_cursor.unwrap();
     let anchor_id = &first.entries[1].operation_id;
     {
@@ -343,7 +349,8 @@ fn restart_updates_newer_insertions_and_removed_cursor_anchors_do_not_shift_late
     )
     .unwrap();
     let reopened = Storage::open_in_directory(&fixture.root).unwrap();
-    let later = configuration_history(&reopened, &scope, Some(&cursor), 50).unwrap();
+    let later =
+        configuration_history(&reopened, &scope, Some(&cursor), 50, &fixture.backups()).unwrap();
     assert_eq!(
         later
             .entries
@@ -362,7 +369,7 @@ fn restart_updates_newer_insertions_and_removed_cursor_anchors_do_not_shift_late
             .iter()
             .any(|entry| entry.operation_id == newer)
     );
-    let refreshed = configuration_history(&reopened, &scope, None, 1).unwrap();
+    let refreshed = configuration_history(&reopened, &scope, None, 1, &fixture.backups()).unwrap();
     assert_eq!(refreshed.entries[0].operation_id, newer);
     assert_eq!(later.entries[1].source_state, OperationState::Partial);
 }
@@ -384,7 +391,8 @@ fn history_keeps_metadata_after_target_and_backup_removal_and_exposes_no_copy_pa
         &[("settings", b"synthetic-private-next")],
     );
     let scope = scope(&fixture, kind, "pi", &["settings"]);
-    let before = configuration_history(&fixture.storage, &scope, None, 50).unwrap();
+    let before =
+        configuration_history(&fixture.storage, &scope, None, 50, &fixture.backups()).unwrap();
     assert!(
         before
             .entries
@@ -393,8 +401,30 @@ fn history_keeps_metadata_after_target_and_backup_removal_and_exposes_no_copy_pa
     );
     fs::remove_dir_all(fixture.root.join("pi")).unwrap();
     fs::remove_dir_all(fixture.backups().root()).unwrap();
-    let after = configuration_history(&fixture.storage, &scope, None, 50).unwrap();
-    assert_eq!(before, after);
+    let after =
+        configuration_history(&fixture.storage, &scope, None, 50, &fixture.backups()).unwrap();
+    assert_eq!(before.entries.len(), after.entries.len());
+    for (previous, current) in before.entries.iter().zip(&after.entries) {
+        assert_eq!(previous.entry_key, current.entry_key);
+        assert_eq!(previous.operation_id, current.operation_id);
+        assert_eq!(previous.revisions.len(), current.revisions.len());
+        for (before_revision, after_revision) in previous.revisions.iter().zip(&current.revisions) {
+            assert_eq!(before_revision.revision_id, after_revision.revision_id);
+            assert_eq!(
+                before_revision.backup_recorded,
+                after_revision.backup_recorded
+            );
+            if after_revision.backup_recorded {
+                assert_eq!(before_revision.backup_state, RevisionBackupState::Available);
+                assert_eq!(
+                    after_revision.backup_state,
+                    RevisionBackupState::Unavailable
+                );
+            } else {
+                assert_eq!(after_revision.backup_state, RevisionBackupState::NotNeeded);
+            }
+        }
+    }
     let serialized = serde_json::to_string(&after).unwrap();
     for private in [
         "synthetic-private-original",
@@ -406,6 +436,8 @@ fn history_keeps_metadata_after_target_and_backup_removal_and_exposes_no_copy_pa
         assert!(!serialized.contains(private));
     }
     assert!(serialized.contains("backupRecorded"));
+    assert!(serialized.contains("backupState"));
+    assert!(serialized.contains("unavailable"));
 }
 
 #[test]
@@ -442,12 +474,13 @@ fn empty_pages_limits_scopes_and_cursor_shapes_are_explicitly_validated() {
     let scope = scope(&fixture, kind, "root", &["settings", "models"]);
     for limit in [0, 51, u32::MAX] {
         assert_eq!(
-            configuration_history(&fixture.storage, &scope, None, limit),
+            configuration_history(&fixture.storage, &scope, None, limit, &fixture.backups()),
             Err(WriteError::InvalidRequest)
         );
     }
     for limit in [1, 50] {
-        let page = configuration_history(&fixture.storage, &scope, None, limit).unwrap();
+        let page = configuration_history(&fixture.storage, &scope, None, limit, &fixture.backups())
+            .unwrap();
         assert!(page.entries.is_empty() && page.next_cursor.is_none());
     }
     for index in 0..3 {
@@ -458,7 +491,8 @@ fn empty_pages_limits_scopes_and_cursor_shapes_are_explicitly_validated() {
             &[("settings", format!("{index}").as_bytes())],
         );
     }
-    let page = configuration_history(&fixture.storage, &scope, None, 1).unwrap();
+    let page =
+        configuration_history(&fixture.storage, &scope, None, 1, &fixture.backups()).unwrap();
     let cursor = page.next_cursor.unwrap();
     for changed in [
         HistoryScope::new(OperationKind::PiSettings, &root, &["settings", "models"]).unwrap(),
@@ -471,12 +505,27 @@ fn empty_pages_limits_scopes_and_cursor_shapes_are_explicitly_validated() {
         HistoryScope::new(kind, &root, &["settings"]).unwrap(),
     ] {
         assert_eq!(
-            configuration_history(&fixture.storage, &changed, Some(&cursor), 1),
+            configuration_history(
+                &fixture.storage,
+                &changed,
+                Some(&cursor),
+                1,
+                &fixture.backups()
+            ),
             Err(WriteError::InvalidRequest)
         );
     }
     let reordered = HistoryScope::new(kind, &root, &["models", "settings"]).unwrap();
-    assert!(configuration_history(&fixture.storage, &reordered, Some(&cursor), 1).is_ok());
+    assert!(
+        configuration_history(
+            &fixture.storage,
+            &reordered,
+            Some(&cursor),
+            1,
+            &fixture.backups()
+        )
+        .is_ok()
+    );
     let value = serde_json::to_value(&cursor).unwrap();
     for (field, bad) in [
         ("createdAt", serde_json::json!(-1)),
@@ -488,7 +537,13 @@ fn empty_pages_limits_scopes_and_cursor_shapes_are_explicitly_validated() {
         invalid[field] = bad;
         let parsed: HistoryCursor = serde_json::from_value(invalid).unwrap();
         assert_eq!(
-            configuration_history(&fixture.storage, &scope, Some(&parsed), 1),
+            configuration_history(
+                &fixture.storage,
+                &scope,
+                Some(&parsed),
+                1,
+                &fixture.backups()
+            ),
             Err(WriteError::InvalidRequest)
         );
     }
@@ -520,7 +575,7 @@ fn malformed_selected_revisions_are_errors_not_skipped_or_labeled_as_valid_versi
         ));
         let scope = scope(&fixture, kind, "pi", &["settings"]);
         assert_eq!(
-            configuration_history(&fixture.storage, &scope, None, 50),
+            configuration_history(&fixture.storage, &scope, None, 50, &fixture.backups()),
             Err(WriteError::InvalidStoredOperation),
             "{mutation}"
         );
@@ -565,7 +620,7 @@ fn mixed_direction_duplicate_ordinal_and_cross_source_batch_collisions_fail_clos
         }
         let scope = scope(&fixture, kind, "pi", &["settings", "models"]);
         assert_eq!(
-            configuration_history(&fixture.storage, &scope, None, 50),
+            configuration_history(&fixture.storage, &scope, None, 50, &fixture.backups()),
             Err(WriteError::InvalidStoredOperation),
             "{fault}"
         );
@@ -575,7 +630,7 @@ fn mixed_direction_duplicate_ordinal_and_cross_source_batch_collisions_fail_clos
             let scope =
                 HistoryScope::new(kind, &fixture.root.join("pi-other"), &["settings"]).unwrap();
             assert_eq!(
-                configuration_history(&fixture.storage, &scope, None, 50),
+                configuration_history(&fixture.storage, &scope, None, 50, &fixture.backups()),
                 Err(WriteError::InvalidStoredOperation)
             );
         }
@@ -601,7 +656,8 @@ fn uncertain_and_failed_results_and_explicit_resolution_audits_remain_distinguis
         );
         fixture.sql("DROP TRIGGER refuse_history_finish;");
         let scope = scope(&fixture, kind, "claude", &["settings"]);
-        let before = configuration_history(&fixture.storage, &scope, None, 50).unwrap();
+        let before =
+            configuration_history(&fixture.storage, &scope, None, 50, &fixture.backups()).unwrap();
         assert_eq!(
             before.entries[0].revisions[0].state,
             HistoryRevisionState::Prepared
@@ -609,7 +665,8 @@ fn uncertain_and_failed_results_and_explicit_resolution_audits_remain_distinguis
         assert!(before.entries[0].revisions[0].resolution.is_none());
         fixture
             .sql("UPDATE config_file_revision SET state='unknown', error_code='outcome_unknown';");
-        let unknown = configuration_history(&fixture.storage, &scope, None, 50).unwrap();
+        let unknown =
+            configuration_history(&fixture.storage, &scope, None, 50, &fixture.backups()).unwrap();
         assert_eq!(
             unknown.entries[0].revisions[0].state,
             HistoryRevisionState::Unknown
@@ -622,7 +679,8 @@ fn uncertain_and_failed_results_and_explicit_resolution_audits_remain_distinguis
             .unwrap()
             .unwrap();
         resolve_interrupted_revisions(&fixture.storage, id, &plan, &fixture.backups()).unwrap();
-        let after = configuration_history(&fixture.storage, &scope, None, 50).unwrap();
+        let after =
+            configuration_history(&fixture.storage, &scope, None, 50, &fixture.backups()).unwrap();
         let revision = &after.entries[0].revisions[0];
         assert_eq!(
             revision.state,
@@ -648,7 +706,7 @@ fn uncertain_and_failed_results_and_explicit_resolution_audits_remain_distinguis
         );
         fixture.sql("PRAGMA ignore_check_constraints=ON; UPDATE config_revision_resolution SET observed_digest=NULL; PRAGMA ignore_check_constraints=OFF;");
         assert_eq!(
-            configuration_history(&fixture.storage, &scope, None, 50),
+            configuration_history(&fixture.storage, &scope, None, 50, &fixture.backups()),
             Err(WriteError::InvalidStoredOperation)
         );
     }
@@ -667,7 +725,8 @@ fn damaged_later_rows_fail_when_reached_and_query_failures_never_look_like_an_em
         );
     }
     let scope = scope(&fixture, kind, "pi", &["settings"]);
-    let initial = configuration_history(&fixture.storage, &scope, None, 50).unwrap();
+    let initial =
+        configuration_history(&fixture.storage, &scope, None, 50, &fixture.backups()).unwrap();
     fixture
         .storage
         .lock()
@@ -677,15 +736,22 @@ fn damaged_later_rows_fail_when_reached_and_query_failures_never_look_like_an_em
             [&initial.entries[1].operation_id],
         )
         .unwrap();
-    let first = configuration_history(&fixture.storage, &scope, None, 1).unwrap();
+    let first =
+        configuration_history(&fixture.storage, &scope, None, 1, &fixture.backups()).unwrap();
     assert_eq!(first.entries.len(), 1);
     assert_eq!(
-        configuration_history(&fixture.storage, &scope, first.next_cursor.as_ref(), 1),
+        configuration_history(
+            &fixture.storage,
+            &scope,
+            first.next_cursor.as_ref(),
+            1,
+            &fixture.backups()
+        ),
         Err(WriteError::InvalidStoredOperation)
     );
     fixture.sql("DROP TABLE config_revision_resolution;");
     assert_eq!(
-        configuration_history(&fixture.storage, &scope, None, 1),
+        configuration_history(&fixture.storage, &scope, None, 1, &fixture.backups()),
         Err(WriteError::LogReadFailed)
     );
 }
@@ -734,7 +800,8 @@ fn each_page_observes_atomic_metadata_updates_from_an_independent_app_connection
         });
         barrier.wait();
         for _ in 0..100 {
-            let page = configuration_history(&fixture.storage, &scope, None, 1).unwrap();
+            let page = configuration_history(&fixture.storage, &scope, None, 1, &fixture.backups())
+                .unwrap();
             let entry = &page.entries[0];
             assert_eq!(
                 entry.source_steps[0].state,
@@ -792,9 +859,224 @@ fn malformed_source_steps_and_oversized_batches_are_not_returned_as_history() {
         }
         let scope = scope(&fixture, kind, "pi", &["settings"]);
         assert_eq!(
-            configuration_history(&fixture.storage, &scope, None, 50),
+            configuration_history(&fixture.storage, &scope, None, 50, &fixture.backups()),
             Err(WriteError::InvalidStoredOperation),
             "{fault}"
         );
+    }
+}
+
+#[test]
+fn history_reports_real_backup_availability_not_journal_references_alone() {
+    let fixture = Fixture::new();
+    fs::create_dir_all(fixture.root.join("agent")).unwrap();
+    fs::write(fixture.root.join("agent/settings.json"), b"original").unwrap();
+    let id = apply_at(
+        &fixture,
+        OperationKind::ClaudeCodeSettings,
+        "agent",
+        &[("settings.json", b"first")],
+    );
+    let scope = scope(
+        &fixture,
+        OperationKind::ClaudeCodeSettings,
+        "agent",
+        &["settings.json"],
+    );
+    let page =
+        configuration_history(&fixture.storage, &scope, None, 10, &fixture.backups()).unwrap();
+    let entry = &page.entries[0];
+    assert_eq!(entry.operation_id, id);
+    assert_eq!(entry.revisions.len(), 1);
+    assert!(entry.revisions[0].backup_recorded);
+    assert_eq!(
+        entry.revisions[0].backup_state,
+        RevisionBackupState::Available
+    );
+    assert_eq!(
+        entry.source_steps[0].backup_state,
+        RevisionBackupState::Available
+    );
+    assert!(
+        !serde_json::to_string(&page)
+            .unwrap()
+            .contains(fixture.backups().root().to_str().unwrap())
+    );
+
+    // Damaging the private copy must flip availability without exposing bytes.
+    let revision_id = entry.revisions[0].revision_id.clone();
+    let copy = fixture
+        .backups()
+        .root()
+        .join(&revision_id)
+        .join("settings.json");
+    fs::write(&copy, b"tampered").unwrap();
+    let damaged =
+        configuration_history(&fixture.storage, &scope, None, 10, &fixture.backups()).unwrap();
+    assert_eq!(
+        damaged.entries[0].revisions[0].backup_state,
+        RevisionBackupState::Unavailable
+    );
+    fs::remove_file(&copy).unwrap();
+    let missing =
+        configuration_history(&fixture.storage, &scope, None, 10, &fixture.backups()).unwrap();
+    assert_eq!(
+        missing.entries[0].revisions[0].backup_state,
+        RevisionBackupState::Unavailable
+    );
+    assert!(missing.entries[0].revisions[0].backup_recorded);
+}
+
+#[test]
+fn history_marks_absence_snapshots_as_backup_not_needed() {
+    let fixture = Fixture::new();
+    fs::create_dir_all(fixture.root.join("agent")).unwrap();
+    // Write a brand-new file so the revision records absence, not a private copy.
+    fixture
+        .apply(
+            OperationKind::ClaudeCodeSettings,
+            &[fixture.file("agent/settings.json", b"created")],
+        )
+        .unwrap();
+    let scope = scope(
+        &fixture,
+        OperationKind::ClaudeCodeSettings,
+        "agent",
+        &["settings.json"],
+    );
+    let page =
+        configuration_history(&fixture.storage, &scope, None, 10, &fixture.backups()).unwrap();
+    assert_eq!(page.entries[0].revisions[0].previous_digest, None);
+    assert!(!page.entries[0].revisions[0].backup_recorded);
+    assert_eq!(
+        page.entries[0].revisions[0].backup_state,
+        RevisionBackupState::NotNeeded
+    );
+    assert_eq!(
+        page.entries[0].source_steps[0].backup_state,
+        RevisionBackupState::NotNeeded
+    );
+}
+
+#[test]
+fn history_pins_current_by_digest_not_latest_operation_and_keeps_it_off_pagination() {
+    let fixture = Fixture::new();
+    let kind = OperationKind::ClaudeCodeSettings;
+    fs::create_dir_all(fixture.root.join("agent")).unwrap();
+    fs::write(fixture.root.join("agent/settings.json"), b"A").unwrap();
+    let a = apply_at(&fixture, kind, "agent", &[("settings.json", b"B")]);
+    let b = apply_at(&fixture, kind, "agent", &[("settings.json", b"C")]);
+    let _c = apply_at(&fixture, kind, "agent", &[("settings.json", b"D")]);
+    let scope = scope(&fixture, kind, "agent", &["settings.json"]);
+
+    // After A→B→C, live files hold C's intended digest.
+    let page =
+        configuration_history(&fixture.storage, &scope, None, 1, &fixture.backups()).unwrap();
+    assert_eq!(page.current.status, HistoryCurrentStatus::Matched);
+    // Page size 1 returns only the newest entry; current still pins that version.
+    assert_eq!(page.entries.len(), 1);
+    assert_eq!(
+        page.current.matched_entry_key.as_deref(),
+        Some(page.entries[0].entry_key.as_str())
+    );
+    assert_eq!(
+        page.current.matched_entry_key.as_deref(),
+        Some(format!("operation:{_c}").as_str())
+    );
+
+    // Restore to B's pre-image (content B) by writing B's previous digest bytes.
+    // B's previous is content after A (= "B" wait): A wrote B, so B's previous is "B"?
+    // Start A: file "A". Apply A writes "B" (previous "A"). Apply B writes "C" (previous "B"). Apply C writes "D" (previous "C").
+    // Restore to entry B means restore previous of B = "B". Pin should be B via previous.
+    let revisions = fixture.revisions();
+    let b_revision = revisions
+        .iter()
+        .find(|row| row.operation == b && row.intent == "apply")
+        .unwrap();
+    let b_previous = b_revision.before.clone().unwrap();
+    // Write live file to match B's previous digest by restoring from backup.
+    let bytes = fs::read(
+        fixture
+            .backups()
+            .root()
+            .join(&b_revision.id)
+            .join("settings.json"),
+    )
+    .unwrap();
+    assert_eq!(digest_hex(&bytes), b_previous);
+    fs::write(fixture.root.join("agent/settings.json"), &bytes).unwrap();
+
+    let page =
+        configuration_history(&fixture.storage, &scope, None, 1, &fixture.backups()).unwrap();
+    assert_eq!(page.current.status, HistoryCurrentStatus::Matched);
+    assert_eq!(
+        page.current.matched_entry_key.as_deref(),
+        Some(format!("operation:{b}").as_str())
+    );
+    // Pagination still returns the newest history row, but the pin stays on B.
+    assert_ne!(page.entries[0].entry_key, format!("operation:{b}"));
+    let older = configuration_history(
+        &fixture.storage,
+        &scope,
+        page.next_cursor.as_ref(),
+        50,
+        &fixture.backups(),
+    )
+    .unwrap();
+    assert_eq!(
+        older.current.matched_entry_key,
+        page.current.matched_entry_key
+    );
+    assert_eq!(older.current.status, HistoryCurrentStatus::Matched);
+
+    // External edit: do not mark any history version as current.
+    fs::write(fixture.root.join("agent/settings.json"), b"external-edit").unwrap();
+    let external =
+        configuration_history(&fixture.storage, &scope, None, 10, &fixture.backups()).unwrap();
+    assert_eq!(external.current.status, HistoryCurrentStatus::Unrecorded);
+    assert_eq!(external.current.matched_entry_key, None);
+    assert!(external.current.files[0].readable);
+    assert_ne!(a, b); // silence unused if any
+}
+
+#[test]
+fn history_current_reports_unreadable_and_partial_multi_file_without_false_match() {
+    let fixture = Fixture::new();
+    let kind = OperationKind::PiSettings;
+    fs::create_dir_all(fixture.root.join("pi")).unwrap();
+    fs::write(fixture.root.join("pi/models.json"), b"models-a").unwrap();
+    fs::write(fixture.root.join("pi/settings.json"), b"settings-a").unwrap();
+    apply_at(
+        &fixture,
+        kind,
+        "pi",
+        &[
+            ("models.json", b"models-b"),
+            ("settings.json", b"settings-b"),
+        ],
+    );
+    let scope = scope(&fixture, kind, "pi", &["models.json", "settings.json"]);
+    let matched =
+        configuration_history(&fixture.storage, &scope, None, 10, &fixture.backups()).unwrap();
+    assert_eq!(matched.current.status, HistoryCurrentStatus::Matched);
+    assert_eq!(matched.current.files.len(), 2);
+
+    // Only one of two files matches the retained version.
+    fs::write(fixture.root.join("pi/settings.json"), b"settings-external").unwrap();
+    let partial =
+        configuration_history(&fixture.storage, &scope, None, 10, &fixture.backups()).unwrap();
+    assert_eq!(partial.current.status, HistoryCurrentStatus::Partial);
+    assert_eq!(partial.current.matched_entry_key, None);
+
+    // Replace settings with a symlink so the live read is unsafe.
+    fs::remove_file(fixture.root.join("pi/settings.json")).unwrap();
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink("models.json", fixture.root.join("pi/settings.json")).unwrap();
+        let unreadable =
+            configuration_history(&fixture.storage, &scope, None, 10, &fixture.backups()).unwrap();
+        assert_eq!(unreadable.current.status, HistoryCurrentStatus::Unreadable);
+        assert_eq!(unreadable.current.matched_entry_key, None);
+        assert!(unreadable.current.files.iter().any(|file| !file.readable));
     }
 }

@@ -10,7 +10,7 @@ use super::{
     AgentId, ClaudeCodeRestoreError, DiscoveryEnvironment, discovery, recovery::ConfigurationAgent,
 };
 use crate::{
-    config_apply::{self, HistoryCursor, HistoryEntry, HistoryScope},
+    config_apply::{self, BackupStore, HistoryCursor, HistoryEntry, HistoryScope},
     storage::Storage,
 };
 
@@ -44,7 +44,8 @@ pub struct ConfigurationHistoryEntry {
     pub owner_label: Option<String>,
 }
 
-/// One enriched history page. It still carries no backup paths or file bytes.
+/// One enriched history page, including backup availability and the current pin.
+/// Still carries no backup paths or file bytes.
 #[derive(Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigurationHistoryPage {
@@ -77,9 +78,8 @@ pub(super) fn history_scope(
 ///
 /// The environment is a trusted desktop snapshot, never frontend input. Resolves
 /// the root without launching/validating an installed CLI, then queries only the
-/// exact files owned by that adapter. Reads journal and Provider metadata only;
-/// does not open target/backup files, infer availability/current state or
-/// authorize recovery.
+/// exact files owned by that adapter. Opens private backup files only to report
+/// availability; never returns paths or bytes, and does not authorize recovery.
 ///
 /// # Errors
 /// Returns safe request errors for invalid pagination, invalid/wrong-root cursors
@@ -88,6 +88,7 @@ pub fn configuration_history_page(
     storage: &Storage,
     environment: &DiscoveryEnvironment,
     request: &ConfigurationHistoryRequest,
+    backups: &BackupStore,
 ) -> Result<ConfigurationHistoryPage, ClaudeCodeRestoreError> {
     let scope = history_scope(request.agent, environment)?;
     let page = config_apply::configuration_history(
@@ -95,6 +96,7 @@ pub fn configuration_history_page(
         &scope,
         request.after.as_ref(),
         request.limit,
+        backups,
     )?;
     let entries = page
         .entries

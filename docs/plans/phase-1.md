@@ -128,8 +128,9 @@ deferred to the release-time platform check.
    Browser review covered both languages, keyboard/focus, retry, JSON/TOML
    and the minimum content viewport. This is agent-run verification, not a
    claim of maintainer sign-off or Provider inference. H1 backup-availability
-   checks/current-version pinning and H3 deletion remain pending;
-   Windows/Linux native checks are still deferred to release acceptance.
+   checks and current-version pinning are delivered in the history IPC; H3
+   deletion remains pending; Windows/Linux native checks are still deferred to
+   release acceptance.
    P24.a–P24.d explicitly
    deliver verified per-Agent mappings and UI for reasoning capabilities/efforts,
    context windows, output metadata and supported request settings. The remaining

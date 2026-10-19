@@ -22,6 +22,7 @@ function revision(): HistoryRevision {
         previousDigest: BEFORE,
         intendedDigest: AFTER,
         backupRecorded: true,
+        backupState: "available",
         state: "completed",
         resolution: null,
         errorCode: null,
@@ -49,6 +50,7 @@ function entry(): HistoryEntry {
                 appliedDigest: AFTER,
                 previousExisted: true,
                 backupRecorded: true,
+                backupState: "available",
                 state: "applied",
                 errorCode: null,
                 restoreState: null,
@@ -58,8 +60,41 @@ function entry(): HistoryEntry {
     };
 }
 
-function page(row = entry()): HistoryPage {
-    return { entries: [row], nextCursor: null };
+function current(status: HistoryPage["current"]["status"] = "unrecorded") {
+    return {
+        status,
+        matchedEntryKey: status === "matched" ? `operation:${ID}` : null,
+        files: [
+            {
+                targetPath: "/Users/test/.pi/agent/models.json",
+                currentDigest: AFTER,
+                readable: true,
+            },
+        ],
+    } satisfies HistoryPage["current"];
+}
+
+function page(row = entry(), status: HistoryPage["current"]["status"] = "unrecorded"): HistoryPage {
+    return {
+        current:
+            status === "matched"
+                ? current("matched")
+                : status === "unreadable"
+                  ? {
+                        status: "unreadable",
+                        matchedEntryKey: null,
+                        files: [
+                            {
+                                targetPath: "/Users/test/.pi/agent/models.json",
+                                currentDigest: null,
+                                readable: false,
+                            },
+                        ],
+                    }
+                  : current(status),
+        entries: [row],
+        nextCursor: null,
+    };
 }
 
 beforeEach(() => {
@@ -111,7 +146,7 @@ test("passes a validated seek cursor unchanged and accepts the empty final page"
     };
     vi.mocked(invoke)
         .mockResolvedValueOnce(first)
-        .mockResolvedValueOnce({ entries: [], nextCursor: null });
+        .mockResolvedValueOnce({ current: current("unrecorded"), entries: [], nextCursor: null });
     const result = await readConfigurationHistory("pi", null, 1);
     expect(result).toEqual({ kind: "desktop", page: first });
     if (result.kind !== "desktop") throw new Error("expected desktop history");
@@ -119,7 +154,7 @@ test("passes a validated seek cursor unchanged and accepts the empty final page"
         await readConfigurationHistory("pi", result.page.nextCursor, 1),
     ).toEqual({
         kind: "desktop",
-        page: { entries: [], nextCursor: null },
+        page: { current: current("unrecorded"), entries: [], nextCursor: null },
     });
     expect(invoke).toHaveBeenLastCalledWith("configuration_history_page", {
         input: { agent: "pi", after: first.nextCursor, limit: 1 },
@@ -218,7 +253,7 @@ const invalidEntries: unknown[] = [
     { ...base, revisions: [{ ...rev, revisionId: "../../private" }] },
     { ...base, revisions: [{ ...rev, backupPath: "/private" }] },
     { ...base, revisions: [{ ...rev, previousDigest: null }] },
-    { ...base, revisions: [{ ...rev, backupRecorded: false }] },
+    { ...base, revisions: [{ ...rev, backupRecorded: false, backupState: "not_needed" }] },
     {
         ...base,
         revisions: [{ ...rev, state: "prepared", errorCode: "write_failed" }],
@@ -368,17 +403,22 @@ test("rejects oversized, misordered and repeated pages without hiding bad rows",
         { code: "invalid_response" },
     );
     vi.mocked(invoke).mockResolvedValue({
+        current: current("unrecorded"),
         entries: [base, older],
         nextCursor: null,
     });
     expect(await readConfigurationHistory("pi", null, 2)).toEqual({
         kind: "desktop",
-        page: { entries: [base, older], nextCursor: null },
+        page: {
+            current: current("unrecorded"),
+            entries: [base, older],
+            nextCursor: null,
+        },
     });
 });
 
 test.each<HistoryRevision>([
-    { ...rev, previousDigest: null, backupRecorded: false },
+    { ...rev, previousDigest: null, backupRecorded: false, backupState: "not_needed" },
     { ...rev, intendedDigest: null },
     { ...rev, state: "prepared" },
     { ...rev, state: "failed", errorCode: "plan_stale" },
@@ -429,6 +469,7 @@ test("retains legacy attempts and separate partial multi-file restore/compensati
                 appliedDigest: null,
                 previousExisted: null,
                 backupRecorded: false,
+                backupState: "not_needed",
                 state: "failed" as const,
                 errorCode: "write_failed" as const,
                 restoreState: null,
@@ -461,7 +502,11 @@ test("retains legacy attempts and separate partial multi-file restore/compensati
                           },
                       ],
         };
-        const response = { entries: [row, legacy], nextCursor: null };
+        const response = {
+            current: current("unrecorded"),
+            entries: [row, legacy],
+            nextCursor: null,
+        };
         // Batches have their own sort time rather than their source's time.
         row.createdAt = 100;
         vi.mocked(invoke).mockResolvedValue(response);

@@ -312,8 +312,30 @@ fn read_pending(
 }
 
 fn inspect_backup(row: &PendingRevision, backups: &BackupStore) -> RevisionBackupState {
-    let (Some(path), Some(digest)) = (&row.backup_path, &row.previous_digest) else {
-        return if row.backup_path.is_none() {
+    recorded_backup_state(
+        backups,
+        &row.id,
+        &row.target_path,
+        row.backup_path.as_deref(),
+        row.previous_digest.as_deref(),
+    )
+}
+
+/// Whether a recorded private copy can still reproduce its bytes.
+///
+/// Absence before the mutation needs no copy (`NotNeeded`). A retained path
+/// that fails the shared layout/digest check is `Unavailable`. Never returns
+/// paths or file bytes. History listings reuse this so a journal reference is
+/// never reported as available without opening the private store.
+pub(super) fn recorded_backup_state(
+    backups: &BackupStore,
+    revision_id: &str,
+    target_path: &str,
+    recorded_path: Option<&str>,
+    expected_digest: Option<&str>,
+) -> RevisionBackupState {
+    let (Some(path), Some(digest)) = (recorded_path, expected_digest) else {
+        return if recorded_path.is_none() {
             RevisionBackupState::NotNeeded
         } else {
             RevisionBackupState::Unavailable
@@ -321,7 +343,7 @@ fn inspect_backup(row: &PendingRevision, backups: &BackupStore) -> RevisionBacku
     };
     // The shared reader refuses paths that do not match the private-store
     // layout, links, oversized or unreadable files, and digest mismatches.
-    match super::snapshots::read_snapshot(backups, &row.id, &row.target_path, path, digest) {
+    match super::snapshots::read_snapshot(backups, revision_id, target_path, path, digest) {
         Ok(_) => RevisionBackupState::Available,
         Err(_) => RevisionBackupState::Unavailable,
     }

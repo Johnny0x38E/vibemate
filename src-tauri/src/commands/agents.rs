@@ -262,9 +262,19 @@ pub(crate) async fn configuration_history_page(
     input: agents::history::ConfigurationHistoryRequest,
 ) -> Result<agents::history::ConfigurationHistoryPage, ClaudeCodeRestoreError> {
     let environment = environment(&app).map_err(|_| ClaudeCodeRestoreError::OperationFailed)?;
+    let backups = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| ClaudeCodeRestoreError::StorageUnavailable)?
+        .join("backups");
     tauri::async_runtime::spawn_blocking(move || {
         with_restore_storage(&app, |storage| {
-            agents::history::configuration_history_page(storage, &environment, &input)
+            agents::history::configuration_history_page(
+                storage,
+                &environment,
+                &input,
+                &crate::config_apply::BackupStore::new(backups),
+            )
         })
     })
     .await

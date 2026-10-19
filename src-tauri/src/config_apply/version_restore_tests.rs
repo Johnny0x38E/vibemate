@@ -480,7 +480,7 @@ fn a_direct_restore_is_listed_as_a_version_restore_without_requiring_resolution(
     )
     .expect("restore");
 
-    let entries = configuration_history(&fixture.storage, &scope, None, 50)
+    let entries = configuration_history(&fixture.storage, &scope, None, 50, &fixture.backups())
         .expect("history")
         .entries;
     let restored = entries

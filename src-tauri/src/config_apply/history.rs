@@ -2,17 +2,21 @@
 //!
 //! A page is one SQLite read snapshot. Cursors seek by immutable entry time and
 //! identity rather than an offset; separate pages remain a live view of the log.
-//! This module reads journal metadata only. It neither opens configuration or
-//! backup files nor grants permission to restore, resolve or delete anything.
+//! Journal pages may open private backup files to report availability, and may
+//! open configuration targets when identifying the current version. They never
+//! return backup paths or file bytes, and never grant restore, resolve or delete
+//! permission.
 
+use std::collections::BTreeMap;
 use std::path::{Component, Path};
 
 use rusqlite::{Connection, OptionalExtension, params, params_from_iter, types::Value};
 use serde::{Deserialize, Serialize};
 
 use super::{
-    OperationKind, OperationRecord, OperationState, RestoreState, RevisionMatch, StepState,
-    WriteError,
+    BackupStore, OperationKind, OperationRecord, OperationState, RestoreState, RevisionMatch,
+    StepState, WriteError,
+    inspection::{RevisionBackupState, recorded_backup_state},
     operations::{is_digest, read_operation},
     path_text,
 };
@@ -162,6 +166,8 @@ pub struct HistorySourceStep {
     pub previous_existed: Option<bool>,
     /// Whether the legacy step retained a copy reference, not its availability.
     pub backup_recorded: bool,
+    /// Real private-store check for the legacy step copy, when one was recorded.
+    pub backup_state: RevisionBackupState,
     /// Current journal state of the original apply step.
     pub state: StepState,
     /// Known write error recorded by a failed original step.
@@ -198,6 +204,8 @@ pub struct HistoryRevision {
     pub intended_digest: Option<String>,
     /// Whether a private copy reference was recorded, NOT its availability.
     pub backup_recorded: bool,
+    /// Real private-store check; a recorded reference alone is never "available".
+    pub backup_state: RevisionBackupState,
     /// Recorded file result, independent of the original operation's state.
     pub state: HistoryRevisionState,
     /// Explicit observation that repaired this result, when one exists.
@@ -235,10 +243,54 @@ pub struct HistoryEntry {
     pub revisions: Vec<HistoryRevision>,
 }
 
+/// How the live configuration relates to retained history.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HistoryCurrentStatus {
+    /// Every scoped file matches one retained version completely.
+    Matched,
+    /// Files are readable but no complete retained version matches.
+    Unrecorded,
+    /// Some files match a candidate while others do not; never pin a partial set.
+    Partial,
+    /// At least one scoped file could not be read safely.
+    Unreadable,
+}
+
+/// One live scoped file observation; digests only, never bytes.
+#[derive(Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryCurrentFile {
+    /// Exact owned target path from the trusted scope.
+    pub target_path: String,
+    /// Live digest, or null when the file is absent (and still readable as such).
+    pub current_digest: Option<String>,
+    /// False for symlinks, oversized files, or other unsafe reads.
+    pub readable: bool,
+}
+
+/// Fixed current-config summary, independent of history pagination.
+///
+/// Always returned with every page so the interface can pin it above the list.
+/// Matching compares live digests to retained previous/intended digests; it does
+/// not treat the newest apply/restore as current by itself.
+#[derive(Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryCurrentConfig {
+    /// Overall relationship of the live files to retained history.
+    pub status: HistoryCurrentStatus,
+    /// Single history entry that fully matches, only when `status` is `matched`.
+    pub matched_entry_key: Option<String>,
+    /// Per-file live observation for every scoped target, in scope order.
+    pub files: Vec<HistoryCurrentFile>,
+}
+
 /// Bounded read result. No total is inferred from a changing journal.
 #[derive(Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryPage {
+    /// Live configuration pin; identical for every page of the same scope.
+    pub current: HistoryCurrentConfig,
     /// Newest first; every multi-file batch stays inside one entry.
     pub entries: Vec<HistoryEntry>,
     /// Seek position for more entries, absent when this read reached the end.
@@ -250,8 +302,9 @@ pub struct HistoryPage {
 /// Each page uses a deferred read transaction, so another app instance cannot
 /// make the ID selection and entry validation observe different database states.
 /// Across pages, metadata may change and entries may disappear; this is not a
-/// frozen export. Newer insertions do not shift the seek position. No target or
-/// backup files are opened and no journal rows are modified.
+/// frozen export. Newer insertions do not shift the seek position. Private
+/// backup files are opened only to report [`RevisionBackupState`]; their paths
+/// and bytes never enter the response. No journal rows are modified.
 ///
 /// # Errors
 /// Returns `InvalidRequest` for a limit outside 1–50 or an invalid/wrong-scope
@@ -263,6 +316,7 @@ pub fn configuration_history(
     scope: &HistoryScope,
     after: Option<&HistoryCursor>,
     limit: u32,
+    backups: &BackupStore,
 ) -> Result<HistoryPage, WriteError> {
     if !(1..=MAX_PAGE_SIZE).contains(&limit) {
         return Err(WriteError::InvalidRequest);
@@ -285,7 +339,7 @@ pub fn configuration_history(
     }
     let mut entries = Vec::with_capacity(candidates.len());
     for candidate in candidates {
-        entries.push(read_entry(&transaction, scope, candidate)?);
+        entries.push(read_entry(&transaction, scope, candidate, backups)?);
     }
     let next_cursor = if has_more {
         entries.last().map(|entry| HistoryCursor {
@@ -296,13 +350,262 @@ pub fn configuration_history(
     } else {
         None
     };
+    let current = identify_current(&transaction, scope)?;
     transaction
         .commit()
         .map_err(|_| WriteError::LogReadFailed)?;
     Ok(HistoryPage {
+        current,
         entries,
         next_cursor,
     })
+}
+
+/// Upper bound when scanning the journal to identify the current version.
+const MAX_CURRENT_SCAN: u32 = 10_000;
+
+/// Full previous and intended digest maps for one history entry, when complete.
+type EntryVersionDigests = (
+    Option<BTreeMap<String, Option<String>>>,
+    Option<BTreeMap<String, Option<String>>>,
+    HistoryIntent,
+);
+
+/// Observe live digests and find at most one fully matching retained version.
+fn identify_current(
+    connection: &Connection,
+    scope: &HistoryScope,
+) -> Result<HistoryCurrentConfig, WriteError> {
+    let files = observe_current_files(scope);
+    if files.iter().any(|file| !file.readable) {
+        return Ok(HistoryCurrentConfig {
+            status: HistoryCurrentStatus::Unreadable,
+            matched_entry_key: None,
+            files,
+        });
+    }
+    let live: BTreeMap<&str, Option<&str>> = files
+        .iter()
+        .map(|file| (file.target_path.as_str(), file.current_digest.as_deref()))
+        .collect();
+    let candidates = read_candidates(connection, scope, None, MAX_CURRENT_SCAN)?;
+    let mut previous_matches: Vec<(i64, String, HistoryIntent)> = Vec::new();
+    let mut intended_matches: Vec<(i64, String, HistoryIntent)> = Vec::new();
+    let mut saw_partial = false;
+    for candidate in candidates {
+        // A damaged older row must not hide the current page. Pagination still
+        // fails closed when that row is selected; matching simply ignores it.
+        let Ok((previous, intended, intent)) = entry_version_digests(connection, scope, &candidate)
+        else {
+            continue;
+        };
+        let previous_full = previous.as_ref().is_some_and(|map| maps_equal(map, &live));
+        let intended_full = intended.as_ref().is_some_and(|map| maps_equal(map, &live));
+        if previous_full {
+            previous_matches.push((candidate.created_at, candidate.entry_key.clone(), intent));
+        } else if intended_full {
+            intended_matches.push((candidate.created_at, candidate.entry_key.clone(), intent));
+        } else if is_partial(&previous, &intended, &live) {
+            saw_partial = true;
+        }
+    }
+    let matched_entry_key = pick_matched_entry(&previous_matches, &intended_matches);
+    let status = if matched_entry_key.is_some() {
+        HistoryCurrentStatus::Matched
+    } else if saw_partial {
+        HistoryCurrentStatus::Partial
+    } else {
+        HistoryCurrentStatus::Unrecorded
+    };
+    Ok(HistoryCurrentConfig {
+        status,
+        matched_entry_key,
+        files,
+    })
+}
+
+fn observe_current_files(scope: &HistoryScope) -> Vec<HistoryCurrentFile> {
+    scope
+        .targets
+        .iter()
+        .map(|path| match super::read_target(Path::new(path)) {
+            Ok(target) if !target.symlink => HistoryCurrentFile {
+                target_path: path.clone(),
+                current_digest: target.content_digest,
+                readable: true,
+            },
+            _ => HistoryCurrentFile {
+                target_path: path.clone(),
+                current_digest: None,
+                readable: false,
+            },
+        })
+        .collect()
+}
+
+fn maps_equal(
+    candidate: &BTreeMap<String, Option<String>>,
+    live: &BTreeMap<&str, Option<&str>>,
+) -> bool {
+    if candidate.len() != live.len() {
+        return false;
+    }
+    live.iter().all(|(path, digest)| {
+        candidate
+            .get(*path)
+            .is_some_and(|value| value.as_deref() == *digest)
+    })
+}
+
+fn is_partial(
+    previous: &Option<BTreeMap<String, Option<String>>>,
+    intended: &Option<BTreeMap<String, Option<String>>>,
+    live: &BTreeMap<&str, Option<&str>>,
+) -> bool {
+    for map in [previous, intended].into_iter().flatten() {
+        let mut matched = 0usize;
+        let mut differed = 0usize;
+        for (path, digest) in live {
+            match map.get(*path) {
+                Some(value) if value.as_deref() == *digest => matched += 1,
+                Some(_) => differed += 1,
+                None => {}
+            }
+        }
+        if matched > 0 && (differed > 0 || matched < live.len()) {
+            return true;
+        }
+    }
+    false
+}
+
+fn pick_matched_entry(
+    previous: &[(i64, String, HistoryIntent)],
+    intended: &[(i64, String, HistoryIntent)],
+) -> Option<String> {
+    // Prefer a restorable snapshot match (previous). Among those, prefer the
+    // original apply identity, then the oldest entry so restoring B pins B.
+    if let Some((_, key, _)) = select_match(previous, true) {
+        return Some(key);
+    }
+    // Otherwise the latest write whose intended digests still hold.
+    select_match(intended, false).map(|(_, key, _)| key)
+}
+
+fn select_match(
+    matches: &[(i64, String, HistoryIntent)],
+    oldest: bool,
+) -> Option<(i64, String, HistoryIntent)> {
+    if matches.is_empty() {
+        return None;
+    }
+    let apply_only: Vec<_> = matches
+        .iter()
+        .filter(|(_, key, intent)| *intent == HistoryIntent::Apply && key.starts_with("operation:"))
+        .cloned()
+        .collect();
+    let pool = if apply_only.is_empty() {
+        matches.to_vec()
+    } else {
+        apply_only
+    };
+    pool.into_iter().reduce(|left, right| {
+        let take_left = if oldest {
+            (left.0, &left.1) <= (right.0, &right.1)
+        } else {
+            (left.0, &left.1) >= (right.0, &right.1)
+        };
+        if take_left { left } else { right }
+    })
+}
+
+/// Full previous/intended digest maps when the entry covers every scoped file.
+fn entry_version_digests(
+    connection: &Connection,
+    scope: &HistoryScope,
+    candidate: &Candidate,
+) -> Result<EntryVersionDigests, WriteError> {
+    if !valid_entry_key(&candidate.entry_key) || !shared::is_random_id(&candidate.operation_id) {
+        return Err(WriteError::InvalidStoredOperation);
+    }
+    let source = read_operation(connection, &candidate.operation_id)?
+        .ok_or(WriteError::InvalidStoredOperation)?;
+    if source.kind != scope.kind
+        || source.steps.len() > MAX_SCOPE_FILES
+        || source
+            .steps
+            .iter()
+            .any(|step| !scope.targets.contains(&step.target_path))
+    {
+        return Err(WriteError::InvalidStoredOperation);
+    }
+    let batch = candidate.entry_key.strip_prefix("batch:");
+    let (intent, stored) = read_revisions(connection, &source, batch)?;
+    let previous_from_revisions = complete_map(
+        scope,
+        stored.iter().map(|row| {
+            (
+                row.target_path.clone(),
+                row.revision.previous_digest.clone(),
+            )
+        }),
+    );
+    let intended_from_revisions = complete_map(
+        scope,
+        stored.iter().map(|row| {
+            (
+                row.target_path.clone(),
+                row.revision.intended_digest.clone(),
+            )
+        }),
+    );
+    if batch.is_some() {
+        return Ok((previous_from_revisions, intended_from_revisions, intent));
+    }
+    // Legacy apply rows without revisions still expose expected/applied digests.
+    let previous_from_steps = complete_map(
+        scope,
+        source
+            .steps
+            .iter()
+            .map(|step| (step.target_path.clone(), step.expected_digest.clone())),
+    );
+    let intended_from_steps =
+        if source.steps.iter().all(|step| {
+            step.state == StepState::Applied && scope.targets.contains(&step.target_path)
+        }) {
+            complete_map(
+                scope,
+                source
+                    .steps
+                    .iter()
+                    .map(|step| (step.target_path.clone(), step.applied_digest.clone())),
+            )
+        } else {
+            None
+        };
+    Ok((
+        previous_from_revisions.or(previous_from_steps),
+        intended_from_revisions.or(intended_from_steps),
+        intent,
+    ))
+}
+
+fn complete_map(
+    scope: &HistoryScope,
+    pairs: impl IntoIterator<Item = (String, Option<String>)>,
+) -> Option<BTreeMap<String, Option<String>>> {
+    let mut map = BTreeMap::new();
+    for (path, digest) in pairs {
+        if !scope.targets.contains(&path) || map.contains_key(&path) {
+            return None;
+        }
+        map.insert(path, digest);
+    }
+    if map.len() != scope.targets.len() {
+        return None;
+    }
+    Some(map)
 }
 
 struct Candidate {
@@ -372,6 +675,7 @@ fn read_entry(
     connection: &Connection,
     scope: &HistoryScope,
     candidate: Candidate,
+    backups: &BackupStore,
 ) -> Result<HistoryEntry, WriteError> {
     if !valid_entry_key(&candidate.entry_key)
         || !shared::is_random_id(&candidate.operation_id)
@@ -398,18 +702,46 @@ fn read_entry(
         .fold(source.updated_at, i64::max);
     let mut source_steps = Vec::with_capacity(source.steps.len());
     for step in source.steps {
+        let backup_recorded = step.backup.is_some();
+        let backup_state = match &step.backup {
+            Some(backup) => recorded_backup_state(
+                backups,
+                &backup.id,
+                &step.target_path,
+                Some(backup.path.as_str()),
+                Some(backup.content_digest.as_str()),
+            ),
+            None => RevisionBackupState::NotNeeded,
+        };
         source_steps.push(HistorySourceStep {
             ordinal: step.ordinal,
             target_path: step.target_path,
             expected_digest: step.expected_digest,
             applied_digest: step.applied_digest,
             previous_existed: step.previous_existed,
-            backup_recorded: step.backup.is_some(),
+            backup_recorded,
+            backup_state,
             state: step.state,
             error_code: step.error_code.as_deref().map(parse_error).transpose()?,
             restore_state: step.restore_state,
         });
     }
+    let revisions = stored
+        .into_iter()
+        .map(|row| {
+            let backup_state = recorded_backup_state(
+                backups,
+                &row.revision.revision_id,
+                &row.target_path,
+                row.backup_path.as_deref(),
+                row.revision.previous_digest.as_deref(),
+            );
+            HistoryRevision {
+                backup_state,
+                ..row.revision
+            }
+        })
+        .collect();
     Ok(HistoryEntry {
         entry_key: candidate.entry_key,
         operation_id: source.id,
@@ -419,7 +751,7 @@ fn read_entry(
         created_at: candidate.created_at,
         updated_at,
         source_steps,
-        revisions: stored.into_iter().map(|row| row.revision).collect(),
+        revisions,
     })
 }
 
@@ -562,6 +894,8 @@ pub(super) fn read_revisions(
                 previous_digest: row.previous_digest,
                 intended_digest: row.next_digest,
                 backup_recorded: row.backup_path.is_some(),
+                // Filled by read_entry after the private-store check.
+                backup_state: RevisionBackupState::NotNeeded,
                 state,
                 resolution,
                 error_code,

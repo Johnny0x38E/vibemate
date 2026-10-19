@@ -54,6 +54,7 @@ const ordinal = z.int().min(0).max(15);
 // The history reader also accepts plan_stale from older/shared write journals.
 const writeError = z.enum([...WRITE_ERROR_CODES, "plan_stale"]);
 const revisionState = z.enum(["prepared", "completed", "failed", "unknown"]);
+const backupState = z.enum(["not_needed", "available", "unavailable"]);
 const cursorSchema = z.strictObject({
     scopeDigest: digest,
     createdAt: timestamp,
@@ -67,6 +68,7 @@ const sourceStepSchema = z
         appliedDigest: digest.nullable(),
         previousExisted: z.boolean().nullable(),
         backupRecorded: z.boolean(),
+        backupState,
         state: z.enum(APPLY_STEP_STATES),
         errorCode: writeError.nullable(),
         restoreState: z.enum(RESTORE_STATES).nullable(),
@@ -78,7 +80,10 @@ const sourceStepSchema = z
             (step.state === "applied" ||
                 (!step.backupRecorded &&
                     step.previousExisted === null &&
-                    step.restoreState === null)),
+                    step.restoreState === null)) &&
+            (step.backupRecorded
+                ? step.backupState !== "not_needed"
+                : step.backupState === "not_needed"),
     );
 const resolutionSchema = z.strictObject({
     previousState: z.enum(["prepared", "completed", "unknown"]),
@@ -93,6 +98,7 @@ const revisionSchema = z
         previousDigest: digest.nullable(),
         intendedDigest: digest.nullable(),
         backupRecorded: z.boolean(),
+        backupState,
         state: revisionState,
         resolution: resolutionSchema.nullable(),
         errorCode: writeError.nullable(),
@@ -119,6 +125,9 @@ const revisionSchema = z
             validResult &&
             validResolution &&
             revision.backupRecorded === (revision.previousDigest !== null) &&
+            (revision.backupRecorded
+                ? revision.backupState !== "not_needed"
+                : revision.backupState === "not_needed") &&
             revision.updatedAt >= revision.createdAt
         );
     });
@@ -163,7 +172,29 @@ const entrySchema = z
             )
         );
     });
+const currentFileSchema = z.strictObject({
+    targetPath: z.string().refine(isSafePath),
+    currentDigest: digest.nullable(),
+    readable: z.boolean(),
+});
+const currentSchema = z
+    .strictObject({
+        status: z.enum(["matched", "unrecorded", "partial", "unreadable"]),
+        matchedEntryKey: entryKey.nullable(),
+        files: z.array(currentFileSchema).max(16),
+    })
+    .refine((current) => {
+        const matched = current.status === "matched";
+        if (matched !== (current.matchedEntryKey !== null)) return false;
+        if (current.status === "unreadable") {
+            return current.files.some((file) => !file.readable);
+        }
+        if (!current.files.every((file) => file.readable)) return false;
+        // Absence is represented by a null digest on a readable file.
+        return true;
+    });
 const pageSchema = z.strictObject({
+    current: currentSchema,
     entries: z.array(entrySchema).max(50),
     nextCursor: cursorSchema.nullable(),
 });
@@ -176,14 +207,16 @@ export type HistorySourceStep = z.infer<typeof sourceStepSchema>;
 export type HistoryResolution = z.infer<typeof resolutionSchema>;
 /** One file's recorded mutation result; `completed` may still need review. */
 export type HistoryRevisionState = z.infer<typeof revisionState>;
-/** Pre-mutation metadata; backupRecorded does not establish availability. */
+/** Pre-mutation metadata; backupState is a real private-store check. */
 export type HistoryRevision = z.infer<typeof revisionSchema>;
 /**
  * One original operation or an independent restore/compensation batch, with
  * adapter-level Provider display text and interrupted-write status.
  */
 export type HistoryEntry = z.infer<typeof entrySchema>;
-/** Complete bounded metadata page; includes no current-state or restore claims. */
+/** Live configuration pin returned with every history page. */
+export type HistoryCurrentConfig = z.infer<typeof currentSchema>;
+/** Complete bounded metadata page, including the fixed current-config pin. */
 export type HistoryPage = z.infer<typeof pageSchema>;
 
 function isOlder(
@@ -209,6 +242,8 @@ function parsePage(
     const page = result.data;
     const last = page.entries[page.entries.length - 1];
     if (
+        new Set(page.current.files.map((file) => file.targetPath)).size !==
+            page.current.files.length ||
         page.entries.length > limit ||
         page.entries.some((entry, index, entries) => {
             const previous = index === 0 ? after : entries[index - 1];

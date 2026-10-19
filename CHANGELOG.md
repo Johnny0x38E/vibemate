@@ -6,6 +6,10 @@ GitHub release notes are extracted from the matching version section only.
 
 ## [Unreleased]
 
+### Changed
+
+- Configuration history pages now report real private-backup availability and a fixed current-configuration pin. Each retained revision and legacy step gets a verified `backupState` (`not_needed` / `available` / `unavailable`) from the private store layout and digest check; a journal reference alone is never treated as available, and backup paths or bytes never cross IPC. Every page also returns `current` (independent of the seek cursor): live digests are compared to retained previous/intended digests so a full match can name one `matchedEntryKey`, while external edits, unsafe reads and partial multi-file matches stay `unrecorded` / `unreadable` / `partial` instead of inventing a current version from the latest operation. The typed frontend history schema requires both fields; RestoreView still needs Frontend wiring to display them. Verified with new availability and current-pin tests, Rust formatting/Clippy/history suites, and matching vitest boundary coverage. This is not maintainer UI acceptance; H3 deletion remains separate.
+
 ### Documentation
 
 - Clarified pending configuration-history requirements: independent pre-write snapshots, including restores, full history browsing, direct restoration of any retained version, and confirmed record/backup deletion with retryable cleanup. Added explicit follow-up tasks for verified Agent mappings and UI for reasoning efforts, context windows, output metadata and supported request settings. These are plans, not newly implemented application features.

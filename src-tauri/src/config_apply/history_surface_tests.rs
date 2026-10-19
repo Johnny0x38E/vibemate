@@ -75,8 +75,13 @@ fn history_surface_defaults_work_without_installations_targets_or_backups() {
         let root = environment.home.join(directory);
         let id = apply_in(&fixture, kind, &root, names);
         fs::remove_dir_all(&root).unwrap();
-        let page = configuration_history_page(&fixture.storage, &environment, &request(agent, 50))
-            .unwrap();
+        let page = configuration_history_page(
+            &fixture.storage,
+            &environment,
+            &request(agent, 50),
+            &fixture.backups(),
+        )
+        .unwrap();
         assert_eq!(page.entries.len(), 1);
         assert_eq!(page.entries[0].entry.operation_id, id);
         assert_eq!(page.entries[0].entry.source_steps.len(), names.len());
@@ -86,20 +91,20 @@ fn history_surface_defaults_work_without_installations_targets_or_backups() {
         assert!(!serialized.contains(fixture.backups().root().to_str().unwrap()));
     }
     fs::remove_dir_all(fixture.backups().root()).unwrap();
-    // A retained reference is metadata, not a claim of actual availability.
+    // A retained journal reference is not enough: missing copies are unavailable.
     let page = configuration_history_page(
         &fixture.storage,
         &environment,
         &request(ConfigurationAgent::Pi, 50),
+        &fixture.backups(),
     )
     .unwrap();
-    assert!(
-        page.entries[0]
-            .entry
-            .revisions
-            .iter()
-            .all(|revision| revision.backup_recorded)
-    );
+    assert!(page.entries[0].entry.revisions.iter().all(|revision| {
+        revision.backup_recorded && revision.backup_state == RevisionBackupState::Unavailable
+    }));
+    assert!(page.entries[0].entry.source_steps.iter().all(|step| {
+        step.backup_recorded && step.backup_state == RevisionBackupState::Unavailable
+    }));
 }
 
 #[test]
@@ -132,8 +137,13 @@ fn history_surface_overrides_isolate_roots_agents_and_unowned_files() {
         apply_in(&fixture, kind, &other, names);
         // Even matching one owned file cannot admit a mixed/unowned operation.
         apply_in(&fixture, kind, &root, &[names[0], "auth.json"]);
-        let page = configuration_history_page(&fixture.storage, &environment, &request(agent, 50))
-            .unwrap();
+        let page = configuration_history_page(
+            &fixture.storage,
+            &environment,
+            &request(agent, 50),
+            &fixture.backups(),
+        )
+        .unwrap();
         assert_eq!(page.entries.len(), 1);
         assert_eq!(page.entries[0].entry.operation_id, expected);
     }
@@ -161,6 +171,7 @@ fn history_surface_pages_restore_batches_and_survives_restart_without_mutation()
         &fixture.storage,
         &environment,
         &request(ConfigurationAgent::Pi, 50),
+        &fixture.backups(),
     )
     .unwrap();
     assert_eq!(before.entries.len(), 13);
@@ -182,7 +193,9 @@ fn history_surface_pages_restore_batches_and_survives_restart_without_mutation()
     let mut page_request = request(ConfigurationAgent::Pi, 3);
     let mut keys = std::collections::BTreeSet::new();
     loop {
-        let page = configuration_history_page(&reopened, &environment, &page_request).unwrap();
+        let page =
+            configuration_history_page(&reopened, &environment, &page_request, &fixture.backups())
+                .unwrap();
         for entry in page.entries {
             assert!(operations.contains(&entry.entry.operation_id));
             assert!(keys.insert(entry.entry.entry_key));
@@ -197,6 +210,7 @@ fn history_surface_pages_restore_batches_and_survives_restart_without_mutation()
         &fixture.storage,
         &environment,
         &request(ConfigurationAgent::Pi, 50),
+        &fixture.backups(),
     )
     .unwrap();
     assert_eq!(before, after);
@@ -218,19 +232,22 @@ fn history_surface_rejects_wrong_root_or_agent_cursor_and_invalid_environment() 
         &fixture.storage,
         &environment,
         &request(ConfigurationAgent::Pi, 1),
+        &fixture.backups(),
     )
     .unwrap();
     let mut next = request(ConfigurationAgent::GrokBuild, 1);
     next.after = first.next_cursor;
     assert!(next.after.is_some());
     assert_eq!(
-        configuration_history_page(&fixture.storage, &environment, &next).unwrap_err(),
+        configuration_history_page(&fixture.storage, &environment, &next, &fixture.backups())
+            .unwrap_err(),
         ClaudeCodeRestoreError::InvalidRequest
     );
     next.agent = ConfigurationAgent::Pi;
     environment.pi_directory = Some(fixture.root.join("different").into_os_string());
     assert_eq!(
-        configuration_history_page(&fixture.storage, &environment, &next).unwrap_err(),
+        configuration_history_page(&fixture.storage, &environment, &next, &fixture.backups())
+            .unwrap_err(),
         ClaudeCodeRestoreError::InvalidRequest
     );
     for invalid in ["", "relative", "invalid\nroot"] {
@@ -239,7 +256,8 @@ fn history_surface_rejects_wrong_root_or_agent_cursor_and_invalid_environment() 
             configuration_history_page(
                 &fixture.storage,
                 &environment,
-                &request(ConfigurationAgent::Pi, 1)
+                &request(ConfigurationAgent::Pi, 1),
+                &fixture.backups()
             )
             .unwrap_err(),
             ClaudeCodeRestoreError::InvalidRequest
@@ -253,7 +271,8 @@ fn history_surface_rejects_wrong_root_or_agent_cursor_and_invalid_environment() 
                     pi_directory: Some(root.clone().into_os_string()),
                     ..DiscoveryEnvironment::default()
                 },
-                &request(ConfigurationAgent::Pi, limit)
+                &request(ConfigurationAgent::Pi, limit),
+                &fixture.backups()
             )
             .unwrap_err(),
             ClaudeCodeRestoreError::InvalidRequest
@@ -296,7 +315,9 @@ fn history_surface_adds_provider_labels_and_resolution_state_without_file_bytes(
     )
     .unwrap();
     let request = request(ConfigurationAgent::ClaudeCode, 50);
-    let page = configuration_history_page(&fixture.storage, &environment, &request).unwrap();
+    let page =
+        configuration_history_page(&fixture.storage, &environment, &request, &fixture.backups())
+            .unwrap();
     assert_eq!(
         page.entries[0].owner_label.as_deref(),
         Some("History Provider")
@@ -309,7 +330,9 @@ fn history_surface_adds_provider_labels_and_resolution_state_without_file_bytes(
         "UPDATE config_file_revision SET state = 'prepared' WHERE operation_id = '{}'",
         applied.operation_id
     ));
-    let page = configuration_history_page(&fixture.storage, &environment, &request).unwrap();
+    let page =
+        configuration_history_page(&fixture.storage, &environment, &request, &fixture.backups())
+            .unwrap();
     assert!(page.entries[0].requires_resolution);
     let serialized = serde_json::to_string(&page).unwrap();
     assert!(serialized.contains("\"requiresResolution\":true"));
@@ -335,7 +358,9 @@ fn history_surface_adds_provider_labels_and_resolution_state_without_file_bytes(
         &["settings.json"],
     );
     assert!(!unowned.is_empty());
-    let page = configuration_history_page(&fixture.storage, &environment, &request).unwrap();
+    let page =
+        configuration_history_page(&fixture.storage, &environment, &request, &fixture.backups())
+            .unwrap();
     let entry = page
         .entries
         .iter()
@@ -362,8 +387,13 @@ fn history_surface_payload_rejects_unsupported_agents_paths_and_cursor_extension
     let fixture = Fixture::new();
     let malformed: ConfigurationHistoryRequest = serde_json::from_value(json!({"agent":"pi","after":{"scopeDigest":"not-a-digest","createdAt":-1,"entryKey":"arbitrary"},"limit":10})).unwrap();
     assert_eq!(
-        configuration_history_page(&fixture.storage, &environment(&fixture), &malformed)
-            .unwrap_err(),
+        configuration_history_page(
+            &fixture.storage,
+            &environment(&fixture),
+            &malformed,
+            &fixture.backups()
+        )
+        .unwrap_err(),
         ClaudeCodeRestoreError::InvalidRequest
     );
 }

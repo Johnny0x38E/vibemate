@@ -745,8 +745,9 @@ pub use cleanup::{
     inspect_backup_copies,
 };
 pub use history::{
-    HistoryCursor, HistoryEntry, HistoryIntent, HistoryPage, HistoryResolution, HistoryRevision,
-    HistoryRevisionState, HistoryScope, HistorySourceStep, configuration_history,
+    HistoryCurrentConfig, HistoryCurrentFile, HistoryCurrentStatus, HistoryCursor, HistoryEntry,
+    HistoryIntent, HistoryPage, HistoryResolution, HistoryRevision, HistoryRevisionState,
+    HistoryScope, HistorySourceStep, configuration_history,
 };
 pub use inspection::{
     RevisionBackupState, RevisionInspection, RevisionMatch, inspect_interrupted_revisions,

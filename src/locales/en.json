@@ -563,7 +563,7 @@
             "credentialMasked": "credential value hidden",
             "absent": "absent",
             "empty": "empty string",
-            "truncated": "Only the first 200 changes are shown. Open the detailed configuration for the complete text.",
+            "truncated": "Only the first 200 changes are shown.",
             "viewDetailsFor": "View detailed configuration for {{path}}",
             "blockedHint": "This version cannot be restored safely. Resolve the listed file reasons and review again.",
             "keyNotice": "The restored files get back whatever they held at that time, including plain text API keys if they contained one. OS credential storage is not changed.",
@@ -588,8 +588,6 @@
             "textClose": "Close",
             "textFiles": "Files in this version",
             "textCurrent": "Current configuration",
-            "textRetained": "Retained version",
-            "textPlanned": "Planned configuration",
             "textAbsent": "The file did not exist at this point.",
             "textUnavailable": "This text cannot be shown safely: {{reason}}",
             "textBytes": "Original size: {{bytes}} bytes",
@@ -597,14 +595,8 @@
             "textRetry": "Try again",
             "textDiff": "Differences",
             "textNoDiff": "No line differences.",
-            "textNoComparison": "A line diff needs both sides to be present; expand the full text below to see each side or its absence.",
-            "textDiffTooLarge": "The files are too large for a line diff; expand the full text below to compare them.",
             "textPreviewMode": "The browser preview cannot read configuration files. Open the vibemate desktop app.",
-            "textMaskedNotice": "Values under credential-like keys are masked before this text leaves Rust.",
-            "textShowFull": "Show full configuration text",
-            "lineAdded": "Added line",
-            "lineRemoved": "Removed line",
-            "lineSame": "Unchanged line"
+            "textMaskedNotice": "Values under credential-like keys are masked before this text leaves Rust."
         },
         "directory": "User configuration directory: {{path}}",
         "states": {
@@ -962,7 +954,8 @@
             "skill": "Skill {{value}}",
             "mcp": "MCP {{value}}",
             "none": "No configuration summary",
-            "separator": " · "
+            "separator": " · ",
+            "notWritten": "not written"
         },
         "skillPanel": {
             "empty": "Managed in the Skills module soon; a read-only status will appear here later."

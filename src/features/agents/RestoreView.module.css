@@ -109,6 +109,29 @@
     border-bottom: 1px solid var(--color-border);
 }
 
+/* Label/paths on the left; unified detailed-config entry right-aligned. */
+.currentPinRow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    min-width: 0;
+}
+
+.currentDetails {
+    flex: none;
+    margin-left: auto;
+}
+
+.versionInline {
+    display: grid;
+    gap: var(--space-sm, 8px);
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid var(--color-border);
+}
+
 /* Label in column 1; every managed path stacks in column 2 so follow-on
  * paths line up under the first path for any locale label width. */
 .currentPinBody {

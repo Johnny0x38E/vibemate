@@ -32,6 +32,11 @@ vi.mock(import("../../lib/desktop/agentVersions"), async (original) => ({
     ...(await original()),
     probeAgentVersion: vi.fn(),
 }));
+vi.mock(import("../../lib/desktop/history"), async (original) => ({
+    ...(await original()),
+    readConfigurationHistory: vi.fn(),
+}));
+import { readConfigurationHistory } from "../../lib/desktop/history";
 const probe = vi.mocked(probeAgentVersion);
 const pi: AgentObservation = {
     id: "pi",
@@ -69,9 +74,11 @@ const result: DiscoveryResult = {
     items: agentReport([pi, grok]),
 };
 const read = vi.mocked(discoverAgents);
+const loadHistory = vi.mocked(readConfigurationHistory);
 beforeEach(() => {
     read.mockReset().mockResolvedValue(result);
     probe.mockReset();
+    loadHistory.mockReset().mockResolvedValue({ kind: "preview" });
 });
 afterEach(cleanup);
 async function mount(locale: "en" | "zh-CN" = "en") {
@@ -651,17 +658,35 @@ test("filename version remains unverified and unavailable config roots do not sh
     expect(screen.queryByText("Not found")).toBeNull();
 });
 
-test("list cards reserve empty Provider model Skill MCP summary slots", async () => {
+test("list cards show real-or-notWritten Provider/Model without dash shells", async () => {
+    loadHistory.mockResolvedValue({
+        kind: "desktop",
+        page: {
+            current: {
+                status: "unrecorded",
+                matchedEntryKey: null,
+                files: [],
+            },
+            entries: [],
+            nextCursor: null,
+        },
+    });
     await mount();
     await screen.findByRole("button", { name: "Open Pi details" });
-    // Configurable agents show dash slots, never a fake zero count.
-    expect(screen.getAllByText(/Provider —/u).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Model —/u).length).toBeGreaterThan(0);
+    // Unmatched history → 「not written」, never empty-shell dashes for Provider/Model.
+    await waitFor(() => {
+        expect(
+            screen.getAllByText(/Provider not written/u).length,
+        ).toBeGreaterThan(0);
+    });
+    expect(screen.getAllByText(/Model not written/u).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Provider —/u)).toBeNull();
+    expect(screen.queryByText(/Model —/u)).toBeNull();
+    // Skill/MCP stay empty-state dashes for now.
     expect(screen.getAllByText(/Skill —/u).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/MCP —/u).length).toBeGreaterThan(0);
     expect(screen.queryByText(/Skill 0/u)).toBeNull();
     expect(screen.queryByText(/MCP 0/u)).toBeNull();
-    // Agents without a write adapter show the shared empty summary line.
     const hermes = screen.getByRole("button", {
         name: "Open Hermes details",
     });
@@ -680,13 +705,15 @@ test("agent detail defaults to the History segment with a current-config pin", a
     expect(screen.getByRole("tab", { name: "Install & paths" })).toBeTruthy();
 });
 
-test("Write segment shows Provider and Model before the config cards", async () => {
+test("Write segment hides unresolved Provider and Model shells", async () => {
     await mount();
     await openPiDetail();
     fireEvent.click(screen.getByRole("tab", { name: "Write" }));
     const writePanel = screen.getByRole("tabpanel", { name: "Write" });
-    expect(within(writePanel).getByText(/Provider —/u)).toBeTruthy();
-    expect(within(writePanel).getByText(/Model —/u)).toBeTruthy();
+    // Browser preview history has no matched provider/model — hide the row.
+    expect(within(writePanel).queryByText(/Provider —/u)).toBeNull();
+    expect(within(writePanel).queryByText(/Model —/u)).toBeNull();
+    expect(within(writePanel).queryByText(/Provider not written/u)).toBeNull();
     expect(within(writePanel).queryByText(/Skill —/u)).toBeNull();
     expect(within(writePanel).queryByText(/MCP —/u)).toBeNull();
 });

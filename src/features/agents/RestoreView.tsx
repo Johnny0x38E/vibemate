@@ -33,7 +33,6 @@ import {
     applyVersionRestore,
     planVersionRestore,
     type VersionRestoreErrorCode,
-    type VersionRestoreFile,
     type VersionRestoreOutcome,
     type VersionRestorePlan,
 } from "../../lib/desktop/versionRestore";
@@ -42,10 +41,13 @@ import card from "./ConfigPreview.module.css";
 import restore from "./RestoreView.module.css";
 import { ResolutionReviewCard } from "./ResolutionReviewCard";
 import {
-    VersionRestorePlanCard,
+    VersionRestorePlanInline,
     VersionRestoreResultCard,
 } from "./VersionRestoreCard";
-import { VersionTextDialog } from "./VersionTextDialog";
+import {
+    CurrentConfigurationDialog,
+    type CurrentConfigTextFile,
+} from "./VersionTextDialog";
 import {
     HistoryDeleteAction,
     historyDeleteBlockReason,
@@ -137,7 +139,14 @@ export function RestoreView({
     /** Notifies the parent whenever the live pin from a page changes. */
     onCurrentChange?: (
         current: HistoryCurrentConfig | null,
-        summary?: { providerLabel: string | null; modelLabel: string | null },
+        summary?: {
+            providerLabel: string | null;
+            modelLabel: string | null;
+            textSource: {
+                entryKey: string;
+                files: CurrentConfigTextFile[];
+            } | null;
+        },
     ) => void;
 }): JSX.Element {
     const { t, i18n } = useTranslation();
@@ -150,12 +159,10 @@ export function RestoreView({
     const [versionApply, setVersionApply] = useState<VersionApplyState>({
         kind: "idle",
     });
-    const [textTarget, setTextTarget] = useState<{
-        plan: VersionRestorePlan;
-        file: VersionRestoreFile;
-    } | null>(null);
-    const textTrigger = useRef<HTMLElement | null>(null);
-    const reviewTrigger = useRef<HTMLElement | null>(null);
+    /** Which history row is expanded to show an inline version plan. */
+    const [versionExpandedKey, setVersionExpandedKey] = useState<string | null>(
+        null,
+    );
     const [attempt, setAttempt] = useState(0);
     const [deleteBusy, setDeleteBusy] = useState(false);
     const pending = useRef(false);
@@ -230,10 +237,34 @@ export function RestoreView({
                 ? list.entries.find((entry) => entry.entryKey === matchedKey)
                 : undefined;
         const providerLabel = matched?.ownerLabel ?? matched?.ownerRef ?? null;
-        // History pages do not yet carry a resolved model label.
+        // History pages do not yet carry a resolved model label (Rust gap).
+        const textSource =
+            matched === undefined || matchedKey === null
+                ? null
+                : {
+                      entryKey: matchedKey,
+                      files: matched.revisions.flatMap((revision) => {
+                          const step = matched.sourceSteps[revision.ordinal];
+                          if (step === undefined) return [];
+                          const live = list.current.files.find(
+                              (file) => file.targetPath === step.targetPath,
+                          );
+                          return [
+                              {
+                                  revisionId: revision.revisionId,
+                                  targetPath: step.targetPath,
+                                  currentDigest: live?.currentDigest ?? null,
+                              },
+                          ];
+                      }),
+                  };
         currentCallback.current?.(list.current, {
             providerLabel,
             modelLabel: null,
+            textSource:
+                textSource !== null && textSource.files.length > 0
+                    ? textSource
+                    : null,
         });
     }, [list]);
 
@@ -310,17 +341,13 @@ export function RestoreView({
      * discards the legacy rollback preview so only one card is on screen.
      */
     async function runVersionPreview(entryKey: string): Promise<void> {
-        reviewTrigger.current =
-            document.activeElement instanceof HTMLElement
-                ? document.activeElement
-                : null;
         if (blocked || pending.current || readingMore) return;
         pending.current = true;
         busyCallback.current?.(true);
         setPreview({ kind: "idle" });
         setApply({ kind: "idle" });
         setVersionApply({ kind: "idle" });
-        setTextTarget(null);
+        setVersionExpandedKey(entryKey);
         setVersionPlan({ kind: "loading", entryKey });
         try {
             const result = await planVersionRestore(agent, entryKey);
@@ -357,7 +384,6 @@ export function RestoreView({
             return;
         pending.current = true;
         busyCallback.current?.(true);
-        setTextTarget(null);
         setVersionApply({ kind: "applying" });
         try {
             const result = await applyVersionRestore(
@@ -367,6 +393,7 @@ export function RestoreView({
             );
             if (!mounted.current) return;
             setVersionPlan({ kind: "idle" });
+            setVersionExpandedKey(null);
             setVersionApply({ kind: "done", result });
             setAttempt((current) => current + 1);
         } catch (error: unknown) {
@@ -383,6 +410,7 @@ export function RestoreView({
                 code === "operation_not_found"
             ) {
                 setVersionPlan({ kind: "idle" });
+                setVersionExpandedKey(null);
                 setAttempt((current) => current + 1);
             }
             setVersionApply({ kind: "error", code });
@@ -600,7 +628,64 @@ export function RestoreView({
                 {list.kind === "ready" && (
                     <>
                         {!hidePin && (
-                            <CurrentConfigPin current={list.current} />
+                            <CurrentConfigPin
+                                current={list.current}
+                                agent={agent}
+                                textSource={
+                                    list.current.status === "matched" &&
+                                    list.current.matchedEntryKey !== null
+                                        ? (() => {
+                                              const matched = list.entries.find(
+                                                  (entry) =>
+                                                      entry.entryKey ===
+                                                      list.current
+                                                          .matchedEntryKey,
+                                              );
+                                              if (matched === undefined)
+                                                  return null;
+                                              const files =
+                                                  matched.revisions.flatMap(
+                                                      (revision) => {
+                                                          const step =
+                                                              matched
+                                                                  .sourceSteps[
+                                                                  revision
+                                                                      .ordinal
+                                                              ];
+                                                          if (
+                                                              step === undefined
+                                                          )
+                                                              return [];
+                                                          const live =
+                                                              list.current.files.find(
+                                                                  (file) =>
+                                                                      file.targetPath ===
+                                                                      step.targetPath,
+                                                              );
+                                                          return [
+                                                              {
+                                                                  revisionId:
+                                                                      revision.revisionId,
+                                                                  targetPath:
+                                                                      step.targetPath,
+                                                                  currentDigest:
+                                                                      live?.currentDigest ??
+                                                                      null,
+                                                              },
+                                                          ];
+                                                      },
+                                                  );
+                                              return files.length === 0
+                                                  ? null
+                                                  : {
+                                                        entryKey:
+                                                            matched.entryKey,
+                                                        files,
+                                                    };
+                                          })()
+                                        : null
+                                }
+                            />
                         )}
                         {list.entries.length === 0 ? (
                             <p className={styles["hint"]}>
@@ -643,15 +728,47 @@ export function RestoreView({
                                             versionPlan.entryKey ===
                                                 entry.entryKey
                                         }
+                                        versionPlan={
+                                            versionPlan.kind === "ready" &&
+                                            versionPlan.plan.entryKey ===
+                                                entry.entryKey
+                                                ? versionPlan.plan
+                                                : null
+                                        }
+                                        versionRestoring={
+                                            versionApply.kind === "applying" &&
+                                            versionPlan.kind === "ready" &&
+                                            versionPlan.plan.entryKey ===
+                                                entry.entryKey
+                                        }
+                                        versionForceExpanded={
+                                            versionExpandedKey ===
+                                            entry.entryKey
+                                        }
                                         onVersionPreview={() => {
                                             void runVersionPreview(
                                                 entry.entryKey,
                                             );
                                         }}
+                                        onVersionConfirm={() => {
+                                            if (versionPlan.kind === "ready")
+                                                void runVersionApply(
+                                                    versionPlan.plan,
+                                                );
+                                        }}
+                                        onVersionDismiss={() => {
+                                            if (
+                                                versionApply.kind === "applying"
+                                            )
+                                                return;
+                                            setVersionPlan({ kind: "idle" });
+                                            setVersionExpandedKey(null);
+                                        }}
                                         onDeleted={() => {
                                             setPreview({ kind: "idle" });
                                             setVersionPlan({ kind: "idle" });
                                             setVersionApply({ kind: "idle" });
+                                            setVersionExpandedKey(null);
                                             setApply({ kind: "idle" });
                                             setList({ kind: "loading" });
                                             setAttempt(
@@ -761,37 +878,6 @@ export function RestoreView({
                     {t(`agents.restore.errors.${apply.code}`)}
                 </p>
             )}
-            {versionPlan.kind === "ready" && (
-                <VersionRestorePlanCard
-                    plan={versionPlan.plan}
-                    locale={i18n.language}
-                    restoring={versionApply.kind === "applying"}
-                    onConfirm={() => {
-                        void runVersionApply(versionPlan.plan);
-                    }}
-                    onViewDetails={(file) => {
-                        if (file.revisionId === null) return;
-                        textTrigger.current =
-                            document.activeElement instanceof HTMLElement
-                                ? document.activeElement
-                                : null;
-                        setTextTarget({
-                            plan: versionPlan.plan,
-                            file,
-                        });
-                    }}
-                    onClose={() => {
-                        if (versionApply.kind === "applying") return;
-                        setTextTarget(null);
-                        setVersionPlan({ kind: "idle" });
-                    }}
-                    returnFocus={() =>
-                        reviewTrigger.current?.isConnected
-                            ? reviewTrigger.current
-                            : null
-                    }
-                />
-            )}
             {versionPlan.kind === "error" && (
                 <p className={styles["error"]} role="alert">
                     {t(`agents.restore.errors.${versionPlan.code}`)}
@@ -810,90 +896,129 @@ export function RestoreView({
                     {t(`agents.restore.errors.${versionApply.code}`)}
                 </p>
             )}
-            {textTarget !== null && textTarget.file.revisionId !== null && (
-                <VersionTextDialog
-                    agent={agent}
-                    plan={textTarget.plan}
-                    initialRevisionId={textTarget.file.revisionId}
-                    onClose={() => {
-                        setTextTarget(null);
-                    }}
-                    returnFocus={() =>
-                        textTrigger.current?.isConnected
-                            ? textTrigger.current
-                            : null
-                    }
-                />
-            )}
         </>
     );
 }
+
+export type CurrentConfigTextSource = {
+    entryKey: string;
+    files: CurrentConfigTextFile[];
+};
 
 /**
  * Page-level pin for the live configuration: label plus managed file paths.
  *
  * Match status and per-file readable labels stay out of this strip; history rows
  * still carry their own current-version mark when a retained entry matches.
- * Provider/model live on the Write segment instead.
+ * Provider/model live on the Write segment instead. 「详细配置」 is the single
+ * entry for actual current config text (right-aligned on this row).
  */
 export function CurrentConfigPin({
     current,
+    agent = null,
+    textSource = null,
 }: {
     current: HistoryCurrentConfig;
+    agent?: ConfigurableAgent | null;
+    textSource?: CurrentConfigTextSource | null;
 }): JSX.Element {
     const { t } = useTranslation();
     const label = t("agents.restore.current.title");
+    const [open, setOpen] = useState(false);
+    const trigger = useRef<HTMLButtonElement | null>(null);
+    const canOpen =
+        agent !== null && textSource !== null && textSource.files.length > 0;
     return (
         <div className={restore["currentPin"]} role="region" aria-label={label}>
-            {current.files.length === 0 ? (
-                <span className={restore["currentMark"]}>{label}</span>
-            ) : (
-                <div className={restore["currentPinBody"]}>
+            <div className={restore["currentPinRow"]}>
+                {current.files.length === 0 ? (
                     <span className={restore["currentMark"]}>{label}</span>
-                    {current.files.map((file) => (
-                        <span
-                            key={file.targetPath}
-                            className={[
-                                card["path"],
-                                restore["currentPath"],
-                            ].join(" ")}
-                        >
-                            {file.targetPath}
-                        </span>
-                    ))}
-                </div>
+                ) : (
+                    <div className={restore["currentPinBody"]}>
+                        <span className={restore["currentMark"]}>{label}</span>
+                        {current.files.map((file) => (
+                            <span
+                                key={file.targetPath}
+                                className={[
+                                    card["path"],
+                                    restore["currentPath"],
+                                ].join(" ")}
+                            >
+                                {file.targetPath}
+                            </span>
+                        ))}
+                    </div>
+                )}
+                <button
+                    ref={trigger}
+                    type="button"
+                    className={[
+                        buttons["secondary"],
+                        restore["currentDetails"],
+                    ].join(" ")}
+                    aria-disabled={!canOpen}
+                    onClick={() => {
+                        if (!canOpen) return;
+                        setOpen(true);
+                    }}
+                >
+                    {t("agents.version.textTitle")}
+                </button>
+            </div>
+            {open && canOpen && agent !== null && textSource !== null && (
+                <CurrentConfigurationDialog
+                    agent={agent}
+                    entryKey={textSource.entryKey}
+                    files={textSource.files}
+                    initialRevisionId={textSource.files[0]?.revisionId ?? ""}
+                    onClose={() => {
+                        setOpen(false);
+                    }}
+                    returnFocus={() =>
+                        trigger.current?.isConnected ? trigger.current : null
+                    }
+                />
             )}
         </div>
     );
 }
 
-/** Concise Provider/Model line at the top of the Write segment. */
+/**
+ * Concise Provider/Model line at the top of the Write segment.
+ *
+ * Shows a slot only when a real value resolved. Never paints an empty-shell 「—」
+ * that pretends to be the current Provider or Model.
+ */
 export function WriteCurrentSummary({
     providerLabel,
     modelLabel,
 }: {
     providerLabel: string | null;
     modelLabel: string | null;
-}): JSX.Element {
+}): JSX.Element | null {
     const { t } = useTranslation();
-    const dash = t("agents.summary.dash");
+    if (providerLabel === null && modelLabel === null) return null;
     return (
         <div className={restore["writeSummary"]} role="status">
-            <span>
-                {t("agents.summary.provider", {
-                    value: providerLabel ?? dash,
-                })}
-            </span>
-            <span>
-                {t("agents.summary.model", {
-                    value: modelLabel ?? dash,
-                })}
-            </span>
+            {providerLabel !== null && (
+                <span>
+                    {t("agents.summary.provider", {
+                        value: providerLabel,
+                    })}
+                </span>
+            )}
+            {modelLabel !== null && (
+                <span>
+                    {t("agents.summary.model", {
+                        value: modelLabel,
+                    })}
+                </span>
+            )}
         </div>
     );
 }
 
-/** One journal entry: compact summary by default, files on expand. */
+/** One journal entry: compact summary by default; version plan expands inline. */
 function OperationRow({
     agent,
     entry,
@@ -905,7 +1030,12 @@ function OperationRow({
     inspecting,
     onInspect,
     versionPreviewing,
+    versionPlan,
+    versionRestoring,
+    versionForceExpanded,
     onVersionPreview,
+    onVersionConfirm,
+    onVersionDismiss,
     onDeleted,
     onDeleteBusy,
 }: {
@@ -924,12 +1054,20 @@ function OperationRow({
     onInspect: () => void;
     /** This row's retained-version preview is being built. */
     versionPreviewing: boolean;
+    /** Inline version plan for this row, when reviewed. */
+    versionPlan: VersionRestorePlan | null;
+    versionRestoring: boolean;
+    /** Parent forces expand while a version plan is open on this row. */
+    versionForceExpanded: boolean;
     onVersionPreview: () => void;
+    onVersionConfirm: () => void;
+    onVersionDismiss: () => void;
     onDeleted: () => void;
     onDeleteBusy: (busy: boolean) => void;
 }): JSX.Element {
     const { t } = useTranslation();
     const [expanded, setExpanded] = useState(false);
+    const showExpand = expanded || versionForceExpanded || versionPlan !== null;
     const state = entryState(entry);
     const files = entryFiles(entry);
     const fileCount = files.length;
@@ -983,7 +1121,7 @@ function OperationRow({
                         <button
                             type="button"
                             className={restore["expandToggle"]}
-                            aria-expanded={expanded}
+                            aria-expanded={showExpand}
                             onClick={() => {
                                 setExpanded((open) => !open);
                             }}
@@ -1041,7 +1179,7 @@ function OperationRow({
                     />
                 </div>
             </div>
-            {expanded && (
+            {showExpand && (
                 <>
                     <ul className={restore["files"]}>
                         {files.map((file) => (
@@ -1080,6 +1218,15 @@ function OperationRow({
                         <p className={styles["hint"]}>
                             {t("agents.resolution.required")}
                         </p>
+                    )}
+                    {versionPlan !== null && (
+                        <VersionRestorePlanInline
+                            plan={versionPlan}
+                            locale={locale}
+                            restoring={versionRestoring}
+                            onConfirm={onVersionConfirm}
+                            onDismiss={onVersionDismiss}
+                        />
                     )}
                 </>
             )}

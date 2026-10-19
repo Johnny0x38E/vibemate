@@ -61,24 +61,7 @@ beforeEach(() => {
             kind: "desktop",
             files: files.map((file, i) => ({
                 ...file,
-                text:
-                    i === index
-                        ? {
-                              revisionId: `file-${String(i)}`,
-                              targetPath: file.targetPath,
-                              format: "json",
-                              current: {
-                                  state: "present",
-                                  text: '{"model":"old"}',
-                                  bytes: 15,
-                              },
-                              target: {
-                                  state: "present",
-                                  text: '{"model":"new"}',
-                                  bytes: 15,
-                              },
-                          }
-                        : null,
+                text: i === index ? files[0]!.text : null,
             })),
         }),
     );
@@ -100,34 +83,24 @@ async function mount() {
     return { apply, ...view };
 }
 
-test("loads summaries first, reads text only on demand, switches files and returns focus", async () => {
+test("opens a preview dialog with summary on top and field diffs below", async () => {
     const { apply } = await mount();
-    const button = await screen.findByRole("button", {
-        name: /View detailed configuration.*models.json/u,
-    });
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toBeTruthy();
     expect(read).toHaveBeenLastCalledWith(plan, "/qa/pi");
-    await userEvent.click(button);
-    await screen.findByRole("dialog");
-    await screen.findByRole("region", { name: "Differences" });
-    await userEvent.click(screen.getByText("Show full configuration text"));
-    await screen.findByText("Planned configuration");
-    expect(read).toHaveBeenLastCalledWith(plan, "/qa/pi", 0);
-    await userEvent.click(
-        screen.getByRole("button", { name: "/qa/settings.json" }),
-    );
-    await waitFor(() => {
-        expect(read).toHaveBeenLastCalledWith(plan, "/qa/pi", 1);
-    });
-    await userEvent.keyboard("{Escape}");
-    await waitFor(() => {
-        expect(screen.queryByRole("dialog")).toBeNull();
-        expect(document.activeElement).toBe(button);
-    });
+    // Top: file paths / states
+    expect(screen.getAllByText("/qa/models.json").length).toBeGreaterThan(0);
+    // Bottom: field diffs — no full-text expand, no planned dual column
+    expect(screen.getAllByText("defaultModel").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Replaced").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Show full configuration text")).toBeNull();
+    expect(screen.queryByText("Planned configuration")).toBeNull();
     await userEvent.click(
         screen.getByRole("button", { name: "Apply these settings" }),
     );
     expect(apply).toHaveBeenCalledOnce();
 });
+
 test("summary failures block apply and retry the same reviewed plan", async () => {
     read.mockRejectedValueOnce(new VersionRestoreRequestError("plan_stale"));
     const { apply } = await mount();
@@ -137,28 +110,32 @@ test("summary failures block apply and retry the same reviewed plan", async () =
     );
     expect(apply).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
-    await screen.findByText("/qa/models.json");
+    await screen.findByRole("dialog");
     await userEvent.click(
         screen.getByRole("button", { name: "Apply these settings" }),
     );
     expect(apply).toHaveBeenCalledOnce();
 });
-test("detail failures offer retry without replacing the plan", async () => {
-    await mount();
-    await screen.findByText("/qa/models.json");
-    read.mockRejectedValueOnce(new VersionRestoreRequestError("plan_stale"));
+
+test("closing the dialog keeps apply available and can reopen", async () => {
+    const { apply } = await mount();
+    await screen.findByRole("dialog");
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() => {
+        expect(screen.queryByRole("dialog")).toBeNull();
+    });
     await userEvent.click(
         screen.getByRole("button", {
-            name: /View detailed configuration.*models.json/u,
+            name: /View detailed configuration/u,
         }),
     );
-    await screen.findByRole("alert");
-    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
-    await screen.findByRole("region", { name: "Differences" });
-    await userEvent.click(screen.getByText("Show full configuration text"));
-    await screen.findByText("Planned configuration");
-    expect(read).toHaveBeenLastCalledWith(plan, "/qa/pi", 0);
+    await screen.findByRole("dialog");
+    await userEvent.click(
+        screen.getByRole("button", { name: "Apply these settings" }),
+    );
+    expect(apply).toHaveBeenCalledOnce();
 });
+
 test("ignores a summary reply after leaving the page", async () => {
     let finish:
         | ((value: { kind: "desktop"; files: ModelPreviewFile[] }) => void)

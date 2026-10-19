@@ -354,6 +354,11 @@ test("follows the chosen instance and drops the plan it replaces", async () => {
     await mount();
     await chooseAndPreview();
     await screen.findByText("env.ANTHROPIC_MODEL");
+    // Preview opens in a modal; dismiss it before changing Provider.
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() => {
+        expect(screen.queryByRole("dialog")).toBeNull();
+    });
 
     await setFieldSelectValue(
         await screen.findByRole("combobox", { name: "Provider" }),

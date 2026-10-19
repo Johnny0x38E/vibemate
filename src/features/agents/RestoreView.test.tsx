@@ -362,10 +362,13 @@ test("pins the live current configuration above the list and marks a matched ent
     expect(
         await screen.findByRole("region", { name: "Current configuration" }),
     ).toBeTruthy();
-    // Pin is label + managed path only; no match-status or readable chrome.
+    // Pin is label + managed path + unified detailed-config entry.
     expect(screen.queryByText(/Current configuration · Matched/u)).toBeNull();
     expect(screen.queryByText("Readable")).toBeNull();
     expect(screen.getByText(SETTINGS)).toBeTruthy();
+    expect(
+        screen.getByRole("button", { name: "Detailed configuration" }),
+    ).toBeTruthy();
     expect(
         screen.queryByRole("button", { name: "Show managed files" }),
     ).toBeNull();
@@ -468,7 +471,7 @@ test("the version preview lists sanitized field changes and confirms the reviewe
     await mount();
     await openVersionPreview();
     expect(
-        await screen.findByRole("dialog", {
+        await screen.findByRole("region", {
             name: "Version restore preview",
         }),
     ).toBeTruthy();
@@ -601,7 +604,7 @@ test("a version preview read failure is reported and can be retried", async () =
         screen.getByRole("button", { name: "Review version" }),
     );
     expect(
-        await screen.findByRole("dialog", {
+        await screen.findByRole("region", {
             name: "Version restore preview",
         }),
     ).toBeTruthy();

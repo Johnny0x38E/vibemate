@@ -6,14 +6,11 @@ import type { ConfigurableAgent } from "../../lib/desktop/agents";
 import {
     VersionRestoreRequestError,
     readVersionText,
-    type VersionRestoreFile,
-    type VersionRestorePlan,
     type VersionText,
     type VersionTextSide,
 } from "../../lib/desktop/versionRestore";
 import styles from "./AgentList.module.css";
 import { ConfigText } from "./ConfigText";
-import { lineDiff } from "./lineDiff";
 import dialog from "./VersionTextDialog.module.css";
 
 type TextState =
@@ -22,97 +19,60 @@ type TextState =
     | { kind: "error"; code: VersionRestoreRequestError["code"] }
     | { kind: "ready"; text: VersionText };
 
-type RevisionFile = VersionRestoreFile & { revisionId: string };
+export type CurrentConfigTextFile = {
+    revisionId: string;
+    targetPath: string;
+    currentDigest: string | null;
+};
 
 /**
- * Detail dialog for a reviewed plan: line-level differences first, with the
- * complete sanitized current and retained/planned text available as an optional
- * expand. Files switch on demand.
+ * Page-level 「详细配置」 dialog: sanitized *current* configuration text only.
  *
- * The parent only mounts this while open. Text is fetched per selected file on
- * demand, bound to the current digest the summary preview showed; a changed
- * file returns `plan_stale` and the retry path, never a mixed comparison. The
- * dialog manages focus and Escape through the shared Base UI primitive.
+ * Bound to a matched history entry so Rust can re-check the live digest. Never
+ * shows retained/planned text or a dual-column layout — those belong nowhere
+ * on the view-version path, and write previews use field diffs instead.
  */
-export function VersionTextDialog({
+export function CurrentConfigurationDialog({
     agent,
-    plan,
+    entryKey,
+    files,
     initialRevisionId,
     onClose,
     returnFocus,
 }: {
     agent: ConfigurableAgent;
-    plan: VersionRestorePlan;
+    entryKey: string;
+    files: CurrentConfigTextFile[];
     initialRevisionId: string;
     onClose: () => void;
     returnFocus: () => HTMLElement | null;
-}): JSX.Element {
-    const files = plan.files.filter(
-        (file): file is RevisionFile => file.revisionId !== null,
-    );
-    const loadText = useCallback(
-        (id: string) => {
-            const file = plan.files.find(
-                (candidate) => candidate.revisionId === id,
-            );
-            if (file === undefined || file.revisionId === null) {
-                return Promise.reject(
-                    new VersionRestoreRequestError("invalid_request"),
-                );
-            }
-            return readVersionText(
-                agent,
-                plan.entryKey,
-                file.revisionId,
-                file.currentDigest,
-            );
-        },
-        [agent, plan],
-    );
-    return (
-        <ConfigurationTextDialog
-            files={files}
-            loadText={loadText}
-            initialRevisionId={initialRevisionId}
-            onClose={onClose}
-            returnFocus={returnFocus}
-        />
-    );
-}
-
-/** Shared on-demand JSON/TOML dialog for native model and restore plans.
- * The caller supplies a plan-bound reader; this component owns loading, file
- * selection, accessible focus, the primary line diff, and optional full text.
- */
-export function ConfigurationTextDialog({
-    files,
-    loadText,
-    initialRevisionId,
-    onClose,
-    returnFocus,
-    planned = false,
-}: {
-    files: { revisionId: string; targetPath: string }[];
-    loadText: (
-        id: string,
-    ) => Promise<{ kind: "preview" } | { kind: "desktop"; text: VersionText }>;
-    initialRevisionId: string;
-    onClose: () => void;
-    returnFocus: () => HTMLElement | null;
-    planned?: boolean;
 }): JSX.Element {
     const { t } = useTranslation();
     const [selectedId, setSelectedId] = useState(initialRevisionId);
     const [reload, setReload] = useState(0);
     const [state, setState] = useState<TextState>({ kind: "loading" });
     const generation = useRef(0);
-    // Focus the title, not the bottom action: focusing Close would scroll a
-    // long dialog straight past its file switcher and configuration headings.
     const title = useRef<HTMLHeadingElement>(null);
 
+    const loadText = useCallback(
+        (id: string) => {
+            const file = files.find((candidate) => candidate.revisionId === id);
+            if (file === undefined) {
+                return Promise.reject(
+                    new VersionRestoreRequestError("invalid_request"),
+                );
+            }
+            return readVersionText(
+                agent,
+                entryKey,
+                file.revisionId,
+                file.currentDigest,
+            );
+        },
+        [agent, entryKey, files],
+    );
+
     useEffect(() => {
-        // A late reply must not replace the text for a different file or a
-        // dialog that has already closed.
         const current = ++generation.current;
         loadText(selectedId).then(
             (result) => {
@@ -141,19 +101,6 @@ export function ConfigurationTextDialog({
 
     const selected =
         files.find((file) => file.revisionId === selectedId) ?? files[0];
-    const text = state.kind === "ready" ? state.text : null;
-    // The dialog renders only on load and file switches; the diff is bounded by
-    // `lineDiff`, so computing it here avoids a memo that React would discard.
-    const comparable =
-        text !== null &&
-        text.current.state === "present" &&
-        text.target.state === "present";
-    const diff =
-        text !== null &&
-        text.current.state === "present" &&
-        text.target.state === "present"
-            ? lineDiff(text.current.text, text.target.text)
-            : null;
 
     return (
         <Dialog.Root
@@ -243,115 +190,11 @@ export function ConfigurationTextDialog({
                             <p className={dialog["meta"]}>
                                 {t("agents.version.textMaskedNotice")}
                             </p>
-                            <section
-                                className={dialog["diff"]}
-                                aria-label={t("agents.version.textDiff")}
-                            >
-                                <h3 className={dialog["sideHeading"]}>
-                                    {t("agents.version.textDiff")}
-                                </h3>
-                                {!comparable ? (
-                                    <p className={styles["hint"]}>
-                                        {t("agents.version.textNoComparison")}
-                                    </p>
-                                ) : diff === null ? (
-                                    <p className={styles["hint"]}>
-                                        {t("agents.version.textDiffTooLarge")}
-                                    </p>
-                                ) : diff.length === 0 ? (
-                                    <p className={styles["hint"]}>
-                                        {t("agents.version.textNoDiff")}
-                                    </p>
-                                ) : (
-                                    <ul className={dialog["diffRows"]}>
-                                        {diff.map((line, index) => (
-                                            <li
-                                                key={index}
-                                                className={[
-                                                    dialog["diffRow"],
-                                                    line.kind === "added"
-                                                        ? dialog["diffAdded"]
-                                                        : line.kind ===
-                                                            "removed"
-                                                          ? dialog[
-                                                                "diffRemoved"
-                                                            ]
-                                                          : null,
-                                                ]
-                                                    .filter(
-                                                        (
-                                                            value,
-                                                        ): value is string =>
-                                                            typeof value ===
-                                                            "string",
-                                                    )
-                                                    .join(" ")}
-                                                aria-label={`${t(
-                                                    line.kind === "added"
-                                                        ? "agents.version.lineAdded"
-                                                        : line.kind ===
-                                                            "removed"
-                                                          ? "agents.version.lineRemoved"
-                                                          : "agents.version.lineSame",
-                                                )}: ${line.text}`}
-                                            >
-                                                <span
-                                                    className={
-                                                        dialog["lineNumber"]
-                                                    }
-                                                >
-                                                    {line.oldLine ?? ""}
-                                                </span>
-                                                <span
-                                                    className={
-                                                        dialog["lineNumber"]
-                                                    }
-                                                >
-                                                    {line.newLine ?? ""}
-                                                </span>
-                                                <span
-                                                    className={dialog["sign"]}
-                                                >
-                                                    {line.kind === "added"
-                                                        ? "+"
-                                                        : line.kind ===
-                                                            "removed"
-                                                          ? "-"
-                                                          : " "}
-                                                </span>
-                                                <span
-                                                    className={
-                                                        dialog["diffText"]
-                                                    }
-                                                >
-                                                    {line.text}
-                                                </span>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                )}
-                            </section>
-                            <details className={dialog["fullText"]}>
-                                <summary className={dialog["fullTextSummary"]}>
-                                    {t("agents.version.textShowFull")}
-                                </summary>
-                                <div className={dialog["sides"]}>
-                                    <TextSide
-                                        side={state.text.current}
-                                        format={state.text.format}
-                                        label={t("agents.version.textCurrent")}
-                                    />
-                                    <TextSide
-                                        side={state.text.target}
-                                        format={state.text.format}
-                                        label={t(
-                                            planned
-                                                ? "agents.version.textPlanned"
-                                                : "agents.version.textRetained",
-                                        )}
-                                    />
-                                </div>
-                            </details>
+                            <CurrentTextSide
+                                side={state.text.current}
+                                format={state.text.format}
+                                label={t("agents.version.textCurrent")}
+                            />
                         </>
                     )}
                     <div className={dialog["actions"]}>
@@ -369,8 +212,8 @@ export function ConfigurationTextDialog({
     );
 }
 
-/** One read-only side: present text, absence or a safe unavailability reason. */
-function TextSide({
+/** One read-only current side: present text, absence or a safe reason. */
+function CurrentTextSide({
     side,
     format,
     label,

@@ -36,9 +36,13 @@ import {
     CurrentConfigPin,
     RestoreView,
     WriteCurrentSummary,
+    type CurrentConfigTextSource,
 } from "./RestoreView";
 import underlineTabs from "../../components/underlineTabs.module.css";
-import type { HistoryCurrentConfig } from "../../lib/desktop/history";
+import {
+    readConfigurationHistory,
+    type HistoryCurrentConfig,
+} from "../../lib/desktop/history";
 import {
     probeAgentVersion,
     type AgentVersionResult,
@@ -95,6 +99,17 @@ export function AgentList({
         providerLabel: string | null;
         modelLabel: string | null;
     }>({ providerLabel: null, modelLabel: null });
+    const [pinTextSource, setPinTextSource] =
+        useState<CurrentConfigTextSource | null>(null);
+    /** List-card Provider labels from history current match (FE-only contract). */
+    const [listSummaries, setListSummaries] = useState<
+        Partial<
+            Record<
+                ConfigurableAgent,
+                { providerLabel: string | null; modelLabel: string | null }
+            >
+        >
+    >({});
     const [versions, setVersions] = useState<
         Partial<Record<AgentId, AgentVersionResult>>
     >({});
@@ -194,6 +209,59 @@ export function AgentList({
         );
         target?.focus();
     }, [hidden, page]);
+
+    // List cards: bind real Provider from history current match when available.
+    // Model is not on the history IPC page yet — show 「未写入」, never a fake dash.
+    useEffect(() => {
+        if (hidden || page.kind !== "list") return;
+        let active = true;
+        const agents: ConfigurableAgent[] = ["claudeCode", "pi", "grokBuild"];
+        void Promise.all(
+            agents.map(async (agentId) => {
+                const empty = {
+                    providerLabel: null as string | null,
+                    modelLabel: null as string | null,
+                };
+                try {
+                    const result = await readConfigurationHistory(agentId);
+                    if (result.kind !== "desktop") {
+                        return [agentId, empty] as const;
+                    }
+                    const matchedKey = result.page.current.matchedEntryKey;
+                    const matched =
+                        result.page.current.status === "matched" &&
+                        matchedKey !== null
+                            ? result.page.entries.find(
+                                  (entry) => entry.entryKey === matchedKey,
+                              )
+                            : undefined;
+                    const providerLabel =
+                        matched?.ownerLabel ?? matched?.ownerRef ?? null;
+                    return [
+                        agentId,
+                        { providerLabel, modelLabel: null },
+                    ] as const;
+                } catch {
+                    return [agentId, empty] as const;
+                }
+            }),
+        ).then((rows) => {
+            if (!active) return;
+            const next: Partial<
+                Record<
+                    ConfigurableAgent,
+                    { providerLabel: string | null; modelLabel: string | null }
+                >
+            > = {};
+            for (const row of rows) {
+                next[row[0]] = row[1];
+            }
+            setListSummaries(next);
+        });
+        return () => {
+            active = false;
+        };
+    }, [hidden, page.kind, configEpoch, state.kind]);
 
     async function refresh(): Promise<void> {
         if (pending.current || state.kind === "preview") return;
@@ -679,9 +747,14 @@ export function AgentList({
                                                         {t(
                                                             "agents.summary.provider",
                                                             {
-                                                                value: t(
-                                                                    "agents.summary.dash",
-                                                                ),
+                                                                value:
+                                                                    listSummaries[
+                                                                        id
+                                                                    ]
+                                                                        ?.providerLabel ??
+                                                                    t(
+                                                                        "agents.summary.notWritten",
+                                                                    ),
                                                             },
                                                         )}
                                                         {t(
@@ -690,9 +763,14 @@ export function AgentList({
                                                         {t(
                                                             "agents.summary.model",
                                                             {
-                                                                value: t(
-                                                                    "agents.summary.dash",
-                                                                ),
+                                                                value:
+                                                                    listSummaries[
+                                                                        id
+                                                                    ]
+                                                                        ?.modelLabel ??
+                                                                    t(
+                                                                        "agents.summary.notWritten",
+                                                                    ),
                                                             },
                                                         )}
                                                     </span>
@@ -791,7 +869,11 @@ export function AgentList({
                 ) : null}
                 <section className={styles["detailGroup"]} data-layout="page">
                     {configurable && currentConfig !== null && (
-                        <CurrentConfigPin current={currentConfig} />
+                        <CurrentConfigPin
+                            current={currentConfig}
+                            agent={id}
+                            textSource={pinTextSource}
+                        />
                     )}
                     <div
                         className={[
@@ -863,13 +945,19 @@ export function AgentList({
                                     const next = summary ?? {
                                         providerLabel: null,
                                         modelLabel: null,
+                                        textSource: null,
                                     };
+                                    setPinTextSource(next.textSource ?? null);
                                     setWriteSummary((previous) =>
                                         previous.providerLabel ===
                                             next.providerLabel &&
                                         previous.modelLabel === next.modelLabel
                                             ? previous
-                                            : next,
+                                            : {
+                                                  providerLabel:
+                                                      next.providerLabel,
+                                                  modelLabel: next.modelLabel,
+                                              },
                                     );
                                 }}
                                 onBusyChange={(busy) => {

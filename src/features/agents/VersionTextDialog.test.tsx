@@ -6,10 +6,9 @@ import { createAppI18n } from "../../i18n";
 import {
     VersionRestoreRequestError,
     readVersionText,
-    type VersionRestorePlan,
     type VersionText,
 } from "../../lib/desktop/versionRestore";
-import { VersionTextDialog } from "./VersionTextDialog";
+import { CurrentConfigurationDialog } from "./VersionTextDialog";
 
 vi.mock(import("../../lib/desktop/versionRestore"), async (original) => ({
     ...(await original()),
@@ -21,51 +20,28 @@ const REVISION = "100-1-0";
 const OTHER_REVISION = "101-1-0";
 const PATH = "/Users/test/.claude/settings.json";
 const OTHER_PATH = "/Users/test/.claude/other.json";
+const ENTRY = `operation:${ID}`;
 
-function file(
-    revisionId: string,
-    targetPath: string,
-): VersionRestorePlan["files"][number] {
-    return {
-        revisionId,
-        ordinal: revisionId === REVISION ? 0 : 1,
-        targetPath,
-        action: "restore",
-        reason: null,
+const files = [
+    {
+        revisionId: REVISION,
+        targetPath: PATH,
         currentDigest: "c".repeat(64),
-        targetDigest: "b".repeat(64),
-        restoredOwnerRef: null,
-        summary: {
-            format: "json",
-            changes: [],
-            truncated: false,
-            reason: null,
-        },
-    };
-}
+    },
+    {
+        revisionId: OTHER_REVISION,
+        targetPath: OTHER_PATH,
+        currentDigest: "c".repeat(64),
+    },
+];
 
-const plan: VersionRestorePlan = {
-    entryKey: `operation:${ID}`,
-    operationId: ID,
-    intent: "apply",
-    ownerRef: null,
-    createdAt: 100,
-    files: [file(REVISION, PATH), file(OTHER_REVISION, OTHER_PATH)],
-    restorable: true,
-    reason: null,
-};
-
-function text(
-    revisionId: string,
-    current: string,
-    target: string,
-): VersionText {
+function text(revisionId: string, current: string): VersionText {
     return {
         revisionId,
         targetPath: PATH,
         format: "json",
         current: { state: "present", text: current, bytes: current.length },
-        target: { state: "present", text: target, bytes: target.length },
+        target: { state: "present", text: "{}", bytes: 2 },
     };
 }
 
@@ -74,26 +50,20 @@ const loadText = vi.mocked(readVersionText);
 beforeEach(() => {
     loadText.mockReset().mockResolvedValue({
         kind: "desktop",
-        text: text(
-            REVISION,
-            '{\n  "model": "current-model"\n}',
-            '{\n  "model": "retained-model"\n}',
-        ),
+        text: text(REVISION, '{\n  "model": "current-model"\n}'),
     });
 });
 afterEach(cleanup);
 
-async function mount(
-    onClose = vi.fn(),
-    initialRevisionId = REVISION,
-): Promise<void> {
+async function mount(onClose = vi.fn()): Promise<void> {
     const i18n = await createAppI18n("en");
     render(
         <I18nextProvider i18n={i18n}>
-            <VersionTextDialog
+            <CurrentConfigurationDialog
                 agent="claudeCode"
-                plan={plan}
-                initialRevisionId={initialRevisionId}
+                entryKey={ENTRY}
+                files={files}
+                initialRevisionId={REVISION}
                 onClose={onClose}
                 returnFocus={() => null}
             />
@@ -101,30 +71,22 @@ async function mount(
     );
 }
 
-test("shows sanitized current and retained text with a line diff", async () => {
+test("shows sanitized current configuration text only", async () => {
     await mount();
     expect(await screen.findByText("Detailed configuration")).toBeTruthy();
     await screen.findByText(/Values under credential-like keys are masked/u);
-    expect(screen.getByRole("region", { name: "Differences" })).toBeTruthy();
-    await userEvent.click(
-        screen.getByText("Show full configuration text"),
-    );
-    const current = screen.getByRole("region", {
+    const current = await screen.findByRole("region", {
         name: "Current configuration",
-    });
-    const retained = screen.getByRole("region", {
-        name: "Retained version",
     });
     await waitFor(() => {
         expect(current.textContent).toContain("current-model");
-        expect(retained.textContent).toContain("retained-model");
     });
     expect(current.textContent).toContain("Original size:");
-    expect(screen.getByLabelText(/"model": "current-model"/u)).toBeTruthy();
-    expect(
-        screen.getByLabelText(/Removed line: .*current-model/u),
-    ).toBeTruthy();
-    expect(screen.getByLabelText(/Added line: .*retained-model/u)).toBeTruthy();
+    // No retained/planned dual column and no full-text expand.
+    expect(screen.queryByText("Show full configuration text")).toBeNull();
+    expect(screen.queryByText("Retained version")).toBeNull();
+    expect(screen.queryByText("Planned configuration")).toBeNull();
+    expect(screen.queryByRole("region", { name: "Differences" })).toBeNull();
 });
 
 test("switches files and loads each text with its own digest", async () => {
@@ -134,13 +96,10 @@ test("switches files and loads each text with its own digest", async () => {
             text: text(
                 revisionId,
                 revisionId === REVISION ? "current one" : "current two",
-                revisionId === REVISION ? "retained one" : "retained two",
             ),
         }),
     );
     await mount();
-    await screen.findByRole("region", { name: "Differences" });
-    await userEvent.click(screen.getByText("Show full configuration text"));
     const current = await screen.findByRole("region", {
         name: "Current configuration",
     });
@@ -151,7 +110,7 @@ test("switches files and loads each text with its own digest", async () => {
     await waitFor(() => {
         expect(loadText).toHaveBeenCalledWith(
             "claudeCode",
-            plan.entryKey,
+            ENTRY,
             OTHER_REVISION,
             "c".repeat(64),
         );
@@ -165,7 +124,7 @@ test("switches files and loads each text with its own digest", async () => {
     });
 });
 
-test("reports absence and unavailable sides without raw content", async () => {
+test("reports absence and unavailable current text without raw content", async () => {
     loadText.mockResolvedValue({
         kind: "desktop",
         text: {
@@ -180,15 +139,9 @@ test("reports absence and unavailable sides without raw content", async () => {
         },
     });
     await mount();
-    await screen.findByRole("region", { name: "Differences" });
-    expect(
-        screen.getByText(/A line diff needs both sides to be present/u),
-    ).toBeTruthy();
-    await userEvent.click(screen.getByText("Show full configuration text"));
     expect(
         await screen.findByText("The file did not exist at this point."),
     ).toBeTruthy();
-    expect(screen.getByText(/This text cannot be shown safely/u)).toBeTruthy();
 });
 
 test("a stale preview is reported and can be retried", async () => {
@@ -196,7 +149,7 @@ test("a stale preview is reported and can be retried", async () => {
         .mockRejectedValueOnce(new VersionRestoreRequestError("plan_stale"))
         .mockResolvedValueOnce({
             kind: "desktop",
-            text: text(REVISION, "current", "retained"),
+            text: text(REVISION, "current"),
         });
     await mount();
     expect(
@@ -205,8 +158,6 @@ test("a stale preview is reported and can be retried", async () => {
         ),
     ).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
-    await screen.findByRole("region", { name: "Differences" });
-    await userEvent.click(screen.getByText("Show full configuration text"));
     const current = await screen.findByRole("region", {
         name: "Current configuration",
     });

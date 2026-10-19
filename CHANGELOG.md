@@ -8,6 +8,9 @@ GitHub release notes are extracted from the matching version section only.
 
 ### Added
 
+- Configuration history `current` pin now carries read-only `providerLabel`, `modelId`, and `modelLabel` when status is `matched`: the Provider's user-custom display name, the live model id from Claude Code / Pi / Grok Build config files, and the saved model alias (or the id when no alias). Fields stay separate for list cards (`providerLabel | modelLabel`); unmatched, partial, and unreadable pins leave them null. No write/apply paths changed.
+
+
 - H3 backend first batch for configuration history deletion. SQLite schema v23 adds a durable delete journal (`prepared` / `failed` / `completed`) and exclusive backup-target rows so database and private-store deletes can retry without first hiding a history entry while secret-bearing copies remain. `delete_history_entry` removes only exclusive private backups, refuses unfinished writes (`history_active`), interrupted revisions (`history_unresolved`) and apply entries that still have restore/compensation batches (`history_referenced`), leaves shared backup refs, Agent config files, credentials and alias bindings untouched, and is not secure erasure. Strict IPC `delete_configuration_history_entry` accepts only Agent + `entryKey` (roots from discovery env); optional TypeScript boundary `deleteHistoryEntry` parses the outcome strictly. Verified with 10 Rust delete/surface tests, matching vitest, Rust formatting/Clippy and the filtered delete/history suites. RestoreView delete UI is recorded below; maintainer desktop visual acceptance remains pending.
 - Agent detail IA shell: current-configuration pin sits above Write / History / Skill / MCP segments (History is the default), install paths fold away, and Agent list cards reserve summary slots with dash empty states instead of inventing zeros. Shared bilingual empty-state and segment copy landed with the redesign.
 

@@ -71,6 +71,9 @@ function current(status: HistoryPage["current"]["status"] = "unrecorded") {
                 readable: true,
             },
         ],
+        providerLabel: null,
+        modelId: null,
+        modelLabel: null,
     } satisfies HistoryPage["current"];
 }
 
@@ -93,6 +96,9 @@ function page(
                                 readable: false,
                             },
                         ],
+                        providerLabel: null,
+                        modelId: null,
+                        modelLabel: null,
                     }
                   : current(status),
         entries: [row],
@@ -619,3 +625,50 @@ test("discards transport and validation diagnostics including malicious field na
         expect(error).not.toHaveProperty("issues");
     }
 });
+
+test("accepts provider display name and model alias-or-id on a matched current pin", async () => {
+    const enriched = {
+        ...page(entry(), "matched"),
+        current: {
+            ...current("matched"),
+            providerLabel: "Command Code GOAT",
+            modelId: "deepseek/deepseek-v4.1-flash",
+            modelLabel: "Flash Alias",
+        },
+    };
+    vi.mocked(invoke).mockResolvedValue(enriched);
+    const result = await readConfigurationHistory("pi");
+    expect(result).toEqual({ kind: "desktop", page: enriched });
+});
+
+test("accepts a matched current pin with null provider/model fields", async () => {
+    const bare = page(entry(), "matched");
+    vi.mocked(invoke).mockResolvedValue(bare);
+    const result = await readConfigurationHistory("pi");
+    expect(result).toEqual({ kind: "desktop", page: bare });
+});
+
+test.each([
+    {
+        ...current("matched"),
+        modelLabel: "Flash Alias",
+        modelId: null,
+    },
+    {
+        ...current("unrecorded"),
+        providerLabel: "Command Code GOAT",
+    },
+    {
+        ...current("matched"),
+        modelId: "has space",
+    },
+])("rejects contradictory or unsafe current provider/model fields %#", async (badCurrent) => {
+    vi.mocked(invoke).mockResolvedValue({
+        ...page(entry(), "matched"),
+        current: badCurrent,
+    });
+    await expect(readConfigurationHistory("pi")).rejects.toMatchObject({
+        code: "invalid_response",
+    });
+});
+

@@ -283,6 +283,23 @@ pub struct HistoryCurrentConfig {
     pub matched_entry_key: Option<String>,
     /// Per-file live observation for every scoped target, in scope order.
     pub files: Vec<HistoryCurrentFile>,
+    /// Matched Provider's user-custom display name, when that row still exists.
+    ///
+    /// Populated only by the Agent history surface after a full match. The core
+    /// journal matcher leaves this null. Never a joined "provider | model" string.
+    pub provider_label: Option<String>,
+    /// Model id read from the matched live config files, when known.
+    ///
+    /// Populated only by the Agent history surface after a full match. Null for
+    /// unmatched, partial, or unreadable pins, and when the live files do not
+    /// yield a valid id.
+    pub model_id: Option<String>,
+    /// Model alias when the saved model still has one; otherwise the model id.
+    ///
+    /// This is the right-hand value for list cards (`ownerDisplayName |
+    /// modelAliasOrId`). Null whenever `model_id` is null. Never pre-joined with
+    /// [`Self::provider_label`].
+    pub model_label: Option<String>,
 }
 
 /// Bounded read result. No total is inferred from a changing journal.
@@ -382,6 +399,9 @@ fn identify_current(
             status: HistoryCurrentStatus::Unreadable,
             matched_entry_key: None,
             files,
+            provider_label: None,
+            model_id: None,
+            model_label: None,
         });
     }
     let live: BTreeMap<&str, Option<&str>> = files
@@ -421,6 +441,9 @@ fn identify_current(
         status,
         matched_entry_key,
         files,
+        provider_label: None,
+        model_id: None,
+        model_label: None,
     })
 }
 

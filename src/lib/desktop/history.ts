@@ -182,6 +182,21 @@ const currentSchema = z
         status: z.enum(["matched", "unrecorded", "partial", "unreadable"]),
         matchedEntryKey: entryKey.nullable(),
         files: z.array(currentFileSchema).max(16),
+        // Provider custom display name for list cards; null when unmatched/removed.
+        providerLabel: z.string().min(1).max(64).refine(isSafeLabel).nullable(),
+        // Live model id from matched config files; null when unknown.
+        modelId: z
+            .string()
+            .min(1)
+            .max(256)
+            .refine(
+                (value) =>
+                    isSafeLabel(value) &&
+                    ![...value].some((character) => character.trim() === ""),
+            )
+            .nullable(),
+        // Alias when saved, else model id — list-card right side (`modelAliasOrId`).
+        modelLabel: z.string().min(1).max(256).refine(isSafeLabel).nullable(),
     })
     .refine((current) => {
         const matched = current.status === "matched";
@@ -190,6 +205,16 @@ const currentSchema = z
             return current.files.some((file) => !file.readable);
         }
         if (!current.files.every((file) => file.readable)) return false;
+        // modelLabel requires modelId; neither is invented off a non-match.
+        if (current.modelLabel !== null && current.modelId === null) return false;
+        if (
+            !matched &&
+            (current.providerLabel !== null ||
+                current.modelId !== null ||
+                current.modelLabel !== null)
+        ) {
+            return false;
+        }
         // Absence is represented by a null digest on a readable file.
         return true;
     });
@@ -214,7 +239,13 @@ export type HistoryRevision = z.infer<typeof revisionSchema>;
  * adapter-level Provider display text and interrupted-write status.
  */
 export type HistoryEntry = z.infer<typeof entrySchema>;
-/** Live configuration pin returned with every history page. */
+/**
+ * Live configuration pin returned with every history page.
+ *
+ * When matched, may carry `providerLabel` (Provider custom display name) and
+ * `modelId` / `modelLabel` (alias, or id when no alias) for list cards as
+ * `providerLabel | modelLabel`. Fields stay separate; null when unknown.
+ */
 export type HistoryCurrentConfig = z.infer<typeof currentSchema>;
 /** Complete bounded metadata page, including the fixed current-config pin. */
 export type HistoryPage = z.infer<typeof pageSchema>;

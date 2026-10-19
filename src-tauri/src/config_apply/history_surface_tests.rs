@@ -436,6 +436,15 @@ fn history_surface_includes_current_pin_for_empty_and_matched_pages() {
         serde_json::Value::Null
     );
     assert_eq!(empty_json["current"]["status"], "unrecorded");
+    assert_eq!(
+        empty_json["current"]["providerLabel"],
+        serde_json::Value::Null
+    );
+    assert_eq!(empty_json["current"]["modelId"], serde_json::Value::Null);
+    assert_eq!(empty_json["current"]["modelLabel"], serde_json::Value::Null);
+    assert_eq!(empty.current.provider_label, None);
+    assert_eq!(empty.current.model_id, None);
+    assert_eq!(empty.current.model_label, None);
 
     // Matched live files: pin names the matching entry and matches the core page.
     let root = environment.home.join(".claude");
@@ -473,4 +482,221 @@ fn history_surface_includes_current_pin_for_empty_and_matched_pages() {
         Some(format!("operation:{id}").as_str())
     );
     assert_eq!(matched_json["current"]["status"], "matched");
+    // Synthetic bytes are not Agent config, so model fields stay null (no invention).
+    assert_eq!(matched.current.provider_label, None);
+    assert_eq!(matched.current.model_id, None);
+    assert_eq!(matched.current.model_label, None);
+    assert_eq!(
+        matched_json["current"]["providerLabel"],
+        serde_json::Value::Null
+    );
+    assert_eq!(matched_json["current"]["modelId"], serde_json::Value::Null);
+    assert_eq!(
+        matched_json["current"]["modelLabel"],
+        serde_json::Value::Null
+    );
+}
+
+#[test]
+fn history_surface_current_pin_resolves_provider_and_model_alias_or_id() {
+    let fixture = Fixture::new();
+    let environment = environment(&fixture);
+    let root = environment.home.join(".claude");
+    fs::create_dir_all(&root).unwrap();
+    let provider = crate::providers::create_provider(
+        &fixture.storage,
+        &FakeStore::default(),
+        CreateProviderRequest {
+            kind: "deepseek".to_owned(),
+            display_name: "Command Code GOAT".to_owned(),
+            base_url: "https://api.deepseek.com".to_owned(),
+            protocol: "chat_completions".to_owned(),
+            extensions: BTreeMap::new(),
+            secret: Secret::new("synthetic-history-key".to_owned()),
+        },
+        42,
+    )
+    .unwrap();
+    crate::models::add_manual_model(
+        &fixture.storage,
+        &crate::models::AddManualModelRequest {
+            provider_id: provider.id.as_str().to_owned(),
+            model_id: "deepseek/deepseek-v4.1-flash".to_owned(),
+            alias: Some("Flash Alias".to_owned()),
+            capability_overrides: Default::default(),
+            context_window: None,
+            max_output_tokens: None,
+            thinking_effort: None,
+        },
+        42,
+    )
+    .unwrap();
+
+    let settings = root.join("settings.json");
+    fs::write(&settings, b"{}").unwrap();
+    let target = read_target_bytes(&settings).unwrap().0;
+    let content = serde_json::to_vec(&json!({
+        "env": {
+            "ANTHROPIC_MODEL": "deepseek/deepseek-v4.1-flash",
+            "ANTHROPIC_BASE_URL": "https://api.deepseek.com"
+        }
+    }))
+    .unwrap();
+    apply_files(
+        &fixture.storage,
+        OperationKind::ClaudeCodeSettings,
+        Some(provider.id.as_str()),
+        &[PlannedFile {
+            target: WriteTarget::from_plan(&target),
+            content,
+        }],
+        &fixture.backups(),
+    )
+    .unwrap();
+
+    let page = configuration_history_page(
+        &fixture.storage,
+        &environment,
+        &request(ConfigurationAgent::ClaudeCode, 50),
+        &fixture.backups(),
+    )
+    .unwrap();
+    assert_eq!(page.current.status, HistoryCurrentStatus::Matched);
+    assert_eq!(
+        page.current.provider_label.as_deref(),
+        Some("Command Code GOAT")
+    );
+    assert_eq!(
+        page.current.model_id.as_deref(),
+        Some("deepseek/deepseek-v4.1-flash")
+    );
+    // Alias wins over id for the list-card model slot.
+    assert_eq!(page.current.model_label.as_deref(), Some("Flash Alias"));
+    let serialized = serde_json::to_value(&page).unwrap();
+    assert_eq!(
+        serialized["current"]["providerLabel"].as_str(),
+        Some("Command Code GOAT")
+    );
+    assert_eq!(
+        serialized["current"]["modelId"].as_str(),
+        Some("deepseek/deepseek-v4.1-flash")
+    );
+    assert_eq!(
+        serialized["current"]["modelLabel"].as_str(),
+        Some("Flash Alias")
+    );
+    // Fields stay separate; IPC must not pre-join the list-card string.
+    let blob = serialized["current"].to_string();
+    assert!(!blob.contains("Command Code GOAT | Flash Alias"));
+
+    // Without an alias, modelLabel falls back to the live model id.
+    fixture.sql(&format!(
+        "UPDATE provider_model SET alias = NULL WHERE provider_id = '{}'",
+        provider.id.as_str()
+    ));
+    let page = configuration_history_page(
+        &fixture.storage,
+        &environment,
+        &request(ConfigurationAgent::ClaudeCode, 50),
+        &fixture.backups(),
+    )
+    .unwrap();
+    assert_eq!(
+        page.current.model_label.as_deref(),
+        Some("deepseek/deepseek-v4.1-flash")
+    );
+
+    // Pi: defaultModel from settings.json (both owned files in one apply).
+    let pi_root = environment.home.join(".pi/agent");
+    fs::create_dir_all(&pi_root).unwrap();
+    let models_path = pi_root.join("models.json");
+    let settings_path = pi_root.join("settings.json");
+    fs::write(&models_path, b"{}").unwrap();
+    fs::write(&settings_path, b"{}").unwrap();
+    let models_body = br#"{"providers":{"x":{"models":[{"id":"deepseek/deepseek-v4.1-flash"}]}}}"#;
+    let settings_body = br#"{"defaultModel":"deepseek/deepseek-v4.1-flash","defaultProvider":"x"}"#;
+    apply_files(
+        &fixture.storage,
+        OperationKind::PiSettings,
+        Some(provider.id.as_str()),
+        &[
+            PlannedFile {
+                target: WriteTarget::from_plan(&read_target_bytes(&models_path).unwrap().0),
+                content: models_body.to_vec(),
+            },
+            PlannedFile {
+                target: WriteTarget::from_plan(&read_target_bytes(&settings_path).unwrap().0),
+                content: settings_body.to_vec(),
+            },
+        ],
+        &fixture.backups(),
+    )
+    .unwrap();
+    let pi = configuration_history_page(
+        &fixture.storage,
+        &environment,
+        &request(ConfigurationAgent::Pi, 50),
+        &fixture.backups(),
+    )
+    .unwrap();
+    assert_eq!(pi.current.status, HistoryCurrentStatus::Matched);
+    assert_eq!(
+        pi.current.provider_label.as_deref(),
+        Some("Command Code GOAT")
+    );
+    assert_eq!(
+        pi.current.model_id.as_deref(),
+        Some("deepseek/deepseek-v4.1-flash")
+    );
+    assert_eq!(
+        pi.current.model_label.as_deref(),
+        Some("deepseek/deepseek-v4.1-flash")
+    );
+
+    // Grok: models.default alias -> [model.<alias>].model id.
+    let grok_root = environment.home.join(".grok");
+    fs::create_dir_all(&grok_root).unwrap();
+    let grok_path = grok_root.join("config.toml");
+    let grok_body = r#"[models]
+default = "owned"
+
+[model.owned]
+model = "deepseek/deepseek-v4.1-flash"
+base_url = "https://api.deepseek.com"
+name = "vibemate-flash"
+api_backend = "chat_completions"
+api_key = "secret"
+"#;
+    fs::write(&grok_path, b"").unwrap();
+    apply_files(
+        &fixture.storage,
+        OperationKind::GrokSettings,
+        Some(provider.id.as_str()),
+        &[PlannedFile {
+            target: WriteTarget::from_plan(&read_target_bytes(&grok_path).unwrap().0),
+            content: grok_body.as_bytes().to_vec(),
+        }],
+        &fixture.backups(),
+    )
+    .unwrap();
+    let grok = configuration_history_page(
+        &fixture.storage,
+        &environment,
+        &request(ConfigurationAgent::GrokBuild, 50),
+        &fixture.backups(),
+    )
+    .unwrap();
+    assert_eq!(grok.current.status, HistoryCurrentStatus::Matched);
+    assert_eq!(
+        grok.current.provider_label.as_deref(),
+        Some("Command Code GOAT")
+    );
+    assert_eq!(
+        grok.current.model_id.as_deref(),
+        Some("deepseek/deepseek-v4.1-flash")
+    );
+    assert_eq!(
+        grok.current.model_label.as_deref(),
+        Some("deepseek/deepseek-v4.1-flash")
+    );
 }

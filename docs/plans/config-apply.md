@@ -316,6 +316,9 @@ SQLite/服务商记录，不读取配置或备份字节：
 - 每页固定附带 `current`：读取范围内实际文件摘要，与全部历史条目的 previous/intended 摘要比对。
   完整匹配才给出一个 `matchedEntryKey`（优先 previous 匹配的 apply 条目，否则最近的 intended 匹配）；
   外部修改、读取失败与多文件部分匹配分别标记，不把最近一次操作单独当成当前配置。
+  适配器历史表面在 `matched` 时额外附带只读 `providerLabel`（仍保存的服务商自定义显示名）、
+  `modelId`（从匹配的 live 配置文件读出）与 `modelLabel`（已保存模型别名，否则为 model id），
+  供列表卡渲染 `providerLabel | modelLabel`；字段保持分开，不预拼接；非匹配时均为 null，不捏造。
 - RestoreView 已固定展示 `current`、标记匹配历史行，并显示各文件 `backupState`；不授权恢复或删除，
   也不用这些字段推断恢复资格。H3 删除仍单独跟踪。
 

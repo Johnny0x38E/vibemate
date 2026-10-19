@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
@@ -83,14 +83,12 @@ async function mount() {
     return { apply, ...view };
 }
 
-test("opens a preview dialog with summary on top and field diffs below", async () => {
+test("shows an inline preview with summary on top and field diffs below", async () => {
     const { apply } = await mount();
-    const dialog = await screen.findByRole("dialog");
-    expect(dialog).toBeTruthy();
+    // Inline in the Write dialog host — never a nested preview Dialog.
+    expect(screen.queryByRole("dialog")).toBeNull();
+    await screen.findByText("/qa/models.json");
     expect(read).toHaveBeenLastCalledWith(plan, "/qa/pi");
-    // Top: file paths / states
-    expect(screen.getAllByText("/qa/models.json").length).toBeGreaterThan(0);
-    // Bottom: field diffs — no full-text expand, no planned dual column
     expect(screen.getAllByText("defaultModel").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Replaced").length).toBeGreaterThan(0);
     expect(screen.queryByText("Show full configuration text")).toBeNull();
@@ -110,26 +108,8 @@ test("summary failures block apply and retry the same reviewed plan", async () =
     );
     expect(apply).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
-    await screen.findByRole("dialog");
-    await userEvent.click(
-        screen.getByRole("button", { name: "Apply these settings" }),
-    );
-    expect(apply).toHaveBeenCalledOnce();
-});
-
-test("closing the dialog keeps apply available and can reopen", async () => {
-    const { apply } = await mount();
-    await screen.findByRole("dialog");
-    await userEvent.click(screen.getByRole("button", { name: "Close" }));
-    await waitFor(() => {
-        expect(screen.queryByRole("dialog")).toBeNull();
-    });
-    await userEvent.click(
-        screen.getByRole("button", {
-            name: /View detailed configuration/u,
-        }),
-    );
-    await screen.findByRole("dialog");
+    await screen.findByText("/qa/models.json");
+    expect(screen.queryByRole("dialog")).toBeNull();
     await userEvent.click(
         screen.getByRole("button", { name: "Apply these settings" }),
     );

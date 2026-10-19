@@ -26,6 +26,7 @@ export type IconName =
     | "folder"
     | "check"
     | "chevron"
+    | "info"
     | "error";
 
 /** Render an inline SVG; the containing control must provide its accessible name. */
@@ -179,6 +180,15 @@ export function Icon({ name }: { name: IconName }): JSX.Element {
         case "chevron":
             // Points right when collapsed; rotate 90° when the row is expanded.
             content = <path d="m9 6 6 6-6 6" />;
+            break;
+        case "info":
+            // Information circle for Detail / about-style actions.
+            content = (
+                <>
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 11v6M12 8h.01" />
+                </>
+            );
             break;
         case "error":
             content = (

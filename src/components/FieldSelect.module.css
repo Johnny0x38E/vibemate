@@ -71,8 +71,9 @@
 }
 
 .positioner {
-    /* The portaled menu sits above the app's ordinary content stacking context. */
-    z-index: var(--layer-popover);
+    /* Above dialogs too: Write / model-entry hosts FieldSelect inside a modal.
+       Matches EffortLevelSelect (layer-dialog + 1). */
+    z-index: calc(var(--layer-dialog) + 1);
     width: var(--anchor-width);
     max-width: var(--available-width);
 }

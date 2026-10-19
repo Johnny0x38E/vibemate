@@ -14,14 +14,14 @@
     list-style: none;
 }
 
-/* Segment top bar: recheck sits above the history list. */
+/* Recheck row above the history DetailPanel — not inside the card surface. */
 .toolbar {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     justify-content: flex-end;
-    gap: var(--space-sm, 8px);
-    margin: 0 0 var(--space-sm, 8px);
+    gap: var(--space-sm);
+    margin: 0 0 var(--space-sm);
 }
 
 .row {

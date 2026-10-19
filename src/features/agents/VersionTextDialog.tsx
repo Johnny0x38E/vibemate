@@ -27,7 +27,7 @@ export type CurrentConfigTextFile = {
 };
 
 /**
- * Page-level 「详细配置」 dialog: sanitized *current* configuration text only.
+ * Page-level 「详细配置」 dialog (shared narrow popupCompact): sanitized *current* configuration text only.
  *
  * Bound to a matched history entry so Rust can re-check the live digest. Never
  * shows retained/planned text or a dual-column layout — those belong nowhere
@@ -113,7 +113,7 @@ export function CurrentConfigurationDialog({
             <Dialog.Portal>
                 <Dialog.Backdrop className={dialog["backdrop"]} />
                 <Dialog.Popup
-                    className={dialog["popup"]}
+                    className={dialog["popupCompact"]}
                     initialFocus={title}
                     finalFocus={returnFocus}
                 >
@@ -188,9 +188,6 @@ export function CurrentConfigurationDialog({
                     )}
                     {state.kind === "ready" && (
                         <>
-                            <p className={dialog["meta"]}>
-                                {t("agents.version.textMaskedNotice")}
-                            </p>
                             <CurrentTextSide
                                 side={state.text.current}
                                 format={state.text.format}

@@ -30,15 +30,15 @@ import hierarchy from "../../components/textHierarchy.module.css";
 import pageStyles from "../providers/ProviderPage.module.css";
 import { AgentIcon } from "./AgentIcon";
 import { IconButton } from "../../components/IconButton";
+import listActions from "../../components/listActions.module.css";
 import { AgentPage } from "./AgentPage";
 import { AgentVersionPanel } from "./AgentVersionPanel";
-import { ConfigPreview } from "./ConfigPreview";
 import {
     CurrentConfigPin,
     RestoreView,
-    WriteCurrentSummary,
     type CurrentConfigTextSource,
 } from "./RestoreView";
+import { WriteConfigDialog } from "./WriteConfigDialog";
 import underlineTabs from "../../components/underlineTabs.module.css";
 import {
     readConfigurationHistory,
@@ -59,7 +59,7 @@ type State =
 
 type AgentsPage = { kind: "list" } | { kind: "detail"; id: AgentId };
 
-type AgentSegment = "write" | "history" | "skill" | "mcp" | "install";
+type AgentSegment = "history" | "skill" | "mcp" | "install";
 
 function failure(error: unknown): DiscoveryErrorCode {
     return error instanceof DiscoveryRequestError
@@ -97,12 +97,13 @@ export function AgentList({
     const [segment, setSegment] = useState<AgentSegment>("history");
     const [currentConfig, setCurrentConfig] =
         useState<HistoryCurrentConfig | null>(null);
-    const [writeSummary, setWriteSummary] = useState<{
-        providerLabel: string | null;
-        modelLabel: string | null;
-    }>({ providerLabel: null, modelLabel: null });
     const [pinTextSource, setPinTextSource] =
         useState<CurrentConfigTextSource | null>(null);
+    /** List-row Write dialog target; null when closed. */
+    const [writeTarget, setWriteTarget] = useState<ConfigurableAgent | null>(
+        null,
+    );
+    const writeReturnFocus = useRef<HTMLElement | null>(null);
     /** List-card provider|model labels from history current / matched entry. */
     const [listSummaries, setListSummaries] = useState<
         Partial<
@@ -206,10 +207,12 @@ export function AgentList({
             return;
         const id = focusCard.current;
         focusCard.current = null;
-        const target = document.querySelector<HTMLElement>(
-            `[data-agent-card="${id}"]`,
-        );
-        target?.focus();
+        const marker = document.querySelector(`[data-agent-card="${id}"]`);
+        const item = marker?.closest("li");
+        // Detail is always the last IconButton on the row (Write, then Detail).
+        const buttons = item?.querySelectorAll<HTMLElement>("button");
+        const detail = buttons?.[buttons.length - 1];
+        detail?.focus();
     }, [hidden, page]);
 
     // List rows: `{providerLabel} | {modelLabel}` from HistoryCurrentConfig when
@@ -435,17 +438,30 @@ export function AgentList({
 
     function openDetail(id: AgentId): void {
         if (state.kind === "loading" || versionBusy) return;
+        setWriteTarget(null);
         setSegment(hasConfigAdapter(id) ? "history" : "skill");
         setCurrentConfig(null);
-        setWriteSummary({ providerLabel: null, modelLabel: null });
         setPage({ kind: "detail", id });
+    }
+
+    function openWrite(
+        id: ConfigurableAgent,
+        returnEl: HTMLElement | null,
+    ): void {
+        if (state.kind === "loading" || versionBusy) return;
+        writeReturnFocus.current = returnEl;
+        setWriteTarget(id);
+    }
+
+    function closeWrite(): void {
+        if (pending.current || versionBusy) return;
+        setWriteTarget(null);
     }
 
     function returnToList(from: AgentId): void {
         if (pending.current) return;
         focusCard.current = from;
         setCurrentConfig(null);
-        setWriteSummary({ providerLabel: null, modelLabel: null });
         setPage({ kind: "list" });
     }
 
@@ -669,6 +685,7 @@ export function AgentList({
                                       )
                                     : t("agents.versionProbe.evidence")
                                 : undefined;
+                        const name = t(`agents.names.${id}`);
                         return (
                             <li
                                 key={id}
@@ -677,69 +694,104 @@ export function AgentList({
                                     styles["item"],
                                 ].join(" ")}
                             >
-                                <button
-                                    type="button"
-                                    className={styles["row"]}
-                                    data-agent-card={id}
-                                    aria-disabled={
-                                        state.kind === "loading" || versionBusy
-                                    }
-                                    aria-describedby={`agent-card-status-${id}`}
-                                    aria-label={t("agents.list.openDetail", {
-                                        name: t(`agents.names.${id}`),
-                                    })}
-                                    onClick={() => {
-                                        openDetail(id);
-                                    }}
-                                >
-                                    <AgentIcon id={id} size="row" />
-                                    <span className={styles["textColumn"]}>
-                                        <span className={styles["rowName"]}>
-                                            {t(`agents.names.${id}`)}
-                                        </span>
-                                        {hasConfigAdapter(id) ? (
-                                            providerModel !== null ? (
+                                <div className={styles["details"]}>
+                                    <div
+                                        className={styles["row"]}
+                                        data-agent-card={id}
+                                    >
+                                        <AgentIcon id={id} size="row" />
+                                        <span className={styles["textColumn"]}>
+                                            <span className={styles["rowName"]}>
+                                                {name}
+                                            </span>
+                                            {hasConfigAdapter(id) ? (
+                                                providerModel !== null ? (
+                                                    <span
+                                                        className={
+                                                            styles["rowSummary"]
+                                                        }
+                                                    >
+                                                        {t(
+                                                            "agents.summary.providerModel",
+                                                            providerModel,
+                                                        )}
+                                                    </span>
+                                                ) : null
+                                            ) : (
                                                 <span
                                                     className={
                                                         styles["rowSummary"]
                                                     }
                                                 >
-                                                    {t(
-                                                        "agents.summary.providerModel",
-                                                        providerModel,
-                                                    )}
+                                                    {t("agents.summary.none")}
                                                 </span>
-                                            ) : null
-                                        ) : (
-                                            <span
-                                                className={styles["rowSummary"]}
-                                            >
-                                                {t("agents.summary.none")}
-                                            </span>
-                                        )}
-                                    </span>
-                                    <span
-                                        className={styles["rowStatus"]}
-                                        id={`agent-card-status-${id}`}
-                                    >
-                                        <span
-                                            className={styles["statusDot"]}
-                                            aria-hidden="true"
-                                            data-state={
-                                                state.kind === "desktop"
-                                                    ? (row?.state ??
-                                                      "unavailable")
-                                                    : state.kind
-                                            }
-                                        />
-                                        <span
-                                            className={styles["statusText"]}
-                                            title={statusTitle}
-                                        >
-                                            {statusText}
+                                            )}
                                         </span>
-                                    </span>
-                                </button>
+                                        <span
+                                            className={styles["rowStatus"]}
+                                            id={`agent-card-status-${id}`}
+                                        >
+                                            <span
+                                                className={styles["statusDot"]}
+                                                aria-hidden="true"
+                                                data-state={
+                                                    state.kind === "desktop"
+                                                        ? (row?.state ??
+                                                          "unavailable")
+                                                        : state.kind
+                                                }
+                                            />
+                                            <span
+                                                className={styles["statusText"]}
+                                                title={statusTitle}
+                                            >
+                                                {statusText}
+                                            </span>
+                                        </span>
+                                    </div>
+                                </div>
+                                <div
+                                    className={[
+                                        listActions["group"],
+                                        styles["rowActions"],
+                                    ].join(" ")}
+                                >
+                                    {hasConfigAdapter(id) ? (
+                                        <IconButton
+                                            icon="edit"
+                                            blocked={
+                                                state.kind === "loading" ||
+                                                versionBusy
+                                            }
+                                            label={t("agents.list.writeLabel", {
+                                                name,
+                                            })}
+                                            onClick={() => {
+                                                const el =
+                                                    document.activeElement;
+                                                openWrite(
+                                                    id,
+                                                    el instanceof HTMLElement
+                                                        ? el
+                                                        : null,
+                                                );
+                                            }}
+                                        />
+                                    ) : null}
+                                    <IconButton
+                                        icon="info"
+                                        blocked={
+                                            state.kind === "loading" ||
+                                            versionBusy
+                                        }
+                                        label={t("agents.list.openDetail", {
+                                            name,
+                                        })}
+                                        onClick={() => {
+                                            openDetail(id);
+                                        }}
+                                    />
+                                </div>
                             </li>
                         );
                     })}
@@ -758,7 +810,7 @@ export function AgentList({
                 : pathValue.trim() === row?.entryPath;
         const configurable = hasConfigAdapter(id);
         const segments: AgentSegment[] = configurable
-            ? ["write", "history", "skill", "mcp", "install"]
+            ? ["history", "skill", "mcp", "install"]
             : ["skill", "mcp", "install"];
 
         return (
@@ -830,32 +882,6 @@ export function AgentList({
                     {configurable && (
                         <div
                             role="tabpanel"
-                            id={`agent-panel-${id}-write`}
-                            aria-labelledby={`agent-segment-${id}-write`}
-                            hidden={segment !== "write"}
-                        >
-                            <WriteCurrentSummary
-                                providerLabel={writeSummary.providerLabel}
-                                modelLabel={writeSummary.modelLabel}
-                            />
-                            <ConfigPreview
-                                key={JSON.stringify([id, row?.entryPath])}
-                                onApplied={() => {
-                                    setConfigEpoch((value) => value + 1);
-                                }}
-                                blocked={blocked}
-                                agent={id}
-                                entryPath={row?.entryPath ?? null}
-                                onBusyChange={(busy) => {
-                                    pending.current = busy;
-                                    if (mounted.current) setVersionBusy(busy);
-                                }}
-                            />
-                        </div>
-                    )}
-                    {configurable && (
-                        <div
-                            role="tabpanel"
                             id={`agent-panel-${id}-history`}
                             aria-labelledby={`agent-segment-${id}-history`}
                             hidden={segment !== "history"}
@@ -874,17 +900,6 @@ export function AgentList({
                                         textSource: null,
                                     };
                                     setPinTextSource(next.textSource ?? null);
-                                    setWriteSummary((previous) =>
-                                        previous.providerLabel ===
-                                            next.providerLabel &&
-                                        previous.modelLabel === next.modelLabel
-                                            ? previous
-                                            : {
-                                                  providerLabel:
-                                                      next.providerLabel,
-                                                  modelLabel: next.modelLabel,
-                                              },
-                                    );
                                 }}
                                 onBusyChange={(busy) => {
                                     pending.current = busy;
@@ -998,6 +1013,15 @@ export function AgentList({
         );
     }
 
+    const writeRow =
+        writeTarget === null
+            ? null
+            : {
+                  agent: writeTarget,
+                  entryPath: observation(writeTarget)?.entryPath ?? null,
+                  summary: listSummaries[writeTarget],
+              };
+
     return (
         <section
             className={styles["view"]}
@@ -1005,6 +1029,30 @@ export function AgentList({
             data-secondary-page={page.kind !== "list" ? true : undefined}
         >
             {page.kind === "list" ? listView() : detailView(page.id)}
+            {writeRow !== null && (
+                <WriteConfigDialog
+                    agent={writeRow.agent}
+                    agentName={t(`agents.names.${writeRow.agent}`)}
+                    entryPath={writeRow.entryPath}
+                    providerLabel={writeRow.summary?.providerLabel ?? null}
+                    modelLabel={writeRow.summary?.modelLabel ?? null}
+                    blocked={blocked}
+                    onBusyChange={(busy) => {
+                        pending.current = busy;
+                        if (mounted.current) setVersionBusy(busy);
+                    }}
+                    onApplied={() => {
+                        setConfigEpoch((value) => value + 1);
+                        setWriteTarget(null);
+                    }}
+                    onClose={closeWrite}
+                    returnFocus={() =>
+                        writeReturnFocus.current?.isConnected
+                            ? writeReturnFocus.current
+                            : null
+                    }
+                />
+            )}
         </section>
     );
 }

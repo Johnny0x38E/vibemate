@@ -504,7 +504,8 @@
             "previousStatus": "{{status}} · 上次结果",
             "empty": "本机未发现 Agent 入口。安装 Agent 或更新 PATH 后请点击「发现」；也可在详情中填写手动入口路径。",
             "openDetail": "打开 {{name}} 详情",
-            "versionShort": "{{version}}"
+            "versionShort": "{{version}}",
+            "writeLabel": "写入 {{name}} 配置"
         },
         "detail": {
             "notFound": "在已检查的位置未发现入口。可在下方指定绝对入口路径，或更新 PATH 后重新发现。",
@@ -596,7 +597,7 @@
             "textDiff": "差异",
             "textNoDiff": "没有行级差异。",
             "textPreviewMode": "浏览器预览无法读取配置文件，请在 vibemate 桌面应用中查看。",
-            "textMaskedNotice": "凭据类键下的值会在文本离开 Rust 前被替换。",
+
             "fieldOwnerRef": "记录的所有者引用",
             "fieldTextBytes": "原始大小",
             "textBytesUnit": "{{bytes}} 字节"
@@ -947,7 +948,6 @@
         },
         "segments": {
             "ariaLabel": "Agent 内容分段",
-            "write": "写入",
             "history": "历史",
             "skill": "Skill",
             "mcp": "MCP",
@@ -969,6 +969,10 @@
         },
         "mcpPanel": {
             "empty": "即将在 MCP 模块管理；此处稍后显示只读状态。"
+        },
+        "writeDialog": {
+            "title": "写入 · {{name}}",
+            "close": "关闭"
         }
     },
     "skills": {

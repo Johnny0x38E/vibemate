@@ -230,6 +230,14 @@ function page(
     return { current, entries, nextCursor };
 }
 
+/** Listed entry is not HistoryCurrentConfig.matchedEntryKey (not live current). */
+function pageNotCurrent(
+    entries: HistoryEntry[] = [entry],
+    nextCursor: HistoryCursor | null = null,
+): HistoryPage {
+    return page(entries, nextCursor, currentConfig("unrecorded"));
+}
+
 const loadHistory = vi.mocked(readConfigurationHistory);
 const previewVersion = vi.mocked(planVersionRestore);
 const restoreVersion = vi.mocked(applyVersionRestore);
@@ -332,6 +340,18 @@ test("an empty history says that nothing was written yet", async () => {
     ).toBeTruthy();
 });
 
+test("Recheck sits outside the history list card", async () => {
+    await mount();
+    const recheck = await screen.findByRole("button", { name: "Recheck" });
+    const card = screen.getByRole("region", { name: "Configuration history" });
+    expect(card.contains(recheck)).toBe(false);
+    // Button is a preceding sibling of the card in the history section.
+    expect(
+        recheck.compareDocumentPosition(card) &
+            Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+});
+
 test("a recorded write shows its intent, state, time, provider and file", async () => {
     await mount();
     expect(
@@ -380,6 +400,25 @@ test("pins the live current configuration above the list and marks a matched ent
     expect(
         screen.getByText(rowSummary("Apply · Written · Current configuration")),
     ).toBeTruthy();
+});
+
+test("current matched entry expands without Restore this version", async () => {
+    previewVersion.mockResolvedValue({
+        kind: "desktop",
+        plan: versionPlan,
+    });
+    // Default page() marks entry as matched current via currentConfig().
+    await mount();
+    await openVersionPreview();
+    expect(
+        await screen.findByRole("region", { name: "Version restore preview" }),
+    ).toBeTruthy();
+    // Field diffs still visible.
+    expect(screen.getByText("model")).toBeTruthy();
+    expect(
+        screen.queryByRole("button", { name: "Restore this version" }),
+    ).toBeNull();
+    expect(screen.getByRole("button", { name: "Close" })).toBeTruthy();
 });
 
 test("an unrecorded current pin stays fixed when older history loads", async () => {
@@ -499,6 +538,10 @@ test("the version preview lists sanitized field changes and confirms the reviewe
         kind: "desktop",
         plan: versionPlan,
     });
+    loadHistory.mockResolvedValue({
+        kind: "desktop",
+        page: pageNotCurrent(),
+    });
     await mount();
     await openVersionPreview();
     expect(
@@ -601,6 +644,10 @@ test("a stale version confirmation is refused and the history is re-read", async
     restoreVersion.mockRejectedValue(
         new VersionRestoreRequestError("plan_stale"),
     );
+    loadHistory.mockResolvedValue({
+        kind: "desktop",
+        page: pageNotCurrent(),
+    });
     await mount();
     await openVersionPreview();
     const reads = loadHistory.mock.calls.length;
@@ -651,7 +698,7 @@ test("restore and compensation batches offer the version preview", async () => {
     };
     loadHistory.mockResolvedValue({
         kind: "desktop",
-        page: page([batch]),
+        page: pageNotCurrent([batch]),
     });
     previewVersion.mockResolvedValue({
         kind: "desktop",

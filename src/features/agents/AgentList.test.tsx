@@ -118,6 +118,16 @@ async function openPiDetail(): Promise<void> {
     await screen.findByRole("heading", { name: /Pi/u });
 }
 
+/** List Write IconButton for a configurable Agent. */
+async function openPiWrite(): Promise<void> {
+    fireEvent.click(
+        await screen.findByRole("button", {
+            name: "Write configuration for Pi",
+        }),
+    );
+    await screen.findByRole("dialog", { name: /Write · Pi/u });
+}
+
 test("manual paths scan only on Rediscover and never show connected state", async () => {
     await mount();
     expect(
@@ -343,21 +353,21 @@ test("an initial failed scan does not report absent installations and remains re
     expect(screen.queryByRole("alert")).toBeNull();
     // The catalog keeps its six slots: Pi is now found (version beside the
     // dot), Codex is still absent (status label only).
-    expect(
-        within(
-            screen.getByRole("button", { name: "Open Pi details" }),
-        ).getByText("1.1.0"),
-    ).toBeDefined();
-    expect(
-        within(
-            screen.getByRole("button", { name: "Open Pi details" }),
-        ).queryByText("Found"),
-    ).toBeNull();
-    expect(
-        within(
-            screen.getByRole("button", { name: "Open Codex details" }),
-        ).getByText("Not found"),
-    ).toBeDefined();
+    const piRow = screen
+        .getByRole("button", { name: "Open Pi details" })
+        .closest("li");
+    if (!(piRow instanceof HTMLElement)) {
+        throw new Error("missing Pi row");
+    }
+    expect(within(piRow).getByText("1.1.0")).toBeDefined();
+    expect(within(piRow).queryByText("Found")).toBeNull();
+    const codexRow = screen
+        .getByRole("button", { name: "Open Codex details" })
+        .closest("li");
+    if (!(codexRow instanceof HTMLElement)) {
+        throw new Error("missing Codex row");
+    }
+    expect(within(codexRow).getByText("Not found")).toBeDefined();
 });
 
 test("confirmed CLI result is separate, blocks scans/navigation and expires at rediscovery", async () => {
@@ -415,8 +425,13 @@ test("confirmed CLI result is separate, blocks scans/navigation and expires at r
     });
     expect(screen.getByText("1.1.0")).toBeDefined();
     fireEvent.click(back);
-    const card = screen.getByRole("button", { name: "Open Pi details" });
-    expect(card.getAttribute("aria-describedby")).toBe("agent-card-status-pi");
+    const detail = screen.getByRole("button", { name: "Open Pi details" });
+    const row = detail.closest("li");
+    if (!(row instanceof HTMLElement)) {
+        throw new Error("missing Pi card");
+    }
+    expect(row.querySelector("#agent-card-status-pi")).not.toBeNull();
+    expect(row.querySelector("[data-agent-card]")).not.toBeNull();
     expect(screen.getByText("1.1.0").getAttribute("title")).toContain(
         "user-triggered CLI",
     );
@@ -424,7 +439,7 @@ test("confirmed CLI result is separate, blocks scans/navigation and expires at r
     fireEvent.click(screen.getByRole("button", { name: "Discover" }));
     await screen.findByRole("alert");
     expect(screen.queryByText("1.1.0")).toBeNull();
-    expect(card.querySelector("[data-state]")?.getAttribute("data-state")).toBe(
+    expect(row.querySelector("[data-state]")?.getAttribute("data-state")).toBe(
         "error",
     );
 });
@@ -631,14 +646,8 @@ test("filename version remains unverified and unavailable config roots do not sh
     );
     await expandInstallPaths();
     const versionBadge = await screen.findByText("1.0.50");
-    // This detail page also mounts the configuration and history cards, and each
-    // one lands with its own browser-preview notice a tick after the scan reply.
-    // Wait for both, or their re-render closes the tooltip this hover opens.
-    expect(
-        await screen.findByText(
-            "The browser preview cannot read or write configuration files. Open the Agents page in the vibemate desktop app.",
-        ),
-    ).toBeTruthy();
+    // Detail no longer mounts Write/ConfigPreview; wait for the history
+    // browser-preview notice so its re-render does not close the tooltip.
     expect(
         await screen.findByText(
             "The browser preview cannot read configuration files or the write history. Open the Agents page in the vibemate desktop app.",
@@ -688,9 +697,14 @@ test("list cards omit provider|model when history has no writable summary", asyn
     expect(screen.queryByText(/Model —/u)).toBeNull();
     expect(screen.queryByText(/Skill —/u)).toBeNull();
     expect(screen.queryByText(/MCP —/u)).toBeNull();
-    const hermes = screen.getByRole("button", {
-        name: "Open Hermes details",
-    });
+    const hermes = screen
+        .getByRole("button", {
+            name: "Open Hermes details",
+        })
+        .closest("li");
+    if (!(hermes instanceof HTMLElement)) {
+        throw new Error("missing Hermes row");
+    }
     expect(within(hermes).getByText("No configuration summary")).toBeTruthy();
 });
 
@@ -761,7 +775,13 @@ test("list cards show a single provider | model line from history current", asyn
         },
     });
     await mount();
-    const pi = await screen.findByRole("button", { name: "Open Pi details" });
+    const piDetail = await screen.findByRole("button", {
+        name: "Open Pi details",
+    });
+    const pi = piDetail.closest("li");
+    if (!(pi instanceof HTMLElement)) {
+        throw new Error("missing Pi row");
+    }
     await waitFor(() => {
         expect(
             within(pi).getByText(
@@ -774,41 +794,88 @@ test("list cards show a single provider | model line from history current", asyn
     expect(within(pi).queryByText(/未写入/u)).toBeNull();
 });
 
-test("agent detail defaults to the History segment with a current-config pin", async () => {
+test("agent detail defaults to History and has no Write tab", async () => {
     await mount();
     await openPiDetail();
     expect(
         screen.getByRole("tab", { name: "History", selected: true }),
     ).toBeTruthy();
-    expect(screen.getByRole("tab", { name: "Write" })).toBeTruthy();
+    expect(screen.queryByRole("tab", { name: "Write" })).toBeNull();
     expect(screen.getByRole("tab", { name: "Skill" })).toBeTruthy();
     expect(screen.getByRole("tab", { name: "MCP" })).toBeTruthy();
     expect(screen.getByRole("tab", { name: "Install & paths" })).toBeTruthy();
 });
 
-test("Write segment hides unresolved Provider and Model shells", async () => {
+test("list Write opens a titlebar-safe dialog with inline form; row click does not open detail", async () => {
     await mount();
-    await openPiDetail();
-    fireEvent.click(screen.getByRole("tab", { name: "Write" }));
-    const writePanel = screen.getByRole("tabpanel", { name: "Write" });
-    // Preview / unmatched history — no provider|model line, no dual empties.
-    expect(within(writePanel).queryByText(/Provider —/u)).toBeNull();
-    expect(within(writePanel).queryByText(/Model —/u)).toBeNull();
-    expect(within(writePanel).queryByText(/Provider not written/u)).toBeNull();
-    expect(within(writePanel).queryByText(/ \| /u)).toBeNull();
-    expect(within(writePanel).queryByText(/未写入/u)).toBeNull();
-    expect(within(writePanel).queryByText(/Skill —/u)).toBeNull();
-    expect(within(writePanel).queryByText(/MCP —/u)).toBeNull();
+    const list = await screen.findByRole("list", { name: "Agents" });
+    const piRow = within(list)
+        .getByRole("button", { name: "Open Pi details" })
+        .closest("li");
+    if (!(piRow instanceof HTMLElement)) {
+        throw new Error("missing Pi row");
+    }
+    // Clicking the non-interactive main column must not navigate.
+    const name = within(piRow).getByText("Pi");
+    fireEvent.click(name);
+    expect(screen.queryByRole("heading", { name: /Pi/u })).toBeNull();
+    expect(screen.queryByRole("tab", { name: "History" })).toBeNull();
+
+    await openPiWrite();
+    const dialog = screen.getByRole("dialog", { name: /Write · Pi/u });
+    // Form or desktop-required preview copy — either is the Write body.
+    expect(
+        within(dialog).queryByRole("combobox", { name: "Provider" }) !== null ||
+            within(dialog).queryByText(
+                /browser preview cannot read or write/i,
+            ) !== null ||
+            within(dialog).queryByText(/Model configuration/i) !== null,
+    ).toBe(true);
+    // Nested preview Dialog must not stack on top of Write.
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+    await waitFor(() => {
+        expect(screen.queryByRole("dialog")).toBeNull();
+    });
 });
 
-test("agent list uses a Provider-style list row layout, not a card grid", async () => {
+test("Write dialog hides unresolved Provider and Model shells", async () => {
+    await mount();
+    await openPiWrite();
+    const dialog = screen.getByRole("dialog", { name: /Write · Pi/u });
+    expect(within(dialog).queryByText(/Provider —/u)).toBeNull();
+    expect(within(dialog).queryByText(/Model —/u)).toBeNull();
+    expect(within(dialog).queryByText(/Provider not written/u)).toBeNull();
+    expect(within(dialog).queryByText(/未写入/u)).toBeNull();
+    expect(within(dialog).queryByText(/Skill —/u)).toBeNull();
+    expect(within(dialog).queryByText(/MCP —/u)).toBeNull();
+});
+
+test("agent list uses Provider-style rows with status rail and Write/Detail actions", async () => {
     await mount();
     const list = await screen.findByRole("list", { name: "Agents" });
     expect(list.children).toHaveLength(6);
-    // surfaceList rows are listitems; each opens via a full-width row button.
     expect(within(list).getAllByRole("listitem")).toHaveLength(6);
-    const pi = within(list).getByRole("button", { name: "Open Pi details" });
-    expect(pi.getAttribute("data-agent-card")).toBe("pi");
-    // Grid card chrome class names are gone from the list markup.
+    const piDetail = within(list).getByRole("button", {
+        name: "Open Pi details",
+    });
+    const piWrite = within(list).getByRole("button", {
+        name: "Write configuration for Pi",
+    });
+    expect(piDetail).toBeTruthy();
+    expect(piWrite).toBeTruthy();
+    // Non-configurable Agents expose Detail only.
+    expect(
+        within(list).queryByRole("button", {
+            name: "Write configuration for Hermes",
+        }),
+    ).toBeNull();
+    expect(
+        within(list).getByRole("button", { name: "Open Hermes details" }),
+    ).toBeTruthy();
+    // data-agent-card lives on the row container, not a full-row button.
+    expect(
+        within(list).getByText("Pi").closest("[data-agent-card]"),
+    ).not.toBeNull();
     expect(list.className).not.toMatch(/cards/u);
 });

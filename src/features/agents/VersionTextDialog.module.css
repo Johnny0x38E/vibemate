@@ -31,7 +31,10 @@
     box-shadow: 0 16px 56px rgb(0 0 0 / 24%);
 }
 
-/* Narrower popup for the version-restore plan confirmation. */
+/*
+ * Shared narrow dialog shell (Write config, 「详细配置」, restore confirm).
+ * Same max-width token for all — do not fork a second width class.
+ */
 .popupCompact {
     position: fixed;
     top: calc(var(--titlebar-height) + (100dvh - var(--titlebar-height)) / 2);
@@ -73,12 +76,21 @@
 }
 
 .fileTab {
-    padding: 2px 8px;
+    /* Match list infoChip pill comfort: min-height 1.625rem + vertical --space-sm.
+       Height/padding only — do not shift the control upward. */
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    min-height: 1.625rem;
+    padding: var(--space-sm) 11px;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-control, 6px);
     background: transparent;
     color: var(--color-text);
-    font-size: 0.75rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    line-height: 1.35;
     overflow-wrap: anywhere;
 }
 

@@ -28,6 +28,7 @@ export function VersionRestorePlanInline({
     plan,
     locale,
     restoring,
+    isCurrent = false,
     onConfirm,
     onDismiss,
 }: {
@@ -36,12 +37,20 @@ export function VersionRestorePlanInline({
     locale: string;
     /** A restore is in flight, so the confirmation waits. */
     restoring: boolean;
+    /**
+     * True when this entry is HistoryCurrentConfig's matchedEntryKey (live
+     * digests fully match this retained version). Expand/view stays available;
+     * restore-to-self confirm is hidden.
+     */
+    isCurrent?: boolean;
     onConfirm: () => void;
     /** Collapse / clear this inline preview without restoring. */
     onDismiss: () => void;
 }): JSX.Element {
     const { t } = useTranslation();
     const blocked = plan.files.some((file) => file.action === "blocked");
+    // Offer confirm only when Rust says restorable AND this is not already current.
+    const canConfirm = plan.restorable && !isCurrent;
     return (
         <div
             className={restore["versionInline"]}
@@ -85,7 +94,7 @@ export function VersionRestorePlanInline({
                     {t("agents.version.blockedHint")}
                 </p>
             )}
-            {plan.restorable ? (
+            {canConfirm ? (
                 <>
                     <p className={styles["hint"]}>
                         {t("agents.version.keyNotice")}
@@ -95,7 +104,9 @@ export function VersionRestorePlanInline({
                     </p>
                 </>
             ) : (
-                plan.reason === null && (
+                !isCurrent &&
+                plan.reason === null &&
+                !plan.restorable && (
                     <p className={styles["hint"]}>
                         {t("agents.version.nothingToRestore")}
                     </p>
@@ -112,7 +123,7 @@ export function VersionRestorePlanInline({
                 >
                     {t("agents.version.textClose")}
                 </button>
-                {plan.restorable && (
+                {canConfirm && (
                     <button
                         type="button"
                         className={buttons["primary"]}

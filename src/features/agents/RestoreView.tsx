@@ -604,6 +604,24 @@ export function RestoreView({
 
     return (
         <>
+            {/* Recheck is outside the history card (own row above), not inside DetailPanel. */}
+            {list.kind === "ready" && (
+                <div className={restore["toolbar"]}>
+                    <button
+                        type="button"
+                        className={buttons["secondary"]}
+                        aria-disabled={busy}
+                        onClick={() => {
+                            if (busy || pending.current) return;
+                            setPreview({ kind: "idle" });
+                            setList({ kind: "loading" });
+                            setAttempt((current) => current + 1);
+                        }}
+                    >
+                        {t("agents.restore.recheck")}
+                    </button>
+                </div>
+            )}
             <DetailPanel label={t("agents.restore.title")}>
                 {list.kind === "loading" && (
                     <p className={styles["hint"]}>
@@ -691,21 +709,6 @@ export function RestoreView({
                                 }
                             />
                         )}
-                        <div className={restore["toolbar"]}>
-                            <button
-                                type="button"
-                                className={buttons["secondary"]}
-                                aria-disabled={busy}
-                                onClick={() => {
-                                    if (busy || pending.current) return;
-                                    setPreview({ kind: "idle" });
-                                    setList({ kind: "loading" });
-                                    setAttempt((current) => current + 1);
-                                }}
-                            >
-                                {t("agents.restore.recheck")}
-                            </button>
-                        </div>
                         {list.entries.length === 0 ? (
                             <p className={styles["hint"]}>
                                 {t("agents.restore.empty")}
@@ -1291,6 +1294,7 @@ function OperationRow({
                             plan={versionPlan}
                             locale={locale}
                             restoring={versionRestoring}
+                            isCurrent={isCurrent}
                             onConfirm={onVersionConfirm}
                             onDismiss={collapseRow}
                         />

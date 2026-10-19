@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type JSX } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { DetailPanel } from "../../components/DetailForm";
+import { useNotify } from "../../components/Notifications";
 import {
     FieldSelect,
     type FieldSelectOption,
@@ -105,6 +106,7 @@ export function ConfigPreview({
     blocked?: boolean;
 }): JSX.Element {
     const { t } = useTranslation();
+    const notify = useNotify();
     const [providers, setProviders] = useState<ProvidersState>({
         kind: "loading",
     });
@@ -321,6 +323,19 @@ export function ConfigPreview({
             if (!mounted.current) return;
             setPreview({ kind: "idle" });
             setApply({ kind: "done", result });
+            // Prefer a toast so the Write dialog can close immediately; AppliedCard
+            // remains for the rare case the parent keeps this panel mounted.
+            const tone =
+                result.state === "applied" || result.state === "compensated"
+                    ? "success"
+                    : "error";
+            const message =
+                agent === "grokBuild" && result.state === "applied"
+                    ? t("agents.modelConfig.grokOutcomeApplied")
+                    : agent === "pi"
+                      ? t(`agents.modelConfig.piOutcome.${result.state}`)
+                      : t(`agents.modelConfig.outcome.${result.state}`);
+            notify({ tone, message });
             onApplied?.();
         } catch (error: unknown) {
             if (!mounted.current) return;
@@ -680,11 +695,20 @@ function AppliedCard({
     );
 }
 
+/** i18n keys under agents.modelConfig.errors.* (typed for t()). */
+type ModelConfigErrorI18nKey =
+    | "agents.modelConfig.errors.agent_version_unverified"
+    | "agents.modelConfig.errors.grokAgentVersionUnverified"
+    | "agents.modelConfig.errors.claudeAgentVersionUnverified"
+    | "agents.modelConfig.errors.credential_conflict"
+    | "agents.modelConfig.errors.credentialConflictGeneric"
+    | `agents.modelConfig.errors.${Exclude<PlanErrorCode | ApplyErrorCode, "agent_version_unverified" | "credential_conflict">}`;
+
 /** i18n key for a plan/apply error; product-named codes follow the current agent. */
 function modelConfigErrorKey(
     agent: ConfigurableAgent,
     code: PlanErrorCode | ApplyErrorCode,
-): string {
+): ModelConfigErrorI18nKey {
     if (code === "agent_version_unverified") {
         // Sibling keys mirror piRestartRequired / grokRestartRequired / restartRequired.
         if (agent === "grokBuild") {

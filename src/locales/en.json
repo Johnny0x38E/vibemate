@@ -504,7 +504,8 @@
             "previousStatus": "{{status}} · previous result",
             "empty": "No Agent entries were found on this machine. Select Refresh after installing one or updating PATH, or open an agent’s detail view to specify a manual entry path.",
             "openDetail": "Open {{name}} details",
-            "versionShort": "{{version}}"
+            "versionShort": "{{version}}",
+            "writeLabel": "Write configuration for {{name}}"
         },
         "detail": {
             "notFound": "No entry was found in the checked locations. Specify an absolute entry path below or rediscover after updating PATH.",
@@ -596,7 +597,7 @@
             "textDiff": "Differences",
             "textNoDiff": "No line differences.",
             "textPreviewMode": "The browser preview cannot read configuration files. Open the vibemate desktop app.",
-            "textMaskedNotice": "Values under credential-like keys are masked before this text leaves Rust.",
+
             "fieldOwnerRef": "Recorded owner reference",
             "fieldTextBytes": "Original size",
             "textBytesUnit": "{{bytes}} bytes"
@@ -947,7 +948,6 @@
         },
         "segments": {
             "ariaLabel": "Agent content sections",
-            "write": "Write",
             "history": "History",
             "skill": "Skill",
             "mcp": "MCP",
@@ -969,6 +969,10 @@
         },
         "mcpPanel": {
             "empty": "Managed in the MCP module soon; a read-only status will appear here later."
+        },
+        "writeDialog": {
+            "title": "Write · {{name}}",
+            "close": "Close"
         }
     },
     "skills": {

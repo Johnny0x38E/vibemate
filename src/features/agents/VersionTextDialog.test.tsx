@@ -74,7 +74,10 @@ async function mount(onClose = vi.fn()): Promise<void> {
 test("shows sanitized current configuration text only", async () => {
     await mount();
     expect(await screen.findByText("Detailed configuration")).toBeTruthy();
-    await screen.findByText(/Values under credential-like keys are masked/u);
+    // Credential/Rust masking notice is intentionally not shown in this dialog.
+    expect(
+        screen.queryByText(/Values under credential-like keys are masked/u),
+    ).toBeNull();
     const current = await screen.findByRole("region", {
         name: "Current configuration",
     });

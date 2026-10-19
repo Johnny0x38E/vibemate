@@ -766,3 +766,52 @@ test("Grok previews its TOML file and applies it once", async () => {
         ),
     ).toBeNull();
 });
+
+test("agent_version_unverified follows the current agent", async () => {
+    vi.mocked(planPiSettings).mockRejectedValue(
+        new PlanRequestError("agent_version_unverified"),
+    );
+    vi.mocked(planGrokSettings).mockRejectedValue(
+        new PlanRequestError("agent_version_unverified"),
+    );
+
+    const i18nPi = await createAppI18n("en");
+    const { unmount: unmountPi } = render(
+        <I18nextProvider i18n={i18nPi}>
+            <ConfigPreview agent="pi" entryPath="/test/pi" />
+        </I18nextProvider>,
+    );
+    await setFieldSelectValue(
+        await screen.findByRole("combobox", { name: "Model" }),
+        FLASH,
+    );
+    await userEvent.click(
+        screen.getByRole("button", { name: "Preview changes" }),
+    );
+    const piAlert = await screen.findByRole("alert");
+    expect(piAlert.textContent).toContain("Pi");
+    expect(piAlert.textContent).toMatch(/compatible model\/settings format/u);
+    unmountPi();
+
+    const i18nGrok = await createAppI18n("en");
+    render(
+        <I18nextProvider i18n={i18nGrok}>
+            <ConfigPreview agent="grokBuild" entryPath="/test/grok" />
+        </I18nextProvider>,
+    );
+    await setFieldSelectValue(
+        await screen.findByRole("combobox", { name: "Model" }),
+        FLASH,
+    );
+    await userEvent.click(
+        screen.getByRole("button", { name: "Preview changes" }),
+    );
+    const grokAlert = await screen.findByRole("alert");
+    expect(grokAlert.textContent).not.toContain("Pi");
+    expect(grokAlert.textContent).toContain("Grok Build");
+    expect(grokAlert.textContent).toContain("1.0.60");
+    expect(grokAlert.textContent).toContain(".metadata_version");
+    expect(grokAlert.textContent).toContain(
+        "docs/user-guide/26-config-reference.md",
+    );
+});

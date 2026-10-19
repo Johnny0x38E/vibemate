@@ -105,7 +105,21 @@ const resolveWrite = vi.mocked(resolveConfigurationOperation);
 beforeEach(() => {
     loadHistory.mockReset().mockResolvedValue({
         kind: "desktop",
-        page: { entries: [operation], nextCursor: null },
+        page: {
+            current: {
+                status: "unrecorded",
+                matchedEntryKey: null,
+                files: [
+                    {
+                        targetPath: PATH,
+                        currentDigest: "c".repeat(64),
+                        readable: true,
+                    },
+                ],
+            },
+            entries: [operation],
+            nextCursor: null,
+        },
     });
     inspectWrite.mockReset().mockResolvedValue({ kind: "desktop", review });
     resolveWrite
@@ -187,6 +201,17 @@ test("confirmation is single-flight, refreshes history and never chains a restor
     loadHistory.mockResolvedValue({
         kind: "desktop",
         page: {
+            current: {
+                status: "matched",
+                matchedEntryKey: `operation:${ID}`,
+                files: [
+                    {
+                        targetPath: PATH,
+                        currentDigest: "c".repeat(64),
+                        readable: true,
+                    },
+                ],
+            },
             entries: [
                 {
                     ...operation,

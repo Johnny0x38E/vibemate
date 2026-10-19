@@ -639,7 +639,7 @@
                 "target_path_invalid": "配置文件路径不可用。",
                 "target_unreadable": "配置文件无法读取，或不是 JSON 对象。未做任何改动。",
                 "target_too_large": "配置文件超过预览读取上限，未读取。",
-                "target_conflict": "配置文件里需要改动的键存着其他类型的值，未覆盖。",
+                "target_conflict": "配置文件里需要改动的位置已有冲突值（类型不符、已有模型别名或条目，或无法安全覆盖），未做任何改动。",
                 "storage_unavailable": "本地配置库不可用，请重启 vibemate。",
                 "provider_not_found": "该服务商配置已不存在。",
                 "model_not_found": "该服务商已没有这个保存的模型。",
@@ -651,8 +651,11 @@
                 "desktop_required": "应用配置需要在 vibemate 桌面应用中进行。",
                 "invalid_response": "桌面应用返回了意外的计划。",
                 "agent_version_unverified": "此 Pi 安装未提供兼容的模型与设置格式。请检查入口路径和安装是否完整；1.2 起的稳定版 Pi 1.x 在配置格式兼容时均可使用。",
+                "grokAgentVersionUnverified": "此 Grok Build 安装不符合已核实的配置合约。请检查入口路径和安装是否完整；发现的版本须为 1.0.60 或更高的 1.0 补丁版，Grok 主目录下的 `.metadata_version` 须与该版本一致，且 `docs/user-guide/26-config-reference.md` 须包含已核实的字段。",
+                "claudeAgentVersionUnverified": "此 Claude Code 安装没有已核实的配置合约。请检查入口路径和安装是否完整。",
                 "protocol_unsupported": "所选模型没有已核实的原生请求协议。",
-                "credential_conflict": "auth.json 中存在此受管服务商的凭据，会覆盖计划中的密钥。请先在 Pi 中处理，再重新预览。"
+                "credential_conflict": "auth.json 中存在此受管服务商的凭据，会覆盖计划中的密钥。请先在 Pi 中处理，再重新预览。",
+                "credentialConflictGeneric": "存在优先级更高的凭据，会覆盖计划中的密钥。请先处理冲突，再重新预览。"
             },
             "piRestartRequired": "新建 Pi 会话以使用这些默认设置；项目设置、命令行参数和恢复的会话可能覆盖默认选择。",
             "piNotice": "仅在应用时从系统凭据库读取密钥，并以明文写入 models.json。替换前会备份原文件。未知模型信息沿用 Pi 默认值，推理档位保持原设置。",
@@ -725,6 +728,25 @@
             "loadMore": "加载更多历史",
             "loadingMore": "正在加载更多历史…",
             "loadMoreFailed": "无法读取更多历史：{{error}}",
+            "current": {
+                "title": "当前配置",
+                "mark": "当前配置",
+                "statuses": {
+                    "matched": "与一条保留的历史版本完整匹配。",
+                    "unrecorded": "与任何保留的历史版本都不匹配。",
+                    "partial": "仅有部分受管文件与保留的历史版本匹配。",
+                    "unreadable": "至少有一个受管文件无法安全读取。"
+                },
+                "fileReadable": "可读",
+                "fileAbsent": "不存在",
+                "fileUnreadable": "不可读"
+            },
+            "backups": {
+                "not_needed": "改写前文件不存在，无需备份。",
+                "available": "独立的改写前备份可用，摘要一致。",
+                "unavailable": "独立的改写前备份缺失、损坏或无法读取。"
+            },
+
             "intents": {
                 "apply": "应用配置",
                 "restore": "手动恢复",

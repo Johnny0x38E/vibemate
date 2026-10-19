@@ -74,7 +74,10 @@ function current(status: HistoryPage["current"]["status"] = "unrecorded") {
     } satisfies HistoryPage["current"];
 }
 
-function page(row = entry(), status: HistoryPage["current"]["status"] = "unrecorded"): HistoryPage {
+function page(
+    row = entry(),
+    status: HistoryPage["current"]["status"] = "unrecorded",
+): HistoryPage {
     return {
         current:
             status === "matched"
@@ -146,7 +149,11 @@ test("passes a validated seek cursor unchanged and accepts the empty final page"
     };
     vi.mocked(invoke)
         .mockResolvedValueOnce(first)
-        .mockResolvedValueOnce({ current: current("unrecorded"), entries: [], nextCursor: null });
+        .mockResolvedValueOnce({
+            current: current("unrecorded"),
+            entries: [],
+            nextCursor: null,
+        });
     const result = await readConfigurationHistory("pi", null, 1);
     expect(result).toEqual({ kind: "desktop", page: first });
     if (result.kind !== "desktop") throw new Error("expected desktop history");
@@ -253,7 +260,12 @@ const invalidEntries: unknown[] = [
     { ...base, revisions: [{ ...rev, revisionId: "../../private" }] },
     { ...base, revisions: [{ ...rev, backupPath: "/private" }] },
     { ...base, revisions: [{ ...rev, previousDigest: null }] },
-    { ...base, revisions: [{ ...rev, backupRecorded: false, backupState: "not_needed" }] },
+    {
+        ...base,
+        revisions: [
+            { ...rev, backupRecorded: false, backupState: "not_needed" },
+        ],
+    },
     {
         ...base,
         revisions: [{ ...rev, state: "prepared", errorCode: "write_failed" }],
@@ -418,7 +430,12 @@ test("rejects oversized, misordered and repeated pages without hiding bad rows",
 });
 
 test.each<HistoryRevision>([
-    { ...rev, previousDigest: null, backupRecorded: false, backupState: "not_needed" },
+    {
+        ...rev,
+        previousDigest: null,
+        backupRecorded: false,
+        backupState: "not_needed",
+    },
     { ...rev, intendedDigest: null },
     { ...rev, state: "prepared" },
     { ...rev, state: "failed", errorCode: "plan_stale" },
@@ -469,7 +486,7 @@ test("retains legacy attempts and separate partial multi-file restore/compensati
                 appliedDigest: null,
                 previousExisted: null,
                 backupRecorded: false,
-                backupState: "not_needed",
+                backupState: "not_needed" as const,
                 state: "failed" as const,
                 errorCode: "write_failed" as const,
                 restoreState: null,

@@ -21,6 +21,7 @@ import {
 import {
     HistoryRequestError,
     readConfigurationHistory,
+    type HistoryCurrentConfig,
     type HistoryCursor,
     type HistoryEntry,
     type HistoryRevisionState,
@@ -57,6 +58,8 @@ type ListState =
     | { kind: "error"; code: RestoreErrorCode }
     | {
           kind: "ready";
+          /** Live pin from every page; independent of the seek cursor. */
+          current: HistoryCurrentConfig;
           /** Newest first; every multi-file batch stays inside one entry. */
           entries: HistoryEntry[];
           /** Seek position for the next page, or null at the end. */
@@ -169,6 +172,7 @@ export function RestoreView({
                         ? { kind: "preview" }
                         : {
                               kind: "ready",
+                              current: result.page.current,
                               entries: result.page.entries,
                               nextCursor: result.page.nextCursor,
                               loadingMore: false,
@@ -231,6 +235,8 @@ export function RestoreView({
             );
             setList({
                 kind: "ready",
+                // Every page repeats the same live pin; keep the freshest copy.
+                current: result.page.current,
                 entries: [
                     ...snapshot.entries,
                     ...result.page.entries.filter(
@@ -545,46 +551,58 @@ export function RestoreView({
                         </p>
                     </>
                 )}
-                {list.kind === "ready" && list.entries.length === 0 && (
-                    <p className={styles["hint"]}>
-                        {t("agents.restore.empty")}
-                    </p>
-                )}
-                {list.kind === "ready" && list.entries.length > 0 && (
+                {list.kind === "ready" && (
                     <>
-                        <ul className={restore["rows"]}>
-                            {list.entries.map((entry) => (
-                                <OperationRow
-                                    key={entry.entryKey}
-                                    entry={entry}
-                                    locale={i18n.language}
-                                    busy={busy}
-                                    previewing={
-                                        preview.kind === "loading" &&
-                                        preview.operationId ===
-                                            entry.operationId
-                                    }
-                                    onPreview={() => {
-                                        void runPreview(entry.operationId);
-                                    }}
-                                    inspecting={
-                                        preview.kind === "inspecting" &&
-                                        preview.operationId ===
-                                            entry.operationId
-                                    }
-                                    onInspect={() => {
-                                        void runInspection(entry.operationId);
-                                    }}
-                                    versionPreviewing={
-                                        versionPlan.kind === "loading" &&
-                                        versionPlan.entryKey === entry.entryKey
-                                    }
-                                    onVersionPreview={() => {
-                                        void runVersionPreview(entry.entryKey);
-                                    }}
-                                />
-                            ))}
-                        </ul>
+                        <CurrentConfigPin current={list.current} />
+                        {list.entries.length === 0 ? (
+                            <p className={styles["hint"]}>
+                                {t("agents.restore.empty")}
+                            </p>
+                        ) : (
+                            <ul className={restore["rows"]}>
+                                {list.entries.map((entry) => (
+                                    <OperationRow
+                                        key={entry.entryKey}
+                                        entry={entry}
+                                        isCurrent={
+                                            list.current.status === "matched" &&
+                                            list.current.matchedEntryKey ===
+                                                entry.entryKey
+                                        }
+                                        locale={i18n.language}
+                                        busy={busy}
+                                        previewing={
+                                            preview.kind === "loading" &&
+                                            preview.operationId ===
+                                                entry.operationId
+                                        }
+                                        onPreview={() => {
+                                            void runPreview(entry.operationId);
+                                        }}
+                                        inspecting={
+                                            preview.kind === "inspecting" &&
+                                            preview.operationId ===
+                                                entry.operationId
+                                        }
+                                        onInspect={() => {
+                                            void runInspection(
+                                                entry.operationId,
+                                            );
+                                        }}
+                                        versionPreviewing={
+                                            versionPlan.kind === "loading" &&
+                                            versionPlan.entryKey ===
+                                                entry.entryKey
+                                        }
+                                        onVersionPreview={() => {
+                                            void runVersionPreview(
+                                                entry.entryKey,
+                                            );
+                                        }}
+                                    />
+                                ))}
+                            </ul>
+                        )}
                         {list.moreError !== null && (
                             <p className={styles["error"]} role="alert">
                                 {t("agents.restore.loadMoreFailed", {
@@ -737,9 +755,60 @@ export function RestoreView({
     );
 }
 
+/**
+ * Fixed pin for the live configuration summary returned with every page.
+ *
+ * It sits above the history list and does not move when older pages append.
+ * Matching a retained entry only marks that row; it never invents restore rights.
+ */
+function CurrentConfigPin({
+    current,
+}: {
+    current: HistoryCurrentConfig;
+}): JSX.Element {
+    const { t } = useTranslation();
+    return (
+        <div
+            className={restore["currentPin"]}
+            role="region"
+            aria-label={t("agents.restore.current.title")}
+        >
+            <div className={restore["rowSummary"]}>
+                <span className={restore["state"]}>
+                    {t("agents.restore.current.title")}
+                </span>
+            </div>
+            <p className={restore["provider"]}>
+                {t(`agents.restore.current.statuses.${current.status}`)}
+            </p>
+            {current.files.length > 0 && (
+                <ul className={restore["files"]}>
+                    {current.files.map((file) => (
+                        <li key={file.targetPath} className={restore["file"]}>
+                            <span className={card["path"]}>
+                                {file.targetPath}
+                            </span>
+                            <span className={restore["stepState"]}>
+                                {!file.readable
+                                    ? t("agents.restore.current.fileUnreadable")
+                                    : file.currentDigest === null
+                                      ? t("agents.restore.current.fileAbsent")
+                                      : t(
+                                            "agents.restore.current.fileReadable",
+                                        )}
+                            </span>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </div>
+    );
+}
+
 /** One journal entry: when it ran, what it did, and its restore entry. */
 function OperationRow({
     entry,
+    isCurrent,
     locale,
     busy,
     previewing,
@@ -750,6 +819,8 @@ function OperationRow({
     onVersionPreview,
 }: {
     entry: HistoryEntry;
+    /** Backend named this entry as the full current-configuration match. */
+    isCurrent: boolean;
     /** Language used for the timestamp; the app language decides it. */
     locale: string;
     /** Another history read or restore action is in flight. */
@@ -772,6 +843,14 @@ function OperationRow({
                     {t(`agents.restore.intents.${entry.intent}`)}
                     {" · "}
                     {entryStateText(state, t)}
+                    {isCurrent && (
+                        <>
+                            {" · "}
+                            <span className={restore["currentMark"]}>
+                                {t("agents.restore.current.mark")}
+                            </span>
+                        </>
+                    )}
                 </span>
                 <span className={restore["time"]}>
                     {formatTime(entry.createdAt, locale)}
@@ -786,6 +865,9 @@ function OperationRow({
                                 {fileNoteText(file.note, t)}
                             </span>
                         )}
+                        <span className={restore["stepState"]}>
+                            {t(`agents.restore.backups.${file.backupState}`)}
+                        </span>
                     </li>
                 ))}
             </ul>
@@ -862,11 +944,12 @@ type EntryFileNote =
     | { group: "stepStates"; state: RestoreState }
     | { group: "revisionStates"; state: HistoryRevisionState };
 
-/** Files an entry changed, with the state that belongs to each row. */
+/** Files an entry changed, with the state and backup check for each row. */
 function entryFiles(entry: HistoryEntry): {
     key: string;
     targetPath: string;
     note: EntryFileNote | null;
+    backupState: HistoryEntry["sourceSteps"][number]["backupState"];
 }[] {
     if (entry.intent === "apply") {
         return entry.sourceSteps.map((step) => ({
@@ -876,6 +959,8 @@ function entryFiles(entry: HistoryEntry): {
                 step.restoreState === null
                     ? null
                     : { group: "stepStates", state: step.restoreState },
+            // Apply rows report the source-step check; do not invent eligibility.
+            backupState: step.backupState,
         }));
     }
     return entry.revisions.flatMap((revision) => {
@@ -893,6 +978,7 @@ function entryFiles(entry: HistoryEntry): {
                           group: "revisionStates" as const,
                           state: revision.state,
                       },
+                      backupState: revision.backupState,
                   },
               ];
     });

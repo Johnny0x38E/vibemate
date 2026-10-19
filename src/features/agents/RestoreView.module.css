@@ -75,3 +75,20 @@
     font-weight: 500;
     line-height: 1.5;
 }
+
+/*
+ * Live current-configuration pin above the history list. Reuses the same
+ * summary/time hierarchy as a row; borders keep it separate from pagination.
+ */
+.currentPin {
+    display: grid;
+    gap: 4px;
+    margin: 0 0 4px;
+    padding: 0 0 10px;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.currentMark {
+    font-weight: 500;
+    color: var(--color-text);
+}

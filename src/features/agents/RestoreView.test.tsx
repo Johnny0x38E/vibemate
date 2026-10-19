@@ -194,11 +194,29 @@ const legacyPlan: ClaudeCodeRestorePlan = {
     steps: [legacyStep],
 };
 
+function currentConfig(
+    status: HistoryPage["current"]["status"] = "matched",
+    matchedEntryKey: string | null = entry.entryKey,
+): HistoryPage["current"] {
+    return {
+        status,
+        matchedEntryKey: status === "matched" ? matchedEntryKey : null,
+        files: [
+            {
+                targetPath: SETTINGS,
+                currentDigest: status === "unreadable" ? null : APPLIED_DIGEST,
+                readable: status !== "unreadable",
+            },
+        ],
+    };
+}
+
 function page(
     entries: HistoryEntry[] = [entry],
     nextCursor: HistoryCursor | null = null,
+    current: HistoryPage["current"] = currentConfig(),
 ): HistoryPage {
-    return { entries, nextCursor };
+    return { current, entries, nextCursor };
 }
 
 const loadHistory = vi.mocked(readConfigurationHistory);
@@ -244,6 +262,16 @@ async function openVersionPreview(): Promise<void> {
     });
 }
 
+function rowSummary(
+    text: string,
+): (content: string, node: Element | null) => boolean {
+    return (_content, node) =>
+        node != null &&
+        typeof node.className === "string" &&
+        node.className.includes("state") &&
+        node.textContent === text;
+}
+
 test("browser preview explains that the history cannot be read", async () => {
     loadHistory.mockResolvedValue({ kind: "preview" });
     await mount();
@@ -274,8 +302,14 @@ test("a failed history read offers a retry that re-reads it", async () => {
 });
 
 test("an empty history says that nothing was written yet", async () => {
-    loadHistory.mockResolvedValue({ kind: "desktop", page: page([]) });
+    loadHistory.mockResolvedValue({
+        kind: "desktop",
+        page: page([], null, currentConfig("unrecorded")),
+    });
     await mount();
+    expect(
+        await screen.findByRole("region", { name: "Current configuration" }),
+    ).toBeTruthy();
     expect(
         await screen.findByText(/has not written this configuration yet/u),
     ).toBeTruthy();
@@ -283,10 +317,106 @@ test("an empty history says that nothing was written yet", async () => {
 
 test("a recorded write shows its intent, state, time, provider and file", async () => {
     await mount();
-    expect(await screen.findByText("Apply · Written")).toBeTruthy();
-    expect(screen.getByText(SETTINGS)).toBeTruthy();
+    expect(
+        await screen.findByText(
+            rowSummary("Apply · Written · Current configuration"),
+        ),
+    ).toBeTruthy();
+    expect(screen.getAllByText(SETTINGS).length).toBeGreaterThan(0);
     expect(screen.getByText("Provider: DeepSeek Work")).toBeTruthy();
+    expect(
+        screen.getByText(
+            /Independent pre-mutation backup is available and matches its digest/u,
+        ),
+    ).toBeTruthy();
     expect(screen.queryByText(String(entry.createdAt))).toBeNull();
+});
+
+test("pins the live current configuration above the list and marks a matched entry", async () => {
+    await mount();
+    expect(
+        await screen.findByRole("region", { name: "Current configuration" }),
+    ).toBeTruthy();
+    expect(
+        screen.getByText(/Matches one retained history version/u),
+    ).toBeTruthy();
+    expect(screen.getByText("Readable")).toBeTruthy();
+    expect(
+        screen.getByText(rowSummary("Apply · Written · Current configuration")),
+    ).toBeTruthy();
+});
+
+test("an unrecorded current pin stays fixed when older history loads", async () => {
+    const older: HistoryEntry = {
+        ...entry,
+        entryKey: `operation:${"e".repeat(32)}`,
+        operationId: "e".repeat(32),
+        createdAt: entry.createdAt - 1_000,
+        updatedAt: entry.updatedAt - 1_000,
+    };
+    const unrecorded = currentConfig("unrecorded");
+    loadHistory.mockImplementation((_agent, after = null) =>
+        after === null
+            ? Promise.resolve({
+                  kind: "desktop",
+                  page: page([entry], CURSOR, unrecorded),
+              })
+            : Promise.resolve({
+                  kind: "desktop",
+                  page: page([older], null, unrecorded),
+              }),
+    );
+    await mount();
+    expect(
+        await screen.findByText(/Does not match any retained history version/u),
+    ).toBeTruthy();
+    expect(
+        screen.queryByText(
+            rowSummary("Apply · Written · Current configuration"),
+        ),
+    ).toBeNull();
+    await userEvent.click(
+        screen.getByRole("button", { name: "Load more history" }),
+    );
+    await waitFor(() => {
+        expect(
+            screen.getAllByRole("button", { name: "Review version" }),
+        ).toHaveLength(2);
+    });
+    expect(
+        screen.getByText(/Does not match any retained history version/u),
+    ).toBeTruthy();
+    // The pin is one status region above the list, not a second history row.
+    expect(screen.getAllByText("Current configuration")).toHaveLength(1);
+});
+
+test("backup unavailable text is shown without inventing a restore action", async () => {
+    const step = entry.sourceSteps[0];
+    const revision = entry.revisions[0];
+    if (step === undefined || revision === undefined) {
+        throw new Error("fixture entry must include a step and revision");
+    }
+    const unavailable: HistoryEntry = {
+        ...entry,
+        sourceSteps: [{ ...step, backupState: "unavailable" }],
+        revisions: [{ ...revision, backupState: "unavailable" }],
+    };
+    loadHistory.mockResolvedValue({
+        kind: "desktop",
+        page: page([unavailable], null, currentConfig("partial")),
+    });
+    await mount();
+    expect(
+        await screen.findByText(
+            /Independent pre-mutation backup is missing, damaged or unreadable/u,
+        ),
+    ).toBeTruthy();
+    expect(
+        screen.getByText(
+            /Only some managed files match a retained history version/u,
+        ),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Review version" })).toBeTruthy();
 });
 
 test("the version preview lists sanitized field changes and confirms the reviewed files", async () => {
@@ -505,7 +635,7 @@ test("loads more history without replacing the entries already read", async () =
             : Promise.resolve({ kind: "desktop", page: page([older]) }),
     );
     await mount();
-    await screen.findByText("Apply · Written");
+    await screen.findByText(/Apply · Written/u);
     await userEvent.click(
         screen.getByRole("button", { name: "Load more history" }),
     );
@@ -538,14 +668,14 @@ test("a failed load more keeps the read entries and offers the button again", as
             : Promise.resolve({ kind: "desktop", page: page([older]) });
     });
     await mount();
-    await screen.findByText("Apply · Written");
+    await screen.findByText(/Apply · Written/u);
     await userEvent.click(
         screen.getByRole("button", { name: "Load more history" }),
     );
     expect(
         await screen.findByText(/More history could not be read/u),
     ).toBeTruthy();
-    expect(screen.getByText("Apply · Written")).toBeTruthy();
+    expect(screen.getByText(/Apply · Written/u)).toBeTruthy();
     failing = false;
     await userEvent.click(
         screen.getByRole("button", { name: "Load more history" }),

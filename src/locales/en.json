@@ -639,7 +639,7 @@
                 "target_path_invalid": "The settings file path cannot be used.",
                 "target_unreadable": "The settings file could not be read or is not a JSON object. Nothing was changed.",
                 "target_too_large": "The settings file is larger than the preview limit and was not read.",
-                "target_conflict": "The settings file holds a value of the wrong type where this change has to go. Nothing was overwritten.",
+                "target_conflict": "The settings file holds a conflicting value where this change has to go (wrong type, existing model alias or entry, or unsafe overwrite). The configuration was left unchanged.",
                 "storage_unavailable": "Local configuration storage is unavailable. Restart vibemate.",
                 "provider_not_found": "That provider configuration is no longer saved.",
                 "model_not_found": "That provider no longer has this saved model.",
@@ -651,8 +651,11 @@
                 "desktop_required": "Applying configuration needs the vibemate desktop app.",
                 "invalid_response": "The desktop app returned an unexpected plan.",
                 "agent_version_unverified": "This Pi installation does not expose the compatible model/settings format. Check its entry path and installation; stable Pi 1.x releases from 1.2 are supported when their configuration schemas match.",
+                "grokAgentVersionUnverified": "This Grok Build installation does not match the verified configuration contract. Check its entry path and installation; the discovered version must be 1.0.60 or a later 1.0 patch, `.metadata_version` under the Grok home directory must match that version, and `docs/user-guide/26-config-reference.md` must include the verified fields.",
+                "claudeAgentVersionUnverified": "This Claude Code installation has no verified configuration contract. Check its entry path and installation.",
                 "protocol_unsupported": "The selected model has no verified native request protocol.",
-                "credential_conflict": "auth.json contains a credential for this managed provider that would override the planned key. Resolve it in Pi and preview again."
+                "credential_conflict": "auth.json contains a credential for this managed provider that would override the planned key. Resolve it in Pi and preview again.",
+                "credentialConflictGeneric": "A higher-priority credential for this managed provider would override the planned key. Resolve the conflict and preview again."
             },
             "piRestartRequired": "Start a new Pi session to use these defaults. Project settings, CLI options and resumed sessions can override them.",
             "piNotice": "The API key is read from OS credential storage only when you apply, then written as plain text in models.json. Existing files are backed up before replacement. Unknown model metadata uses Pi defaults; reasoning levels are unchanged.",
@@ -725,6 +728,25 @@
             "loadMore": "Load more history",
             "loadingMore": "Loading more history…",
             "loadMoreFailed": "More history could not be read: {{error}}",
+            "current": {
+                "title": "Current configuration",
+                "mark": "Current configuration",
+                "statuses": {
+                    "matched": "Matches one retained history version.",
+                    "unrecorded": "Does not match any retained history version.",
+                    "partial": "Only some managed files match a retained history version.",
+                    "unreadable": "At least one managed file could not be read safely."
+                },
+                "fileReadable": "Readable",
+                "fileAbsent": "Absent",
+                "fileUnreadable": "Unreadable"
+            },
+            "backups": {
+                "not_needed": "Pre-mutation absence; no backup file is needed.",
+                "available": "Independent pre-mutation backup is available and matches its digest.",
+                "unavailable": "Independent pre-mutation backup is missing, damaged or unreadable."
+            },
+
             "intents": {
                 "apply": "Apply",
                 "restore": "Restore",

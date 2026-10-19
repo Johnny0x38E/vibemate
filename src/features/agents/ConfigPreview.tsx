@@ -533,7 +533,7 @@ export function ConfigPreview({
                 )}
                 {preview.kind === "error" && (
                     <p className={styles["error"]} role="alert">
-                        {t(`agents.modelConfig.errors.${preview.code}`)}
+                        {t(modelConfigErrorKey(agent, preview.code))}
                     </p>
                 )}
             </DetailPanel>
@@ -552,7 +552,7 @@ export function ConfigPreview({
             )}
             {apply.kind === "error" && (
                 <p className={styles["error"]} role="alert">
-                    {t(`agents.modelConfig.errors.${apply.code}`)}
+                    {t(modelConfigErrorKey(agent, apply.code))}
                 </p>
             )}
         </>
@@ -674,6 +674,30 @@ function AppliedCard({
             </p>
         </DetailPanel>
     );
+}
+
+/** i18n key for a plan/apply error; product-named codes follow the current agent. */
+function modelConfigErrorKey(
+    agent: ConfigurableAgent,
+    code: PlanErrorCode | ApplyErrorCode,
+): string {
+    if (code === "agent_version_unverified") {
+        // Sibling keys mirror piRestartRequired / grokRestartRequired / restartRequired.
+        if (agent === "grokBuild") {
+            return "agents.modelConfig.errors.grokAgentVersionUnverified";
+        }
+        if (agent === "claudeCode") {
+            return "agents.modelConfig.errors.claudeAgentVersionUnverified";
+        }
+        return "agents.modelConfig.errors.agent_version_unverified";
+    }
+    // credential_conflict is Pi-only (auth.json); keep Pi copy under the pi branch.
+    if (code === "credential_conflict") {
+        return agent === "pi"
+            ? "agents.modelConfig.errors.credential_conflict"
+            : "agents.modelConfig.errors.credentialConflictGeneric";
+    }
+    return `agents.modelConfig.errors.${code}`;
 }
 
 type Translator = TFunction;

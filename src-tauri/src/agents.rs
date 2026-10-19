@@ -11,6 +11,7 @@ pub mod recovery;
 pub use configuration::{ConfigApplied, ConfigApplyError};
 mod discovery;
 mod version_probe;
+pub mod version_restore;
 pub use claude_code::{
     ApplyClaudeCodeRestoreRequest, ClaudeCodeApplied, ClaudeCodeApplyError, ClaudeCodeApplyInput,
     ClaudeCodeOperation, ClaudeCodeOperationStep, ClaudeCodePlanInput, ClaudeCodeRestoreError,

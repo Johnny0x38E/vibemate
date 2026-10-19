@@ -54,6 +54,25 @@ pub struct ConfigurationHistoryPage {
     pub next_cursor: Option<HistoryCursor>,
 }
 
+/// Build the exact file scope for one supported Agent from the desktop environment.
+///
+/// Shared by history reads and version restore so both use the same root
+/// precedence and owned-file list. The environment is trusted desktop state.
+pub(super) fn history_scope(
+    agent: ConfigurationAgent,
+    environment: &DiscoveryEnvironment,
+) -> Result<HistoryScope, ClaudeCodeRestoreError> {
+    let (agent_id, files): (AgentId, &[&str]) = match agent {
+        ConfigurationAgent::ClaudeCode => (AgentId::ClaudeCode, &["settings.json"]),
+        ConfigurationAgent::Pi => (AgentId::Pi, &["models.json", "settings.json"]),
+        ConfigurationAgent::GrokBuild => (AgentId::GrokBuild, &["config.toml"]),
+    };
+    let (root, _) = discovery::configuration_directory(agent_id, environment);
+    // An invalid explicit override must not silently expose the default root.
+    let root = root.ok_or(ClaudeCodeRestoreError::InvalidRequest)?;
+    Ok(HistoryScope::new(agent.kind(), &root, files)?)
+}
+
 /// Read retained apply/restore/compensation entries in the adapter's active root.
 ///
 /// The environment is a trusted desktop snapshot, never frontend input. Resolves
@@ -70,15 +89,7 @@ pub fn configuration_history_page(
     environment: &DiscoveryEnvironment,
     request: &ConfigurationHistoryRequest,
 ) -> Result<ConfigurationHistoryPage, ClaudeCodeRestoreError> {
-    let (agent, files): (AgentId, &[&str]) = match request.agent {
-        ConfigurationAgent::ClaudeCode => (AgentId::ClaudeCode, &["settings.json"]),
-        ConfigurationAgent::Pi => (AgentId::Pi, &["models.json", "settings.json"]),
-        ConfigurationAgent::GrokBuild => (AgentId::GrokBuild, &["config.toml"]),
-    };
-    let (root, _) = discovery::configuration_directory(agent, environment);
-    // An invalid explicit override must not silently expose the default root.
-    let root = root.ok_or(ClaudeCodeRestoreError::InvalidRequest)?;
-    let scope = HistoryScope::new(request.agent.kind(), &root, files)?;
+    let scope = history_scope(request.agent, environment)?;
     let page = config_apply::configuration_history(
         storage,
         &scope,

@@ -20,7 +20,7 @@
 use std::path::{Path, PathBuf};
 
 use rusqlite::OptionalExtension;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use super::{
     BackupStore, HistoryIntent, HistoryScope, OperationKind, RestoreState, WriteError, WriteTarget,
@@ -110,7 +110,11 @@ pub struct VersionRestorePlan {
 }
 
 /// One file as the interface saw it when the user confirmed the restore.
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// This is a strict IPC payload: unknown fields do not silently pass, and the
+/// domain still rechecks every identity and digest against a rebuilt plan.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ReviewedVersionFile {
     /// Retained revision whose pre-state the user reviewed.
     pub revision_id: String,

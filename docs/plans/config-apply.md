@@ -346,7 +346,32 @@ SQLite/服务商记录，不读取配置或备份字节：
 
 本批验证 A→B→C 直接恢复 A、再恢复该恢复批次回到 C；无文件状态、快照缺失/损坏、符号链接、
 只读目标、预览后并发修改、跨 Agent/根/文件范围、旧日志无快照、Provider 归属及中断恢复的核对。
-仍待完成：IPC/前端边界、字段摘要与详情弹窗两层预览、脱敏文本、界面确认与桌面验收。
+
+#### H2 IPC 与前端严格边界
+
+`plan_configuration_version_restore` 与 `apply_configuration_version_restore` 复用历史查询的
+发现环境优先级，只接受 Agent、条目身份（`operation:<id>` / `batch:<id>`）以及 apply 时逐文件的
+`revisionId`/`currentDigest`；不接受配置根、备份路径或文件内容。apply 在取得存储与配置锁前先
+拒绝空列表、超过 16 项、畸形 revision 身份或摘要；领域层仍会重建计划并逐项比对。命令只返回
+计划/结果元数据，不含备份路径或配置字节。
+
+前端 `src/lib/desktop/versionRestore.ts` 用严格 Zod Schema 校验：
+
+- `restorable` 必须等于“存在 restore/remove 且没有 blocked”；`blocked` 必须有理由，其他动作
+  不得带理由；`restore`/`remove` 必须有 revision 身份与符合方向的目标摘要，`skip` 要求当前摘要
+  已等于目标。
+- 操作条目必须是 `intent = apply` 且 `operationId` 与条目身份一致；批次条目不得为 `apply`；
+  文件序号与 revision 身份在一页内唯一。
+- 结果中的每个文件必须来自本次 reviewed 集合，状态与错误码互相一致；整页畸形即拒绝，错误只保留
+  稳定码，不保留响应或 Zod 诊断。
+- 浏览器预览不调用 IPC，也不伪造计划；apply 在浏览器中返回 `desktop_required`。
+
+仍待完成：字段摘要与详情弹窗两层预览、脱敏文本、界面确认与桌面验收。
+
+#### 历史界面切换与 H2 界面接线前的状态
+
+H1 的分页历史界面现已显示 `version_restore` 条目，但仍使用旧的“预览恢复”入口；H2 的新入口、
+两层预览和确认界面尚未接线。桌面运行时验收与 Windows/Linux 验证继续单独记录。
 
 ### 界面删除历史记录和备份（H3）
 

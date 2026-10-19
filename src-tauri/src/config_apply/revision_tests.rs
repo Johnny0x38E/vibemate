@@ -11,6 +11,8 @@ mod history_tests;
 mod recovery_surface_tests;
 #[path = "resolution_tests.rs"]
 mod resolution_tests;
+#[path = "version_restore_surface_tests.rs"]
+mod version_restore_surface_tests;
 #[path = "version_restore_tests.rs"]
 mod version_restore_tests;
 

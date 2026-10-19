@@ -271,6 +271,61 @@ pub(crate) async fn configuration_history_page(
     .map_err(|_| ClaudeCodeRestoreError::OperationFailed)?
 }
 
+/// Preview restoring one history entry's retained version.
+///
+/// The Agent identity selects the root and owned files; the request carries no
+/// paths. Reading a preview never writes files or reads credentials.
+#[tauri::command]
+pub(crate) async fn plan_configuration_version_restore(
+    app: tauri::AppHandle,
+    input: agents::version_restore::VersionRestoreRequest,
+) -> Result<crate::config_apply::VersionRestorePlan, ClaudeCodeRestoreError> {
+    let environment = environment(&app).map_err(|_| ClaudeCodeRestoreError::OperationFailed)?;
+    let backups = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| ClaudeCodeRestoreError::StorageUnavailable)?
+        .join("backups");
+    tauri::async_runtime::spawn_blocking(move || {
+        with_restore_storage(&app, |storage| {
+            agents::version_restore::plan_version_restore(
+                storage,
+                &environment,
+                &input,
+                &crate::config_apply::BackupStore::new(backups),
+            )
+        })
+    })
+    .await
+    .map_err(|_| ClaudeCodeRestoreError::OperationFailed)?
+}
+
+/// Apply a reviewed version restore, keeping every snapshot for a later undo.
+#[tauri::command]
+pub(crate) async fn apply_configuration_version_restore(
+    app: tauri::AppHandle,
+    input: agents::version_restore::ApplyVersionRestoreRequest,
+) -> Result<crate::config_apply::VersionRestoreOutcome, ClaudeCodeRestoreError> {
+    let environment = environment(&app).map_err(|_| ClaudeCodeRestoreError::OperationFailed)?;
+    let backups = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| ClaudeCodeRestoreError::StorageUnavailable)?
+        .join("backups");
+    tauri::async_runtime::spawn_blocking(move || {
+        with_restore_storage(&app, |storage| {
+            agents::version_restore::apply_version_restore(
+                storage,
+                &environment,
+                &input,
+                &crate::config_apply::BackupStore::new(backups),
+            )
+        })
+    })
+    .await
+    .map_err(|_| ClaudeCodeRestoreError::OperationFailed)?
+}
+
 /// Inspect one supported Agent's interrupted write using the private backup root.
 /// Reads metadata/files on the blocking pool; never reads credential storage.
 #[tauri::command]

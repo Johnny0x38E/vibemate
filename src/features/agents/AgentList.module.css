@@ -47,6 +47,31 @@
     padding: 0;
 }
 
+/*
+ * Hover paint lives on the li so first/last corners can clip it. Rounding the
+ * inner button alone left a square fill: the li (surfaceList item) still painted
+ * full-bleed behind the card's --radius-card. overflow:hidden on first/last
+ * items matches the surfaceList card corners; middle rows stay square.
+ */
+.item:hover {
+    background: var(--color-hover);
+}
+
+.item:first-child {
+    border-radius: var(--radius-card) var(--radius-card) 0 0;
+    overflow: hidden;
+}
+
+.item:last-child {
+    border-radius: 0 0 var(--radius-card) var(--radius-card);
+    overflow: hidden;
+}
+
+.item:only-child {
+    border-radius: var(--radius-card);
+    overflow: hidden;
+}
+
 .row {
     display: flex;
     align-items: center;
@@ -61,23 +86,6 @@
     font: inherit;
     text-align: start;
     cursor: pointer;
-}
-
-.row:hover {
-    background: var(--color-hover);
-}
-
-/* First/last rows follow the surfaceList card corners (middle rows stay full-bleed). */
-.item:first-child .row {
-    border-radius: var(--radius-card) var(--radius-card) 0 0;
-}
-
-.item:last-child .row {
-    border-radius: 0 0 var(--radius-card) var(--radius-card);
-}
-
-.item:only-child .row {
-    border-radius: var(--radius-card);
 }
 
 .row:focus-visible {
@@ -121,10 +129,14 @@
     justify-content: flex-end;
     gap: 8px;
     margin-inline-start: auto;
-    min-width: 0;
+    box-sizing: border-box;
+    /* Equal-width right rail so version / 未发现 line up across rows. */
+    width: 12rem;
+    min-width: 12rem;
     color: var(--color-summary);
     font-size: 0.75rem;
     line-height: 1.35;
+    font-variant-numeric: tabular-nums;
 }
 
 .statusDot {
@@ -150,7 +162,8 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 12rem;
+    min-width: 0;
+    flex: 1 1 auto;
     text-align: end;
 }
 
@@ -252,6 +265,8 @@
 
     .rowStatus {
         flex-basis: 100%;
+        width: auto;
+        min-width: 0;
         justify-content: flex-start;
         margin-inline-start: calc(2.5rem + var(--space-md));
     }

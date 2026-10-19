@@ -87,23 +87,6 @@ pub(crate) async fn apply_grok_settings(
     .map_err(|_| ConfigApplyError::OperationFailed)?
 }
 
-/// List the ten most recent Grok writes, without file content or credentials.
-#[tauri::command]
-pub(crate) async fn grok_operations(
-    app: tauri::AppHandle,
-) -> Result<Vec<crate::agents::ClaudeCodeOperation>, crate::agents::ClaudeCodeRestoreError> {
-    tauri::async_runtime::spawn_blocking(move || {
-        super::state::with_restore_storage(&app, |storage| {
-            crate::agents::list_config_operations(
-                storage,
-                crate::config_apply::OperationKind::GrokSettings,
-            )
-        })
-    })
-    .await
-    .map_err(|_| crate::agents::ClaudeCodeRestoreError::OperationFailed)?
-}
-
 /// Preview recovery of a Grok backup; another adapter's operation ID is refused.
 #[tauri::command]
 pub(crate) async fn plan_grok_restore(

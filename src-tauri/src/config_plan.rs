@@ -4,7 +4,7 @@
 //! Nothing in this module writes files, reads credential values or sends
 //! requests. An Agent adapter builds a plan from vendor instructions that were
 //! verified first; the Claude Code mapping is recorded in
-//! `docs/integrations/claude-code.md` and `docs/plans/p18-claude-code-link.md`.
+//! `docs/integrations/claude-code.md`.
 
 use serde::Serialize;
 use serde_json::{Map, Value};

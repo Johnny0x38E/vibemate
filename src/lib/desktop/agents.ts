@@ -761,25 +761,6 @@ export class RestoreRequestError extends Error {
         this.code = code;
     }
 }
-/** One file of a recorded write, without backup paths or file content. */
-export interface RecordedOperationStep {
-    ordinal: number;
-    targetPath: string;
-    state: ApplyStepState;
-    restoreState: RestoreState | null;
-}
-/** One recorded Claude Code settings write, as the restore view lists it. */
-export interface RecordedOperation {
-    operationId: string;
-    state: ApplyState;
-    providerId: string | null;
-    providerLabel: string | null;
-    createdAt: number;
-    updatedAt: number;
-    restorable: boolean;
-    requiresResolution: boolean;
-    steps: RecordedOperationStep[];
-}
 /** One file of a restore preview. */
 export interface RestorePlanStep {
     ordinal: number;
@@ -835,9 +816,6 @@ export interface RestoreOutcome {
     steps: RestoreStepOutcome[];
     leftovers: string[];
 }
-/** Listing result; the browser preview has no history to show. */
-export type OperationListResult =
-    { kind: "preview" } | { kind: "desktop"; operations: RecordedOperation[] };
 /** Preview result; the browser preview neither lists nor plans a restore. */
 export type RestorePlanResult =
     { kind: "preview" } | { kind: "desktop"; plan: ClaudeCodeRestorePlan };
@@ -881,82 +859,6 @@ function restoreState(value: unknown): RestoreState | null {
     if (value === null) return null;
     const state = RESTORE_STATES.find((known) => known === value);
     return state ?? restoreInvalid();
-}
-
-function recordedOperationStep(
-    value: unknown,
-    ordinal: number,
-): RecordedOperationStep {
-    if (
-        !isObject(value) ||
-        !hasExactKeys(value, [
-            "ordinal",
-            "targetPath",
-            "state",
-            "restoreState",
-        ]) ||
-        value["ordinal"] !== ordinal
-    )
-        return restoreInvalid();
-    const targetPath = value["targetPath"];
-    if (!isSafePath(targetPath)) return restoreInvalid();
-    const state = APPLY_STEP_STATES.find((known) => known === value["state"]);
-    if (state === undefined) return restoreInvalid();
-    const restore = restoreState(value["restoreState"]);
-    // Only a step that wrote something can carry a rollback result.
-    if (restore !== null && state !== "applied") return restoreInvalid();
-    return { ordinal, targetPath, state, restoreState: restore };
-}
-
-function recordedOperation(value: unknown): RecordedOperation {
-    if (
-        !isObject(value) ||
-        !hasExactKeys(value, [
-            "operationId",
-            "state",
-            "providerId",
-            "providerLabel",
-            "createdAt",
-            "updatedAt",
-            "restorable",
-            "requiresResolution",
-            "steps",
-        ]) ||
-        typeof value["restorable"] !== "boolean" ||
-        typeof value["requiresResolution"] !== "boolean" ||
-        (value["requiresResolution"] && value["restorable"])
-    )
-        return restoreInvalid();
-    const id = operationId(value["operationId"]);
-    const state = APPLY_STATES.find((known) => known === value["state"]);
-    if (state === undefined) return restoreInvalid();
-    const providerId = optionalLabel(value["providerId"]);
-    const providerLabel = optionalLabel(value["providerLabel"]);
-    const createdAt = timestamp(value["createdAt"]);
-    const updatedAt = timestamp(value["updatedAt"]);
-    // A name without the reference it names, or a write that claims to end
-    // before it started, cannot come from the log.
-    if (
-        (providerLabel !== null && providerId === null) ||
-        updatedAt < createdAt
-    )
-        return restoreInvalid();
-    const rawSteps = value["steps"];
-    if (!Array.isArray(rawSteps) || rawSteps.length === 0)
-        return restoreInvalid();
-    return {
-        operationId: id,
-        state,
-        providerId,
-        providerLabel,
-        createdAt,
-        updatedAt,
-        restorable: value["restorable"],
-        requiresResolution: value["requiresResolution"],
-        steps: rawSteps.map((entry: unknown, index: number) =>
-            recordedOperationStep(entry, index),
-        ),
-    };
 }
 
 function restorePlanStep(value: unknown, ordinal: number): RestorePlanStep {
@@ -1149,24 +1051,22 @@ function restoreOutcome(
 }
 
 /**
- * The commands each adapter exposes for its recorded writes and their recovery.
+ * The legacy restore commands each adapter exposes for its own recorded writes.
  *
- * An Agent with a preview but no write path is not listed here: the history and
- * restore screens only appear for adapters that can record an operation.
+ * The paginated history reads through `history.ts`, not this table. An Agent
+ * with a preview but no write path is not listed here: the history and restore
+ * screens only appear for adapters that can record an operation.
  */
 const AGENT_CONFIG_COMMANDS = {
     claudeCode: {
-        list: "claude_code_operations",
         plan: "plan_claude_code_restore",
         apply: "apply_claude_code_restore",
     },
     pi: {
-        list: "pi_operations",
         plan: "plan_pi_restore",
         apply: "apply_pi_restore",
     },
     grokBuild: {
-        list: "grok_operations",
         plan: "plan_grok_restore",
         apply: "apply_grok_restore",
     },
@@ -1174,33 +1074,6 @@ const AGENT_CONFIG_COMMANDS = {
 
 /** An Agent whose configuration writes vibemate records and can undo. */
 export type ConfigurableAgent = keyof typeof AGENT_CONFIG_COMMANDS;
-
-/**
- * List the settings writes vibemate recorded for one Agent, newest first.
- *
- * Read-only: the listing names files, states and digests, never file content and
- * never where a copy of it sits. Browser preview says so instead of inventing a
- * history.
- */
-export async function listAgentOperations(
-    agent: ConfigurableAgent,
-): Promise<OperationListResult> {
-    if (!isTauri()) return { kind: "preview" };
-    let value: unknown;
-    try {
-        value = await invoke<unknown>(AGENT_CONFIG_COMMANDS[agent].list);
-    } catch (error: unknown) {
-        throw new RestoreRequestError(
-            RESTORE_ERROR_CODES.find((code) => code === error) ??
-                "operation_failed",
-        );
-    }
-    if (!Array.isArray(value)) return restoreInvalid();
-    return {
-        kind: "desktop",
-        operations: value.map((entry: unknown) => recordedOperation(entry)),
-    };
-}
 
 /**
  * Preview what undoing one recorded write would do.

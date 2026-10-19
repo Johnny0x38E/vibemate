@@ -1,215 +1,208 @@
-# 后端模块拆分与扩展边界
+# Backend module boundaries
 
-本文按维护者提出的后续 Vercel、GitHub、更多 MCP 和模型服务商接入需求制定。
-维护者进一步明确的用途包括：配置备份到 GitHub、从 MCP/Skill 来源直接安装，
-向 Agent 提供 API 转发，以及可能直接安装 Agent。上述用途决定模块边界，而不是按外部品牌归类所有业务。
-BR0–BR5 已完成；本文保留现行边界与未来扩展约束，不再重复已完成批次的行数和迁移过程。
-任务状态只维护在 [todo.md](todo.md) 的 BR 系列任务中。
+This page keeps the current Rust structure and the constraints for future
+integrations. BR0–BR5 are complete. Task status lives only in
+[`todo.md`](todo.md) under the BR series.
 
-## 当前结构
+## Current structure
 
-继续保留一个 Rust crate，使用 `feature.rs` + `feature/`。BR1–BR5 已完成测试、
-命令、Provider/MCP 和 Models/Fetch 拆分；过程与历史测试计数从 Git/CI 查阅。
-SQL 位于各功能 repository，凭据补偿与操作协调位于 service；命令只做 IPC 与调度。
-`shared` 只复用文字、ID 格式和时间，不承载业务身份。
+Keep one Rust crate using `feature.rs` plus a matching `feature/` directory. Never
+create `mod.rs`. Module functions stay private or `pub(super)`; open an item as
+`pub(crate)` only for a real cross-feature need. Command names, serde fields,
+error codes, stable IDs, credential service names and published migrations are
+compatibility contracts.
 
-获取快照后释放数据库锁再读取凭据，合并重新检查修订；取消、浏览缓存、原始 API
-与结果 offset 的区别保留。结构拆分没有新增集成，也没有完成真实凭据或跨平台验收。
-当前模型发现 HTTP 客户端采用 Bearer 与服务商错误分类，不能直接当成所有云服务
-或流式转发的通用客户端。
+| Boundary                       | Responsibility                                                       | Constraint                                                             |
+| ------------------------------ | -------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `commands`                     | IPC arguments, Tauri state, blocking/async scheduling, safe errors   | Business modules never depend back on commands or Tauri                |
+| `providers`                    | Provider instances, protocol choice, templates, instance credentials | Does not hold GitHub/Vercel cloud accounts                             |
+| `models`                       | Saved models, selection, capability metadata, aliases, search        | Links by `ProviderId`; does not borrow fetch SQL helpers               |
+| `model_fetch`                  | Discovery, cancellation lifecycle, snapshots, cache, merge           | Network outside the database lock; merge rechecks the revision         |
+| `model_catalog`                | Vendor response parsing, catalog paging, verified capability mapping | Adapt per vendor; the same protocol does not imply the same model API  |
+| `model_http`, `model_identity` | Model-list HTTPS GET; model-ID grammar and protocol routes           | Not a general streaming or cloud-service client                        |
+| `mcp`                          | Central stdio/HTTP definitions, credentials, central state           | Saving and showing never start a server                                |
+| `skills`                       | Central library, import, source editing, deletion                    | Install, update and deployment are separate use cases                  |
+| `agents`                       | Discovery, version evidence, write adapters, history IPC             | Adapter mapping is independent of Provider protocols                   |
+| `config_plan`, `config_apply`  | Target digests, plans, backups, journal, history, restore            | See [`configuration.md`](../configuration.md)                          |
+| `storage`                      | Database lifecycle and the single ordered migration entry            | Each feature owns its SQL; no central CRUD layer                       |
+| `credentials`                  | Non-leaking secret type, OS store interface and implementation       | Platform layer does not know Provider/MCP/cloud types                  |
+| `shared`                       | Time and text/ID format checks used more than once                   | Stays small and specific                                               |
+| `integrations` (future)        | GitHub/Vercel accounts and resource operations                       | Cloud contracts stay separate; share infrastructure only on real reuse |
 
-## 模块边界
+SQL lives in each feature's repository; credential compensation and operation
+coordination live in its service. Commands only validate IPC input and schedule
+work. Model fetch takes its snapshot, releases the database lock, then reads the
+credential, and the merge rechecks the revision. Cancellation, browse cache, raw
+API offsets and result offsets stay distinct.
 
-按功能聚合业务，功能内部再分类型、校验、数据访问和操作编排。
-`repository` 指本地 SQLite 数据访问；`service` 指完成一次业务操作的步骤协调。
-小模块不必同时创建这些文件。只有已有职责值得独立时才拆，避免空目录和样板。
+`http_client` is not a module yet: the model-list client returns a complete body
+and cannot serve streaming forwarding. Extract a shared transport only when a
+second real use requires it, and keep authentication, business error codes and
+retry in each service.
 
-| 边界                               | 负责什么                                                  | 依赖约束                                                       |
-| ---------------------------------- | --------------------------------------------------------- | -------------------------------------------------------------- |
-| `commands`                         | IPC 参数、Tauri 状态、blocking/async 调度、稳定错误映射   | 业务模块不反向依赖 commands/Tauri                              |
-| `providers`                        | 模型服务商实例、协议选择、模板、实例凭据操作              | 不承载 GitHub/Vercel 云服务账号                                |
-| `models`                           | 已保存模型、选择、能力元数据、别名与搜索                  | 通过 ProviderId 关联服务商，避免获取层借用私有 SQL helpers     |
-| `model_fetch`                      | 模型发现用例、取消生命周期、快照、缓存与持久化合并协调    | 网络请求在数据库锁外；合并再次校验修订                         |
-| `model_catalog`                    | 各服务商响应转换、目录收集/分页、已核实能力映射           | 按厂商局部适配，协议相同不等于模型接口相同                     |
-| `mcp`                              | 中央 stdio/HTTP 定义、凭据、中央状态                      | 定义保存与显示不执行服务器；部署和连接另设用例                 |
-| `storage`                          | 数据库连接生命周期、单一顺序迁移入口                      | 每个功能拥有自己的 SQL；不集中所有 CRUD                        |
-| `credentials`                      | 非泄漏 Secret 类型、OS 存储接口与实现                     | 平台层不依赖 Provider/MCP/云服务业务类型                       |
-| `http_client`                      | 当前模型发现网络边界；未来按需提取通用 transport          | 认证方式、业务错误和重试由各服务决定                           |
-| `shared`                           | 确有多处复用的时间与文字/ID 格式校验                      | 保持小而具体；不成为杂项业务集合                               |
-| `agents` / `skills`                | 现有 Agent 只读发现；未来 Agent 配置与 Skill 来源/部署    | Agent 映射独立于 Provider 协议，复用安全写入基础               |
-| `integrations`（未来）             | GitHub/Vercel 账号与资源操作                              | 云服务契约独立，按真实需求复用基础设施                         |
-| `backup`（未来）                   | 配置快照、备份格式、目标选择、上传与恢复协调              | 调用 GitHub 等存储适配器；不把 OS 密钥和运行状态直接复制到远端 |
-| `sources` / `installation`（未来） | Agent/MCP/Skill 来源、固定版本、安装计划、执行与卸载/更新 | 来源内容为数据；安装依赖与 Agent 部署是不同操作                |
-| `gateway` / `protocols`（未来）    | 本地 API 服务生命周期、模型路由与协议请求/响应转换        | 调用 Provider/Model 配置；长时间转发不持数据库或凭据写锁       |
+## Adding a vendor
 
-模块布局统一使用 Rust 的文件加同名目录方式：`providers.rs` 声明入口和导出，
-`providers/types.rs` 等文件实现子模块。规划与实施都不引入 `mod.rs`。
-沿用当前 stable Rust 和 edition 2024；模块布局之外，也避免引入弃用 API 或旧版
-Tauri 写法。模块内部函数优先私有或 `pub(super)`；跨功能需要的小接口才用
-`pub(crate)`，不为了编译到处开放实现细节。
-`commands` 使用新的子模块注册路径，Tauri 对外命令名保持原样。
-当前部分类型已通过 `pub mod` 暴露，移动时保持公开入口。
+Verify brand, protocol, authentication, model discovery and capability/parameter
+fields separately. An existing Chat Completions route does not prove a new vendor
+works. Keep an explicit brand enum and capability declaration, add the response
+adapter, and introduce a small static adapter interface only when several vendors
+genuinely share behavior. Do not require every vendor to implement discovery,
+inference, quotas and OAuth behind one trait. A database CHECK or validation that
+restricts brands needs a migration that preserves existing instances and models.
 
-一个功能可采用这样的结构，具体文件由迁移批次按需产生：
+## Future integrations
 
-```text
-providers.rs       # 声明子模块与原有公开入口
-providers/
-  types.rs         # 实例、请求、协议类型和安全错误
-  templates.rs     # 支持的品牌及其声明
-  validation.rs    # Provider 专用规则
-  repository.rs    # SQLite 读写
-  service.rs       # 保存及凭据补偿协调
-  tests.rs
-  tests/
-commands.rs        # 声明功能命令与共享状态模块
-commands/
-  state.rs         # 状态访问和进程内凭据锁
-  app.rs
-  preferences.rs
-  providers.rs
-  models.rs
-  mcp.rs
-```
+These are recorded intentions. None is scheduled or implemented; the interface
+must not suggest otherwise. Task cards are BR6–BR11 in [`todo.md`](todo.md).
 
-## 未来接入如何放置
+### Cloud service accounts
 
-新增模型服务商需要分开验证品牌、协议、认证、模型发现和能力/参数。
-已有 Chat Completions 支持不能自动证明新厂商支持。先保留明确的品牌枚举和
-能力声明，逐家添加响应适配；确有多个实现重复时再引入小的静态 adapter 接口。
-不要提前要求每个厂商实现获取、推理、额度、OAuth 等一整套统一 trait。
-现有数据库 CHECK/验证若限制品牌，增加厂商需配套迁移，并保留旧实例和模型。
+GitHub is the confirmed backup target; Vercel's purpose is undecided and deferred
+(2026-10-13). A cloud connection has its own account/connection ID, authorization
+state and resource types; it never reuses `ProviderId`, `ProviderKind` or the
+provider instance table.
 
-GitHub/Vercel 按独立云服务客户端规划。GitHub 已明确作为配置备份目标；Vercel 用途待定，维护者 2026-10-13 决定列为后续功能、暂不排期。云服务客户端按以下边界规划：
+- Share the OS credential layer. Credential reference prefixes and service names
+  are a storage compatibility contract. OAuth token and refresh-token lifecycles
+  differ from API keys; define account state, scopes, expiry/refresh/revocation and
+  the system-browser callback when the first authorization is designed.
+- A GitHub repository API, a Skill source and a GitHub MCP server are different
+  uses. They may reference one explicitly chosen account, but one use's grant does
+  not imply the others.
+- Vercel and GitHub MCP servers stay central MCP definitions and may map to an
+  integration account explicitly. An ordinary HTTP MCP URL does not become a cloud
+  account or enable OAuth.
+- Preserve paging, permission/resource errors and rate-limit information. The
+  current model-discovery classification (403 means auth failure, 402 means no
+  balance) must not be inherited.
 
-- 服务连接用自己的 account/connection ID、授权状态和资源类型，不能复用
-  ProviderId、ProviderKind 或模型服务商实例表来存云服务账号。
-- 共享 OS 凭据底层；凭据引用前缀和 service name 属于存储兼容契约。
-  OAuth token/refresh token 生命周期不同于 API key；授权需求明确后再设计
-  账号状态、授权 scope、到期/刷新/撤销与系统浏览器回调。
-- GitHub 的仓库 API、Skill 来源和 GitHub MCP 是不同用途，可以关联同一个
-  明确选定的账号，但不能推定一个用途的授权足够覆盖其他用途。
-- Vercel/GitHub MCP 仍是 `mcp` 中央定义，可通过显式映射关联集成账号；
-  普通 HTTP MCP URL 不会自动变成云服务账号或启用 OAuth。
-- 云服务客户端需要保留分页、权限/资源错误与限流信息；不能直接继承当前
-  “403 等于认证拒绝、402 等于余额不足”的模型发现分类。
-- 未来 transport 复用连接设置、响应限制和安全错误处理；各业务客户端自行决定
-  认证、允许的状态码与重试条件。MCP Streamable HTTP 的会话和流式行为另行实现。
+### Configuration backup to GitHub
 
-## 明确的新业务边界
+A `backup` module owns the versioned format, snapshots and restore rules;
+`integrations/github` owns remote file access, authentication and remote revision
+information. A different target later must not rewrite the backup rules. Explicit
+backup/restore comes before any automatic sync because the conflict semantics
+differ.
 
-### 配置备份到 GitHub
+Export a controlled format containing configuration, model selections, MCP/Skill
+definitions and their pinned source versions — not a live SQLite file, logs or a
+whole Agent config directory. Exclude OS credential values by default; a credential
+reference from another machine is not a usable authorization. Restore states which
+credentials must be re-associated. Migrating credential values would need a
+separate encrypted format and key-recovery plan.
 
-`backup` 拥有版本化备份格式、快照与恢复规则，`integrations/github` 负责远端仓库
-文件读写、认证和远端修订信息。未来换成本地文件或其他目标，不重写备份规则。
-先做显式备份/恢复，再按需要增加自动备份或同步；这些操作的冲突语义不同。
+One snapshot stays internally consistent; a remote update carries revision and
+conflict checks, touches only the managed backup path in a chosen repository, and
+never overwrites other files. Restore validates the version before showing
+differences, resolving identity conflicts and writing. Restoring local definitions
+does not install MCP/Skill packages, execute commands, start a gateway or write
+Agent configuration.
 
-备份采用受控导出格式，内容包括配置、模型选择、MCP/Skill 定义及其固定来源版本，
-而不是直接上传可能正在写入的 SQLite 文件、日志或整个 Agent 配置目录。
-默认不含 OS 凭据值；本机凭据引用跨设备不能当作可用授权。恢复时明确哪些凭据
-需要重新关联或填写，不自动复制原设备引用后宣称连接可用。
-如果以后要求迁移凭据值，单独规划加密格式和密钥恢复，不加入普通配置备份。
+### Source-based installation
 
-同一次配置快照保持内部一致；远端更新带修订/冲突检查，只修改选定仓库的受管备份
-路径，不覆盖其他文件。恢复先解析版本和校验，再展示配置差异、处理身份冲突并写入。
-恢复本地定义不会自动安装 MCP/Skill、执行命令、恢复转发服务或写入 Agent。
+`sources` turns catalog APIs and Git repositories into inspectable candidates:
+source identity, version/revision, resource type, download location and dependency
+declarations. Verify each source contract when it is integrated; do not assume every
+"provider" shares one install protocol.
 
-### 从 MCP/Skill 来源安装
+`installation` coordinates candidate choice, version pinning, preview, install,
+update, uninstall and failure recovery. An MCP install yields a usable local
+package/executable path plus a central definition; a Skill install yields managed
+files and a source record. Installers are an explicit allowlist with structured
+executable and arguments, never a script API. Showing a catalog, importing a
+definition, restoring a backup or reading metadata never runs an install command.
 
-`sources` 将目录 API、Git 仓库等不同来源转换为可检查的候选信息：来源身份、版本/
-revision、资源类型、下载位置与依赖声明。来源接口是否存在以及实际契约，在接入
-该来源时核实；不预设所有“提供商”都有相同安装协议。
+MCP dependency install, server start/connection and Agent deployment have separate
+states, as do Skill local install and Agent link/copy deployment. An update keeps
+user modification information and records managed paths, pinned revision, steps and
+results for retry/uninstall; user-unowned files are never deleted. The safe file
+writer and operation recovery can be reused, while GitHub backup, software install
+and Agent configuration backup keep their own formats.
 
-`installation` 协调候选选择、固定版本、预览、安装、更新、卸载和失败恢复。
-MCP 安装得到可用的本地包/执行路径及中央定义；Skill 安装得到受管文件和来源记录。
-安装器采用明确的可支持类型，结构化传递可执行文件和参数，不拼接任意脚本 API。
-目录展示、定义导入、备份恢复与下载元数据不会顺带执行安装命令。
+### Direct Agent installation
 
-MCP 的依赖安装、服务器启动/连接、Agent 配置部署各有自己的状态。
-Skill 的本地安装、Agent 链接/复制部署同样分开。更新保留用户修改信息；记录受管
-路径、固定 revision、安装步骤和结果，供后续重试/卸载使用，不能删除用户未受管文件。
-可复用 P19 的安全文件写入和 P34 的操作恢复思路，但 GitHub 备份、软件安装与
-Agent 配置备份仍分别保留自己的格式和业务语义。
+`installation` owns Agent install/upgrade/uninstall; `agents` keeps discovery,
+version/capability detection, precedence and configuration application. Each Agent's
+package manager or release archive is implemented as its own adapter after its
+official contract is verified, sharing downloads, version pinning, managed-install
+records and progress instead of forcing one command shape.
 
-### 直接安装 Agent
+The flow is: choose Agent → inspect the existing install and target platform/arch →
+show the install plan → execute → detect the actual version and capabilities.
+Upgrade and uninstall follow the managed-install record. An existing user install
+is identified by source first; "discovered" does not mean "installed by vibemate and
+safe to delete". Agent configuration and user working directories are outside
+package cleanup. A version upgrade can change configuration capability, so detect
+first and then build the configuration diff.
 
-Agent 安装纳入 `installation` 的业务范围，`agents` 保留安装发现、版本/能力检测、
-配置优先级和配置应用的职责。不同 Agent 的包管理器、发布包或安装方式，在官方
-契约核实后分别实现安装 adapter；共享下载、版本固定、受管安装记录和操作进度，
-而不把所有安装方案强行统一成同一条命令。
+Finishing an install only means the software exists. It does not start the Agent,
+configure a model or claim a working inference connection.
 
-选择 Agent → 检查现有安装与目标平台/架构 → 展示安装计划 → 执行 → 检测实际版本
-与能力，是一条独立安装流程。后续升级和卸载根据受管安装记录处理；用户已有安装
-应先识别来源，不把“发现到了”当作“由应用安装并可删除”。Agent 配置与用户工作目录
-不属于安装包清理范围。升级可能影响配置能力，重新检测结果后再生成配置差异。
+### Local API forwarding
 
-安装完成只表示软件存在，不自动启动 Agent、配置模型或声明推理连接成功。
-运行 Agent、写入配置、连接 gateway 均保留明确操作和各自状态。此规划承接 P17
-只读发现而不是把发现改成自动安装；新增安装功能实施前独立拆解任务。
+A `gateway` service runs inside Rust and owns local listening, start/stop,
+connection handling, routing snapshots and runtime status. React manages it over
+Tauri; Agents call the local API directly, so forwarded traffic never goes through
+Tauri IPC. Agent configuration that points at the local endpoint is still written by
+`agents`. Start with explicit local-only access and authorization; external
+listening, cloud deployment and multi-user service are separate.
 
-### 给 Agent 提供 API 转发
+`protocols` converts verified request/response and streaming events; the Provider
+adapter owns upstream authentication, endpoints and vendor differences. The gateway
+routes by stable Provider/Model identity rather than display alias. MCP server
+routing and LLM API forwarding are different contracts and do not share a business
+interface just because both use HTTP.
 
-`gateway` 是 Rust 进程内的服务，负责本地监听、启动/停止、连接处理、路由配置
-快照和运行状态。React 通过 Tauri 管理它；Agent 直接访问本地 API，转发流量不走
-Tauri IPC。配置指向本地端点的 Agent 写入仍由 `agents` 完成。
-初期采用明确的本地访问与授权边界；外网监听、云端部署和多用户服务另行规划。
+Prove a same-protocol forwarding path first, then add conversions one at a time. The
+matrix must cover normal and streaming responses, tool calls, errors, client
+cancellation and upstream cancellation; reasoning, image and parameter conversions
+need the real protocol. Unsupported mappings are refused explicitly. Rate-limit
+retries and route switching must account for already-emitted output and duplicate
+requests; the model-list GET behavior does not transfer. TLS/proxy/timeout basics
+can be shared, but a client returning a complete `Vec<u8>` cannot implement
+streaming forwarding. Runtime needs snapshot reads and short credential access and
+must not hold SQLite locks across long connections.
 
-`protocols` 负责已验证的请求/响应和流式事件转换，Provider adapter 负责上游认证、
-端点和厂商差异。gateway 通过稳定 Provider/Model 身份路由，不把显示别名当作唯一键。
-MCP server 的路由与 LLM API 转发是两套契约，不能因为都是 HTTP 就共享业务接口。
+### Dependency sketch
 
-第一条转发路径优先验证同协议，再逐项增加转换。支持矩阵需要覆盖普通与流式响应、
-工具调用、错误、客户端取消及其上游取消；推理、图像、参数转换必须按真实协议核实。
-不支持的映射显式拒绝，不静默删字段或宣称所有 OpenAI 兼容服务都等价。
-限流重试和路由切换需考虑已输出流与重复请求，不能照搬模型发现 GET 的行为。
-可复用 TLS/代理/超时等网络基础，但当前返回完整 `Vec<u8>` 的客户端不能作为流式
-转发实现。运行时需要快照读取和短期凭据访问，不能在长连接期间占用 SQLite 锁。
-
-依赖关系如下，均表示未来业务设计；当前仍只存在前面列出的现有功能：
+All nodes below are future design; none exists today.
 
 ```mermaid
 flowchart TD
-    UI[React / Tauri 管理入口] --> Backup[配置备份与恢复]
-    UI --> Install[来源与安装]
-    UI --> Gateway[API 转发生命周期]
-    Backup --> GitHub[GitHub 存储适配]
-    Backup --> Config[Provider / Model / MCP / Skill 配置]
-    Install --> Sources[目录与仓库来源适配]
+    UI[React / Tauri management] --> Backup[Configuration backup and restore]
+    UI --> Install[Sources and installation]
+    UI --> Gateway[Forwarding lifecycle]
+    Backup --> GitHub[GitHub storage adapter]
+    Backup --> Config[Provider / Model / MCP / Skill configuration]
+    Install --> Sources[Catalog and repository sources]
     Install --> Config
-    Install --> AgentInstall[Agent 安装记录]
-    AgentInstall --> AgentManager[Agent 发现与配置管理]
-    Agent[Agent API 请求] --> Gateway
-    Gateway --> Protocols[协议适配与模型路由]
+    Install --> AgentInstall[Agent install records]
+    AgentInstall --> AgentManager[Agent discovery and configuration]
+    Agent[Agent API request] --> Gateway
+    Gateway --> Protocols[Protocol adapters and model routing]
     Protocols --> Config
-    Protocols --> Upstream[模型服务商 API]
-    GitHub --> Infra[凭据 / HTTP / 存储基础]
+    Protocols --> Upstream[Provider APIs]
+    GitHub --> Infra[Credentials / HTTP / Storage]
     Sources --> Infra
     Config --> Infra
     Gateway --> Infra
 ```
 
-## 后续拆分
+## Refactoring rules
 
-BR6 的目录解析/存储/凭据拆分按实际业务需求推进；BR7–BR11 分别承接外部服务、
-备份、来源安装、API 转发和 Agent 安装。先核实首条路径的数据与生命周期，再提取
-实际复用能力；不要求做完所有重构才能开发业务，也不创建未来模块空壳。
+A migration batch usually touches 1–5 real files and can be reverted on its own.
+One batch does not change IPC, data format, concurrency rules and directory
+structure together. Pure moves add no duplicate tests but must run the existing
+suite; real gaps get targeted tests.
 
-六种 Agent 固定目录与发现见 [agent-catalog.md](agent-catalog.md)。发现和安装分开；
-使用参数和必要能力覆盖属于目标 Agent，不存成中央模型的全局请求设置。
-
-## 回归与边界
-
-每个迁移批次通常控制在 1–5 个实际文件，超出时继续拆任务；单批可以独立提交和撤回。
-同一批不同时改 IPC、数据格式、并发规则和目录结构。纯重排不添加重复实现测试，
-但必须运行已有测试，真实缺口补针对性测试。
-
-验收需保持：
-
-- 既有 Tauri 命令名、serde 字段/错误码、稳定 ID、凭据 service name/引用和已发布迁移；新增行为按任务显式变更。
-- 凭据提示不占用 SQLite 锁、获取快照与合并的修订校验、取消阶段与资源释放顺序。
-- 已存模型选择、非敏感 MCP 元数据、凭据清理、补偿与未知结果重读行为。
-- 正常行为与测试仍可脱离 Tauri 窗口运行；只移动到子目录不等于已经解决依赖。
-
-运行 Rust fmt、Clippy（all targets、零警告）与完整测试；命令/导出/构建资源移动批次
-另外跑完整前端检查和锁定原生构建，并按影响做隔离原生 IPC 验证。
-现有真实凭据库和多平台待验项继续待验，不以结构重排宣称它们已完成。
+Acceptance: existing command names, serde fields/error codes, stable IDs,
+credential service names and published migrations stay intact unless a task
+changes them explicitly. Credential prompts stay outside the SQLite lock; model
+fetch snapshot and merge revision checks, cancellation stages and resource release
+order stay unchanged. Stored selections, non-secret MCP metadata, credential
+cleanup, compensation and unknown-outcome reloads stay covered. Normal behavior
+and tests still run without a Tauri window. Run Rust fmt, locked Clippy (all
+targets, zero warnings) and the full test suite; batches that move commands,
+exports or build resources also run the frontend check, the locked desktop build and
+an isolated native IPC check where affected. Real credential stores and other
+platforms stay open until actually verified.

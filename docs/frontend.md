@@ -4,7 +4,7 @@ The frontend is React + TypeScript, rendered inside Tauri's system WebView.
 React describes the interface; Rust handles local system and provider operations.
 `src/AGENTS.md` contains the frontend implementation rules.
 
-## Current code and planned layout
+## Current code and layout
 
 Sidebar activation always requests the destination module home, including clicks
 on the currently active module. Providers, MCP and Agents open their lists;
@@ -30,8 +30,9 @@ invalidated when returning home.
   `count_provider_models` (selected-into-library only)), `ProvidersView` (mounted on the first visit, then
   kept mounted while hidden to retain caches and pending work),
   central MCP management, read-only Agent discovery, `SkillLibrary`, and
-  `SettingsView` (mounted while hidden). Sidebar width is fixed; only the collapse button
-  changes layout. `src/App.css` holds shared design variables and scaffold styles.
+  `SettingsView` (mounted while hidden). Sidebar width is fixed at 200 px expanded
+  and 88 px collapsed; only the collapse button changes layout. `src/App.css`
+  holds shared design variables and scaffold styles.
 - `src/features/providers/` holds the provider views; see
   [Provider configurations](#provider-configurations). `SettingsView` uses
   General/About tabs, and tab switches or leaving Settings keep preference
@@ -584,7 +585,7 @@ the existing opener's Rust functions, with TextEdit on macOS, Notepad on Windows
 and the default file association on Linux. No opener/plugin capability or CSP
 change is needed. Dispatch acknowledgment is not proof that a viewer displayed
 the file, so the UI makes no success claim. See
-[logging access and safety rules](plans/logging.md).
+[logging access and safety rules](logging.md).
 
 Automated tests do not launch external tools. Native editor/file-manager opening
 and visual acceptance remain manual checks.
@@ -703,7 +704,7 @@ badge on model rows. Save and recovery actions ("Save again", "Refresh list",
 stays in the scrollable form. There is no form Cancel; **Back** leaves the page.
 One Save submits settings and an optional replacement key together.
 
-The Models tab follows [models-tab-ux.md](plans/models-tab-ux.md). In brief: the
+The Models tab follows [models.md](models.md). In brief: the
 default **Added** / 「已添加」 view lists persisted models, with a fixed list title
 (**Added** / **All**) above the scroll region. **Fetch models** opens **upstream**
 browse with lazy-loaded result pages via `browse_upstream_models_page` (optional
@@ -729,7 +730,7 @@ selection **Save**. Route support still comes from the provider's own route
 declaration; an alias is only a display label. Capability icons show a capability
 only when it is effectively supported, from either the vendor catalog's evidence
 or the user's own declaration (see
-[provider-completion.md](plans/provider-completion.md)); a missing icon never
+[models.md](models.md)); a missing icon never
 claims that the model lacks the ability. Every icon names its source (catalog or
 user declaration) in its accessible label.
 
@@ -863,7 +864,7 @@ credential store to cover the commit, rollback, concurrent-edit and key-exclusio
 paths described above.
 
 Remaining credential-store, protocol/model inference and Windows/Linux runtime
-acceptance is tracked in `docs/plans/todo.md`, not inferred from passing
+acceptance is tracked in [`plans/todo.md`](plans/todo.md), not inferred from passing
 automated tests.
 
 ## Product branding
@@ -933,10 +934,11 @@ controls, pending operations and edited input.
 
 ## Appearance acceptance and verification
 
-The maintainer accepted the expressive-palette shell/branding iteration and the
-Select migration. macOS/Windows system-style palette visual acceptance remains
-pending, as do native restart checks where unrecorded, Windows/Linux icon/runtime
-behavior, system-browser opening and comprehensive accessibility acceptance.
+The maintainer accepted the expressive-palette shell/branding iteration, the
+Select migration and the macOS/Windows system-style palettes (2026-10-13).
+Windows/Linux icon and runtime behavior, system-browser opening, native restart
+behavior where unrecorded and comprehensive accessibility acceptance remain
+release-time checks.
 
 Historical test counts, token contrast measurements and packaging results are in
 Git/CI. They are scoped observations, not current full-platform or accessibility
@@ -1028,7 +1030,7 @@ keyboard-opened detail at a narrow window width. Simulated IPC samples establish
 neither native IPC nor real-installation acceptance; these are scoped checks, not
 full accessibility or maintainer acceptance. Current filesystem rules, sources
 and native verification boundaries are in
-[agent-discovery.md](plans/agent-discovery.md); real installations, native
+[agents.md](agents.md); real installations, native
 cross-platform behavior and maintainer visual acceptance remain separate.
 
 ### Confirmed CLI version probing
@@ -1047,7 +1049,7 @@ on rediscovery. They do not upgrade configuration capabilities. The selected
 program may still read credentials, access the network, write files or launch
 other processes; the protection is not a sandbox. Native execution limits,
 official command sources and the verification scope are in
-[agent-version-probe.md](plans/agent-version-probe.md).
+[agents.md](agents.md#explicit-version-probing).
 
 ### Automatic version probing
 
@@ -1064,17 +1066,38 @@ the manual button stays available. Results live in the same window-local
 
 ## Agent model configuration
 
+`AgentList` shows the saved Provider and model for each write-capable Agent as
+plain secondary text reading `Provider · Model` (for example
+`Command Code GOAT · deepseek/deepseek-v4.1-flash`), truncated with an ellipsis
+because the row gives it one line. There is no chip or badge around it. This is
+vibemate's own presentation: the `name` field written into an Agent file reads
+`(vibemate-<Provider>) <model ID>`, so the two formats are deliberately
+independent. The summary appears only when the history pin is `matched` and both
+labels are present; otherwise the row states that no configuration summary
+exists. The same text is used at the top of the Write segment. Rows have no hover
+state: only the Write and Detail buttons are interactive.
+
 `ConfigPreview` serves Claude Code, Pi and Grok Build through their typed desktop
-adapters. Pi previews both `models.json` and `settings.json` and binds the read-only
+adapters and opens from the list's **Write** icon button in a compact dialog. Pi
+previews both `models.json` and `settings.json` and binds the read-only
 `auth.json` precedence token. Grok Build changes one TOML document, so its card
 lists the planned `[model.<alias>]` fields, `[models].default`, and the
 higher-precedence files that were located but never read. Each adapter keeps its own
 restart and outcome sentences, because "written" means a different set of files in
 each one. Applying consumes the reviewed preview, reports per-file backups and keeps
 navigation and other configuration actions blocked while the native operation is
-pending. The shared `RestoreView` lists only the selected Agent's recorded writes,
-choosing its three commands from one per-Agent table; the backend independently
-checks operation ownership before previewing or restoring any target.
+pending. After a preview is generated, `ModelPlanPresentation` renders the field
+summary and detail entry inline in the same dialog; it follows the shared
+two-layer rules in [configuration.md](configuration.md). A successful apply
+notifies, closes the dialog and refreshes the list's current-configuration pin.
+
+The Agent detail page shows History, Skill, MCP and Install & paths segments. The
+shared `RestoreView` lists only the selected Agent's recorded writes from the
+root-scoped paginated history, choosing its commands from one per-Agent table; the
+backend independently checks operation ownership before previewing or restoring any
+target. It pins the backend-reported current configuration above the list, marks the
+matching history row, shows per-file backup availability, loads older entries by
+cursor and offers version restore, resolution review and confirmed deletion.
 Interrupted mutations set `requiresResolution` on a history row, withholding the
 legacy restore button. `src/lib/desktop/recovery.ts` validates metadata-only reviews
 and sends only the fixed Agent identity, operation ID and complete backend plan's
@@ -1083,8 +1106,6 @@ eligibility; confirmation records observations only, discards approval and refre
 history. It never chains a configuration restore. Stale/blocked observations require
 fresh inspection; all actions share the existing navigation and single-flight guard.
 The Agent detail keys this view by Agent/configuration epoch, so changing its scope
-unmounts it and late replies cannot update the new view. History still lists only the
-latest ten operations; full browsing, root isolation and current-version detection
-remain planned.
+unmounts it and late replies cannot update the new view.
 Provider/model selections stay local, and browser preview never invents a plan or a
 completed write.

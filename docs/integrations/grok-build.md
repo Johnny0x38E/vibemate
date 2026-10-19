@@ -116,16 +116,17 @@ API key 放进共享仓库」。也就是说用户级 `config.toml` 里的 `api_
 别名是配置身份，因此需要区分 vibemate 拥有的条目与用户手写条目：只有私有存储里有归属记录的
 `[model.<alias>]` 才能被本适配器改写，同名但无记录的条目一律拒绝接管。
 
-### 适配器写入的 `name` 与别名（2026-10-19）
+### 适配器写入的 `name` 与别名（2026-10-19 修订）
 
 vibemate 拥有的 `[model.<alias>]` 条目写入时：
 
-- **`name` 字段**一律为 `vibemate-<slug(model_id)>`（与别名候选共用同一套 slug：非字母数字改为连字符、小写、截断）。例如 `deepseek-flash` → `name = "vibemate-deepseek-flash"`；带 `/` 的 id（如 `org/deepseek-flash`）→ `vibemate-org-deepseek-flash`。不再使用用户模型显示别名或 `upstream_name` 作为 TOML `name`。
-- **配置别名（表名）**仍由 `choose_alias` 决定：优先复用本根下已记录的归属；否则按 `vibemate-{provider}-{model}` 等候选选取空闲名。**不会**接管同名但无归属记录的用户手写表。
+- **`name` 字段**固定为 `(vibemate-<服务商名>) <模型 ID>`：括号内 `vibemate` 固定，服务商显示名称转为连字符标记（与配置键同一形状），括号后一个空格接模型 ID 原文。例如 `Command Code GOAT` + `deepseek/deepseek-v4.1-flash` → `name = "(vibemate-Command-Code-GOAT) deepseek/deepseek-v4.1-flash"`；斜杠、大写和点号原样保留，不使用用户模型别名或 `upstream_name`。连续空白折叠，控制字符与不可见格式字符（含 bidi 覆盖）移除；模型 ID 过长时截断并以 `…` 结尾，整段不超过 160 个字符。推理档位是单独的请求设置，写入后由调用方追加在名称之后。
+- **格式处理**：连续空白折叠为一个空格（`name` 始终单行）；控制字符与不可见格式字符（含 bidi 覆盖）被移除，避免两个不同名称看起来相同。组合文本超过 160 个字符时截断模型 ID 部分并以 `…` 结尾；模型 ID 本身仍是身份，`name` 只是显示文本。
+- **配置别名（表名）**仍由 `choose_alias` 决定：优先复用本根下已记录的归属；否则按 `vibemate-{provider}-{model}` 等候选选取空闲名。表名是配置身份，保持稳定；**不会**接管同名但无归属记录的用户手写表。
 - **碰撞拒绝**：若计划写入的 API `model` 字段值（即 `model_id`）与当前 `config.toml` 里某个已有 `[model.<alias>]` 表名**完全相同**，预览以 `TargetConflict` / `target_conflict` 拒绝，不静默改写。典型场景：用户已手写 `[model.deepseek-flash]`，而 vibemate 又要写 `model = "deepseek-flash"`。
-- **再应用**：对已归属的别名再次预览/写入时，会把该条目的 `name` 更新为上述 `vibemate-…` 格式（仅 vibemate 拥有的条目）。
+- **再应用**：对已归属的别名再次预览/写入时，会把该条目的 `name` 更新为上述格式（仅 vibemate 拥有的条目）。
 
-`name` 与 alias 故意分开：alias 带 provider 段以降低跨 Provider 碰撞并保持归属键稳定；`name` 只标记 vibemate 来源与模型 slug，便于在 Grok UI 中辨认。若将来把两者都收成 `vibemate-<model_slug>`，需另做绑定迁移与冲突评估。
+`name` 与 alias 故意分开：alias 是配置身份，参与 `disabled_models`/`allowed_models` 与归属键；`name` 只用于 Grok 模型选择器中的显示。共享实现为 `shared::agent_model_display_name`，Pi 的模型 `name` 字段使用同一规则。该格式在 2026-10-19 由维护者定为最终形态。
 
 环境引用依赖独立启动 Grok 的终端环境；桌面设置不能自动传播到已有终端。
 中央 OS 凭据引用也不能直接充当 `env_key` 值。若目标需要私有明文配置，应明确
@@ -201,7 +202,7 @@ MCP；兼容来源还可能以 disabled 状态列出。因此适配器必须结�
 [model.vibemate-deepseek]
 model = "deepseek-flash"
 base_url = "https://api.deepseek.com"
-name = "vibemate-deepseek-flash"
+name = "(vibemate-DeepSeek) deepseek-flash"
 env_key = "VIBEMATE_DEEPSEEK_API_KEY"
 api_backend = "chat_completions"
 

@@ -252,7 +252,7 @@ const MIGRATIONS: &[Migration] = &[
         // Singleton row for the Agent CLI auto-version-probe preference. The
         // value is only informed consent to run `--version` without a per-run
         // click; it never stores a version number. Auto-probe results stay in
-        // window memory (see `docs/plans/agent-version-probe.md`).
+        // window memory (see `docs/agents.md`).
         sql: "CREATE TABLE agent_version_preference (
             id INTEGER PRIMARY KEY CHECK (id = 1),
             auto_probe INTEGER NOT NULL CHECK (auto_probe IN (0, 1))

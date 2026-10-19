@@ -11,9 +11,9 @@ use super::state::{
 use crate::agents::{
     self, AgentObservation, AgentVersionResult, ApplyClaudeCodeRestoreRequest,
     ApplyClaudeCodeSettingsRequest, ClaudeCodeApplied, ClaudeCodeApplyError, ClaudeCodeApplyInput,
-    ClaudeCodeOperation, ClaudeCodePlanInput, ClaudeCodeRestoreError, ClaudeCodeRestorePlan,
-    DirectorySource, DiscoveryEnvironment, DiscoveryError, DiscoveryInput, ModelFacts,
-    ProviderFacts, VersionProbeError, VersionProbeGate, VersionProbeInput,
+    ClaudeCodePlanInput, ClaudeCodeRestoreError, ClaudeCodeRestorePlan, DirectorySource,
+    DiscoveryEnvironment, DiscoveryError, DiscoveryInput, ModelFacts, ProviderFacts,
+    VersionProbeError, VersionProbeGate, VersionProbeInput,
 };
 use crate::config_apply::RestoreOutcome;
 use crate::config_plan::{ConfigPlan, PlanError};
@@ -189,22 +189,6 @@ pub(crate) async fn apply_claude_code_settings(
     })
     .await
     .map_err(|_| ClaudeCodeApplyError::OperationFailed)?
-}
-
-/// List the Claude Code settings writes vibemate recorded, newest first.
-///
-/// Read-only: the listing carries paths, states and digests, never file content,
-/// and each row says whether the files as they are now leave something to
-/// restore.
-#[tauri::command]
-pub(crate) async fn claude_code_operations(
-    app: tauri::AppHandle,
-) -> Result<Vec<ClaudeCodeOperation>, ClaudeCodeRestoreError> {
-    tauri::async_runtime::spawn_blocking(move || {
-        with_restore_storage(&app, agents::list_claude_code_operations)
-    })
-    .await
-    .map_err(|_| ClaudeCodeRestoreError::OperationFailed)?
 }
 
 /// Preview what undoing one recorded write would do, without writing anything.

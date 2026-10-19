@@ -2,6 +2,13 @@
 
 use super::*;
 use crate::agents::{self, recovery::*};
+use crate::config_apply::operation_requires_resolution;
+
+/// One root-scoped history page for the adapter under test.
+fn history_page(fixture: &Fixture, kind: OperationKind) -> HistoryPage {
+    let scope = HistoryScope::new(kind, &fixture.root, &["a"]).unwrap();
+    configuration_history(&fixture.storage, &scope, None, 50, &fixture.backups()).unwrap()
+}
 
 fn interrupt(fixture: &Fixture, kind: OperationKind, legacy_result: bool) -> String {
     fs::write(fixture.root.join("a"), b"synthetic-original-private").unwrap();
@@ -62,9 +69,11 @@ fn all_three_agent_surfaces_settle_both_crash_windows_without_restoring_and_requ
         for legacy_result in [false, true] {
             let fixture = Fixture::new();
             let id = interrupt(&fixture, kind, legacy_result);
-            let listed = agents::list_config_operations(&fixture.storage, kind).unwrap();
-            assert!(listed[0].requires_resolution);
-            assert!(!listed[0].restorable);
+            let page = history_page(&fixture, kind);
+            assert!(operation_requires_resolution(&fixture.storage, &id).unwrap());
+            assert_eq!(page.entries[0].operation_id, id);
+            // An interrupted rewrite stays in the history while it is unresolved.
+            assert_eq!(page.entries.len(), 1);
             let observed = review(&fixture, agent, &id);
             assert!(observed.resolvable);
             assert_eq!(observed.revisions.len(), 1);
@@ -84,9 +93,7 @@ fn all_three_agent_surfaces_settle_both_crash_windows_without_restoring_and_requ
                 resolve(&fixture, agent, &observed).unwrap_err(),
                 agents::ClaudeCodeRestoreError::PlanStale
             );
-            let listed = agents::list_config_operations(&fixture.storage, kind).unwrap();
-            assert!(!listed[0].requires_resolution);
-            assert!(listed[0].restorable);
+            assert!(!operation_requires_resolution(&fixture.storage, &id).unwrap());
             fixture.restore(&id).unwrap();
             assert_eq!(
                 fs::read(fixture.root.join("a")).unwrap(),

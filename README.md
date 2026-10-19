@@ -5,18 +5,20 @@ Built with Rust, Tauri 2, React, and TypeScript. Licensed under MIT.
 
 ## Status
 
-The desktop app supports provider configuration with OS-stored API keys, model
-fetching and selection, manual model entries, aliases and per-field capability
-evidence, and central stdio/HTTP MCP definitions, plus read-only six-Agent entry
-discovery (Claude Code, Codex, OpenCode, Pi, Grok Build, Hermes) with manual
-paths and an explicit-consent Agent CLI version read.
-Discovery does not execute Agents or read their configuration contents; versions
-and documented capabilities retain explicit evidence and uncertainty. It also
-includes bilingual preferences, themes, local logging, and a central skill
-library with system-picker local import from existing skill folders.
-Agent configuration deployment, skill installation/update/deployment, MCP
-deployment and inference verification remain planned. Saving an MCP definition
-never starts its server.
+The desktop app configures providers with OS-stored API keys, fetches and selects
+models with aliases, manual entries, capability evidence and context/output/effort
+metadata, and keeps central stdio/HTTP MCP definitions plus a central Skill library
+with local import. It discovers six Agents read-only (Claude Code, Codex, OpenCode,
+Pi, Grok Build, Hermes), reads CLI versions only with consent, and writes
+configuration for Claude Code, Pi and Grok Build through a previewed, backed-up,
+reversible path with paginated history, restore of any retained version and
+confirmed deletion.
+
+Discovery does not execute Agents or read their configuration contents. Versions
+and documented capabilities keep explicit evidence and uncertainty. Saving an MCP
+definition never starts its server. Skill installation, update and deployment,
+MCP deployment, per-Agent request settings for Claude Code and Grok Build, and
+inference verification remain planned.
 
 The first release targets **Command Code, DeepSeek, and OpenRouter** with
 **Claude Code, Pi, and Grok Build** configuration adapters in that order. macOS,
@@ -53,12 +55,14 @@ builds a desktop executable without an installer.
 
 ## Find your way around
 
+- [`docs/README.md`](docs/README.md): documentation index, separated into
+  current reference pages and remaining plans.
 - [`AGENTS.md`](AGENTS.md): coding rules, English comments, and verification.
 - [`src/AGENTS.md`](src/AGENTS.md): strict frontend rules.
 - [`docs/frontend.md`](docs/frontend.md): React/Tauri boundaries and automated checks.
-- [`docs/architecture.md`](docs/architecture.md): responsibilities and extension points.
-- [`docs/plans/backend-modularity.md`](docs/plans/backend-modularity.md): backend module boundaries and incremental refactoring.
-- [`docs/plans/phase-1.md`](docs/plans/phase-1.md): scope, implementation order, and acceptance criteria.
+- [`docs/architecture.md`](docs/architecture.md): Rust responsibilities and extension points.
+- [`docs/plans/phase-1.md`](docs/plans/phase-1.md): scope, delivered baseline and remaining work order.
+- [`docs/plans/todo.md`](docs/plans/todo.md): the single task-status source.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md): local checks and contribution expectations.
 
 React uses typed, validated IPC wrappers. Rust owns configuration persistence,
@@ -68,11 +72,10 @@ SQLite repositories and credential save/cleanup services. Saved models separate
 queries from edit transactions; model discovery separates registration, downloads,
 browse caching, snapshots and merging. Modules use
 `feature.rs` with a matching directory.
-The app does not write Agent configuration yet. Implementation status and
-remaining native/platform acceptance are recorded in
-[`docs/plans/todo.md`](docs/plans/todo.md).
+Remaining verification, planned features and native/platform acceptance are
+recorded in [`docs/plans/todo.md`](docs/plans/todo.md).
 
 GitHub Actions runs frontend checks and native Rust checks/builds on all three
-platforms after this repository is pushed to GitHub. Installer builds are defined in `.github/workflows/release.yml`: a stable version
+platforms. Installer builds are defined in `.github/workflows/release.yml`: a stable version
 tag creates a draft with notes from `CHANGELOG.md`. See
 [`docs/releases.md`](docs/releases.md). OS signing is not configured yet.

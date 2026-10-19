@@ -7,14 +7,15 @@
 重新核对 [官方模型文档](https://pi.dev/docs/latest/models)、[配置文档](https://pi.dev/docs/latest/configuration) 与已安装 1.2.0、1.3.0 包中的 `model-config.js`、`provider-composer.js`、`resolve-config-value.js`、`settings-manager.js` 和 `model-resolver.js`。
 
 - 用户目录使用桌面进程的 `PI_CODING_AGENT_DIR`，未设置时为 `~/.pi/agent`；无效覆盖不回退。配置操作验证包入口或官方托管安装布局，并读取当前激活版本；稳定 1.x（1.2 起）检查包内 `models.schema.json`、`settings.schema.json` 的所用字段与兼容选项，不因小版本号变化直接拒绝。预览不启动 Pi。
-- 每个服务商实例使用 `vibemate-<可读配置名称>`；空格和分隔符转为连字符，同名冲突才加 ID 短后缀。Pi 1.2/1.3 的模型选择器直接显示配置键，单独设置 Provider `name` 不能替代该键。SQLite v18 按配置目录记录当前及历史别名所有权；旧 UUID 条目只有已记录的写入才允许迁移，复制全部模型并同步 `enabledModels`、`modelThinkingLevels` 引用。`models.json` 保存原生 API、地址、密钥、所选模型及已声明元数据；`settings.json` 只更新 `defaultProvider/defaultModel`。其他 Provider、模型及字段保留。同名条目没有 vibemate 的写入记录时拒绝接管。
+- 每个服务商实例的配置键使用 `vibemate-<可读配置名称>`；空格和分隔符转为连字符，同名冲突才加 ID 短后缀。配置键是 Provider 身份，`/model` 列表按该键分组并显示它。
+- 模型条目的 `name` 固定为 `(vibemate-<服务商名>) <模型 ID>`（例如 `(vibemate-Command-Code-GOAT) deepseek/deepseek-v4.1-flash`），与 Grok Build 共用 `shared::agent_model_display_name`：括号内 `vibemate` 固定、服务商显示名称转为连字符标记，括号后一个空格接模型 ID 原文；连续空白折叠、不可见字符移除、超长截断并以 `…` 结尾（整段不超过 160 个字符）。用户模型别名和 `upstream_name` 不再写入该字段。单独设置 Provider `name` 不能替代配置键。
 - 已保存模型的 `resolvedProtocol` 分别映射 `openai-completions`、`openai-responses` 和 `anthropic-messages`。需要不同官方地址时按已核实的模板选择；自定义地址不猜测另一协议的路径。DeepSeek/OpenRouter Chat 的兼容字段仅用于各自官方地址。
 - `auth.json` 高于 `models.json.apiKey`。预览只读其结构和摘要；有同名凭据则拒绝应用，不执行其中的凭据命令，不修改凭据文件。应用重新检查其摘要。
 - 应用时从 OS 凭据存储读取密钥，写入模型定义。Pi 会解释 `!command` 与 `$VAR`，因此按 1.2.0 的 `$$`/`$!` 规则转义，保证按原文使用密钥；预览的旧密钥和新密钥均为掩码。
 - 两个文件通过共享写入日志、私有备份、摘要检查、同目录临时文件和原子替换写入；多文件不是单次原子事务，后续文件失败时补偿已写文件。Unix 替换后为 0600，避免在原本 0644 的模型文件中暴露新密钥。历史恢复按 Agent 类型隔离，并检查应用后的手工改动。
 - 新建会话读取默认选择。项目设置、CLI 参数和恢复会话可能覆盖它；未知元数据沿用 Pi 默认值，不新增推理档位与请求参数。当前解析接受 JSON 对象；含 JSON 注释等不可解析内容会拒绝写入。
 
-验证与验收状态以 [PI1](../plans/todo.md) 为准；写入成功不代表真实推理或其他平台已经通过。
+验证与验收状态以 [todo.md](../plans/todo.md) 为准；写入成功不代表真实推理或其他平台已经通过。
 
 ## P02 发行身份与证据（1.1.0 历史）
 
@@ -193,6 +194,6 @@ Settings 的资源数组支持 `!pattern`、`+path`、`-path`。Skill 停用可�
 
 本机已升级至 1.3.0；该版 `model-config.js` 和 `resolve-config-value.js` 与安装的 1.2.0 相同，所用模型/默认选择 schema 字段一致。新版原生兼容入口在隔离目录中通过了当前 1.3.0 安装检查；真实 Tauri 窗口成功生成旧 UUID 到可读名称的双文件迁移预览，含模型范围与推理档位引用。
 
-同一份由 Rust 适配器生成、从 UUID 条目迁移的临时配置分别交给已安装的 1.2.0 与 1.3.0 `ModelRuntime` 离线加载，并用各自的 `ModelSelectorComponent` 渲染：服务商徽标显示可读键，旧 UUID 条目已移除，额外模型和合成认证可读取。回滚后再次预览仍正确识别别名。没有启动 Agent 会话或发送 Provider 请求。
+同一份由 Rust 适配器生成、从 UUID 条目迁移的临时配置分别交给已安装的 1.2.0 与 1.3.0 `ModelRuntime` 离线加载，并用各自的 `ModelSelectorComponent` 渲染：服务商徽标显示可读键，旧 UUID 条目已移除，额外模型和合成认证可读取。1.3.0 的源码确认选择器会显示所选模型的 `Model Name: <name>` 并把它计入搜索文本，因此模型 `name` 采用上方现行格式；该显示未单独做原生窗口验收。回滚后再次预览仍正确识别别名。没有启动 Agent 会话或发送 Provider 请求。
 
 维护者于 2026-10-16 确认 Pi 1.3.0 升级后的配置预览与可读 Provider 名称验收通过。真实 Provider 消息请求及 Windows/Linux 行为仍待单独确认。

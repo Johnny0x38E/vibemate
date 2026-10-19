@@ -135,7 +135,7 @@ pub struct AutoVersionProbePreference {
 
 impl Default for AutoVersionProbePreference {
     /// Auto-probe is off until the user turns it on, matching the manual-only
-    /// default documented in `docs/plans/agent-version-probe.md`.
+    /// default documented in `docs/agents.md`.
     fn default() -> Self {
         Self { auto_probe: false }
     }

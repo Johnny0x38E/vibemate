@@ -99,7 +99,7 @@ MCP 服务器按三个作用域存储：
 
 本机观测：`~/.claude.json` 顶层 `mcpServers` 存有用户级服务器，`projects` 为按
 项目路径索引的配置。`~/.claude.json` 不属于 settings 层级，自动发现不读取它
-（见 [agent-catalog.md](../plans/agent-catalog.md)）；配置适配写入 MCP 时按
+（见 [agents.md](../agents.md)）；配置适配写入 MCP 时按
 作用域选择正确位置，并保留无关条目。
 
 ## Skill 配置
@@ -182,7 +182,62 @@ DeepSeek 的配方除基地址与 `ANTHROPIC_AUTH_TOKEN` 外还设置 `ANTHROPIC
 
 同一页还写明窗口假定：被固定的 ID 若无法匹配到 Claude Code 已知的模型，会话按 200K 窗口运行，除非
 该 ID 带 `[1m]` 后缀；带原生 1M 窗口的模型在 ID 可匹配时无需后缀。因此窗口声明不能只写数字，必须与
-ID 形状一起决定（见 [p18-claude-code-link.md](../plans/p18-claude-code-link.md) 的未映射项）。
+ID 形状一起决定（见下方「使用设置的归属」与 [model-parameters.md](../plans/model-parameters.md)）。
+
+### 使用设置的归属（2026-10-13 分类）
+
+Claude Code 的 `model-config` 与 `settings-reference` 页已核实下列键的语义。规律是：**能力事实放模型层，
+写哪个键与写什么值放 Agent 层**，同一件事在不同 Agent 里的键名、单位和语义都不同（Codex 用
+`model_context_window`/`model_max_output_tokens`，Pi 把窗口写在模型定义里，Grok Build 的
+`context_window` 只是元数据）。
+
+| 键                                                                                      | 类别                                              | 归属与默认值                                                        |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------- |
+| `ANTHROPIC_BASE_URL`、`ANTHROPIC_AUTH_TOKEN`、`ANTHROPIC_MODEL`                         | 链接身份                                          | Agent 绑定；厂商已核实地址、OS 凭据、所选模型 ID                    |
+| `ANTHROPIC_DEFAULT_OPUS/SONNET/HAIKU_MODEL`、`CLAUDE_CODE_SUBAGENT_MODEL`               | 类别 → 模型策略（Claude Code 按用途与表面取模型） | Agent 绑定；默认可全部指向所选模型，允许逐类指定                    |
+| `CLAUDE_CODE_MAX_CONTEXT_TOKENS`                                                        | 模型事实在 Agent 侧的声明                         | Agent 绑定；**派生**自模型目录 `context_window`，缺失则不写         |
+| `CLAUDE_CODE_AUTO_COMPACT_WINDOW`                                                       | Agent 策略值（压缩阈值）                          | Agent 绑定；派生自窗口的比例（官方样本 786432 = 0.75 × 1M），可覆盖 |
+| `CLAUDE_CODE_EFFORT_LEVEL`                                                              | 使用设置（档位）                                  | Agent 绑定；**可选档位来自模型声明**，选定值属于用户                |
+| `API_TIMEOUT_MS`、`BASH_DEFAULT_TIMEOUT_MS`、`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` | Agent 自身行为（超时、遥测）                      | 不映射；链接流程不静默改用户的超时与隐私选择                        |
+
+四条已核实的细节，映射时必须处理：
+
+1. `max` 档位只在环境变量通道有效，`effortLevel` 与 `modelSettings` 两个设置键不接受它（另有独立的
+   `ultracode` 键）。通道选择限制可选值。
+2. 不支持的档位不会报错：Claude Code 降级到不高于该值的最高支持档。预览必须提示实际生效档位。
+3. 类别键会盖过 `ANTHROPIC_MODEL`：只改 `ANTHROPIC_MODEL` 会让子代理、技能等表面继续用旧模型。
+4. `[1m]` 是 Claude Code 自己的窗口约定（网关或自定义 ID 带 `[1m]` 时按 1M 假定），
+   `CLAUDE_CODE_MAX_CONTEXT_TOKENS` 的生效方式随 ID 形状变化，不能只写数字。
+
+vibemate 目前写入三个链接键与四个类别模型键，取值是模型 ID 的存储原值，不追加 `[1m]` 后缀
+（维护者决定 2026-10-14：四个类别都指向所选模型）。窗口声明与自动压缩、档位映射仍属
+[P24](../plans/model-parameters.md)，受上述通道约束。
+
+未映射项（保持未知，不做猜测）：`[1m]` 上下文变体、`ANTHROPIC_DEFAULT_FABLE_MODEL`、
+`ANTHROPIC_DEFAULT_MODEL`、`ANTHROPIC_CUSTOM_MODEL_OPTION` 等选择器条目、
+`CLAUDE_CODE_EFFORT_LEVEL`、`CLAUDE_CODE_AUTO_COMPACT_WINDOW`、网关模型发现。
+
+#### 凭据通道（2026-10-13 决定）
+
+采用 Claude Code 文档的 `env` 通道：应用阶段由 Rust 从 OS 凭据存储读取密钥，写入用户级
+`~/.claude/settings.json` 的 `env.ANTHROPIC_AUTH_TOKEN`。这意味着**密钥以明文落在该文件里**，
+预览与界面必须明示。
+
+不使用 `apiKeyHelper`：它能让配置文件只保存一条命令引用、密钥不落盘，但 Claude Code 默认每
+5 分钟执行一次该命令（`CLAUDE_CODE_API_KEY_HELPER_TTL_MS` 可调），命令的签名与 macOS 钥匙串
+授权行为、以及空输出与命令失败的后果都尚未核实；另外 `ANTHROPIC_AUTH_TOKEN` 一旦存在会覆盖
+helper。将来若改成引用式，先验证这些点再改计划映射。
+
+不写 `model` 键：它是用户级设置，而 `env.ANTHROPIC_MODEL` 覆盖所有设置文件；两家厂商的官方配方
+都用后者。重复键会在预览里作为覆盖提示出现。
+
+| Provider     | 状态         | 处理                                        |
+| ------------ | ------------ | ------------------------------------------- |
+| DeepSeek     | 已核实       | 生成计划                                    |
+| OpenRouter   | 已核实有限制 | 生成计划并附"仅保证 Anthropic 模型"提示     |
+| Command Code | 未核实       | 拒绝生成并说明缺少官方 Claude Code 接入说明 |
+
+实例地址被用户改成厂商默认之外的地址时同样拒绝，理由为无法核实该地址的网关行为。
 
 ### DeepSeek 官方推荐配置与维护者实测（2026-10-13）
 
@@ -221,7 +276,8 @@ Haiku 与子代理用普通 `deepseek-flash`。
 这是目前唯一的真实可用样本，也是唯一一条真实链路记录。它能证明这条链路可用，但不能说明哪些键必需、
 哪些只是调优：官方九项是厂商推荐，多出的四项是维护者补充。vibemate 自身仍未发出过网关请求。
 
-各键的类别与归属见 [p18-claude-code-link.md](../plans/p18-claude-code-link.md) 的「使用设置的归属」一节。
+各键的类别与归属见 [model-parameters.md](../plans/model-parameters.md) 与
+[agents.md](../agents.md) 的适配器边界。
 
 OpenRouter 的页面补充两点：Claude Code 只保证与 Anthropic 一等厂商的模型配合使用；曾用 Anthropic
 账号登录过时必须先 `/logout`，否则缓存的登录与网关凭据冲突，表现为 `openrouter/auto` 之类的

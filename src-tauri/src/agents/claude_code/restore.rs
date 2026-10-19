@@ -1,9 +1,10 @@
 //! Claude Code restore surface for the detail page (P21).
 //!
-//! Lists the settings writes vibemate recorded, previews what undoing one would
-//! do, and applies the preview the user confirmed. The file content stays in the
-//! private backup directory: this layer adds what the interface needs to label a
-//! write — the Provider name — and nothing else.
+//! Previews what undoing one recorded write would do and applies the preview the
+//! user confirmed. The history list itself is adapter-scoped and paginated in
+//! `agents/history.rs`; this layer adds what the interface needs to label a
+//! preview — the Provider name — and nothing else. The file content stays in the
+//! private backup directory.
 
 use std::path::{Path, PathBuf};
 
@@ -12,13 +13,9 @@ use serde::{Deserialize, Serialize};
 use super::is_digest;
 use crate::config_apply::{
     BackupStore, OperationKind, OperationState, RestoreAction, RestoreOutcome, RestorePlan,
-    RestoreState, RestoreStepPlan, ReviewedRestoreStep, StepState, WriteError, apply_restore,
-    plan_restore, recent_operations,
+    RestoreState, RestoreStepPlan, ReviewedRestoreStep, WriteError, apply_restore, plan_restore,
 };
 use crate::storage::Storage;
-
-/// How many writes the detail page lists, newest first.
-const LISTED_OPERATIONS: u32 = 10;
 
 /// Upper bound on the reviewed tokens one request may carry.
 ///
@@ -108,47 +105,6 @@ impl From<WriteError> for ClaudeCodeRestoreError {
             _ => Self::OperationFailed,
         }
     }
-}
-
-/// One recorded Claude Code settings write, as the detail page lists it.
-///
-/// Backup paths, copy digests and file content stay in the write layer; the
-/// interface needs the time, the state, the Provider and what each step did.
-#[derive(Debug, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ClaudeCodeOperation {
-    /// Identity a restore request names.
-    pub operation_id: String,
-    /// How far the write got.
-    pub state: OperationState,
-    /// Provider the write was made for, when it recorded one.
-    pub provider_id: Option<String>,
-    /// Display name of that Provider, when it is still in the library.
-    pub provider_label: Option<String>,
-    /// Unix milliseconds when the write was recorded.
-    pub created_at: i64,
-    /// Unix milliseconds of its last change.
-    pub updated_at: i64,
-    /// Whether the files as they are now leave something to restore.
-    pub restorable: bool,
-    /// Interrupted mutation metadata must be explicitly reviewed before restoring.
-    pub requires_resolution: bool,
-    /// One entry per file the write covers.
-    pub steps: Vec<ClaudeCodeOperationStep>,
-}
-
-/// One file of a recorded write, without backup paths or file content.
-#[derive(Debug, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ClaudeCodeOperationStep {
-    /// Position of the step in the write, counted from zero.
-    pub ordinal: u32,
-    /// Absolute path the write changed.
-    pub target_path: String,
-    /// What the write did to this file.
-    pub state: StepState,
-    /// What a rollback did to it, when one was attempted.
-    pub restore_state: Option<RestoreState>,
 }
 
 /// A restore preview prepared for the detail page.
@@ -249,68 +205,6 @@ impl ApplyClaudeCodeRestoreRequest {
         }
         Ok(reviewed)
     }
-}
-
-/// List the Claude Code settings writes vibemate recorded, newest first.
-///
-/// Read-only: the listing carries paths, states and digests, never file content,
-/// and each row says whether the files as they are now leave something to
-/// restore.
-///
-/// # Errors
-/// Returns `StorageUnavailable` when the database or its log cannot be read, and
-/// `OperationFailed` when a listed row cannot be planned.
-pub fn list_claude_code_operations(
-    storage: &Storage,
-) -> Result<Vec<ClaudeCodeOperation>, ClaudeCodeRestoreError> {
-    list_config_operations(storage, OperationKind::ClaudeCodeSettings)
-}
-
-/// List only writes owned by one adapter. No file contents are returned.
-/// Returns safe storage/restore errors when the recorded state cannot be read.
-pub fn list_config_operations(
-    storage: &Storage,
-    kind: OperationKind,
-) -> Result<Vec<ClaudeCodeOperation>, ClaudeCodeRestoreError> {
-    let records = recent_operations(storage, kind, LISTED_OPERATIONS)?;
-    let mut listed = Vec::with_capacity(records.len());
-    for record in records {
-        // The listing says whether a restore is worth offering; whether a
-        // specific step is a conflict is answered again by the preview.
-        let requires_resolution =
-            crate::config_apply::operation_requires_resolution(storage, &record.id)?;
-        let restorable = if requires_resolution {
-            false
-        } else {
-            plan_restore(storage, &record.id)?
-                .ok_or(ClaudeCodeRestoreError::OperationFailed)?
-                .restorable
-        };
-        listed.push(ClaudeCodeOperation {
-            operation_id: record.id,
-            state: record.state,
-            provider_id: record.owner_ref.clone(),
-            provider_label: record
-                .owner_ref
-                .as_deref()
-                .and_then(|provider_id| provider_label(storage, provider_id)),
-            created_at: record.created_at,
-            updated_at: record.updated_at,
-            restorable,
-            requires_resolution,
-            steps: record
-                .steps
-                .iter()
-                .map(|step| ClaudeCodeOperationStep {
-                    ordinal: step.ordinal,
-                    target_path: step.target_path.clone(),
-                    state: step.state,
-                    restore_state: step.restore_state,
-                })
-                .collect(),
-        });
-    }
-    Ok(listed)
 }
 
 /// Preview what undoing one recorded write would do, without writing anything.

@@ -7,7 +7,6 @@ import { createAppI18n } from "../../i18n";
 import {
     planAgentRestore,
     type ClaudeCodeRestorePlan,
-    type RecordedOperation,
     type RestorePlanStep,
 } from "../../lib/desktop/agents";
 import {
@@ -161,25 +160,6 @@ const versionOutcome: VersionRestoreOutcome = {
     ],
 };
 
-const legacyOperation: RecordedOperation = {
-    operationId: OPERATION_ID,
-    state: "applied",
-    providerId: PROVIDER_ID,
-    providerLabel: "DeepSeek Work",
-    createdAt: 1_700_000_000_000,
-    updatedAt: 1_700_000_000_500,
-    restorable: true,
-    requiresResolution: false,
-    steps: [
-        {
-            ordinal: 0,
-            targetPath: SETTINGS,
-            state: "applied",
-            restoreState: null,
-        },
-    ],
-};
-
 const legacyStep: RestorePlanStep = {
     ordinal: 0,
     targetPath: SETTINGS,
@@ -195,7 +175,7 @@ const legacyStep: RestorePlanStep = {
 const legacyPlan: ClaudeCodeRestorePlan = {
     operationId: OPERATION_ID,
     state: "applied",
-    createdAt: legacyOperation.createdAt,
+    createdAt: 1_700_000_000_000,
     restorable: true,
     providerId: PROVIDER_ID,
     providerLabel: "DeepSeek Work",

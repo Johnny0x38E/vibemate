@@ -1,6 +1,8 @@
 # Contributing
 
-Read `AGENTS.md` and `docs/plans/phase-1.md` before changing the project.
+Read `AGENTS.md` and `docs/README.md` before changing the project. `docs/` holds
+reference pages for delivered behavior; `docs/plans/` holds remaining work and
+`docs/plans/todo.md` is the only task-status source.
 Frontend contributions must also follow `src/AGENTS.md` and `docs/frontend.md`.
 Keep changes focused on a single behavior. Write comments and public API
 documentation in English so contributors can follow the code.

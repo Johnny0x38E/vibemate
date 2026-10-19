@@ -407,11 +407,9 @@ mod apply_tests;
 
 mod restore;
 pub use restore::{
-    ApplyClaudeCodeRestoreRequest, ClaudeCodeOperation, ClaudeCodeOperationStep,
-    ClaudeCodeRestoreError, ClaudeCodeRestorePlan, ClaudeCodeRestoreStep,
-    ReviewedRestoreStepRequest, apply_claude_code_restore, apply_config_restore,
-    list_claude_code_operations, list_config_operations, plan_claude_code_restore,
-    plan_config_restore,
+    ApplyClaudeCodeRestoreRequest, ClaudeCodeRestoreError, ClaudeCodeRestorePlan,
+    ClaudeCodeRestoreStep, ReviewedRestoreStepRequest, apply_claude_code_restore,
+    apply_config_restore, plan_claude_code_restore, plan_config_restore,
 };
 
 #[cfg(test)]

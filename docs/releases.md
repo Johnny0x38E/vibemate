@@ -19,8 +19,8 @@
 4. Commit the release changes. When ready to start remote builds, create and
    push the matching `vX.Y.Z` Git tag to GitHub.
 
-The current scaffold has only an `Unreleased` entry. It is not a published
-0.1.0 release; tagging it before adding versioned notes will fail validation.
+The current history has only an `Unreleased` entry. No version has been published
+yet; tagging a version before adding its versioned notes will fail validation.
 
 ## GitHub Actions behavior
 
@@ -46,8 +46,8 @@ automatically. Reruns can update a draft; published releases are not overwritten
 Use a new version for subsequent corrections.
 
 The workflow uses the repository's `GITHUB_TOKEN` with `contents: write` only in
-release jobs. It requires a GitHub repository with Actions enabled. No remote
-repository, tag, or Release is created by adding these local files.
+release jobs. It requires a GitHub repository with Actions enabled. Pushing a tag
+is a separate, explicit maintainer decision.
 
 ## Signing and future app updates
 

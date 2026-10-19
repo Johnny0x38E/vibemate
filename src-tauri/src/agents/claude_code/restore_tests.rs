@@ -2,8 +2,9 @@
 //! labels and the request boundary. Every fixture is a temporary directory
 //! removed when the test ends; no real Agent file is touched.
 use super::*;
+use crate::agents::DiscoveryEnvironment;
 use crate::config_apply::{
-    BackupStore, OperationKind, PlannedFile, RestoreAction, StepState, WriteTarget, apply_files,
+    BackupStore, OperationKind, PlannedFile, RestoreAction, WriteTarget, apply_files,
 };
 use crate::config_plan::read_target_document;
 use crate::credentials::Secret;
@@ -122,28 +123,48 @@ impl Drop for Fixture {
     }
 }
 
+/// Read the Claude Code history page the detail view would request.
+fn history(fixture: &Fixture) -> crate::agents::history::ConfigurationHistoryPage {
+    let environment = DiscoveryEnvironment {
+        home: fixture.root.join("home-with-no-installed-agents"),
+        claude_directory: Some(fixture.root.as_os_str().to_owned()),
+        ..DiscoveryEnvironment::default()
+    };
+    crate::agents::history::configuration_history_page(
+        &fixture.storage,
+        &environment,
+        &crate::agents::history::ConfigurationHistoryRequest {
+            agent: crate::agents::recovery::ConfigurationAgent::ClaudeCode,
+            after: None,
+            limit: 50,
+        },
+        &BackupStore::new(fixture.backups_root()),
+    )
+    .expect("history")
+}
+
 #[test]
-fn the_listing_labels_the_provider_and_carries_no_backup_path() {
+fn the_history_page_labels_the_provider_and_carries_no_backup_path() {
     let fixture = Fixture::new();
     fixture.write_settings("{\"model\":\"one\"}\n");
     let provider_id = fixture.create_provider("DeepSeek Work");
     let operation_id = fixture.apply("{\"model\":\"two\"}\n", &provider_id);
 
-    let listed = list_claude_code_operations(&fixture.storage).expect("listing");
-    assert_eq!(listed.len(), 1);
-    let row = &listed[0];
-    assert_eq!(row.operation_id, operation_id);
-    assert_eq!(row.state, OperationState::Applied);
-    assert_eq!(row.provider_id.as_deref(), Some(provider_id.as_str()));
-    assert_eq!(row.provider_label.as_deref(), Some("DeepSeek Work"));
-    assert!(row.restorable);
-    assert_eq!(row.steps.len(), 1);
-    assert_eq!(row.steps[0].state, StepState::Applied);
-    assert_eq!(row.steps[0].restore_state, None);
-    assert!(row.steps[0].target_path.ends_with("settings.json"));
-    // The listing names the file, never where the copy of its content sits.
-    let encoded = serde_json::to_string(&listed).unwrap();
-    assert!(!encoded.contains("backups"));
+    let page = history(&fixture);
+    assert_eq!(page.entries.len(), 1);
+    let row = &page.entries[0];
+    assert_eq!(row.entry.operation_id, operation_id);
+    assert_eq!(row.owner_label.as_deref(), Some("DeepSeek Work"));
+    assert!(!row.requires_resolution);
+    assert_eq!(row.entry.source_steps.len(), 1);
+    assert!(
+        row.entry.source_steps[0]
+            .target_path
+            .ends_with("settings.json")
+    );
+    // The page names the file, never where the copy of its content sits.
+    let encoded = serde_json::to_string(&page).unwrap();
+    assert!(!encoded.contains("backupPath"));
     assert!(!encoded.contains(KEY));
 }
 
@@ -163,11 +184,14 @@ fn a_deleted_provider_leaves_the_label_out_instead_of_a_stale_name() {
     )
     .expect("delete provider");
 
-    let listed = list_claude_code_operations(&fixture.storage).expect("listing");
-    assert_eq!(listed[0].provider_id.as_deref(), Some(provider_id.as_str()));
-    assert_eq!(listed[0].provider_label, None);
+    let page = history(&fixture);
+    assert_eq!(
+        page.entries[0].entry.owner_ref.as_deref(),
+        Some(provider_id.as_str())
+    );
+    assert_eq!(page.entries[0].owner_label, None);
     // The recorded write stays restorable: undoing it does not need the Provider.
-    assert!(listed[0].restorable);
+    assert!(fixture.plan(&operation_id).restorable);
     assert_eq!(
         fixture.plan(&operation_id).provider_label,
         None,

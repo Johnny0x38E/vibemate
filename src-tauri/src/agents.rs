@@ -2,7 +2,7 @@
 //! Discovery never executes entries. Version execution is bounded, not sandboxed;
 //! the launched program can have side effects outside vibemate's control.
 
-mod claude_code;
+pub(crate) mod claude_code;
 mod configuration;
 pub mod grok_build;
 pub mod history;

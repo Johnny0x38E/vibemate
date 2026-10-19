@@ -491,9 +491,43 @@ names. Do not log the original response or validation error.
 The data deliberately separates source-operation state from each mutation's result.
 `backupRecorded` means only that the journal has a reference; it does not prove a
 backup exists, a version is current, or a restore is permitted. Reconciliation is
-an observation, not evidence of who changed a file. The wrapper is not yet used
-by `RestoreView`; switching the paginated interface and native WebView invocation
-acceptance remain separate work.
+an observation, not evidence of who changed a file. `RestoreView` uses the
+root-scoped paginated wrapper; version restoration is a separate preview and
+confirmation, not permission inferred from the history row.
+
+## Shared two-layer configuration preview
+
+Model configuration and retained-version restore share `VersionSummary` and
+`ConfigurationTextDialog`. The default layer shows field paths, add/remove/replace
+kinds and sanitized old/new values. The detail dialog requests one complete
+native JSON/TOML file only when opened or switched; React never reconstructs a
+configuration from displayed fields. Missing, empty and unavailable sides are
+separate states. Both original and sanitized text are limited to 1 MiB; the line
+diff has its own computation limit and says when comparison is unavailable.
+
+`src/lib/desktop/configurationPreview.ts` wraps the read-only
+`read_model_configuration_preview` command. It sends the existing native model
+plan back for exact comparison, plus an optional file index. Rust rebuilds that
+plan with the same adapter used by apply, verifies file digests again and masks
+credential-like keys throughout the document before returning data. Summary and
+text reuse strict schemas from `versionRestore.ts`; response checks also bind
+file order, paths, format and the requested text identity to the model plan.
+The read accepts no arbitrary target path, reads no OS key and writes nothing.
+The existing apply commands still recheck their original tokens.
+
+`ModelPlanPresentation` owns summary loading/retry and blocks apply until that
+read succeeds. A new reviewed plan remounts the presentation, while cleanup
+ignores late replies. A memoized reader callback keeps the shared dialog's
+request tied to that plan without reloading on unrelated renders. The dialog
+focuses its title initially so a small viewport opens at the start of long
+content rather than scrolling to the bottom Close button. Base UI traps focus,
+handles Escape and returns focus to the invoking detail button.
+
+Browser preview returns an explicit preview state, never synthetic history or
+configuration. Acceptance fixtures are separate temporary QA pages, not a
+production fallback. Isolated macOS Tauri verification used synthetic credentials
+and three separate configuration roots; no real Agent configuration or Provider
+request was involved. Windows/Linux native behavior remains a release-time check.
 
 ## Model IPC boundary
 

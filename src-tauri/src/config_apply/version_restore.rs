@@ -607,7 +607,7 @@ fn resolve_file(
             version_text::summarize(kind, current_bytes.as_deref(), current_bytes.as_deref());
         return Ok(file.into_state(
             VersionRestoreAction::Skip,
-            None,
+            current_digest.clone(),
             current_digest,
             None,
             summary,

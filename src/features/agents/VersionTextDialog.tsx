@@ -1,5 +1,5 @@
 import { Dialog } from "@base-ui/react/dialog";
-import { useEffect, useRef, useState, type JSX } from "react";
+import { useCallback, useEffect, useRef, useState, type JSX } from "react";
 import { useTranslation } from "react-i18next";
 import buttons from "../../components/actionButtons.module.css";
 import type { ConfigurableAgent } from "../../lib/desktop/agents";
@@ -46,34 +46,74 @@ export function VersionTextDialog({
     onClose: () => void;
     returnFocus: () => HTMLElement | null;
 }): JSX.Element {
-    const { t } = useTranslation();
     const files = plan.files.filter(
         (file): file is RevisionFile => file.revisionId !== null,
     );
+    const loadText = useCallback(
+        (id: string) => {
+            const file = plan.files.find(
+                (candidate) => candidate.revisionId === id,
+            );
+            if (file === undefined || file.revisionId === null) {
+                return Promise.reject(
+                    new VersionRestoreRequestError("invalid_request"),
+                );
+            }
+            return readVersionText(
+                agent,
+                plan.entryKey,
+                file.revisionId,
+                file.currentDigest,
+            );
+        },
+        [agent, plan],
+    );
+    return (
+        <ConfigurationTextDialog
+            files={files}
+            loadText={loadText}
+            initialRevisionId={initialRevisionId}
+            onClose={onClose}
+            returnFocus={returnFocus}
+        />
+    );
+}
+
+/** Shared on-demand JSON/TOML dialog for native model and restore plans.
+ * The caller supplies a plan-bound reader; this component owns only loading,
+ * file selection, accessible focus and sanitized text/diff presentation.
+ */
+export function ConfigurationTextDialog({
+    files,
+    loadText,
+    initialRevisionId,
+    onClose,
+    returnFocus,
+    planned = false,
+}: {
+    files: { revisionId: string; targetPath: string }[];
+    loadText: (
+        id: string,
+    ) => Promise<{ kind: "preview" } | { kind: "desktop"; text: VersionText }>;
+    initialRevisionId: string;
+    onClose: () => void;
+    returnFocus: () => HTMLElement | null;
+    planned?: boolean;
+}): JSX.Element {
+    const { t } = useTranslation();
     const [selectedId, setSelectedId] = useState(initialRevisionId);
     const [reload, setReload] = useState(0);
     const [state, setState] = useState<TextState>({ kind: "loading" });
     const generation = useRef(0);
-    const closeButton = useRef<HTMLButtonElement>(null);
+    // Focus the title, not the bottom action: focusing Close would scroll a
+    // long dialog straight past its file switcher and configuration headings.
+    const title = useRef<HTMLHeadingElement>(null);
 
     useEffect(() => {
         // A late reply must not replace the text for a different file or a
         // dialog that has already closed.
         const current = ++generation.current;
-        const file = plan.files.find(
-            (candidate) => candidate.revisionId === selectedId,
-        );
-        if (file === undefined || file.revisionId === null) {
-            return () => {
-                generation.current += 1;
-            };
-        }
-        readVersionText(
-            agent,
-            plan.entryKey,
-            file.revisionId,
-            file.currentDigest,
-        ).then(
+        loadText(selectedId).then(
             (result) => {
                 if (current !== generation.current) return;
                 setState(
@@ -96,7 +136,7 @@ export function VersionTextDialog({
         return () => {
             generation.current += 1;
         };
-    }, [agent, plan, selectedId, reload]);
+    }, [loadText, selectedId, reload]);
 
     const selected =
         files.find((file) => file.revisionId === selectedId) ?? files[0];
@@ -125,10 +165,14 @@ export function VersionTextDialog({
                 <Dialog.Backdrop className={dialog["backdrop"]} />
                 <Dialog.Popup
                     className={dialog["popup"]}
-                    initialFocus={closeButton}
+                    initialFocus={title}
                     finalFocus={returnFocus}
                 >
-                    <Dialog.Title className={dialog["title"]}>
+                    <Dialog.Title
+                        ref={title}
+                        tabIndex={-1}
+                        className={dialog["title"]}
+                    >
                         {t("agents.version.textTitle")}
                     </Dialog.Title>
                     <Dialog.Description className={dialog["meta"]}>
@@ -207,7 +251,11 @@ export function VersionTextDialog({
                                 <TextSide
                                     side={state.text.target}
                                     format={state.text.format}
-                                    label={t("agents.version.textRetained")}
+                                    label={t(
+                                        planned
+                                            ? "agents.version.textPlanned"
+                                            : "agents.version.textRetained",
+                                    )}
                                 />
                             </div>
                             <section
@@ -302,7 +350,6 @@ export function VersionTextDialog({
                     )}
                     <div className={dialog["actions"]}>
                         <button
-                            ref={closeButton}
                             type="button"
                             className={buttons["secondary"]}
                             onClick={onClose}

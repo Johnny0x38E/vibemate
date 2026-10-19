@@ -214,12 +214,14 @@ test("browser preview explains that text is unavailable", async () => {
     ).toBeTruthy();
 });
 
-test("closes from the button, Escape and initial focus", async () => {
+test("focuses the title without skipping content and closes from the button or Escape", async () => {
     const onClose = vi.fn();
     await mount(onClose);
     const close = screen.getByRole("button", { name: "Close" });
     await waitFor(() => {
-        expect(document.activeElement).toBe(close);
+        expect(document.activeElement).toBe(
+            screen.getByRole("heading", { name: "Detailed configuration" }),
+        );
     });
     await userEvent.click(close);
     await waitFor(() => {

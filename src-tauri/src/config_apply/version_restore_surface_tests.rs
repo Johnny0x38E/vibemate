@@ -97,6 +97,78 @@ fn the_surface_previews_and_applies_one_reviewed_entry() {
 }
 
 #[test]
+fn already_restored_entries_keep_present_target_tokens_and_complete_text() {
+    let fixture = Fixture::new();
+    let environment = environment(&fixture);
+    let root = environment.home.join(".claude");
+    let operation = apply_at(&fixture, OperationKind::ClaudeCodeSettings, &root, FIRST);
+    fs::write(root.join("settings.json"), BEFORE).unwrap();
+    let request = VersionRestoreRequest {
+        agent: ConfigurationAgent::ClaudeCode,
+        entry_key: format!("operation:{operation}"),
+    };
+    let plan =
+        plan_version_restore(&fixture.storage, &environment, &request, &fixture.backups()).unwrap();
+    assert!(!plan.restorable);
+    let file = &plan.files[0];
+    assert_eq!(file.action, VersionRestoreAction::Skip);
+    assert!(file.target_digest.is_some());
+    assert_eq!(file.target_digest, file.current_digest);
+    let text = read_version_text(
+        &fixture.storage,
+        &environment,
+        &VersionTextRequest {
+            agent: ConfigurationAgent::ClaudeCode,
+            entry_key: request.entry_key,
+            revision_id: file.revision_id.clone().unwrap(),
+            current_digest: file.current_digest.clone(),
+        },
+        &fixture.backups(),
+    )
+    .unwrap();
+    assert_eq!(text.current, text.target);
+    let VersionTextSide::Present { text, .. } = text.target else {
+        panic!("present retained file");
+    };
+    assert!(text.contains("before"));
+    assert!(!text.contains("synthetic-old-secret"));
+}
+
+#[test]
+fn already_absent_entries_have_no_invalid_root_field_change() {
+    let fixture = Fixture::new();
+    let environment = environment(&fixture);
+    let root = environment.home.join(".claude");
+    fs::create_dir_all(&root).unwrap();
+    let target = read_target_bytes(&root.join("settings.json")).unwrap().0;
+    let operation = fixture
+        .apply(
+            OperationKind::ClaudeCodeSettings,
+            &[PlannedFile {
+                target: WriteTarget::from_plan(&target),
+                content: FIRST.to_vec(),
+            }],
+        )
+        .unwrap();
+    fs::remove_file(root.join("settings.json")).unwrap();
+    let plan = plan_version_restore(
+        &fixture.storage,
+        &environment,
+        &VersionRestoreRequest {
+            agent: ConfigurationAgent::ClaudeCode,
+            entry_key: format!("operation:{}", operation.operation_id),
+        },
+        &fixture.backups(),
+    )
+    .unwrap();
+    assert!(!plan.restorable);
+    assert_eq!(plan.files[0].action, VersionRestoreAction::Skip);
+    assert_eq!(plan.files[0].current_digest, None);
+    assert_eq!(plan.files[0].target_digest, None);
+    assert!(plan.files[0].summary.changes.is_empty());
+}
+
+#[test]
 fn the_text_surface_returns_sanitized_current_and_retained_text() {
     let fixture = Fixture::new();
     let environment = environment(&fixture);

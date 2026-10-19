@@ -194,6 +194,62 @@ theme = "dark"
 "#;
 
 #[test]
+fn full_model_preview_is_bound_to_native_plan_and_preserves_unowned_toml() {
+    use crate::configuration_preview::{PreviewError, PreviewRequest, read_preview};
+    let f = Fixture::new();
+    let environment = f.installed();
+    f.write(
+        "config.toml",
+        "# retained layout\n[other]\npassword = \"synthetic-unowned\"\nlabel = \"keep\"\n",
+    );
+    let plan = f.plan();
+    let mut request = PreviewRequest {
+        agent: AgentId::GrokBuild,
+        provider_id: ID.into(),
+        model_id: MODEL.into(),
+        entry_path: f.entry("downloads/grok-1.0.60-macos-aarch64"),
+        reviewed: serde_json::to_value(&plan).unwrap(),
+        file_index: None,
+    };
+    let summaries =
+        read_preview(&f.storage, &environment, &f.provider, &f.model, &request).unwrap();
+    assert_eq!(summaries.len(), 1);
+    assert!(summaries[0].text.is_none());
+    request.file_index = Some(0);
+    let details = read_preview(&f.storage, &environment, &f.provider, &f.model, &request).unwrap();
+    let encoded = serde_json::to_string(&details).unwrap();
+    assert!(!encoded.contains("synthetic-unowned"));
+    let text = details[0].text.as_ref().unwrap();
+    let crate::config_apply::VersionTextSide::Present { text: after, .. } = &text.target else {
+        panic!("planned text");
+    };
+    assert!(after.contains("# retained layout"));
+    let document = after.parse::<DocumentMut>().unwrap();
+    assert_eq!(
+        document["models"]["default"].as_str(),
+        Some(plan.model_alias.as_str())
+    );
+    assert_eq!(document["other"]["label"].as_str(), Some("keep"));
+    let mut changed_provider = f.provider.clone();
+    changed_provider.revision += 1;
+    assert!(matches!(
+        read_preview(
+            &f.storage,
+            &environment,
+            &changed_provider,
+            &f.model,
+            &request
+        ),
+        Err(PreviewError::PlanStale)
+    ));
+    f.write("config.toml", "# external edit\n");
+    assert!(matches!(
+        read_preview(&f.storage, &environment, &f.provider, &f.model, &request),
+        Err(PreviewError::PlanStale)
+    ));
+}
+
+#[test]
 fn preview_describes_only_its_own_fields_and_leaves_the_file_untouched() {
     let f = Fixture::new();
     f.write("config.toml", USER_CONFIG);

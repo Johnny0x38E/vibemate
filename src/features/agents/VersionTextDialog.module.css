@@ -70,6 +70,7 @@
 
 .side {
     display: grid;
+    align-content: start;
     gap: 4px;
     min-width: 0;
 }

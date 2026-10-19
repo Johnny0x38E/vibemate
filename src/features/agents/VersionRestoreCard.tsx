@@ -146,7 +146,11 @@ function VersionFilePreview({
 }
 
 /** The default field-level layer of the two-layer preview. */
-function VersionSummary({ file }: { file: VersionRestoreFile }): JSX.Element {
+export function VersionSummary({
+    file,
+}: {
+    file: Pick<VersionRestoreFile, "summary">;
+}): JSX.Element {
     const { t } = useTranslation();
     const { summary } = file;
     if (summary.reason !== null) {

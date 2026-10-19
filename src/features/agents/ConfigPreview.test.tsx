@@ -27,6 +27,10 @@ import {
 } from "../../lib/desktop/providers";
 import { fieldSelectValue, setFieldSelectValue } from "../../test/fieldSelect";
 import { ConfigPreview } from "./ConfigPreview";
+import { readModelConfigurationPreview } from "../../lib/desktop/configurationPreview";
+vi.mock(import("../../lib/desktop/configurationPreview"), () => ({
+    readModelConfigurationPreview: vi.fn(),
+}));
 import {
     planPiSettings,
     applyPiSettings,
@@ -209,6 +213,35 @@ const writtenResult: ClaudeCodeApplied = {
 };
 
 beforeEach(() => {
+    vi.mocked(readModelConfigurationPreview)
+        .mockReset()
+        .mockImplementation((plan) => {
+            const files =
+                plan.agent === "pi"
+                    ? plan.files
+                    : plan.agent === "grokBuild"
+                      ? [plan.file]
+                      : [{ target: plan.target, changes: plan.changes }];
+            return Promise.resolve({
+                kind: "desktop",
+                files: files.map((file) => ({
+                    targetPath: file.target.path,
+                    summary: {
+                        format: plan.agent === "grokBuild" ? "toml" : "json",
+                        reason: null,
+                        truncated: false,
+                        changes: file.changes.map((change) => ({
+                            path: change.keyPath,
+                            kind: change.before === null ? "added" : "replaced",
+                            before: change.before,
+                            after: change.after,
+                            secret: change.secret,
+                        })),
+                    },
+                    text: null,
+                })),
+            });
+        });
     loadProviders.mockReset().mockResolvedValue(providersPage([deepseek]));
     loadModels
         .mockReset()
@@ -284,11 +317,7 @@ test("previews the chosen pair and shows what would change", async () => {
     expect(screen.getByText("env.ANTHROPIC_AUTH_TOKEN")).toBeTruthy();
     expect(screen.getByText("/Users/test/.claude/settings.json")).toBeTruthy();
     expect(screen.getByText("Exists; other keys stay unchanged")).toBeTruthy();
-    expect(
-        screen.getByText(
-            "The API key from OS credential storage, written as plain text",
-        ),
-    ).toBeTruthy();
+    expect(screen.getByText("credential value hidden")).toBeTruthy();
     expect(
         screen.getByText(
             "Start a new Claude Code session for these settings to take effect.",
@@ -687,9 +716,7 @@ test("Grok previews its TOML file and applies it once", async () => {
     const key = screen
         .getByText(`model.${alias}.api_key`)
         .closest("li")?.textContent;
-    expect(key).toContain(
-        "The API key from OS credential storage, written as plain text",
-    );
+    expect(key).toContain("credential value hidden");
     expect(key).toContain("••••••••");
     // The default it replaces and the alias it now points at are both visible.
     const fallback = screen.getByText("models.default").closest("li");

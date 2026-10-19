@@ -81,7 +81,8 @@ const fieldChangeSchema = z
               ? change.before !== null && change.after === null
               : change.before !== null && change.after !== null,
     );
-const summarySchema = z
+/** Strict field summary shared by native model and retained-version previews. */
+export const summarySchema = z
     .strictObject({
         format: configFormat,
         changes: z.array(fieldChangeSchema).max(200),
@@ -217,15 +218,19 @@ const textSideSchema = z.discriminatedUnion("state", [
     z.strictObject({ state: z.literal("absent") }),
     z.strictObject({
         state: z.literal("present"),
-        text: z.string(),
-        bytes: z.int().nonnegative(),
+        text: z.string().max(1024 * 1024),
+        bytes: z
+            .int()
+            .nonnegative()
+            .max(1024 * 1024),
     }),
     z.strictObject({
         state: z.literal("unavailable"),
         reason: summaryReason,
     }),
 ]);
-const textSchema = z.strictObject({
+/** Complete sanitized text; the identity is scoped by the calling plan. */
+export const textSchema = z.strictObject({
     revisionId: revisionIdSchema,
     targetPath: z.string().refine(isSafePath),
     format: configFormat,

@@ -49,6 +49,7 @@ import {
 } from "../../lib/desktop/grok";
 import styles from "./AgentList.module.css";
 import card from "./ConfigPreview.module.css";
+import { ModelPlanPresentation } from "./ModelPlanPresentation";
 
 /** Saved instances are a small, hand-managed set; one page covers them. */
 const PROVIDER_PAGE_LIMIT = 100;
@@ -539,6 +540,7 @@ export function ConfigPreview({
             {preview.kind === "ready" && (
                 <PlanCard
                     plan={preview.plan}
+                    entryPath={entryPath}
                     applying={blocked || apply.kind === "applying"}
                     onApply={() => {
                         void runApply();
@@ -560,82 +562,31 @@ export function ConfigPreview({
 /** One sanitized plan: target file, key changes, notices and the apply action. */
 function PlanCard({
     plan,
+    entryPath,
     applying,
     onApply,
 }: {
     plan: ClaudeCodePlan | PiPlan | GrokPlan;
+    entryPath: string | null;
     applying: boolean;
     onApply: () => void;
 }): JSX.Element {
     const { t } = useTranslation();
-    const files =
-        plan.agent === "pi"
-            ? plan.files
-            : plan.agent === "grokBuild"
-              ? [plan.file]
-              : [{ target: plan.target, changes: plan.changes }];
     // Pi carries its fixed sentence instead of Rust-side notices.
     const notices = plan.agent === "pi" ? [] : plan.notices;
     return (
         <DetailPanel label={t("agents.modelConfig.planHeading")}>
-            {files.map(({ target, changes }) => (
-                <div key={target.path}>
-                    <div className={card["summary"]}>
-                        <span className={card["path"]}>{target.path}</span>
-                        <span className={card["fileState"]}>
-                            {target.exists
-                                ? target.symlink
-                                    ? t("agents.modelConfig.fileStateSymlink")
-                                    : t("agents.modelConfig.fileStateExists")
-                                : t("agents.modelConfig.fileStateNew")}
-                        </span>
-                        {plan.restartRequired && (
-                            <span className={card["note"]}>
-                                {t(
-                                    plan.agent === "pi"
-                                        ? "agents.modelConfig.piRestartRequired"
-                                        : plan.agent === "grokBuild"
-                                          ? "agents.modelConfig.grokRestartRequired"
-                                          : "agents.modelConfig.restartRequired",
-                                )}
-                            </span>
-                        )}
-                    </div>
-                    <ul className={card["changes"]}>
-                        {changes.map((change) => (
-                            <li key={change.keyPath} className={card["change"]}>
-                                <span className={card["key"]}>
-                                    {change.keyPath}
-                                </span>
-                                <span className={card["transition"]}>
-                                    {change.before !== null && (
-                                        <>
-                                            <span className={card["before"]}>
-                                                {valueText(change.before, t)}
-                                            </span>
-                                            {/* Decorative: the two values already read
-                                        as "previous" and "planned". */}
-                                            <span
-                                                className={card["arrow"]}
-                                                aria-hidden="true"
-                                            >
-                                                →
-                                            </span>
-                                        </>
-                                    )}
-                                    <span className={card["after"]}>
-                                        {change.secret
-                                            ? t(
-                                                  "agents.modelConfig.secretValue",
-                                              )
-                                            : valueText(change.after, t)}
-                                    </span>
-                                </span>
-                            </li>
-                        ))}
-                    </ul>
-                </div>
-            ))}
+            {plan.restartRequired && (
+                <p className={card["note"]}>
+                    {t(
+                        plan.agent === "pi"
+                            ? "agents.modelConfig.piRestartRequired"
+                            : plan.agent === "grokBuild"
+                              ? "agents.modelConfig.grokRestartRequired"
+                              : "agents.modelConfig.restartRequired",
+                    )}
+                </p>
+            )}
             {plan.agent === "pi" && (
                 <p className={styles["hint"]}>
                     {t("agents.modelConfig.piNotice")}
@@ -648,18 +599,13 @@ function PlanCard({
                     ))}
                 </ul>
             )}
-            <div className={card["actions"]}>
-                <button
-                    type="button"
-                    className={buttons["primary"]}
-                    aria-disabled={applying}
-                    onClick={onApply}
-                >
-                    {applying
-                        ? t("agents.modelConfig.applying")
-                        : t("agents.modelConfig.apply")}
-                </button>
-            </div>
+            <ModelPlanPresentation
+                key={JSON.stringify(plan)}
+                plan={plan}
+                entryPath={entryPath}
+                applying={applying}
+                onApply={onApply}
+            />
         </DetailPanel>
     );
 }
@@ -731,11 +677,6 @@ function AppliedCard({
 }
 
 type Translator = TFunction;
-
-/** Display text for one side of a change; an empty value stays visible. */
-function valueText(value: string, t: Translator): string {
-    return value === "" ? t("agents.modelConfig.emptyValue") : value;
-}
 
 /** Translated notice; `detail` carries the previous value when there is one. */
 function noticeText(notice: PlanNotice, t: Translator): string {

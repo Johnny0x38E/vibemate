@@ -738,7 +738,7 @@ mod revisions;
 mod service;
 mod snapshots;
 mod version_restore;
-mod version_text;
+pub(crate) mod version_text;
 
 pub use cleanup::{
     BackupCleanupOutcome, BackupInventory, UnreferencedBackup, cleanup_backup_copies,

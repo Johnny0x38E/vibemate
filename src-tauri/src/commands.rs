@@ -3,6 +3,7 @@
 
 pub(crate) mod agents;
 pub(crate) mod app;
+pub(crate) mod configuration_preview;
 pub(crate) mod mcp;
 pub(crate) mod models;
 pub(crate) mod preferences;

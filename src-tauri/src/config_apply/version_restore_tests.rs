@@ -376,6 +376,13 @@ fn legacy_entries_without_retained_bytes_block_only_when_the_file_changed() {
     .expect("preview at original");
     assert!(!plan.restorable);
     assert_eq!(plan.files[0].action, VersionRestoreAction::Skip);
+    // Already-current files still have a real target side. The IPC contract
+    // and full-text reader must not confuse a skipped present file with absence.
+    assert_eq!(plan.files[0].target_digest, plan.files[0].current_digest);
+    assert_eq!(
+        plan.files[0].target_digest.as_deref(),
+        Some(digest_hex(b"original").as_str())
+    );
 }
 
 #[test]

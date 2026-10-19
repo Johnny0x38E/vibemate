@@ -258,7 +258,7 @@ pub fn plan_pi_settings(
 }
 
 /// Keep merged documents private: unrelated content can contain credentials.
-fn build(
+pub(crate) fn build(
     storage: &Storage,
     root: &std::path::Path,
     provider: &ProviderRecord,

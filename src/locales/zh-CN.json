@@ -841,8 +841,8 @@
                 "invalid_stored_operation": "已记录的版本不合法"
             },
             "kinds": {
-                "added": "保留版本新增",
-                "removed": "当前版本已删除",
+                "added": "新增",
+                "removed": "删除",
                 "replaced": "已替换"
             },
             "noChanges": "没有字段变化；文件已与这个版本一致。",
@@ -876,6 +876,7 @@
             "textFiles": "此版本涉及的文件",
             "textCurrent": "当前配置",
             "textRetained": "保留版本",
+            "textPlanned": "计划写入配置",
             "textAbsent": "此时该文件不存在。",
             "textUnavailable": "无法安全显示文本：{{reason}}",
             "textBytes": "原始大小：{{bytes}} 字节",

@@ -5,6 +5,7 @@ pub mod appearance;
 mod commands;
 pub mod config_apply;
 pub mod config_plan;
+mod configuration_preview;
 pub mod credentials;
 mod log_access;
 mod logging;
@@ -88,6 +89,7 @@ pub fn run() {
             commands::agents::plan_configuration_version_restore,
             commands::agents::apply_configuration_version_restore,
             commands::agents::read_configuration_version_text,
+            commands::configuration_preview::read_model_configuration_preview,
             commands::agents::review_configuration_resolution,
             commands::agents::resolve_configuration_operation,
             commands::mcp::list_mcp_definitions,

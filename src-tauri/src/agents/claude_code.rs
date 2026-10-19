@@ -171,7 +171,9 @@ pub fn plan_claude_code_settings(input: &ClaudeCodePlanInput) -> Result<ConfigPl
 /// The merged document stays out of [`ConfigPlan`] on purpose: it holds the
 /// user's whole settings file, including credentials of other tools, and must
 /// not travel to the interface. The write step (P19) rebuilds it from the file.
-fn build(input: &ClaudeCodePlanInput) -> Result<(ConfigPlan, Map<String, Value>), PlanError> {
+pub(crate) fn build(
+    input: &ClaudeCodePlanInput,
+) -> Result<(ConfigPlan, Map<String, Value>), PlanError> {
     let gateway = gateway(input.provider.kind).ok_or(PlanError::GatewayUnverified)?;
     if !gateway
         .vendor_bases

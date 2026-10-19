@@ -841,8 +841,8 @@
                 "invalid_stored_operation": "a recorded version is not valid"
             },
             "kinds": {
-                "added": "Added in the retained version",
-                "removed": "Removed from the current version",
+                "added": "Added",
+                "removed": "Removed",
                 "replaced": "Replaced"
             },
             "noChanges": "No field changes; the file already matches this version.",
@@ -876,6 +876,7 @@
             "textFiles": "Files in this version",
             "textCurrent": "Current configuration",
             "textRetained": "Retained version",
+            "textPlanned": "Planned configuration",
             "textAbsent": "The file did not exist at this point.",
             "textUnavailable": "This text cannot be shown safely: {{reason}}",
             "textBytes": "Original size: {{bytes}} bytes",

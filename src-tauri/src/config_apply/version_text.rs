@@ -1,4 +1,4 @@
-//! Sanitized field summaries and full text for version-restore previews (H2).
+//! Shared sanitized field summaries and full text for configuration previews (H2).
 //!
 //! The UI defaults to a field-level view: every changed path, whether it was
 //! added, removed or replaced, and the old/new display value. Credentials are
@@ -9,7 +9,7 @@
 //!
 //! JSON text is re-rendered pretty-printed (JSON has no comments or layout to
 //! preserve). TOML uses `toml_edit` so comments and key order survive. Text is
-//! bounded by the same 1 MiB target limit as every other configuration read;
+//! bounded before and after sanitization by the same 1 MiB target limit;
 //! an unparseable document is reported as unavailable rather than returned
 //! unsanitized.
 
@@ -18,7 +18,7 @@ use serde_json::{Map, Value};
 use toml_edit::{DocumentMut, Item, Value as TomlValue};
 
 use super::OperationKind;
-use crate::config_plan::SECRET_PLACEHOLDER;
+use crate::config_plan::{MAX_TARGET_BYTES, SECRET_PLACEHOLDER};
 
 /// Most field changes one file summary lists before setting `truncated`.
 pub(super) const MAX_SUMMARY_CHANGES: usize = 200;
@@ -115,7 +115,7 @@ pub struct VersionText {
 }
 
 /// Summary of one file, or a safe reason when it cannot be produced.
-pub(super) fn summarize(
+pub(crate) fn summarize(
     kind: OperationKind,
     current: Option<&[u8]>,
     target: Option<&[u8]>,
@@ -152,10 +152,13 @@ pub(super) fn summarize(
 /// Returns `None` for an absent file and a safe reason when the bytes are not
 /// valid UTF-8/JSON/TOML. The returned text never contains a value under a
 /// credential-like key.
-pub(super) fn render_text(
+pub(crate) fn render_text(
     format: ConfigFormat,
     bytes: &[u8],
 ) -> Result<VersionTextSide, &'static str> {
+    if bytes.len() as u64 > MAX_TARGET_BYTES {
+        return Err(TEXT_UNAVAILABLE);
+    }
     let text = match format {
         ConfigFormat::Json => {
             let mut value = parse_json(bytes)?;
@@ -172,6 +175,11 @@ pub(super) fn render_text(
             document.to_string()
         }
     };
+    // Pretty printing can expand a bounded input substantially. Never return
+    // truncated JSON/TOML or let that expansion bypass the display limit.
+    if text.len() as u64 > MAX_TARGET_BYTES {
+        return Err(TEXT_UNAVAILABLE);
+    }
     Ok(VersionTextSide::Present {
         text,
         bytes: u64::try_from(bytes.len()).unwrap_or(u64::MAX),
@@ -179,7 +187,7 @@ pub(super) fn render_text(
 }
 
 /// Format used by one Agent adapter.
-pub(super) fn format_for(kind: OperationKind) -> ConfigFormat {
+pub(crate) fn format_for(kind: OperationKind) -> ConfigFormat {
     match kind {
         OperationKind::ClaudeCodeSettings | OperationKind::PiSettings => ConfigFormat::Json,
         OperationKind::GrokSettings => ConfigFormat::Toml,
@@ -329,6 +337,7 @@ fn diff_node(
         return;
     }
     match (before, after) {
+        (None, None) => {}
         (Some(Node::Object(left)), Some(Node::Object(right))) => {
             for (key, value) in left {
                 let child = right
@@ -492,10 +501,15 @@ fn is_container(node: &Node) -> bool {
     matches!(node, Node::Array(_) | Node::Object(_))
 }
 
-fn push_change(changes: &mut Vec<FieldChange>, truncated: &mut bool, change: FieldChange) {
+fn push_change(changes: &mut Vec<FieldChange>, truncated: &mut bool, mut change: FieldChange) {
     if changes.len() >= MAX_SUMMARY_CHANGES {
         *truncated = true;
         return;
+    }
+    // An external edit can replace the whole JSON object with a scalar. Use
+    // the JSON root marker instead of an empty, invalid IPC field path.
+    if change.path.is_empty() {
+        change.path = "$".to_owned();
     }
     changes.push(change);
 }
@@ -851,6 +865,43 @@ mod tests {
         assert_eq!(
             summary.changes[0].after.as_deref(),
             Some(SECRET_PLACEHOLDER)
+        );
+    }
+
+    #[test]
+    fn external_scalar_root_edits_have_an_explicit_valid_field_path() {
+        let summary = summarize(
+            OperationKind::ClaudeCodeSettings,
+            Some(b"null"),
+            Some(br#"{"model":"restored"}"#),
+        );
+        assert_eq!(summary.reason, None);
+        assert!(summary.changes.iter().any(|change| change.path == "$"
+            && change.kind == FieldChangeKind::Removed
+            && change.before.as_deref() == Some("null")));
+        assert!(summary.changes.iter().all(|change| !change.path.is_empty()));
+    }
+
+    #[test]
+    fn two_absent_files_have_no_synthetic_root_change() {
+        let summary = summarize(OperationKind::PiSettings, None, None);
+        assert!(summary.changes.is_empty());
+        assert!(!summary.truncated);
+        assert_eq!(summary.reason, None);
+    }
+
+    #[test]
+    fn text_size_limit_applies_before_and_after_pretty_printing() {
+        let oversized = vec![b' '; MAX_TARGET_BYTES as usize + 1];
+        assert_eq!(
+            render_text(ConfigFormat::Json, &oversized).unwrap_err(),
+            TEXT_UNAVAILABLE
+        );
+        let compact = format!("[{}]", vec!["0"; MAX_TARGET_BYTES as usize / 3].join(","));
+        assert!(compact.len() < MAX_TARGET_BYTES as usize);
+        assert_eq!(
+            render_text(ConfigFormat::Json, compact.as_bytes()).unwrap_err(),
+            TEXT_UNAVAILABLE
         );
     }
 

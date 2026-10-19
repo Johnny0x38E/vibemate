@@ -283,7 +283,7 @@ fn read_toml_target(path: &Path) -> Result<TomlTarget, PlanError> {
 ///
 /// The document is returned so the apply step serializes the same merge the card
 /// described, with only the credential position filled in.
-fn build(
+pub(crate) fn build(
     storage: &Storage,
     root: &Path,
     provider: &ProviderRecord,

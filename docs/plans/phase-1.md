@@ -119,10 +119,17 @@ deferred to the release-time platform check.
    complete-text dialog with JSON/TOML highlighting and a bounded line diff,
    and an explicit confirmation whose tokens are rechecked before writing.
    Legacy entries without retained snapshots keep the older rollback entry.
-   Adding the same two-layer presentation to the existing model-configuration
-   previews, native desktop acceptance, backup-availability checks and
-   current-version detection/pinning remain pending. H1 and H2 as a whole are
-   not accepted.
+   The three model-configuration previews now share that presentation, with
+   Rust rebuilding and comparing the complete reviewed native plan before
+   returning field summaries or the requested file's sanitized text. H2 is
+   complete: an isolated macOS Tauri run with synthetic credentials verified
+   all three Agents' A→B→C→A→C restore chain, stale reads/writes, independent
+   snapshots and exact-byte restoration, including Pi's absent-file state.
+   Browser review covered both languages, keyboard/focus, retry, JSON/TOML
+   and the minimum content viewport. This is agent-run verification, not a
+   claim of maintainer sign-off or Provider inference. H1 backup-availability
+   checks/current-version pinning and H3 deletion remain pending;
+   Windows/Linux native checks are still deferred to release acceptance.
    P24.a–P24.d explicitly
    deliver verified per-Agent mappings and UI for reasoning capabilities/efforts,
    context windows, output metadata and supported request settings. The remaining

@@ -113,11 +113,15 @@ deferred to the release-time platform check.
    restore/compensation batch can be restored to its pre-entry state, with
    exact Agent/root scope, verified snapshots, concurrent-change tokens, a new
    independent pre-restore snapshot, and a `direct` marker that keeps the source
-   operation's legacy rollback result untouched. Strict version-restore IPC and
-   a typed frontend boundary are implemented; the history interface still uses
-   the older preview entry, and the shared two-layer preview remains pending.
-   Nothing runs automatically. Native IPC runtime acceptance, backup availability
-   checks and current-version detection/pinning remain pending. H1 as a whole is
+   operation's legacy rollback result untouched. Strict version-restore IPC, a
+   typed frontend boundary and the history interface are implemented: entries
+   with retained revisions offer a sanitized field summary, an on-demand
+   complete-text dialog with JSON/TOML highlighting and a bounded line diff,
+   and an explicit confirmation whose tokens are rechecked before writing.
+   Legacy entries without retained snapshots keep the older rollback entry.
+   Adding the same two-layer presentation to the existing model-configuration
+   previews, native desktop acceptance, backup-availability checks and
+   current-version detection/pinning remain pending. H1 and H2 as a whole are
    not accepted.
    P24.a–P24.d explicitly
    deliver verified per-Agent mappings and UI for reasoning capabilities/efforts,

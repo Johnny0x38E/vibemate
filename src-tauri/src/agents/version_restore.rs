@@ -15,12 +15,27 @@ use super::{
 use crate::{
     config_apply::{
         self, BackupStore, ReviewedVersionFile, VersionRestoreOutcome, VersionRestorePlan,
+        VersionText,
     },
     storage::Storage,
 };
 
 /// Most files one supported Agent scope can own.
 const MAX_REVIEWED_FILES: usize = 16;
+
+/// Request the complete sanitized text for one revision-backed file.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct VersionTextRequest {
+    /// Adapter whose history the user is viewing.
+    pub agent: ConfigurationAgent,
+    /// Entry the preview described.
+    pub entry_key: String,
+    /// Revision whose pre-mutation bytes are the target side.
+    pub revision_id: String,
+    /// Current digest the preview showed; a change makes the dialog stale.
+    pub current_digest: Option<String>,
+}
 
 /// Request one entry's version-restore preview.
 #[derive(Debug, Deserialize)]
@@ -94,6 +109,41 @@ pub fn apply_version_restore(
         &scope,
         &request.entry_key,
         &request.reviewed,
+        backups,
+    )?)
+}
+
+/// Read the complete sanitized current/retained text for one revision.
+///
+/// The request repeats the current digest the preview showed; a changed file,
+/// entry or snapshot returns `PlanStale` instead of mixing old and new text.
+/// Per-side read or sanitize failures are explicit `Unavailable` states.
+///
+/// # Errors
+/// Returns `InvalidRequest` for a malformed revision or digest, the scope and
+/// plan errors of [`plan_version_restore`], and `PlanStale` when the preview's
+/// tokens no longer describe the files.
+pub fn read_version_text(
+    storage: &Storage,
+    environment: &DiscoveryEnvironment,
+    request: &VersionTextRequest,
+    backups: &BackupStore,
+) -> Result<VersionText, ClaudeCodeRestoreError> {
+    if !valid_revision_id(&request.revision_id)
+        || request
+            .current_digest
+            .as_deref()
+            .is_some_and(|digest| !is_digest(digest))
+    {
+        return Err(ClaudeCodeRestoreError::InvalidRequest);
+    }
+    let scope = history_scope(request.agent, environment)?;
+    Ok(config_apply::read_version_text(
+        storage,
+        &scope,
+        &request.entry_key,
+        &request.revision_id,
+        request.current_digest.as_deref(),
         backups,
     )?)
 }

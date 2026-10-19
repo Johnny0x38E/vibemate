@@ -1,0 +1,184 @@
+/* Complete-text dialog for version restore: file switcher, two read-only panes
+   and a line diff. Layout uses shared tokens; colors come from the palette
+   layer so light and dark system themes keep readable contrast. */
+
+.backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: var(--layer-dialog-backdrop);
+    background: rgb(0 0 0 / 35%);
+}
+
+.popup {
+    position: fixed;
+    inset: 50% auto auto 50%;
+    z-index: var(--layer-dialog);
+    display: grid;
+    gap: var(--space-sm);
+    width: min(72rem, calc(100vw - 32px));
+    max-height: calc(100vh - 32px);
+    overflow: auto;
+    transform: translate(-50%, -50%);
+    padding: var(--space-md);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    background: var(--color-surface);
+    box-shadow: 0 16px 56px rgb(0 0 0 / 24%);
+}
+
+.title {
+    margin: 0;
+    color: var(--color-text);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.meta {
+    margin: 0;
+    color: var(--color-summary);
+    font-size: 0.75rem;
+    overflow-wrap: anywhere;
+}
+
+.fileTabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs, 4px);
+}
+
+.fileTab {
+    padding: 2px 8px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control, 6px);
+    background: transparent;
+    color: var(--color-text);
+    font-size: 0.75rem;
+    overflow-wrap: anywhere;
+}
+
+.fileTab[aria-pressed="true"] {
+    border-color: var(--color-accent);
+    background: var(--color-selected);
+}
+
+.sides {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+    gap: var(--space-sm);
+}
+
+.side {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+}
+
+.sideHeading {
+    margin: 0;
+    color: var(--color-text);
+    font-size: 0.8125rem;
+    font-weight: 600;
+}
+
+.text {
+    margin: 0;
+    max-height: 40vh;
+    overflow: auto;
+    padding: 8px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control, 6px);
+    background: var(--color-surface-alt, transparent);
+    color: var(--color-text);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.75rem;
+    line-height: 1.5;
+    white-space: pre;
+    tab-size: 4;
+}
+
+.line {
+    display: block;
+    min-height: 1.5em;
+}
+
+.tokenKey {
+    color: var(--color-accent);
+}
+
+.tokenString {
+    color: var(--color-success-text, var(--color-text));
+}
+
+.tokenNumber,
+.tokenLiteral {
+    color: var(--color-warning-text, var(--color-text));
+}
+
+.tokenComment {
+    color: var(--color-summary);
+    font-style: italic;
+}
+
+.tokenSection {
+    color: var(--color-accent);
+    font-weight: 600;
+}
+
+.diff {
+    display: grid;
+    gap: 4px;
+}
+
+.diffRows {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    max-height: 40vh;
+    overflow: auto;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control, 6px);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.75rem;
+    line-height: 1.5;
+}
+
+.diffRow {
+    display: flex;
+    gap: 8px;
+    padding: 0 8px;
+    white-space: pre;
+}
+
+.diffAdded {
+    background: var(--color-success-bg);
+}
+
+.diffRemoved {
+    background: var(--color-danger-bg);
+}
+
+.lineNumber {
+    flex: none;
+    width: 3.5em;
+    color: var(--color-summary);
+    text-align: right;
+}
+
+.sign {
+    flex: none;
+    width: 1em;
+    font-weight: 600;
+}
+
+.diffText {
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: var(--space-sm);
+}

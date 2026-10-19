@@ -87,6 +87,7 @@ pub fn run() {
             commands::agents::configuration_history_page,
             commands::agents::plan_configuration_version_restore,
             commands::agents::apply_configuration_version_restore,
+            commands::agents::read_configuration_version_text,
             commands::agents::review_configuration_resolution,
             commands::agents::resolve_configuration_operation,
             commands::mcp::list_mcp_definitions,

@@ -738,6 +738,7 @@ mod revisions;
 mod service;
 mod snapshots;
 mod version_restore;
+mod version_text;
 
 pub use cleanup::{
     BackupCleanupOutcome, BackupInventory, UnreferencedBackup, cleanup_backup_copies,
@@ -767,6 +768,10 @@ pub use service::{AppliedOperation, PlannedFile, StepOutcome, apply_files, compe
 pub use version_restore::{
     ReviewedVersionFile, VersionRestoreAction, VersionRestoreFile, VersionRestoreFileOutcome,
     VersionRestoreOutcome, VersionRestorePlan, apply_version_restore, plan_version_restore,
+    read_version_text,
+};
+pub use version_text::{
+    ConfigFormat, FieldChange, FieldChangeKind, VersionFileSummary, VersionText, VersionTextSide,
 };
 
 #[cfg(test)]

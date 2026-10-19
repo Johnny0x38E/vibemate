@@ -25,10 +25,25 @@ import {
     type HistoryEntry,
     type HistoryRevisionState,
 } from "../../lib/desktop/history";
+import {
+    VersionRestoreRequestError,
+    applyVersionRestore,
+    planVersionRestore,
+    type VersionRestoreErrorCode,
+    type VersionRestoreFile,
+    type VersionRestoreOutcome,
+    type VersionRestorePlan,
+} from "../../lib/desktop/versionRestore";
 import styles from "./AgentList.module.css";
 import card from "./ConfigPreview.module.css";
 import restore from "./RestoreView.module.css";
 import { ResolutionReviewCard } from "./ResolutionReviewCard";
+import {
+    VersionRestorePlanCard,
+    VersionRestoreResultCard,
+} from "./VersionRestoreCard";
+import { VersionTextDialog } from "./VersionTextDialog";
+import { formatTime } from "./formatTime";
 import {
     reviewConfigurationResolution,
     resolveConfigurationOperation,
@@ -72,6 +87,21 @@ type ApplyState =
     | { kind: "error"; code: RestoreErrorCode }
     | { kind: "done"; result: RestoreOutcome };
 
+/** H2 version restore preview, separate from the legacy operation rollback. */
+type VersionPlanState =
+    | { kind: "idle" }
+    | { kind: "preview" }
+    | { kind: "loading"; entryKey: string }
+    | { kind: "error"; code: VersionRestoreErrorCode }
+    | { kind: "ready"; plan: VersionRestorePlan };
+
+/** Result of one confirmed version restore. */
+type VersionApplyState =
+    | { kind: "idle" }
+    | { kind: "applying" }
+    | { kind: "error"; code: VersionRestoreErrorCode }
+    | { kind: "done"; result: VersionRestoreOutcome };
+
 /**
  * Configuration writes vibemate recorded for one Agent, with a preview of what
  * undoing one would do.
@@ -96,6 +126,17 @@ export function RestoreView({
     const [list, setList] = useState<ListState>({ kind: "loading" });
     const [preview, setPreview] = useState<PreviewState>({ kind: "idle" });
     const [apply, setApply] = useState<ApplyState>({ kind: "idle" });
+    const [versionPlan, setVersionPlan] = useState<VersionPlanState>({
+        kind: "idle",
+    });
+    const [versionApply, setVersionApply] = useState<VersionApplyState>({
+        kind: "idle",
+    });
+    const [textTarget, setTextTarget] = useState<{
+        plan: VersionRestorePlan;
+        file: VersionRestoreFile;
+    } | null>(null);
+    const textTrigger = useRef<HTMLElement | null>(null);
     const [attempt, setAttempt] = useState(0);
     const pending = useRef(false);
     const busyCallback = useRef(onBusyChange);
@@ -215,6 +256,92 @@ export function RestoreView({
     }
 
     /**
+     * Ask Rust what restoring one retained version would change.
+     *
+     * Reads journal metadata and the current files; snapshots are verified but
+     * no file is written and no credential is read. Starting this preview
+     * discards the legacy rollback preview so only one card is on screen.
+     */
+    async function runVersionPreview(entryKey: string): Promise<void> {
+        if (blocked || pending.current || readingMore) return;
+        pending.current = true;
+        busyCallback.current?.(true);
+        setPreview({ kind: "idle" });
+        setApply({ kind: "idle" });
+        setVersionApply({ kind: "idle" });
+        setTextTarget(null);
+        setVersionPlan({ kind: "loading", entryKey });
+        try {
+            const result = await planVersionRestore(agent, entryKey);
+            if (!mounted.current) return;
+            setVersionPlan(
+                result.kind === "preview"
+                    ? { kind: "preview" }
+                    : { kind: "ready", plan: result.plan },
+            );
+        } catch (error: unknown) {
+            if (!mounted.current) return;
+            setVersionPlan({
+                kind: "error",
+                code:
+                    error instanceof VersionRestoreRequestError
+                        ? error.code
+                        : "operation_failed",
+            });
+        } finally {
+            pending.current = false;
+            busyCallback.current?.(false);
+        }
+    }
+
+    /**
+     * Confirm a reviewed version restore.
+     *
+     * Only the files the preview said would change travel back, each with the
+     * current digest it showed. Any answer clears the card and re-reads the
+     * history; a stale approval cannot be applied twice.
+     */
+    async function runVersionApply(plan: VersionRestorePlan): Promise<void> {
+        if (blocked || pending.current || readingMore || !plan.restorable)
+            return;
+        pending.current = true;
+        busyCallback.current?.(true);
+        setTextTarget(null);
+        setVersionApply({ kind: "applying" });
+        try {
+            const result = await applyVersionRestore(
+                agent,
+                plan.entryKey,
+                reviewedVersionFiles(plan),
+            );
+            if (!mounted.current) return;
+            setVersionPlan({ kind: "idle" });
+            setVersionApply({ kind: "done", result });
+            setAttempt((current) => current + 1);
+        } catch (error: unknown) {
+            if (!mounted.current) return;
+            const code =
+                error instanceof VersionRestoreRequestError
+                    ? error.code
+                    : "operation_failed";
+            if (
+                code === "plan_stale" ||
+                code === "invalid_response" ||
+                code === "operation_failed" ||
+                code === "invalid_request" ||
+                code === "operation_not_found"
+            ) {
+                setVersionPlan({ kind: "idle" });
+                setAttempt((current) => current + 1);
+            }
+            setVersionApply({ kind: "error", code });
+        } finally {
+            pending.current = false;
+            busyCallback.current?.(false);
+        }
+    }
+
+    /**
      * Ask Rust what undoing one recorded write would do.
      *
      * Read-only: the preview reads each file's change token and compares it with
@@ -222,6 +349,8 @@ export function RestoreView({
      */
     async function runPreview(operationId: string): Promise<void> {
         if (blocked || pending.current || readingMore) return;
+        setVersionPlan({ kind: "idle" });
+        setVersionApply({ kind: "idle" });
         pending.current = true;
         busyCallback.current?.(true);
         // A new preview replaces the previous outcome, which described another
@@ -305,6 +434,8 @@ export function RestoreView({
         pending.current = true;
         busyCallback.current?.(true);
         setApply({ kind: "idle" });
+        setVersionPlan({ kind: "idle" });
+        setVersionApply({ kind: "idle" });
         setPreview({ kind: "inspecting", operationId });
         try {
             const result = await reviewConfigurationResolution(
@@ -339,6 +470,8 @@ export function RestoreView({
         pending.current = true;
         busyCallback.current?.(true);
         setApply({ kind: "resolving" });
+        setVersionPlan({ kind: "idle" });
+        setVersionApply({ kind: "idle" });
         try {
             const result = await resolveConfigurationOperation(agent, review);
             if (!mounted.current) return;
@@ -381,7 +514,9 @@ export function RestoreView({
         preview.kind === "loading" ||
         preview.kind === "inspecting" ||
         apply.kind === "applying" ||
-        apply.kind === "resolving";
+        apply.kind === "resolving" ||
+        versionPlan.kind === "loading" ||
+        versionApply.kind === "applying";
 
     return (
         <>
@@ -439,6 +574,13 @@ export function RestoreView({
                                     }
                                     onInspect={() => {
                                         void runInspection(entry.operationId);
+                                    }}
+                                    versionPreviewing={
+                                        versionPlan.kind === "loading" &&
+                                        versionPlan.entryKey === entry.entryKey
+                                    }
+                                    onVersionPreview={() => {
+                                        void runVersionPreview(entry.entryKey);
                                     }}
                                 />
                             ))}
@@ -537,6 +679,60 @@ export function RestoreView({
                     {t(`agents.restore.errors.${apply.code}`)}
                 </p>
             )}
+            {versionPlan.kind === "ready" && (
+                <VersionRestorePlanCard
+                    plan={versionPlan.plan}
+                    locale={i18n.language}
+                    restoring={versionApply.kind === "applying"}
+                    onConfirm={() => {
+                        void runVersionApply(versionPlan.plan);
+                    }}
+                    onViewDetails={(file) => {
+                        if (file.revisionId === null) return;
+                        textTrigger.current =
+                            document.activeElement instanceof HTMLElement
+                                ? document.activeElement
+                                : null;
+                        setTextTarget({
+                            plan: versionPlan.plan,
+                            file,
+                        });
+                    }}
+                />
+            )}
+            {versionPlan.kind === "error" && (
+                <p className={styles["error"]} role="alert">
+                    {t(`agents.restore.errors.${versionPlan.code}`)}
+                </p>
+            )}
+            {versionPlan.kind === "preview" && (
+                <p className={styles["hint"]}>
+                    {t("agents.restore.previewMode")}
+                </p>
+            )}
+            {versionApply.kind === "done" && (
+                <VersionRestoreResultCard result={versionApply.result} />
+            )}
+            {versionApply.kind === "error" && (
+                <p className={styles["error"]} role="alert">
+                    {t(`agents.restore.errors.${versionApply.code}`)}
+                </p>
+            )}
+            {textTarget !== null && textTarget.file.revisionId !== null && (
+                <VersionTextDialog
+                    agent={agent}
+                    plan={textTarget.plan}
+                    initialRevisionId={textTarget.file.revisionId}
+                    onClose={() => {
+                        setTextTarget(null);
+                    }}
+                    returnFocus={() =>
+                        textTrigger.current?.isConnected
+                            ? textTrigger.current
+                            : null
+                    }
+                />
+            )}
         </>
     );
 }
@@ -550,17 +746,22 @@ function OperationRow({
     onPreview,
     inspecting,
     onInspect,
+    versionPreviewing,
+    onVersionPreview,
 }: {
     entry: HistoryEntry;
     /** Language used for the timestamp; the app language decides it. */
     locale: string;
     /** Another history read or restore action is in flight. */
     busy: boolean;
-    /** This row's preview is being built. */
+    /** This row's legacy rollback preview is being built. */
     previewing: boolean;
     onPreview: () => void;
     inspecting: boolean;
     onInspect: () => void;
+    /** This row's retained-version preview is being built. */
+    versionPreviewing: boolean;
+    onVersionPreview: () => void;
 }): JSX.Element {
     const { t } = useTranslation();
     const state = entryState(entry);
@@ -620,10 +821,25 @@ function OperationRow({
                         </button>
                     </div>
                 </>
+            ) : entry.revisions.length > 0 ? (
+                // A retained version exists: restore any file to its pre-entry
+                // state, including after later legitimate writes.
+                <div className={card["actions"]}>
+                    <button
+                        type="button"
+                        className={buttons["secondary"]}
+                        aria-disabled={busy}
+                        onClick={onVersionPreview}
+                    >
+                        {versionPreviewing
+                            ? t("agents.version.reviewing")
+                            : t("agents.version.review")}
+                    </button>
+                </div>
             ) : entry.intent === "apply" ? (
-                // The paginated reader never reads target files, so restore
-                // eligibility is answered by the read-only preview. A write with
-                // nothing left to undo reports that instead of hiding the row.
+                // Legacy logs without retained bytes keep the old rollback
+                // entry, which only touches a file that still holds the
+                // operation's applied content.
                 <div className={card["actions"]}>
                     <button
                         type="button"
@@ -893,6 +1109,22 @@ function reasonText(reason: RestoreReasonCode, t: Translator): string {
     return t(`agents.restore.reasons.${reason}`);
 }
 
+/** Tokens the version confirmation sends: exactly the files it would change. */
+function reviewedVersionFiles(
+    plan: VersionRestorePlan,
+): { revisionId: string; currentDigest: string | null }[] {
+    return plan.files.flatMap((file) => {
+        if (file.action !== "restore" && file.action !== "remove") return [];
+        if (file.revisionId === null) return [];
+        return [
+            {
+                revisionId: file.revisionId,
+                currentDigest: file.currentDigest,
+            },
+        ];
+    });
+}
+
 /** Tokens the confirmation sends back: exactly the steps it would change. */
 function reviewedSteps(
     plan: ClaudeCodeRestorePlan,
@@ -903,14 +1135,6 @@ function reviewedSteps(
             ordinal: step.ordinal,
             currentDigest: step.currentDigest,
         }));
-}
-
-/** Locale-aware timestamp for one recorded write. */
-function formatTime(ms: number, locale: string): string {
-    return new Intl.DateTimeFormat(locale, {
-        dateStyle: "medium",
-        timeStyle: "short",
-    }).format(new Date(ms));
 }
 
 /**

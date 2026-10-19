@@ -17,9 +17,13 @@ const ERROR_CODES = [
     "desktop_required",
 ] as const;
 
+/** Stable failure codes this boundary reports. */
+export type VersionRestoreErrorCode =
+    (typeof ERROR_CODES)[number] | "invalid_response";
+
 /** Safe version-restore failure; no payload or validation diagnostics are kept. */
 export class VersionRestoreRequestError extends Error {
-    readonly code: (typeof ERROR_CODES)[number] | "invalid_response";
+    readonly code: VersionRestoreErrorCode;
 
     /** Discard original diagnostics; consumers translate only this code. */
     constructor(code: VersionRestoreRequestError["code"]) {
@@ -30,7 +34,7 @@ export class VersionRestoreRequestError extends Error {
 }
 
 const digest = z.string().regex(/^[0-9a-f]{64}$/u);
-const revisionId = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/u);
+const revisionIdSchema = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/u);
 const operationId = z.string().regex(/^[0-9a-f]{32}$/u);
 const entryKeySchema = z
     .string()
@@ -50,10 +54,47 @@ const blockedReason = z.enum([
     "snapshot_unavailable",
 ]);
 const intent = z.enum(["apply", "restore", "compensation", "version_restore"]);
+const configFormat = z.enum(["json", "toml"]);
+const summaryReason = z.enum([
+    "symlink_refused",
+    "target_read_only",
+    "target_path_invalid",
+    "target_unreadable",
+    "target_too_large",
+    "backup_unavailable",
+    "snapshot_unavailable",
+    "text_unavailable",
+]);
+const changeKind = z.enum(["added", "removed", "replaced"]);
+const fieldChangeSchema = z
+    .strictObject({
+        path: z.string().min(1).max(4096),
+        kind: changeKind,
+        before: z.string().nullable(),
+        after: z.string().nullable(),
+        secret: z.boolean(),
+    })
+    .refine((change) =>
+        change.kind === "added"
+            ? change.before === null && change.after !== null
+            : change.kind === "removed"
+              ? change.before !== null && change.after === null
+              : change.before !== null && change.after !== null,
+    );
+const summarySchema = z
+    .strictObject({
+        format: configFormat,
+        changes: z.array(fieldChangeSchema).max(200),
+        truncated: z.boolean(),
+        reason: summaryReason.nullable(),
+    })
+    .refine((summary) =>
+        summary.reason === null ? true : summary.changes.length === 0,
+    );
 
 const fileSchema = z
     .strictObject({
-        revisionId: revisionId.nullable(),
+        revisionId: revisionIdSchema.nullable(),
         ordinal,
         targetPath: z.string().refine(isSafePath),
         action,
@@ -61,6 +102,7 @@ const fileSchema = z
         currentDigest: digest.nullable(),
         targetDigest: digest.nullable(),
         restoredOwnerRef: ownerRef.nullable(),
+        summary: summarySchema,
     })
     .refine((file) => {
         if (file.action === "blocked") return file.reason !== null;
@@ -132,7 +174,7 @@ const planSchema = z
 
 const outcomeFileSchema = z
     .strictObject({
-        revisionId,
+        revisionId: revisionIdSchema,
         targetPath: z.string().refine(isSafePath),
         action: z.enum(["restore", "remove"]),
         state: z.enum(RESTORE_STATES),
@@ -167,12 +209,40 @@ const outcomeSchema = z
     );
 
 const reviewedSchema = z.strictObject({
-    revisionId,
+    revisionId: revisionIdSchema,
     currentDigest: digest.nullable(),
 });
 
+const textSideSchema = z.discriminatedUnion("state", [
+    z.strictObject({ state: z.literal("absent") }),
+    z.strictObject({
+        state: z.literal("present"),
+        text: z.string(),
+        bytes: z.int().nonnegative(),
+    }),
+    z.strictObject({
+        state: z.literal("unavailable"),
+        reason: summaryReason,
+    }),
+]);
+const textSchema = z.strictObject({
+    revisionId: revisionIdSchema,
+    targetPath: z.string().refine(isSafePath),
+    format: configFormat,
+    current: textSideSchema,
+    target: textSideSchema,
+});
+
+/** One field-level current-to-retained change. */
+export type VersionFieldChange = z.infer<typeof fieldChangeSchema>;
+/** Sanitized field summary for one file. */
+export type VersionFileSummary = z.infer<typeof summarySchema>;
 /** One file of a version-restore preview. */
 export type VersionRestoreFile = z.infer<typeof fileSchema>;
+/** One side of the complete-text dialog. */
+export type VersionTextSide = z.infer<typeof textSideSchema>;
+/** Complete sanitized current and retained text for one file. */
+export type VersionText = z.infer<typeof textSchema>;
 /** What restoring one history entry would do. */
 export type VersionRestorePlan = z.infer<typeof planSchema>;
 /** One file as the confirmation sends it back. */
@@ -285,4 +355,43 @@ export async function applyVersionRestore(
     )
         invalidResponse();
     return outcome.data;
+}
+
+/**
+ * Read complete sanitized current and retained text for one revision.
+ *
+ * The current digest from the preview is repeated; Rust refuses with
+ * `plan_stale` when the file or entry changed. Text is sanitized before it
+ * crosses IPC, and an unparseable side is reported as `unavailable` instead of
+ * returning raw content. Browser preview returns no invented text.
+ */
+export async function readVersionText(
+    agent: ConfigurableAgent,
+    entryKey: string,
+    revisionId: string,
+    currentDigest: string | null,
+): Promise<{ kind: "preview" } | { kind: "desktop"; text: VersionText }> {
+    if (!isTauri()) return { kind: "preview" };
+    const request = z
+        .strictObject({
+            agent: z.enum(["claudeCode", "pi", "grokBuild"]),
+            entryKey: entryKeySchema,
+            revisionId: revisionIdSchema,
+            currentDigest: digest.nullable(),
+        })
+        .safeParse({ agent, entryKey, revisionId, currentDigest });
+    if (!request.success)
+        throw new VersionRestoreRequestError("invalid_request");
+    let value: unknown;
+    try {
+        value = await invoke<unknown>("read_configuration_version_text", {
+            input: request.data,
+        });
+    } catch (error: unknown) {
+        throw requestError(error);
+    }
+    const parsed = textSchema.safeParse(value);
+    if (!parsed.success || parsed.data.revisionId !== revisionId)
+        invalidResponse();
+    return { kind: "desktop", text: parsed.data };
 }

@@ -30,12 +30,12 @@ use super::{
     },
     inspection::has_interrupted_revisions,
     operations::read_operation,
-    read_target,
     restore::{owner_for_digest, remove_recorded_file},
     revisions::{RevisionContext, RevisionIntent},
     snapshots::read_snapshot,
+    version_text::{self, VersionFileSummary, VersionText, VersionTextSide},
 };
-use crate::storage::Storage;
+use crate::{config_plan::PlanError, storage::Storage};
 
 /// The entry has no proven retained bytes for a file that changed since.
 const SNAPSHOT_UNAVAILABLE: &str = "snapshot_unavailable";
@@ -85,6 +85,8 @@ pub struct VersionRestoreFile {
     /// Reference of the Provider whose recorded write produced the bytes that
     /// come back, when the journal can prove one.
     pub restored_owner_ref: Option<String>,
+    /// Sanitized field-level current-to-retained changes.
+    pub summary: VersionFileSummary,
 }
 
 /// Everything the interface needs to show one version-restore preview.
@@ -391,6 +393,7 @@ struct ResolvedVersionFile {
     action: VersionRestoreAction,
     reason: Option<String>,
     restored_owner_ref: Option<String>,
+    summary: VersionFileSummary,
 }
 
 impl ResolvedVersionFile {
@@ -405,6 +408,7 @@ impl ResolvedVersionFile {
             current_digest: self.current_digest.clone(),
             target_digest: self.target_digest.clone(),
             restored_owner_ref: self.restored_owner_ref.clone(),
+            summary: self.summary.clone(),
         }
     }
 }
@@ -577,38 +581,71 @@ fn resolve_file(
     backups: &BackupStore,
 ) -> Result<ResolvedVersionFile, WriteError> {
     let path = Path::new(&file.target_path);
-    let current = match read_target(path) {
-        Ok(current) => current,
-        Err(error) => return Ok(file.blocked(error.code(), None)),
+    let (current, current_bytes) = match read_target_with_bytes(path) {
+        Ok((current, bytes)) => {
+            let exists = current.exists;
+            (current, exists.then_some(bytes))
+        }
+        Err(error) => {
+            return Ok(file.blocked(
+                error.code(),
+                None,
+                version_text::unavailable_summary(kind, error.code()),
+            ));
+        }
     };
-    if current.symlink {
-        return Ok(file.blocked(WriteError::SymlinkRefused.code(), current.content_digest));
-    }
     let current_digest = current.content_digest.clone();
+    if current.symlink {
+        return Ok(file.blocked(
+            WriteError::SymlinkRefused.code(),
+            current_digest,
+            version_text::unavailable_summary(kind, WriteError::SymlinkRefused.code()),
+        ));
+    }
     if current_digest == file.target_digest {
-        return Ok(file.into_state(VersionRestoreAction::Skip, None, current_digest, None));
+        let summary =
+            version_text::summarize(kind, current_bytes.as_deref(), current_bytes.as_deref());
+        return Ok(file.into_state(
+            VersionRestoreAction::Skip,
+            None,
+            current_digest,
+            None,
+            summary,
+        ));
     }
     if let Some(digest) = file.target_digest.clone() {
         let (Some(revision_id), Some(snapshot_path)) = (&file.revision_id, &file.snapshot_path)
         else {
-            return Ok(file.blocked(SNAPSHOT_UNAVAILABLE, current_digest));
+            let summary = version_text::unavailable_summary(kind, SNAPSHOT_UNAVAILABLE);
+            return Ok(file.blocked(SNAPSHOT_UNAVAILABLE, current_digest, summary));
         };
-        if let Err(error) = read_snapshot(
+        let target_bytes = match read_snapshot(
             backups,
             revision_id,
             &file.target_path,
             snapshot_path,
             &digest,
         ) {
-            return Ok(file.blocked(error.code(), current_digest));
-        }
+            Ok(bytes) => bytes,
+            Err(error) => {
+                let summary = version_text::unavailable_summary(kind, error.code());
+                return Ok(file.blocked(error.code(), current_digest, summary));
+            }
+        };
+        let summary = version_text::summarize(kind, current_bytes.as_deref(), Some(&target_bytes));
         if current.exists {
             match super::is_read_only(path) {
                 Ok(true) => {
-                    return Ok(file.blocked(WriteError::TargetReadOnly.code(), current_digest));
+                    return Ok(file.blocked(
+                        WriteError::TargetReadOnly.code(),
+                        current_digest,
+                        summary,
+                    ));
                 }
                 Ok(false) => {}
-                Err(error) => return Ok(file.blocked(error.code(), current_digest)),
+                Err(error) => {
+                    return Ok(file.blocked(error.code(), current_digest, summary));
+                }
             }
         }
         let owner = owner_for_digest(storage, kind, &digest)?;
@@ -617,13 +654,143 @@ fn resolve_file(
             Some(digest),
             current_digest,
             owner,
+            summary,
         ));
     }
     // The retained state is absence, and the current file is present.
+    let summary = version_text::summarize(kind, current_bytes.as_deref(), None);
     match super::is_read_only(path) {
-        Ok(true) => Ok(file.blocked(WriteError::TargetReadOnly.code(), current_digest)),
-        Ok(false) => Ok(file.into_state(VersionRestoreAction::Remove, None, current_digest, None)),
-        Err(error) => Ok(file.blocked(error.code(), current_digest)),
+        Ok(true) => Ok(file.blocked(WriteError::TargetReadOnly.code(), current_digest, summary)),
+        Ok(false) => Ok(file.into_state(
+            VersionRestoreAction::Remove,
+            None,
+            current_digest,
+            None,
+            summary,
+        )),
+        Err(error) => Ok(file.blocked(error.code(), current_digest, summary)),
+    }
+}
+
+/// Read a target's identity and exact bytes using the shared bounded reader.
+fn read_target_with_bytes(path: &Path) -> Result<(super::TargetFile, Vec<u8>), WriteError> {
+    crate::config_plan::read_target_bytes(path).map_err(|error| match error {
+        PlanError::TargetPathInvalid => WriteError::TargetPathInvalid,
+        PlanError::TargetTooLarge => WriteError::TargetTooLarge,
+        _ => WriteError::TargetUnreadable,
+    })
+}
+
+/// Read the complete sanitized current and retained text for one revision.
+///
+/// This is only available for a revision-backed file of the entry. The request
+/// must repeat the current digest the preview showed; otherwise the files
+/// changed and the dialog must be rebuilt from a fresh preview. The current
+/// bytes are re-read and re-checked before rendering; the retained bytes are
+/// re-read through the shared snapshot verifier.
+///
+/// # Errors
+/// Returns `InvalidRequest` for a malformed/missing revision, `PlanStale` when
+/// the entry or current bytes changed, and storage/log errors when the journal
+/// cannot be read. A per-side read/sanitize failure is reported in the returned
+/// side, not as raw text.
+pub fn read_version_text(
+    storage: &Storage,
+    scope: &HistoryScope,
+    entry_key: &str,
+    revision_id: &str,
+    current_digest: Option<&str>,
+    backups: &BackupStore,
+) -> Result<VersionText, WriteError> {
+    if !valid_revision_id(revision_id) {
+        return Err(WriteError::InvalidRequest);
+    }
+    let plan = build_plan(storage, scope, entry_key, backups)?;
+    if plan.reason.is_some() {
+        return Err(WriteError::PlanStale);
+    }
+    let file = plan
+        .files
+        .iter()
+        .find(|file| file.revision_id.as_deref() == Some(revision_id))
+        .ok_or(WriteError::InvalidRequest)?;
+    if file.current_digest.as_deref() != current_digest {
+        return Err(WriteError::PlanStale);
+    }
+    let format = version_text::format_for(scope.operation_kind());
+    let current = current_text(file, format)?;
+    let target = target_text(file, format, backups);
+    Ok(VersionText {
+        revision_id: revision_id.to_owned(),
+        target_path: file.target_path.clone(),
+        format,
+        current,
+        target,
+    })
+}
+
+/// Render the current side, or explain why it cannot be shown safely.
+fn current_text(
+    file: &ResolvedVersionFile,
+    format: version_text::ConfigFormat,
+) -> Result<VersionTextSide, WriteError> {
+    let (current, bytes) = match read_target_with_bytes(Path::new(&file.target_path)) {
+        Ok((current, bytes)) => (current, bytes),
+        Err(error) => {
+            return Ok(VersionTextSide::Unavailable {
+                reason: error.code().to_owned(),
+            });
+        }
+    };
+    if current.symlink {
+        return Ok(VersionTextSide::Unavailable {
+            reason: WriteError::SymlinkRefused.code().to_owned(),
+        });
+    }
+    if current.content_digest.as_deref() != file.current_digest.as_deref() {
+        return Err(WriteError::PlanStale);
+    }
+    if !current.exists {
+        return Ok(VersionTextSide::Absent);
+    }
+    Ok(
+        version_text::render_text(format, &bytes).unwrap_or_else(|reason| {
+            VersionTextSide::Unavailable {
+                reason: reason.to_owned(),
+            }
+        }),
+    )
+}
+
+/// Render the retained side, or explain why it cannot be shown safely.
+fn target_text(
+    file: &ResolvedVersionFile,
+    format: version_text::ConfigFormat,
+    backups: &BackupStore,
+) -> VersionTextSide {
+    let Some(digest) = file.target_digest.as_deref() else {
+        return VersionTextSide::Absent;
+    };
+    let (Some(revision_id), Some(snapshot_path)) = (&file.revision_id, &file.snapshot_path) else {
+        return VersionTextSide::Unavailable {
+            reason: SNAPSHOT_UNAVAILABLE.to_owned(),
+        };
+    };
+    match read_snapshot(
+        backups,
+        revision_id,
+        &file.target_path,
+        snapshot_path,
+        digest,
+    ) {
+        Ok(bytes) => version_text::render_text(format, &bytes).unwrap_or_else(|reason| {
+            VersionTextSide::Unavailable {
+                reason: reason.to_owned(),
+            }
+        }),
+        Err(error) => VersionTextSide::Unavailable {
+            reason: error.code().to_owned(),
+        },
     }
 }
 
@@ -635,6 +802,7 @@ impl PendingVersion {
         target_digest: Option<String>,
         current_digest: Option<String>,
         restored_owner_ref: Option<String>,
+        summary: VersionFileSummary,
     ) -> ResolvedVersionFile {
         ResolvedVersionFile {
             revision_id: self.revision_id,
@@ -646,11 +814,17 @@ impl PendingVersion {
             action,
             reason: None,
             restored_owner_ref,
+            summary,
         }
     }
 
     /// Build a blocked file result, keeping the private snapshot path for apply.
-    fn blocked(self, reason: &str, current_digest: Option<String>) -> ResolvedVersionFile {
+    fn blocked(
+        self,
+        reason: &str,
+        current_digest: Option<String>,
+        summary: VersionFileSummary,
+    ) -> ResolvedVersionFile {
         ResolvedVersionFile {
             revision_id: self.revision_id,
             ordinal: self.ordinal,
@@ -661,6 +835,7 @@ impl PendingVersion {
             action: VersionRestoreAction::Blocked,
             reason: Some(reason.to_owned()),
             restored_owner_ref: None,
+            summary,
         }
     }
 }

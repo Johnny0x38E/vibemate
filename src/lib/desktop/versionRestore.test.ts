@@ -5,9 +5,11 @@ import {
     VersionRestoreRequestError,
     applyVersionRestore,
     planVersionRestore,
+    readVersionText,
     type ReviewedVersionFile,
     type VersionRestoreOutcome,
     type VersionRestorePlan,
+    type VersionText,
 } from "./versionRestore";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn(), isTauri: vi.fn() }));
@@ -29,8 +31,19 @@ function file(
         currentDigest: AFTER,
         targetDigest: BEFORE,
         restoredOwnerRef: null,
+        summary: {
+            format: "json",
+            changes: [],
+            truncated: false,
+            reason: null,
+        },
         ...overrides,
     };
+}
+
+/** A file with fields a strict schema must reject; the caller types it unknown. */
+function rawFile(overrides: Record<string, unknown>): unknown {
+    return { ...file(), ...overrides };
 }
 
 function plan(overrides: Partial<VersionRestorePlan> = {}): VersionRestorePlan {
@@ -200,6 +213,106 @@ test("rejects malformed previews as a whole", async () => {
             ...base,
             files: [{ ...file(), targetPath: "relative" }],
         },
+        {
+            ...base,
+            files: [
+                file({
+                    summary: {
+                        format: "json",
+                        changes: [
+                            {
+                                path: "a",
+                                kind: "added",
+                                before: "x",
+                                after: "y",
+                                secret: false,
+                            },
+                        ],
+                        truncated: false,
+                        reason: null,
+                    },
+                }),
+            ],
+        },
+        {
+            ...base,
+            files: [
+                file({
+                    summary: {
+                        format: "json",
+                        changes: [],
+                        truncated: false,
+                        reason: "backup_unavailable",
+                    },
+                }),
+                file({
+                    revisionId: "other-revision",
+                    ordinal: 1,
+                    summary: {
+                        format: "json",
+                        changes: [
+                            {
+                                path: "a",
+                                kind: "removed",
+                                before: "x",
+                                after: "y",
+                                secret: false,
+                            },
+                        ],
+                        truncated: false,
+                        reason: null,
+                    },
+                }),
+            ],
+        },
+        {
+            ...base,
+            files: [
+                file({
+                    summary: {
+                        format: "json",
+                        changes: [
+                            {
+                                path: "a",
+                                kind: "replaced",
+                                before: null,
+                                after: "y",
+                                secret: false,
+                            },
+                        ],
+                        truncated: false,
+                        reason: null,
+                    },
+                }),
+            ],
+        },
+        {
+            ...base,
+            files: [
+                rawFile({
+                    summary: {
+                        format: "json",
+                        changes: [],
+                        truncated: false,
+                        reason: "backup_unavailable",
+                        extra: true,
+                    },
+                }),
+            ],
+        },
+        {
+            ...base,
+            files: [
+                rawFile({
+                    summary: {
+                        format: "yaml",
+                        changes: [],
+                        truncated: false,
+                        reason: null,
+                    },
+                }),
+            ],
+        },
         { ...base, restorable: false },
         { ...base, restorable: true, files: [blocked] },
         {
@@ -355,6 +468,103 @@ test("rejects invalid local requests before IPC", async () => {
         ).rejects.toEqual(new VersionRestoreRequestError("invalid_request"));
     }
     expect(invoke).not.toHaveBeenCalled();
+});
+
+function text(): VersionText {
+    return {
+        revisionId: REVISION,
+        targetPath: PATH,
+        format: "json",
+        current: {
+            state: "present",
+            text: '{\n  "value": "after"\n}',
+            bytes: 19,
+        },
+        target: {
+            state: "present",
+            text: '{\n  "value": "before"\n}',
+            bytes: 20,
+        },
+    };
+}
+
+test("reads sanitized text with the preview digest as its token", async () => {
+    const response = text();
+    vi.mocked(invoke).mockResolvedValue(response);
+    expect(
+        await readVersionText("pi", `operation:${ID}`, REVISION, AFTER),
+    ).toEqual({ kind: "desktop", text: response });
+    expect(invoke).toHaveBeenCalledExactlyOnceWith(
+        "read_configuration_version_text",
+        {
+            input: {
+                agent: "pi",
+                entryKey: `operation:${ID}`,
+                revisionId: REVISION,
+                currentDigest: AFTER,
+            },
+        },
+    );
+});
+
+test("browser text preview invents nothing", async () => {
+    vi.mocked(isTauri).mockReturnValue(false);
+    expect(
+        await readVersionText("pi", `operation:${ID}`, REVISION, AFTER),
+    ).toEqual({ kind: "preview" });
+    expect(invoke).not.toHaveBeenCalled();
+});
+
+test("rejects invalid text requests and responses", async () => {
+    await expect(
+        readVersionText("pi", `operation:${ID}`, "bad id", AFTER),
+    ).rejects.toEqual(new VersionRestoreRequestError("invalid_request"));
+    await expect(
+        readVersionText("pi", `operation:${ID}`, REVISION, "short"),
+    ).rejects.toEqual(new VersionRestoreRequestError("invalid_request"));
+    await expect(
+        readVersionText("pi", "not-entry", REVISION, AFTER),
+    ).rejects.toEqual(new VersionRestoreRequestError("invalid_request"));
+
+    const base = text();
+    for (const value of [
+        { ...base, extra: "synthetic-detail" },
+        { ...base, revisionId: "other-revision" },
+        { ...base, format: "yaml" },
+        { ...base, targetPath: "relative" },
+        {
+            ...base,
+            current: { state: "present", text: "x", bytes: -1 },
+        },
+        {
+            ...base,
+            current: { state: "unavailable", reason: "private-detail" },
+        },
+        {
+            ...base,
+            target: { state: "future-state" },
+        },
+    ]) {
+        vi.mocked(invoke).mockResolvedValue(value);
+        await expect(
+            readVersionText("pi", `operation:${ID}`, REVISION, AFTER),
+        ).rejects.toEqual(new VersionRestoreRequestError("invalid_response"));
+    }
+});
+
+test("accepts absent and unavailable text sides", async () => {
+    const response: VersionText = {
+        ...text(),
+        current: { state: "absent" },
+        target: {
+            state: "unavailable",
+            reason: "backup_unavailable",
+        },
+    };
+    vi.mocked(invoke).mockResolvedValue(response);
+    expect(
+        await readVersionText("pi", `operation:${ID}`, REVISION, null),
+    ).toEqual({ kind: "desktop", text: response });
 });
 
 test("maps IPC failures to safe codes", async () => {

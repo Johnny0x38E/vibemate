@@ -326,6 +326,35 @@ pub(crate) async fn apply_configuration_version_restore(
     .map_err(|_| ClaudeCodeRestoreError::OperationFailed)?
 }
 
+/// Read sanitized current/retained text for one version-restore file.
+///
+/// The preview's current digest is required to match; text is sanitized in Rust
+/// before it crosses IPC, and no backup path or credential value is returned.
+#[tauri::command]
+pub(crate) async fn read_configuration_version_text(
+    app: tauri::AppHandle,
+    input: agents::version_restore::VersionTextRequest,
+) -> Result<crate::config_apply::VersionText, ClaudeCodeRestoreError> {
+    let environment = environment(&app).map_err(|_| ClaudeCodeRestoreError::OperationFailed)?;
+    let backups = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| ClaudeCodeRestoreError::StorageUnavailable)?
+        .join("backups");
+    tauri::async_runtime::spawn_blocking(move || {
+        with_restore_storage(&app, |storage| {
+            agents::version_restore::read_version_text(
+                storage,
+                &environment,
+                &input,
+                &crate::config_apply::BackupStore::new(backups),
+            )
+        })
+    })
+    .await
+    .map_err(|_| ClaudeCodeRestoreError::OperationFailed)?
+}
+
 /// Inspect one supported Agent's interrupted write using the private backup root.
 /// Reads metadata/files on the blocking pool; never reads credential storage.
 #[tauri::command]

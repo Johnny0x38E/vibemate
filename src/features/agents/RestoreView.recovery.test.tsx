@@ -144,6 +144,7 @@ test("inspection can be cancelled and repeated without repairing logs or restori
     expect(
         screen.queryByRole("button", { name: "Preview restore" }),
     ).toBeNull();
+    expect(screen.queryByRole("button", { name: "Review version" })).toBeNull();
     await inspect();
     expect(inspectWrite).toHaveBeenCalledExactlyOnceWith("pi", ID);
     expect(screen.getByText(/does not prove who wrote them/u)).toBeDefined();
@@ -198,7 +199,7 @@ test("confirmation is single-flight, refreshes history and never chains a restor
         complete?.({ operationId: ID, state: "applied" });
         await Promise.resolve();
     });
-    await screen.findByRole("button", { name: "Preview restore" });
+    await screen.findByRole("button", { name: "Review version" });
     expect(screen.getByRole("status").textContent).toContain(
         "Configuration files were not changed",
     );

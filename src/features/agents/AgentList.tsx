@@ -32,7 +32,11 @@ import { IconButton } from "../../components/IconButton";
 import { AgentPage } from "./AgentPage";
 import { AgentVersionPanel } from "./AgentVersionPanel";
 import { ConfigPreview } from "./ConfigPreview";
-import { CurrentConfigPin, RestoreView } from "./RestoreView";
+import {
+    CurrentConfigPin,
+    RestoreView,
+    WriteCurrentSummary,
+} from "./RestoreView";
 import underlineTabs from "../../components/underlineTabs.module.css";
 import type { HistoryCurrentConfig } from "../../lib/desktop/history";
 import {
@@ -49,7 +53,7 @@ type State =
 
 type AgentsPage = { kind: "list" } | { kind: "detail"; id: AgentId };
 
-type AgentSegment = "write" | "history" | "skill" | "mcp";
+type AgentSegment = "write" | "history" | "skill" | "mcp" | "install";
 
 function failure(error: unknown): DiscoveryErrorCode {
     return error instanceof DiscoveryRequestError
@@ -87,7 +91,10 @@ export function AgentList({
     const [segment, setSegment] = useState<AgentSegment>("history");
     const [currentConfig, setCurrentConfig] =
         useState<HistoryCurrentConfig | null>(null);
-    const [installOpen, setInstallOpen] = useState(false);
+    const [writeSummary, setWriteSummary] = useState<{
+        providerLabel: string | null;
+        modelLabel: string | null;
+    }>({ providerLabel: null, modelLabel: null });
     const [versions, setVersions] = useState<
         Partial<Record<AgentId, AgentVersionResult>>
     >({});
@@ -366,7 +373,7 @@ export function AgentList({
         if (state.kind === "loading" || versionBusy) return;
         setSegment(hasConfigAdapter(id) ? "history" : "skill");
         setCurrentConfig(null);
-        setInstallOpen(false);
+        setWriteSummary({ providerLabel: null, modelLabel: null });
         setPage({ kind: "detail", id });
     }
 
@@ -374,7 +381,7 @@ export function AgentList({
         if (pending.current) return;
         focusCard.current = from;
         setCurrentConfig(null);
-        setInstallOpen(false);
+        setWriteSummary({ providerLabel: null, modelLabel: null });
         setPage({ kind: "list" });
     }
 
@@ -740,8 +747,8 @@ export function AgentList({
                 : pathValue.trim() === row?.entryPath;
         const configurable = hasConfigAdapter(id);
         const segments: AgentSegment[] = configurable
-            ? ["write", "history", "skill", "mcp"]
-            : ["skill", "mcp"];
+            ? ["write", "history", "skill", "mcp", "install"]
+            : ["skill", "mcp", "install"];
 
         return (
             <AgentPage
@@ -812,6 +819,10 @@ export function AgentList({
                             aria-labelledby={`agent-segment-${id}-write`}
                             hidden={segment !== "write"}
                         >
+                            <WriteCurrentSummary
+                                providerLabel={writeSummary.providerLabel}
+                                modelLabel={writeSummary.modelLabel}
+                            />
                             <ConfigPreview
                                 key={JSON.stringify([id, row?.entryPath])}
                                 onApplied={() => {
@@ -839,9 +850,20 @@ export function AgentList({
                                 blocked={blocked}
                                 agent={id}
                                 hidePin
-                                onCurrentChange={(current) => {
-                                    if (mounted.current)
-                                        setCurrentConfig(current);
+                                onCurrentChange={(current, summary) => {
+                                    if (!mounted.current) return;
+                                    setCurrentConfig(current);
+                                    const next = summary ?? {
+                                        providerLabel: null,
+                                        modelLabel: null,
+                                    };
+                                    setWriteSummary((previous) =>
+                                        previous.providerLabel ===
+                                            next.providerLabel &&
+                                        previous.modelLabel === next.modelLabel
+                                            ? previous
+                                            : next,
+                                    );
                                 }}
                                 onBusyChange={(busy) => {
                                     pending.current = busy;
@@ -870,16 +892,12 @@ export function AgentList({
                             {t("agents.mcpPanel.empty")}
                         </p>
                     </div>
-                    <details
-                        className={styles["installPaths"]}
-                        open={installOpen}
-                        onToggle={(event) => {
-                            setInstallOpen(event.currentTarget.open);
-                        }}
+                    <div
+                        role="tabpanel"
+                        id={`agent-panel-${id}-install`}
+                        aria-labelledby={`agent-segment-${id}-install`}
+                        hidden={segment !== "install"}
                     >
-                        <summary className={styles["installSummary"]}>
-                            {t("agents.installPaths.heading")}
-                        </summary>
                         <DetailPanel label={t("agents.detail.detailsHeading")}>
                             {row !== undefined && details(row)}
                             <form
@@ -953,7 +971,7 @@ export function AgentList({
                                 }}
                             />
                         </DetailPanel>
-                    </details>
+                    </div>
                 </section>
             </AgentPage>
         );

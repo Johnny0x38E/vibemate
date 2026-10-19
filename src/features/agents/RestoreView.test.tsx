@@ -339,8 +339,14 @@ test("a recorded write shows its intent, state, time, provider and file", async 
     expect(screen.getByText("DeepSeek Work")).toBeTruthy();
     expect(screen.getByText("Available")).toBeTruthy();
     expect(screen.getByRole("button", { name: "1 file" })).toBeTruthy();
-    // Paths and long backup sentences stay collapsed until expanded.
-    expect(screen.queryByText(SETTINGS)).toBeNull();
+    // The current-config pin always lists managed paths; long backup sentences
+    // on the history row stay collapsed until expanded.
+    expect(screen.getByText(SETTINGS)).toBeTruthy();
+    expect(
+        screen.queryByText(
+            /Independent pre-mutation backup is available and matches its digest/u,
+        ),
+    ).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "1 file" }));
     expect(screen.getAllByText(SETTINGS).length).toBeGreaterThan(0);
     expect(
@@ -357,14 +363,13 @@ test("pins the live current configuration above the list and marks a matched ent
         await screen.findByRole("region", { name: "Current configuration" }),
     ).toBeTruthy();
     expect(screen.getByText(/Current configuration · Matched/u)).toBeTruthy();
-    expect(
-        screen.getByRole("button", { name: "Show managed files" }),
-    ).toBeTruthy();
-    expect(screen.queryByText("Readable")).toBeNull();
-    await userEvent.click(
-        screen.getByRole("button", { name: "Show managed files" }),
-    );
+    // Managed files stay visible; no expand toggle and no empty Provider slots.
     expect(screen.getByText("Readable")).toBeTruthy();
+    expect(screen.getByText(SETTINGS)).toBeTruthy();
+    expect(
+        screen.queryByRole("button", { name: "Show managed files" }),
+    ).toBeNull();
+    expect(screen.queryByText(/Provider —/u)).toBeNull();
     expect(
         screen.getByText(rowSummary("Apply · Written · Current configuration")),
     ).toBeTruthy();

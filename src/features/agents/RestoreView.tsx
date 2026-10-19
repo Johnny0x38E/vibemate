@@ -135,7 +135,10 @@ export function RestoreView({
     /** When true, the page-level top owns the current-config pin. */
     hidePin?: boolean;
     /** Notifies the parent whenever the live pin from a page changes. */
-    onCurrentChange?: (current: HistoryCurrentConfig | null) => void;
+    onCurrentChange?: (
+        current: HistoryCurrentConfig | null,
+        summary?: { providerLabel: string | null; modelLabel: string | null },
+    ) => void;
 }): JSX.Element {
     const { t, i18n } = useTranslation();
     const [list, setList] = useState<ListState>({ kind: "loading" });
@@ -160,6 +163,10 @@ export function RestoreView({
         // Keep cleanup and late async completions bound to the current parent.
         busyCallback.current = onBusyChange;
     }, [onBusyChange]);
+    const currentCallback = useRef(onCurrentChange);
+    useEffect(() => {
+        currentCallback.current = onCurrentChange;
+    }, [onCurrentChange]);
     const mounted = useRef(false);
     const listGeneration = useRef(0);
 
@@ -210,9 +217,24 @@ export function RestoreView({
     }, [attempt, agent]);
 
     useEffect(() => {
-        if (list.kind === "ready") onCurrentChange?.(list.current);
-        else onCurrentChange?.(null);
-    }, [list, onCurrentChange]);
+        // Publish through a ref so an inline parent callback cannot retrigger
+        // this effect and loop setState on every render.
+        if (list.kind !== "ready") {
+            currentCallback.current?.(null);
+            return;
+        }
+        const matchedKey = list.current.matchedEntryKey;
+        const matched =
+            list.current.status === "matched" && matchedKey !== null
+                ? list.entries.find((entry) => entry.entryKey === matchedKey)
+                : undefined;
+        const providerLabel = matched?.ownerLabel ?? matched?.ownerRef ?? null;
+        // History pages do not yet carry a resolved model label.
+        currentCallback.current?.(list.current, {
+            providerLabel,
+            modelLabel: null,
+        });
+    }, [list]);
 
     // A page read and a restore action share one list; do not let them interleave
     // so a late page cannot re-add rows an action has already settled.
@@ -796,7 +818,7 @@ export function RestoreView({
  * Page-level or inline pin for the live configuration summary.
  *
  * Matching a retained entry only marks that row; it never invents restore rights.
- * Provider / model / Skill / MCP slots stay "—" until real data exists.
+ * Managed files stay visible; Provider/model live on the Write segment instead.
  */
 export function CurrentConfigPin({
     current,
@@ -804,8 +826,6 @@ export function CurrentConfigPin({
     current: HistoryCurrentConfig;
 }): JSX.Element {
     const { t } = useTranslation();
-    const [filesOpen, setFilesOpen] = useState(false);
-    const dash = t("agents.summary.dash");
     return (
         <div
             className={restore["currentPin"]}
@@ -818,28 +838,8 @@ export function CurrentConfigPin({
                     {" · "}
                     {t(`agents.restore.current.statusShort.${current.status}`)}
                 </span>
-                {current.files.length > 0 && (
-                    <button
-                        type="button"
-                        className={restore["expandToggle"]}
-                        aria-expanded={filesOpen}
-                        onClick={() => {
-                            setFilesOpen((open) => !open);
-                        }}
-                    >
-                        {filesOpen
-                            ? t("agents.restore.hideFiles")
-                            : t("agents.restore.showFiles")}
-                    </button>
-                )}
             </div>
-            <div className={restore["slotRow"]}>
-                <span>{t("agents.summary.provider", { value: dash })}</span>
-                <span>{t("agents.summary.model", { value: dash })}</span>
-                <span>{t("agents.summary.skill", { value: dash })}</span>
-                <span>{t("agents.summary.mcp", { value: dash })}</span>
-            </div>
-            {filesOpen && current.files.length > 0 && (
+            {current.files.length > 0 && (
                 <ul className={restore["files"]}>
                     {current.files.map((file) => (
                         <li key={file.targetPath} className={restore["file"]}>
@@ -859,6 +859,32 @@ export function CurrentConfigPin({
                     ))}
                 </ul>
             )}
+        </div>
+    );
+}
+
+/** Concise Provider/Model line at the top of the Write segment. */
+export function WriteCurrentSummary({
+    providerLabel,
+    modelLabel,
+}: {
+    providerLabel: string | null;
+    modelLabel: string | null;
+}): JSX.Element {
+    const { t } = useTranslation();
+    const dash = t("agents.summary.dash");
+    return (
+        <div className={restore["writeSummary"]} role="status">
+            <span>
+                {t("agents.summary.provider", {
+                    value: providerLabel ?? dash,
+                })}
+            </span>
+            <span>
+                {t("agents.summary.model", {
+                    value: modelLabel ?? dash,
+                })}
+            </span>
         </div>
     );
 }

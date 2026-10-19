@@ -98,10 +98,9 @@ async function expandInstallPaths(
     locale: "en" | "zh-CN" = "en",
 ): Promise<void> {
     const name = locale === "zh-CN" ? "安装与路径" : "Install & paths";
-    const summary = await screen.findByText(name);
-    // Closed <details> hides the path field from role queries.
-    if (summary.closest("details")?.open !== true) {
-        fireEvent.click(summary);
+    const tab = await screen.findByRole("tab", { name });
+    if (tab.getAttribute("aria-selected") !== "true") {
+        fireEvent.click(tab);
     }
 }
 
@@ -110,7 +109,6 @@ async function openPiDetail(): Promise<void> {
         await screen.findByRole("button", { name: "Open Pi details" }),
     );
     await screen.findByRole("heading", { name: /Pi/u });
-    await expandInstallPaths();
 }
 
 test("manual paths scan only on Rediscover and never show connected state", async () => {
@@ -120,6 +118,7 @@ test("manual paths scan only on Rediscover and never show connected state", asyn
     ).toBeDefined();
     fireEvent.click(screen.getByRole("button", { name: "Open Pi details" }));
     expect(await screen.findByText("Found")).toBeDefined();
+    await expandInstallPaths();
     const calls = read.mock.calls.length;
     fireEvent.change(screen.getByRole("textbox", { name: "Pi entry path" }), {
         target: { value: " /home/test user/manual-pi " },
@@ -370,6 +369,7 @@ test("confirmed CLI result is separate, blocks scans/navigation and expires at r
     probe.mockReturnValue(promise);
     await mount();
     await openPiDetail();
+    await expandInstallPaths();
     expect(probe).not.toHaveBeenCalled();
     const readVersion = screen.getByRole("button", { name: "Read version" });
     fireEvent.click(readVersion);
@@ -419,6 +419,7 @@ test("confirmed CLI result is separate, blocks scans/navigation and expires at r
 test("editing a manual path requires discovery before a version launch", async () => {
     await mount();
     await openPiDetail();
+    await expandInstallPaths();
     const field = screen.getByRole("textbox");
     fireEvent.change(field, {
         target: { value: "/different/unverified-entry" },
@@ -458,6 +459,7 @@ test("an unavailable entry reports its state and cannot launch a version probe",
 test("sanitizes errors and retries with preserved manual input", async () => {
     await mount();
     await openPiDetail();
+    await expandInstallPaths();
     await screen.findByText("Found");
     const input = screen.getByRole("textbox", { name: "Pi entry path" });
     fireEvent.change(input, { target: { value: "relative/pi" } });
@@ -484,6 +486,7 @@ test("sanitizes errors and retries with preserved manual input", async () => {
 test("blocks duplicate scans synchronously and keeps fields read-only until completion", async () => {
     await mount();
     await openPiDetail();
+    await expandInstallPaths();
     await screen.findByText("Found");
     const next = deferred();
     read.mockReturnValueOnce(next.promise);
@@ -668,4 +671,16 @@ test("agent detail defaults to the History segment with a current-config pin", a
     expect(screen.getByRole("tab", { name: "Write" })).toBeTruthy();
     expect(screen.getByRole("tab", { name: "Skill" })).toBeTruthy();
     expect(screen.getByRole("tab", { name: "MCP" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Install & paths" })).toBeTruthy();
+});
+
+test("Write segment shows Provider and Model before the config cards", async () => {
+    await mount();
+    await openPiDetail();
+    fireEvent.click(screen.getByRole("tab", { name: "Write" }));
+    const writePanel = screen.getByRole("tabpanel", { name: "Write" });
+    expect(within(writePanel).getByText(/Provider —/u)).toBeTruthy();
+    expect(within(writePanel).getByText(/Model —/u)).toBeTruthy();
+    expect(within(writePanel).queryByText(/Skill —/u)).toBeNull();
+    expect(within(writePanel).queryByText(/MCP —/u)).toBeNull();
 });

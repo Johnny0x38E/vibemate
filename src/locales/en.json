@@ -926,8 +926,6 @@
             },
             "expandRow": "Show file details",
             "collapseRow": "Hide file details",
-            "showFiles": "Show managed files",
-            "hideFiles": "Hide managed files",
             "delete": {
                 "label": "Delete this record and its backups",
                 "title": "Delete configuration history entry?",
@@ -962,7 +960,8 @@
             "write": "Write",
             "history": "History",
             "skill": "Skill",
-            "mcp": "MCP"
+            "mcp": "MCP",
+            "install": "Install & paths"
         },
         "summary": {
             "dash": "—",
@@ -978,11 +977,6 @@
         },
         "mcpPanel": {
             "empty": "Managed in the MCP module soon; a read-only status will appear here later."
-        },
-        "installPaths": {
-            "heading": "Install & paths",
-            "expand": "Expand install and paths",
-            "collapse": "Collapse install and paths"
         }
     },
     "skills": {

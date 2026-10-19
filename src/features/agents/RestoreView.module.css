@@ -21,6 +21,12 @@
     border-top: 1px solid var(--color-border);
 }
 
+/* One divider between rows; skip the first so the list does not double the
+ * card/pin edge above it. */
+.row:first-child {
+    border-top: 0;
+}
+
 .rowSummary {
     display: flex;
     flex-wrap: wrap;
@@ -92,8 +98,8 @@
 }
 
 /*
- * Live current-configuration pin. Reuses summary hierarchy; borders separate
- * it from the list. Empty Provider/model/Skill/MCP slots use "—", never 0.
+ * Live current-configuration pin. Reuses summary hierarchy; a single border
+ * separates it from the segment tabs / list. Managed files stay visible.
  */
 .currentPin {
     display: grid;
@@ -108,10 +114,11 @@
     color: var(--color-text);
 }
 
-.slotRow {
+.writeSummary {
     display: flex;
     flex-wrap: wrap;
     gap: 6px 10px;
+    margin: 0 0 8px;
     color: var(--color-summary);
     font-size: 0.75rem;
     line-height: 1.4;

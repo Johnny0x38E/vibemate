@@ -926,8 +926,6 @@
             },
             "expandRow": "展开文件详情",
             "collapseRow": "收起文件详情",
-            "showFiles": "展开受管文件",
-            "hideFiles": "收起受管文件",
             "delete": {
                 "label": "删除此记录及备份",
                 "title": "删除配置历史记录？",
@@ -962,7 +960,8 @@
             "write": "写入",
             "history": "历史",
             "skill": "Skill",
-            "mcp": "MCP"
+            "mcp": "MCP",
+            "install": "安装与路径"
         },
         "summary": {
             "dash": "—",
@@ -978,11 +977,6 @@
         },
         "mcpPanel": {
             "empty": "即将在 MCP 模块管理；此处稍后显示只读状态。"
-        },
-        "installPaths": {
-            "heading": "安装与路径",
-            "expand": "展开安装与路径",
-            "collapse": "收起安装与路径"
         }
     },
     "skills": {

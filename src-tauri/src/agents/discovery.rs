@@ -223,12 +223,13 @@ fn grok_version(entry: &Path) -> Option<String> {
     None
 }
 
-fn observe(
+/// Resolve the same textual root for discovery and read-only history.
+/// Does not inspect the Agent entry or require a verified write contract.
+pub(super) fn configuration_directory(
     id: AgentId,
-    manual: Option<PathBuf>,
     environment: &DiscoveryEnvironment,
-) -> AgentObservation {
-    let (directory, directory_source) = match id {
+) -> (Option<PathBuf>, DirectorySource) {
+    match id {
         AgentId::ClaudeCode => claude_config_root(environment),
         AgentId::Codex => {
             // Codex ignores an empty CODEX_HOME, but rejects an explicit directory
@@ -302,7 +303,15 @@ fn observe(
             environment.grok_directory.as_ref(),
             ".grok",
         ),
-    };
+    }
+}
+
+fn observe(
+    id: AgentId,
+    manual: Option<PathBuf>,
+    environment: &DiscoveryEnvironment,
+) -> AgentObservation {
+    let (directory, directory_source) = configuration_directory(id, environment);
     let names: &[&str] = match id {
         AgentId::ClaudeCode => &["settings.json"],
         AgentId::Codex => &["config.toml", "auth.json"],

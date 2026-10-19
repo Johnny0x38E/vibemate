@@ -32,7 +32,7 @@ pub enum ConfigurationAgent {
 }
 
 impl ConfigurationAgent {
-    fn kind(self) -> OperationKind {
+    pub(super) fn kind(self) -> OperationKind {
         match self {
             Self::ClaudeCode => OperationKind::ClaudeCodeSettings,
             Self::Pi => OperationKind::PiSettings,

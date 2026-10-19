@@ -254,6 +254,23 @@ pub(crate) async fn apply_claude_code_restore(
     .map_err(|_| ClaudeCodeRestoreError::OperationFailed)?
 }
 
+/// Read a root-scoped history page, including separate restore/compensation batches.
+/// The root comes only from the desktop environment; no CLI or config is opened.
+#[tauri::command]
+pub(crate) async fn configuration_history_page(
+    app: tauri::AppHandle,
+    input: agents::history::ConfigurationHistoryRequest,
+) -> Result<crate::config_apply::HistoryPage, ClaudeCodeRestoreError> {
+    let environment = environment(&app).map_err(|_| ClaudeCodeRestoreError::OperationFailed)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        with_restore_storage(&app, |storage| {
+            agents::history::configuration_history_page(storage, &environment, &input)
+        })
+    })
+    .await
+    .map_err(|_| ClaudeCodeRestoreError::OperationFailed)?
+}
+
 /// Inspect one supported Agent's interrupted write using the private backup root.
 /// Reads metadata/files on the blocking pool; never reads credential storage.
 #[tauri::command]

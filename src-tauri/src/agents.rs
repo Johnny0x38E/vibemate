@@ -5,6 +5,7 @@
 mod claude_code;
 mod configuration;
 pub mod grok_build;
+pub mod history;
 pub mod pi;
 pub mod recovery;
 pub use configuration::{ConfigApplied, ConfigApplyError};

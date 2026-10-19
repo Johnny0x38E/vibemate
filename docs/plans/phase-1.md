@@ -99,10 +99,16 @@ deferred to the release-time platform check.
    restore/compensation batches, retaining reconciliation audits. Exact Agent/root
    file scopes and bounded seek cursors keep other configurations out; each page
    reads one SQLite snapshot without opening target or backup files. Existing
-   history IPC/UI still uses the latest-ten, Agent-only listing; it has not been
-   switched to this reader. Nothing runs automatically. Next, integrate complete
-   history browsing and root isolation into IPC/UI, verify backup availability and
-   detect/pin the current version. H1 as a whole is not accepted.
+   history UI still uses the latest-ten, Agent-only listing. A separate read-only
+   Rust IPC now exposes this reader for all three supported Agents, selecting the
+   exact root/files through shared discovery environment precedence without
+   requiring a surviving installation or accepting frontend paths. A typed
+   frontend wrapper now validates strict nested schemas, journal/audit consistency
+   and seek pagination, rejecting whole malformed pages with safe error codes.
+   The history UI has not switched to it, and native IPC runtime acceptance is
+   pending. Nothing runs automatically. Next, switch history browsing to this
+   root-scoped IPC, then verify backup availability and detect/pin
+   the current version. H1 as a whole is not accepted.
    P24.a–P24.d explicitly
    deliver verified per-Agent mappings and UI for reasoning capabilities/efforts,
    context windows, output metadata and supported request settings. The remaining

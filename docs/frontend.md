@@ -465,6 +465,36 @@ made and keeps each code list limited to what that request can actually return.
 More complex commands will need structured success/error results and documented
 payload schemas shared with Rust. Do not expose credentials in error messages.
 
+## Configuration history IPC boundary
+
+`src/lib/desktop/history.ts` wraps the read-only `configuration_history_page`
+command. The request contains only a supported Agent identity, seek cursor and
+page size; Rust resolves the configuration root. Browser preview returns
+`{ kind: "preview" }` without invoking IPC or inventing records.
+
+The nested history response uses [Zod](https://zod.dev/api) strict schemas rather
+than another hand-written validation framework. A schema describes the runtime
+shape, and `z.infer` derives its TypeScript type from that same definition.
+`z.strictObject` rejects extra fields instead of silently stripping them. Zod
+4.6.7 is a stable MIT dependency, locked in `pnpm-lock.yaml`; it was already in the
+lint dependency tree and is now an explicit application dependency. Existing
+boundary modules are not migrated in this slice.
+
+Schemas check bounded arrays, paths, identities, nullable digests, journal states,
+source-step ordinals and reconciliation relationships. Page checks enforce seek
+ordering, unique identities, requested size and a next cursor anchored to the last
+entry. A malformed page is rejected as a whole, not partially displayed as a
+complete history. `HistoryRequestError` contains only an allowlisted safe code;
+Zod issues and raw transport diagnostics are discarded, including unknown field
+names. Do not log the original response or validation error.
+
+The data deliberately separates source-operation state from each mutation's result.
+`backupRecorded` means only that the journal has a reference; it does not prove a
+backup exists, a version is current, or a restore is permitted. Reconciliation is
+an observation, not evidence of who changed a file. The wrapper is not yet used
+by `RestoreView`; switching the paginated interface and native WebView invocation
+acceptance remain separate work.
+
 ## Model IPC boundary
 
 `src/lib/desktop/models.ts` wraps the model commands registered in Rust. It does

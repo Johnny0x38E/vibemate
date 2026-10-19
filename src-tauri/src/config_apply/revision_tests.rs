@@ -3,6 +3,8 @@
 
 #[path = "cleanup_tests.rs"]
 mod cleanup_tests;
+#[path = "history_surface_tests.rs"]
+mod history_surface_tests;
 #[path = "history_tests.rs"]
 mod history_tests;
 #[path = "recovery_surface_tests.rs"]

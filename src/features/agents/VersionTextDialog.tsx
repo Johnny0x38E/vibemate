@@ -2,6 +2,7 @@ import { Dialog } from "@base-ui/react/dialog";
 import { useCallback, useEffect, useRef, useState, type JSX } from "react";
 import { useTranslation } from "react-i18next";
 import buttons from "../../components/actionButtons.module.css";
+import hierarchy from "../../components/textHierarchy.module.css";
 import type { ConfigurableAgent } from "../../lib/desktop/agents";
 import {
     VersionRestoreRequestError,
@@ -241,9 +242,15 @@ function CurrentTextSide({
             {side.state === "present" && (
                 <>
                     <p className={dialog["meta"]}>
-                        {t("agents.version.textBytes", {
-                            bytes: side.bytes,
-                        })}
+                        <span className={hierarchy["label"]}>
+                            {t("agents.version.fieldTextBytes")}
+                        </span>
+                        {": "}
+                        <span className={hierarchy["value"]}>
+                            {t("agents.version.textBytesUnit", {
+                                bytes: side.bytes,
+                            })}
+                        </span>
                     </p>
                     <ConfigText text={side.text} format={format} />
                 </>

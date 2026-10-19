@@ -26,6 +26,7 @@ import {
     type DiscoveryResult,
 } from "../../lib/desktop/agents";
 import buttons from "../../components/actionButtons.module.css";
+import hierarchy from "../../components/textHierarchy.module.css";
 import pageStyles from "../providers/ProviderPage.module.css";
 import { AgentIcon } from "./AgentIcon";
 import { IconButton } from "../../components/IconButton";
@@ -513,14 +514,18 @@ export function AgentList({
         return (
             <>
                 <span className={styles["metaPair"]}>
-                    <span>{t("agents.detail.labels.status")}</span>
+                    <span className={hierarchy["label"]}>
+                        {t("agents.detail.labels.status")}
+                    </span>
                     {factBadge(
                         discoveryLabel(row),
                         t(`agents.sources.${row.source}`),
                     )}
                 </span>
                 <span className={styles["metaPair"]}>
-                    <span>{t("agents.detail.labels.version")}</span>
+                    <span className={hierarchy["label"]}>
+                        {t("agents.detail.labels.version")}
+                    </span>
                     {factBadge(
                         reported?.version ?? row.version ?? t("agents.unknown"),
                         reported === undefined

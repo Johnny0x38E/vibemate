@@ -3,6 +3,7 @@ import type { JSX } from "react";
 import { useTranslation } from "react-i18next";
 import { DetailPanel } from "../../components/DetailForm";
 import buttons from "../../components/actionButtons.module.css";
+import hierarchy from "../../components/textHierarchy.module.css";
 import type {
     VersionRestoreFile,
     VersionRestoreOutcome,
@@ -56,9 +57,13 @@ export function VersionRestorePlanInline({
                 </span>
                 {plan.ownerRef !== null && (
                     <span className={card["note"]}>
-                        {t("agents.version.ownerRef", {
-                            id: plan.ownerRef,
-                        })}
+                        <span className={hierarchy["label"]}>
+                            {t("agents.version.fieldOwnerRef")}
+                        </span>
+                        {": "}
+                        <span className={hierarchy["value"]}>
+                            {plan.ownerRef}
+                        </span>
                     </span>
                 )}
             </div>

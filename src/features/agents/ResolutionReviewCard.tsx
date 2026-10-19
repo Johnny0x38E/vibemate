@@ -2,6 +2,7 @@ import type { JSX } from "react";
 import { useTranslation } from "react-i18next";
 import { DetailPanel } from "../../components/DetailForm";
 import buttons from "../../components/actionButtons.module.css";
+import hierarchy from "../../components/textHierarchy.module.css";
 import type { ResolutionReview } from "../../lib/desktop/recovery";
 import styles from "./AgentList.module.css";
 import card from "./ConfigPreview.module.css";
@@ -62,13 +63,16 @@ export function ResolutionReviewCard({
                             </span>
                         )}
                         <span className={card["path"]}>
-                            {t("agents.resolution.observedDigest", {
-                                digest:
-                                    revision.currentMatch === "unreadable"
-                                        ? t("agents.resolution.unreadable")
-                                        : (revision.currentDigest ??
-                                          t("agents.resolution.absent")),
-                            })}
+                            <span className={hierarchy["label"]}>
+                                {t("agents.resolution.fieldObservedDigest")}
+                            </span>
+                            {": "}
+                            <span className={hierarchy["value"]}>
+                                {revision.currentMatch === "unreadable"
+                                    ? t("agents.resolution.unreadable")
+                                    : (revision.currentDigest ??
+                                      t("agents.resolution.absent"))}
+                            </span>
                         </span>
                     </li>
                 ))}

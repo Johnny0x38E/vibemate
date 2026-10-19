@@ -56,6 +56,7 @@
 }
 
 .state {
+    color: var(--color-text);
     font-size: 0.8125rem;
     font-weight: 500;
     line-height: 1.4;
@@ -95,13 +96,13 @@
 
 .provider {
     margin: 0;
-    color: var(--color-summary);
     font-size: 0.75rem;
     line-height: 1.5;
     overflow-wrap: anywhere;
 }
 
 .action {
+    color: var(--color-text);
     font-size: 0.8125rem;
     font-weight: 500;
     line-height: 1.5;
@@ -162,6 +163,7 @@
 .currentPath {
     grid-column: 2;
     min-width: 0;
+    color: var(--color-text);
     font-size: 0.8125rem;
     line-height: 1.4;
 }
@@ -171,7 +173,7 @@
     flex-wrap: wrap;
     gap: 6px 10px;
     margin: 0 0 8px;
-    color: var(--color-summary);
+    color: var(--color-text);
     font-size: 0.75rem;
     line-height: 1.4;
 }

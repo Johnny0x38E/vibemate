@@ -1,0 +1,19 @@
+/*
+ * Shared field text hierarchy (matches Provider detail / detailForm).
+ *
+ * Only existing theme tokens: --color-summary (muted label / hint) and
+ * --color-text (primary value). Hints share the label token; call sites keep
+ * their smaller type so the third level stays typographic, not a new color.
+ */
+
+.label {
+    color: var(--color-summary);
+}
+
+.value {
+    color: var(--color-text);
+}
+
+.hint {
+    color: var(--color-summary);
+}

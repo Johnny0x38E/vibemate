@@ -596,7 +596,10 @@
             "textDiff": "差异",
             "textNoDiff": "没有行级差异。",
             "textPreviewMode": "浏览器预览无法读取配置文件，请在 vibemate 桌面应用中查看。",
-            "textMaskedNotice": "凭据类键下的值会在文本离开 Rust 前被替换。"
+            "textMaskedNotice": "凭据类键下的值会在文本离开 Rust 前被替换。",
+            "fieldOwnerRef": "记录的所有者引用",
+            "fieldTextBytes": "原始大小",
+            "textBytesUnit": "{{bytes}} 字节"
         },
         "directory": "用户配置路径：{{path}}",
         "states": {
@@ -787,7 +790,8 @@
                 "not_needed": "改写前文件不存在，无需备份文件。",
                 "available": "独立的改写前备份可用，摘要一致。",
                 "unavailable": "独立的改写前备份缺失、损坏或无法读取。"
-            }
+            },
+            "fieldObservedDigest": "观察到的 SHA-256"
         },
         "restore": {
             "title": "配置历史",
@@ -937,7 +941,9 @@
                     "desktop_required": "删除配置历史需要在 vibemate 桌面应用中进行。",
                     "invalid_response": "桌面应用返回了意外的删除结果。"
                 }
-            }
+            },
+            "fieldProvider": "服务商",
+            "providerRemovedNote": "（已不在库中）"
         },
         "segments": {
             "ariaLabel": "Agent 内容分段",

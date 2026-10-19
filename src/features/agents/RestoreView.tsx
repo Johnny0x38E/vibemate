@@ -37,6 +37,7 @@ import {
     type VersionRestoreOutcome,
     type VersionRestorePlan,
 } from "../../lib/desktop/versionRestore";
+import hierarchy from "../../components/textHierarchy.module.css";
 import styles from "./AgentList.module.css";
 import card from "./ConfigPreview.module.css";
 import restore from "./RestoreView.module.css";
@@ -1257,16 +1258,27 @@ function OperationRow({
                     </ul>
                     {entry.ownerLabel !== null && (
                         <p className={restore["provider"]}>
-                            {t("agents.restore.provider", {
-                                name: entry.ownerLabel,
-                            })}
+                            <span className={hierarchy["label"]}>
+                                {t("agents.restore.fieldProvider")}
+                            </span>
+                            {": "}
+                            <span className={hierarchy["value"]}>
+                                {entry.ownerLabel}
+                            </span>
                         </p>
                     )}
                     {entry.ownerLabel === null && entry.ownerRef !== null && (
                         <p className={restore["provider"]}>
-                            {t("agents.restore.providerRemoved", {
-                                id: entry.ownerRef,
-                            })}
+                            <span className={hierarchy["label"]}>
+                                {t("agents.restore.fieldProvider")}
+                            </span>
+                            {": "}
+                            <span className={hierarchy["value"]}>
+                                {entry.ownerRef}
+                            </span>{" "}
+                            <span className={hierarchy["hint"]}>
+                                {t("agents.restore.providerRemovedNote")}
+                            </span>
                         </p>
                     )}
                     {entry.requiresResolution && (
@@ -1424,9 +1436,13 @@ function RestorePlanCard({
                         </span>
                         {plan.providerLabel !== null && (
                             <span className={card["note"]}>
-                                {t("agents.restore.provider", {
-                                    name: plan.providerLabel,
-                                })}
+                                <span className={hierarchy["label"]}>
+                                    {t("agents.restore.fieldProvider")}
+                                </span>
+                                {": "}
+                                <span className={hierarchy["value"]}>
+                                    {plan.providerLabel}
+                                </span>
                             </span>
                         )}
                     </div>

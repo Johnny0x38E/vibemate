@@ -13,6 +13,7 @@
 }
 
 .label {
+    color: var(--color-summary);
     font-size: 0.8125rem;
     cursor: pointer;
 }
@@ -20,11 +21,11 @@
 .hint {
     margin: 0;
     font-size: 0.75rem;
-    color: var(--color-text-muted);
+    color: var(--color-summary);
 }
 
 .error {
     margin: 0;
     font-size: 0.75rem;
-    color: var(--color-danger);
+    color: var(--color-danger-fg);
 }

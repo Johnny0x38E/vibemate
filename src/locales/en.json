@@ -596,7 +596,10 @@
             "textDiff": "Differences",
             "textNoDiff": "No line differences.",
             "textPreviewMode": "The browser preview cannot read configuration files. Open the vibemate desktop app.",
-            "textMaskedNotice": "Values under credential-like keys are masked before this text leaves Rust."
+            "textMaskedNotice": "Values under credential-like keys are masked before this text leaves Rust.",
+            "fieldOwnerRef": "Recorded owner reference",
+            "fieldTextBytes": "Original size",
+            "textBytesUnit": "{{bytes}} bytes"
         },
         "directory": "User configuration directory: {{path}}",
         "states": {
@@ -787,7 +790,8 @@
                 "not_needed": "The pre-mutation state was absence; no backup file is needed.",
                 "available": "The independent pre-mutation backup is available and its digest matches.",
                 "unavailable": "The independent pre-mutation backup is missing, damaged or unreadable."
-            }
+            },
+            "fieldObservedDigest": "Observed SHA-256"
         },
         "restore": {
             "title": "Configuration history",
@@ -937,7 +941,9 @@
                     "desktop_required": "Deleting configuration history requires the vibemate desktop app.",
                     "invalid_response": "The desktop app returned an unexpected delete result."
                 }
-            }
+            },
+            "fieldProvider": "Provider",
+            "providerRemovedNote": "(no longer in the library)"
         },
         "segments": {
             "ariaLabel": "Agent content sections",

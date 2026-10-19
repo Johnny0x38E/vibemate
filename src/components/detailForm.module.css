@@ -51,6 +51,7 @@
 .value {
     flex: 0 1 min(65%, 28rem);
     margin: 0;
+    color: var(--color-text);
     font-size: 0.8125rem;
     line-height: 1.5;
     text-align: end;

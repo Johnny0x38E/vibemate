@@ -47,6 +47,7 @@
 .label {
     margin: 0;
     flex-shrink: 0;
+    color: var(--color-summary);
     font-size: 0.8125rem;
     font-weight: 400;
 }

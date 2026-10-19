@@ -111,3 +111,11 @@
     line-height: 1.5;
     overflow-wrap: anywhere;
 }
+
+/*
+ * Stacked plan / outcome cards under the Write form. Same gap as other
+ * follow-on surfaces (e.g. HistoryDeleteAction); theme token only.
+ */
+.followOn {
+    margin-top: var(--space-md);
+}

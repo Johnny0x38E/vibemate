@@ -67,6 +67,19 @@
     background: var(--color-hover);
 }
 
+/* First/last rows follow the surfaceList card corners (middle rows stay full-bleed). */
+.item:first-child .row {
+    border-radius: var(--radius-card) var(--radius-card) 0 0;
+}
+
+.item:last-child .row {
+    border-radius: 0 0 var(--radius-card) var(--radius-card);
+}
+
+.item:only-child .row {
+    border-radius: var(--radius-card);
+}
+
 .row:focus-visible {
     outline: 2px solid var(--color-focus);
     outline-offset: -2px;
@@ -100,11 +113,13 @@
 }
 
 .rowStatus {
-    display: inline-flex;
+    display: flex;
+    flex-wrap: nowrap;
     flex-shrink: 0;
     align-items: center;
     align-self: center;
-    gap: 6px;
+    justify-content: flex-end;
+    gap: 8px;
     margin-inline-start: auto;
     min-width: 0;
     color: var(--color-summary);
@@ -136,6 +151,7 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     max-width: 12rem;
+    text-align: end;
 }
 
 .detailGroup {

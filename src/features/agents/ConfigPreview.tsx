@@ -538,17 +538,21 @@ export function ConfigPreview({
                 )}
             </DetailPanel>
             {preview.kind === "ready" && (
-                <PlanCard
-                    plan={preview.plan}
-                    entryPath={entryPath}
-                    applying={blocked || apply.kind === "applying"}
-                    onApply={() => {
-                        void runApply();
-                    }}
-                />
+                <div className={card["followOn"]}>
+                    <PlanCard
+                        plan={preview.plan}
+                        entryPath={entryPath}
+                        applying={blocked || apply.kind === "applying"}
+                        onApply={() => {
+                            void runApply();
+                        }}
+                    />
+                </div>
             )}
             {apply.kind === "done" && (
-                <AppliedCard result={apply.result} agent={agent} />
+                <div className={card["followOn"]}>
+                    <AppliedCard result={apply.result} agent={agent} />
+                </div>
             )}
             {apply.kind === "error" && (
                 <p className={styles["error"]} role="alert">

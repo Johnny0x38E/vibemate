@@ -908,8 +908,8 @@
                 "unavailable": "Unavailable",
                 "not_needed": "Not needed"
             },
-            "expandRow": "Show file details",
-            "collapseRow": "Hide file details",
+            "expandRow": "Show details",
+            "collapseRow": "Hide details",
             "delete": {
                 "label": "Delete this record and its backups",
                 "title": "Delete configuration history entry?",

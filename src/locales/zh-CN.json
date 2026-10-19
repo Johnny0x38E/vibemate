@@ -908,8 +908,8 @@
                 "unavailable": "不可用",
                 "not_needed": "无需"
             },
-            "expandRow": "展开文件详情",
-            "collapseRow": "收起文件详情",
+            "expandRow": "展开详情",
+            "collapseRow": "收起详情",
             "delete": {
                 "label": "删除此记录及备份",
                 "title": "删除配置历史记录？",

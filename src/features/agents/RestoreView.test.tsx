@@ -269,7 +269,7 @@ async function mount(): Promise<void> {
 
 async function openVersionPreview(): Promise<void> {
     await userEvent.click(
-        await screen.findByRole("button", { name: "Review version" }),
+        await screen.findByRole("button", { name: "Show details" }),
     );
     await waitFor(() => {
         expect(previewVersion).toHaveBeenCalledWith(
@@ -313,7 +313,7 @@ test("a failed history read offers a retry that re-reads it", async () => {
     const reads = loadHistory.mock.calls.length;
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(
-        await screen.findByRole("button", { name: "Review version" }),
+        await screen.findByRole("button", { name: "Show details" }),
     ).toBeTruthy();
     expect(loadHistory).toHaveBeenCalledTimes(reads + 1);
 });
@@ -341,7 +341,10 @@ test("a recorded write shows its intent, state, time, provider and file", async 
     ).toBeTruthy();
     expect(screen.getByText("DeepSeek Work")).toBeTruthy();
     expect(screen.getByText("Available")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "1 file" })).toBeTruthy();
+    expect(screen.getByText("1 file")).toBeTruthy();
+    expect(
+        screen.getByRole("button", { name: "Show details" }),
+    ).toBeTruthy();
     // The current-config pin always lists managed paths; long backup sentences
     // on the history row stay collapsed until expanded.
     expect(screen.getByText(SETTINGS)).toBeTruthy();
@@ -350,7 +353,7 @@ test("a recorded write shows its intent, state, time, provider and file", async 
             /Independent pre-mutation backup is available and matches its digest/u,
         ),
     ).toBeNull();
-    await userEvent.click(screen.getByRole("button", { name: "1 file" }));
+    await userEvent.click(screen.getByRole("button", { name: "Show details" }));
     expect(screen.getAllByText(SETTINGS).length).toBeGreaterThan(0);
     expect(
         screen.getByText(
@@ -419,7 +422,7 @@ test("an unrecorded current pin stays fixed when older history loads", async () 
     );
     await waitFor(() => {
         expect(
-            screen.getAllByRole("button", { name: "Review version" }),
+            screen.getAllByRole("button", { name: "Show details" }),
         ).toHaveLength(2);
     });
     expect(
@@ -457,13 +460,13 @@ test("backup unavailable text is shown without inventing a restore action", asyn
         screen.getByRole("region", { name: "Current configuration" }),
     ).toBeTruthy();
     expect(screen.queryByText(/Current configuration · Partial/u)).toBeNull();
-    await userEvent.click(screen.getByRole("button", { name: "1 file" }));
+    await userEvent.click(screen.getByRole("button", { name: "Show details" }));
     expect(
         screen.getByText(
             /Independent pre-mutation backup is missing, damaged or unreadable/u,
         ),
     ).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Review version" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Hide details" })).toBeTruthy();
 });
 
 test("the version preview lists sanitized field changes and confirms the reviewed files", async () => {
@@ -598,13 +601,17 @@ test("a version preview read failure is reported and can be retried", async () =
     );
     await mount();
     await userEvent.click(
-        await screen.findByRole("button", { name: "Review version" }),
+        await screen.findByRole("button", { name: "Show details" }),
     );
     expect(
         await screen.findByText(/Local configuration storage is unavailable/u),
     ).toBeTruthy();
+    // Collapse (dismisses the failed plan) then expand to retry the preview.
     await userEvent.click(
-        screen.getByRole("button", { name: "Review version" }),
+        screen.getByRole("button", { name: "Hide details" }),
+    );
+    await userEvent.click(
+        screen.getByRole("button", { name: "Show details" }),
     );
     expect(
         await screen.findByRole("region", {
@@ -638,7 +645,7 @@ test("restore and compensation batches offer the version preview", async () => {
         await screen.findByText("Restore · File result recorded"),
     ).toBeTruthy();
     await userEvent.click(
-        screen.getByRole("button", { name: "Review version" }),
+        screen.getByRole("button", { name: "Show details" }),
     );
     await waitFor(() => {
         expect(previewVersion).toHaveBeenCalledWith(
@@ -664,7 +671,7 @@ test("a legacy apply entry without retained bytes keeps the rollback entry", asy
         expect(previewLegacy).toHaveBeenCalledWith("claudeCode", OPERATION_ID);
     });
     expect(
-        await screen.findByRole("region", { name: "Restore preview" }),
+        await screen.findByRole("dialog", { name: "Restore preview" }),
     ).toBeTruthy();
 });
 
@@ -693,7 +700,7 @@ test("loads more history without replacing the entries already read", async () =
         expect(loadHistory).toHaveBeenLastCalledWith("claudeCode", CURSOR);
     });
     expect(
-        screen.getAllByRole("button", { name: "Review version" }),
+        screen.getAllByRole("button", { name: "Show details" }),
     ).toHaveLength(2);
     expect(
         screen.queryByRole("button", { name: "Load more history" }),
@@ -732,7 +739,7 @@ test("a failed load more keeps the read entries and offers the button again", as
     );
     await waitFor(() => {
         expect(
-            screen.getAllByRole("button", { name: "Review version" }),
+            screen.getAllByRole("button", { name: "Show details" }),
         ).toHaveLength(2);
     });
 });
@@ -748,7 +755,7 @@ test("each Agent asks for its own history and version preview", async () => {
         expect(loadHistory).toHaveBeenCalledWith("grokBuild");
     });
     await userEvent.click(
-        await screen.findByRole("button", { name: "Review version" }),
+        await screen.findByRole("button", { name: "Show details" }),
     );
     await waitFor(() => {
         expect(previewVersion).toHaveBeenCalledWith(
@@ -760,7 +767,7 @@ test("each Agent asks for its own history and version preview", async () => {
 
 test("deletes a history entry after confirmation and reloads the list", async () => {
     await mount();
-    await screen.findByRole("button", { name: "Review version" });
+    await screen.findByRole("button", { name: "Show details" });
     const reads = loadHistory.mock.calls.length;
     await userEvent.click(
         screen.getByRole("button", {

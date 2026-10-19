@@ -25,6 +25,7 @@ export type IconName =
     | "logFile"
     | "folder"
     | "check"
+    | "chevron"
     | "error";
 
 /** Render an inline SVG; the containing control must provide its accessible name. */
@@ -174,6 +175,10 @@ export function Icon({ name }: { name: IconName }): JSX.Element {
             break;
         case "check":
             content = <path d="M5 12l5 5L20 7" />;
+            break;
+        case "chevron":
+            // Points right when collapsed; rotate 90° when the row is expanded.
+            content = <path d="m9 6 6 6-6 6" />;
             break;
         case "error":
             content = (

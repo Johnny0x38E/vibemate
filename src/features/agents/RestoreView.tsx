@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState, type JSX } from "react";
+import { Dialog } from "@base-ui/react/dialog";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { DetailPanel } from "../../components/DetailForm";
 import buttons from "../../components/actionButtons.module.css";
+import { Icon } from "../../components/Icon";
 import { IconButton } from "../../components/IconButton";
 import listActions from "../../components/listActions.module.css";
 import {
@@ -39,6 +41,7 @@ import {
 import styles from "./AgentList.module.css";
 import card from "./ConfigPreview.module.css";
 import restore from "./RestoreView.module.css";
+import dialog from "./VersionTextDialog.module.css";
 import { ResolutionReviewCard } from "./ResolutionReviewCard";
 import {
     VersionRestorePlanInline,
@@ -688,6 +691,21 @@ export function RestoreView({
                                 }
                             />
                         )}
+                        <div className={restore["toolbar"]}>
+                            <button
+                                type="button"
+                                className={buttons["secondary"]}
+                                aria-disabled={busy}
+                                onClick={() => {
+                                    if (busy || pending.current) return;
+                                    setPreview({ kind: "idle" });
+                                    setList({ kind: "loading" });
+                                    setAttempt((current) => current + 1);
+                                }}
+                            >
+                                {t("agents.restore.recheck")}
+                            </button>
+                        </div>
                         {list.entries.length === 0 ? (
                             <p className={styles["hint"]}>
                                 {t("agents.restore.empty")}
@@ -794,8 +812,8 @@ export function RestoreView({
                                 })}
                             </p>
                         )}
-                        <div className={card["actions"]}>
-                            {list.nextCursor !== null && (
+                        {list.nextCursor !== null && (
+                            <div className={card["actions"]}>
                                 <button
                                     type="button"
                                     className={buttons["secondary"]}
@@ -808,21 +826,8 @@ export function RestoreView({
                                         ? t("agents.restore.loadingMore")
                                         : t("agents.restore.loadMore")}
                                 </button>
-                            )}
-                            <button
-                                type="button"
-                                className={buttons["secondary"]}
-                                aria-disabled={busy}
-                                onClick={() => {
-                                    if (busy || pending.current) return;
-                                    setPreview({ kind: "idle" });
-                                    setList({ kind: "loading" });
-                                    setAttempt((current) => current + 1);
-                                }}
-                            >
-                                {t("agents.restore.recheck")}
-                            </button>
-                        </div>
+                            </div>
+                        )}
                     </>
                 )}
                 {preview.kind === "resolutionError" && (
@@ -843,6 +848,11 @@ export function RestoreView({
                     restoring={apply.kind === "applying"}
                     onConfirm={() => {
                         void runApply(preview.plan);
+                    }}
+                    onDismiss={() => {
+                        if (apply.kind === "applying" || pending.current)
+                            return;
+                        setPreview({ kind: "idle" });
                     }}
                 />
             )}
@@ -1062,6 +1072,22 @@ function OperationRow({
     const state = entryState(entry);
     const files = entryFiles(entry);
     const fileCount = files.length;
+    const canExpand = fileCount > 0 || entry.revisions.length > 0;
+
+    function toggleExpand(): void {
+        if (!canExpand) return;
+        if (showExpand) {
+            setExpanded(false);
+            if (versionForceExpanded || versionPlan !== null) {
+                onVersionDismiss();
+            }
+            return;
+        }
+        setExpanded(true);
+        if (entry.revisions.length > 0) {
+            onVersionPreview();
+        }
+    }
     const backupShort =
         files.length === 0
             ? null
@@ -1083,46 +1109,97 @@ function OperationRow({
     return (
         <li className={restore["row"]}>
             <div className={restore["rowSummary"]}>
-                <div className={restore["rowMain"]}>
-                    <span className={restore["state"]}>
-                        {t(`agents.restore.intents.${entry.intent}`)}
-                        {" · "}
-                        {entryStateText(state, t)}
-                        {isCurrent && (
-                            <>
-                                {" · "}
-                                <span className={restore["currentMark"]}>
-                                    {t("agents.restore.current.mark")}
-                                </span>
-                            </>
-                        )}
-                    </span>
-                    {providerText !== null && (
-                        <span className={restore["meta"]}>{providerText}</span>
-                    )}
-                    <span className={restore["time"]}>
-                        {formatTime(entry.createdAt, locale)}
-                    </span>
-                    {backupShort !== null && (
-                        <span className={restore["meta"]}>
-                            {t(`agents.restore.backupShort.${backupShort}`)}
-                        </span>
-                    )}
-                    {fileCount > 0 && (
-                        <button
-                            type="button"
-                            className={restore["expandToggle"]}
-                            aria-expanded={showExpand}
-                            onClick={() => {
-                                setExpanded((open) => !open);
-                            }}
+                {canExpand ? (
+                    <button
+                        type="button"
+                        className={restore["rowToggle"]}
+                        aria-expanded={showExpand}
+                        aria-label={
+                            showExpand
+                                ? t("agents.restore.collapseRow")
+                                : t("agents.restore.expandRow")
+                        }
+                        onClick={toggleExpand}
+                    >
+                        <span
+                            className={restore["expandIcon"]}
+                            data-expanded={showExpand ? "true" : undefined}
+                            aria-hidden="true"
                         >
-                            {t("agents.restore.fileCount", {
-                                count: fileCount,
-                            })}
-                        </button>
-                    )}
-                </div>
+                            <Icon name="chevron" />
+                        </span>
+                        <span className={restore["rowMain"]}>
+                            <span className={restore["state"]}>
+                                {t(`agents.restore.intents.${entry.intent}`)}
+                                {" · "}
+                                {entryStateText(state, t)}
+                                {isCurrent && (
+                                    <>
+                                        {" · "}
+                                        <span
+                                            className={restore["currentMark"]}
+                                        >
+                                            {t("agents.restore.current.mark")}
+                                        </span>
+                                    </>
+                                )}
+                            </span>
+                            {providerText !== null && (
+                                <span className={restore["meta"]}>
+                                    {providerText}
+                                </span>
+                            )}
+                            <span className={restore["time"]}>
+                                {formatTime(entry.createdAt, locale)}
+                            </span>
+                            {backupShort !== null && (
+                                <span className={restore["meta"]}>
+                                    {t(
+                                        `agents.restore.backupShort.${backupShort}`,
+                                    )}
+                                </span>
+                            )}
+                            {fileCount > 0 && (
+                                <span className={restore["meta"]}>
+                                    {t("agents.restore.fileCount", {
+                                        count: fileCount,
+                                    })}
+                                </span>
+                            )}
+                        </span>
+                    </button>
+                ) : (
+                    <div className={restore["rowMain"]}>
+                        <span className={restore["state"]}>
+                            {t(`agents.restore.intents.${entry.intent}`)}
+                            {" · "}
+                            {entryStateText(state, t)}
+                            {isCurrent && (
+                                <>
+                                    {" · "}
+                                    <span className={restore["currentMark"]}>
+                                        {t("agents.restore.current.mark")}
+                                    </span>
+                                </>
+                            )}
+                        </span>
+                        {providerText !== null && (
+                            <span className={restore["meta"]}>
+                                {providerText}
+                            </span>
+                        )}
+                        <span className={restore["time"]}>
+                            {formatTime(entry.createdAt, locale)}
+                        </span>
+                        {backupShort !== null && (
+                            <span className={restore["meta"]}>
+                                {t(
+                                    `agents.restore.backupShort.${backupShort}`,
+                                )}
+                            </span>
+                        )}
+                    </div>
+                )}
                 <div className={listActions["group"]}>
                     {entry.requiresResolution ? (
                         <IconButton
@@ -1135,18 +1212,8 @@ function OperationRow({
                             blocked={busy}
                             onClick={onInspect}
                         />
-                    ) : entry.revisions.length > 0 ? (
-                        <IconButton
-                            icon="logFile"
-                            label={
-                                versionPreviewing
-                                    ? t("agents.version.reviewing")
-                                    : t("agents.version.review")
-                            }
-                            blocked={busy}
-                            onClick={onVersionPreview}
-                        />
-                    ) : entry.intent === "apply" ? (
+                    ) : entry.revisions.length > 0 ? null : entry.intent ===
+                      "apply" ? (
                         <IconButton
                             icon="logFile"
                             label={
@@ -1171,7 +1238,7 @@ function OperationRow({
                 </div>
             </div>
             {showExpand && (
-                <>
+                <div className={restore["expandedBody"]}>
                     <ul className={restore["files"]}>
                         {files.map((file) => (
                             <li key={file.key} className={restore["file"]}>
@@ -1219,9 +1286,10 @@ function OperationRow({
                             onDismiss={onVersionDismiss}
                         />
                     )}
-                </>
+                </div>
             )}
         </li>
+
     );
 }
 
@@ -1307,79 +1375,115 @@ function fileNoteText(note: EntryFileNote, t: Translator): string {
         : t(`agents.restore.revisionStates.${note.state}`);
 }
 
-/** What restoring one recorded write would do to each file it changed. */
+/** What restoring one recorded write would do — titlebar-safe dialog. */
 function RestorePlanCard({
     plan,
     locale,
     restoring,
     onConfirm,
+    onDismiss,
 }: {
     plan: ClaudeCodeRestorePlan;
     /** Language used for the timestamp; the app language decides it. */
     locale: string;
     restoring: boolean;
     onConfirm: () => void;
+    onDismiss: () => void;
 }): JSX.Element {
     const { t } = useTranslation();
+    const title = useRef<HTMLHeadingElement>(null);
     // A conflict or a blocked file needs the user's decision before any retry,
     // so the card explains what to do instead of only naming the state.
     const stopped = plan.steps.some(
         (step) => step.action === "conflict" || step.action === "blocked",
     );
     return (
-        <DetailPanel label={t("agents.restore.previewHeading")}>
-            <div className={card["summary"]}>
-                <span className={card["path"]}>
-                    {t("agents.restore.previewFor", {
-                        time: formatTime(plan.createdAt, locale),
-                    })}
-                </span>
-                <span className={card["fileState"]}>
-                    {t(`agents.restore.states.${plan.state}`)}
-                </span>
-                {plan.providerLabel !== null && (
-                    <span className={card["note"]}>
-                        {t("agents.restore.provider", {
-                            name: plan.providerLabel,
-                        })}
-                    </span>
-                )}{" "}
-            </div>
-            <ul className={card["changes"]}>
-                {plan.steps.map((step) => (
-                    <RestorePlanStepRow key={step.ordinal} step={step} />
-                ))}
-            </ul>
-            {stopped && (
-                <p className={styles["hint"]}>
-                    {t("agents.restore.conflictHint")}
-                </p>
-            )}
-            {plan.restorable && (
-                <>
-                    <p className={styles["hint"]}>
-                        {t("agents.restore.keyNotice")}
-                    </p>
-                    <div className={card["actions"]}>
+        <Dialog.Root
+            open
+            onOpenChange={(open) => {
+                if (!open && !restoring) onDismiss();
+            }}
+        >
+            <Dialog.Portal>
+                <Dialog.Backdrop className={dialog["backdrop"]} />
+                <Dialog.Popup
+                    className={dialog["popupCompact"]}
+                    initialFocus={title}
+                >
+                    <Dialog.Title
+                        ref={title}
+                        tabIndex={-1}
+                        className={dialog["title"]}
+                    >
+                        {t("agents.restore.previewHeading")}
+                    </Dialog.Title>
+                    <div className={card["summary"]}>
+                        <span className={card["path"]}>
+                            {t("agents.restore.previewFor", {
+                                time: formatTime(plan.createdAt, locale),
+                            })}
+                        </span>
+                        <span className={card["fileState"]}>
+                            {t(`agents.restore.states.${plan.state}`)}
+                        </span>
+                        {plan.providerLabel !== null && (
+                            <span className={card["note"]}>
+                                {t("agents.restore.provider", {
+                                    name: plan.providerLabel,
+                                })}
+                            </span>
+                        )}
+                    </div>
+                    <ul className={card["changes"]}>
+                        {plan.steps.map((step) => (
+                            <RestorePlanStepRow
+                                key={step.ordinal}
+                                step={step}
+                            />
+                        ))}
+                    </ul>
+                    {stopped && (
+                        <p className={styles["hint"]}>
+                            {t("agents.restore.conflictHint")}
+                        </p>
+                    )}
+                    {!plan.restorable && (
+                        <p className={styles["hint"]}>
+                            {t("agents.restore.nothingToRestore")}
+                        </p>
+                    )}
+                    {plan.restorable && (
+                        <p className={styles["hint"]}>
+                            {t("agents.restore.keyNotice")}
+                        </p>
+                    )}
+                    <div className={dialog["actions"]}>
                         <button
                             type="button"
-                            className={buttons["primary"]}
+                            className={buttons["secondary"]}
                             aria-disabled={restoring}
-                            onClick={onConfirm}
+                            onClick={() => {
+                                if (!restoring) onDismiss();
+                            }}
                         >
-                            {restoring
-                                ? t("agents.restore.restoring")
-                                : t("agents.restore.confirm")}
+                            {t("agents.version.textClose")}
                         </button>
+                        {plan.restorable && (
+                            <button
+                                type="button"
+                                className={buttons["primary"]}
+                                aria-disabled={restoring}
+                                onClick={onConfirm}
+                            >
+                                {restoring
+                                    ? t("agents.restore.restoring")
+                                    : t("agents.restore.confirm")}
+                            </button>
+                        )}
                     </div>
-                </>
-            )}
-            {!plan.restorable && (
-                <p className={styles["hint"]}>
-                    {t("agents.restore.nothingToRestore")}
-                </p>
-            )}
-        </DetailPanel>
+                </Dialog.Popup>
+            </Dialog.Portal>
+        </Dialog.Root>
     );
 }
 

@@ -155,6 +155,7 @@ export function RestoreView({
         file: VersionRestoreFile;
     } | null>(null);
     const textTrigger = useRef<HTMLElement | null>(null);
+    const reviewTrigger = useRef<HTMLElement | null>(null);
     const [attempt, setAttempt] = useState(0);
     const [deleteBusy, setDeleteBusy] = useState(false);
     const pending = useRef(false);
@@ -309,6 +310,10 @@ export function RestoreView({
      * discards the legacy rollback preview so only one card is on screen.
      */
     async function runVersionPreview(entryKey: string): Promise<void> {
+        reviewTrigger.current =
+            document.activeElement instanceof HTMLElement
+                ? document.activeElement
+                : null;
         if (blocked || pending.current || readingMore) return;
         pending.current = true;
         busyCallback.current?.(true);
@@ -775,6 +780,16 @@ export function RestoreView({
                             file,
                         });
                     }}
+                    onClose={() => {
+                        if (versionApply.kind === "applying") return;
+                        setTextTarget(null);
+                        setVersionPlan({ kind: "idle" });
+                    }}
+                    returnFocus={() =>
+                        reviewTrigger.current?.isConnected
+                            ? reviewTrigger.current
+                            : null
+                    }
                 />
             )}
             {versionPlan.kind === "error" && (

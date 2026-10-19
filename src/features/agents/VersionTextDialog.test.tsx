@@ -105,6 +105,10 @@ test("shows sanitized current and retained text with a line diff", async () => {
     await mount();
     expect(await screen.findByText("Detailed configuration")).toBeTruthy();
     await screen.findByText(/Values under credential-like keys are masked/u);
+    expect(screen.getByRole("region", { name: "Differences" })).toBeTruthy();
+    await userEvent.click(
+        screen.getByText("Show full configuration text"),
+    );
     const current = screen.getByRole("region", {
         name: "Current configuration",
     });
@@ -135,6 +139,8 @@ test("switches files and loads each text with its own digest", async () => {
         }),
     );
     await mount();
+    await screen.findByRole("region", { name: "Differences" });
+    await userEvent.click(screen.getByText("Show full configuration text"));
     const current = await screen.findByRole("region", {
         name: "Current configuration",
     });
@@ -174,13 +180,15 @@ test("reports absence and unavailable sides without raw content", async () => {
         },
     });
     await mount();
+    await screen.findByRole("region", { name: "Differences" });
+    expect(
+        screen.getByText(/A line diff needs both sides to be present/u),
+    ).toBeTruthy();
+    await userEvent.click(screen.getByText("Show full configuration text"));
     expect(
         await screen.findByText("The file did not exist at this point."),
     ).toBeTruthy();
     expect(screen.getByText(/This text cannot be shown safely/u)).toBeTruthy();
-    expect(
-        screen.getByText(/A line diff needs both sides to be present/u),
-    ).toBeTruthy();
 });
 
 test("a stale preview is reported and can be retried", async () => {
@@ -197,6 +205,8 @@ test("a stale preview is reported and can be retried", async () => {
         ),
     ).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await screen.findByRole("region", { name: "Differences" });
+    await userEvent.click(screen.getByText("Show full configuration text"));
     const current = await screen.findByRole("region", {
         name: "Current configuration",
     });

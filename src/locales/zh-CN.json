@@ -597,10 +597,11 @@
             "textRetry": "重试",
             "textDiff": "差异",
             "textNoDiff": "没有行级差异。",
-            "textNoComparison": "只有两侧都存在文本时才能生成行级差异；请查看上方的文本或不存在状态。",
-            "textDiffTooLarge": "文件过大，无法生成行级差异；请直接对比两个窗格。",
+            "textNoComparison": "只有两侧都存在文本时才能生成行级差异；可展开下方完整配置查看文本或不存在状态。",
+            "textDiffTooLarge": "文件过大，无法生成行级差异；请展开下方完整配置进行对比。",
             "textPreviewMode": "浏览器预览无法读取配置文件，请在 vibemate 桌面应用中查看。",
             "textMaskedNotice": "凭据类键下的值会在文本离开 Rust 前被替换。",
+            "textShowFull": "显示完整配置文本",
             "lineAdded": "新增行",
             "lineRemoved": "删除行",
             "lineSame": "未变更行"

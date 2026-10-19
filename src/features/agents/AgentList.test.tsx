@@ -332,14 +332,20 @@ test("an initial failed scan does not report absent installations and remains re
     expect(screen.queryByText("Not found")).toBeNull();
     read.mockResolvedValue(result);
     fireEvent.click(screen.getByRole("button", { name: "Discover" }));
-    await screen.findByText("Found");
+    await screen.findByText("1.1.0");
     expect(screen.queryByRole("alert")).toBeNull();
-    // The catalog keeps its six slots: Pi is now found, Codex is still absent.
+    // The catalog keeps its six slots: Pi is now found (version beside the
+    // dot), Codex is still absent (status label only).
     expect(
         within(
             screen.getByRole("button", { name: "Open Pi details" }),
-        ).getByText("Found"),
+        ).getByText("1.1.0"),
     ).toBeDefined();
+    expect(
+        within(
+            screen.getByRole("button", { name: "Open Pi details" }),
+        ).queryByText("Found"),
+    ).toBeNull();
     expect(
         within(
             screen.getByRole("button", { name: "Open Codex details" }),

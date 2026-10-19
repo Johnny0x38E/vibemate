@@ -597,10 +597,11 @@
             "textRetry": "Try again",
             "textDiff": "Differences",
             "textNoDiff": "No line differences.",
-            "textNoComparison": "A line diff needs both sides to be present; see the text or absence above.",
-            "textDiffTooLarge": "The files are too large for a line diff; compare the two panes directly.",
+            "textNoComparison": "A line diff needs both sides to be present; expand the full text below to see each side or its absence.",
+            "textDiffTooLarge": "The files are too large for a line diff; expand the full text below to compare them.",
             "textPreviewMode": "The browser preview cannot read configuration files. Open the vibemate desktop app.",
             "textMaskedNotice": "Values under credential-like keys are masked before this text leaves Rust.",
+            "textShowFull": "Show full configuration text",
             "lineAdded": "Added line",
             "lineRemoved": "Removed line",
             "lineSame": "Unchanged line"

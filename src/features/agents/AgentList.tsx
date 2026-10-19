@@ -629,35 +629,42 @@ export function AgentList({
                                                                 : state.kind
                                                         }
                                                     />
+                                                    {/* Discovered cards show the
+                                                        version beside the dot;
+                                                        undiscovered keep the
+                                                        status label only. */}
                                                     <span
                                                         className={
                                                             styles["statusText"]
                                                         }
+                                                        title={
+                                                            state.kind ===
+                                                                "desktop" &&
+                                                            row?.state ===
+                                                                "found"
+                                                                ? reported ===
+                                                                  undefined
+                                                                    ? t(
+                                                                          `agents.evidence.${row.versionEvidence}`,
+                                                                      )
+                                                                    : t(
+                                                                          "agents.versionProbe.evidence",
+                                                                      )
+                                                                : undefined
+                                                        }
                                                     >
-                                                        {discoveryLabel(row)}
+                                                        {state.kind ===
+                                                            "desktop" &&
+                                                        row?.state === "found"
+                                                            ? (reported?.version ??
+                                                              row.version ??
+                                                              t(
+                                                                  "agents.unknown",
+                                                              ))
+                                                            : discoveryLabel(
+                                                                  row,
+                                                              )}
                                                     </span>
-                                                </span>
-                                                <span
-                                                    className={
-                                                        styles["cardVersion"]
-                                                    }
-                                                    title={
-                                                        reported === undefined
-                                                            ? row === undefined
-                                                                ? undefined
-                                                                : t(
-                                                                      `agents.evidence.${row.versionEvidence}`,
-                                                                  )
-                                                            : t(
-                                                                  "agents.versionProbe.evidence",
-                                                              )
-                                                    }
-                                                >
-                                                    {row?.state === "found"
-                                                        ? (reported?.version ??
-                                                          row.version ??
-                                                          t("agents.unknown"))
-                                                        : null}
                                                 </span>
                                             </span>
                                             {hasConfigAdapter(id) ? (

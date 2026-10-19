@@ -25,8 +25,9 @@ type TextState =
 type RevisionFile = VersionRestoreFile & { revisionId: string };
 
 /**
- * Two-layer preview detail: complete sanitized current and retained text with a
- * line diff, switchable across the entry's files.
+ * Detail dialog for a reviewed plan: line-level differences first, with the
+ * complete sanitized current and retained/planned text available as an optional
+ * expand. Files switch on demand.
  *
  * The parent only mounts this while open. Text is fetched per selected file on
  * demand, bound to the current digest the summary preview showed; a changed
@@ -80,8 +81,8 @@ export function VersionTextDialog({
 }
 
 /** Shared on-demand JSON/TOML dialog for native model and restore plans.
- * The caller supplies a plan-bound reader; this component owns only loading,
- * file selection, accessible focus and sanitized text/diff presentation.
+ * The caller supplies a plan-bound reader; this component owns loading, file
+ * selection, accessible focus, the primary line diff, and optional full text.
  */
 export function ConfigurationTextDialog({
     files,
@@ -242,22 +243,6 @@ export function ConfigurationTextDialog({
                             <p className={dialog["meta"]}>
                                 {t("agents.version.textMaskedNotice")}
                             </p>
-                            <div className={dialog["sides"]}>
-                                <TextSide
-                                    side={state.text.current}
-                                    format={state.text.format}
-                                    label={t("agents.version.textCurrent")}
-                                />
-                                <TextSide
-                                    side={state.text.target}
-                                    format={state.text.format}
-                                    label={t(
-                                        planned
-                                            ? "agents.version.textPlanned"
-                                            : "agents.version.textRetained",
-                                    )}
-                                />
-                            </div>
                             <section
                                 className={dialog["diff"]}
                                 aria-label={t("agents.version.textDiff")}
@@ -346,6 +331,27 @@ export function ConfigurationTextDialog({
                                     </ul>
                                 )}
                             </section>
+                            <details className={dialog["fullText"]}>
+                                <summary className={dialog["fullTextSummary"]}>
+                                    {t("agents.version.textShowFull")}
+                                </summary>
+                                <div className={dialog["sides"]}>
+                                    <TextSide
+                                        side={state.text.current}
+                                        format={state.text.format}
+                                        label={t("agents.version.textCurrent")}
+                                    />
+                                    <TextSide
+                                        side={state.text.target}
+                                        format={state.text.format}
+                                        label={t(
+                                            planned
+                                                ? "agents.version.textPlanned"
+                                                : "agents.version.textRetained",
+                                        )}
+                                    />
+                                </div>
+                            </details>
                         </>
                     )}
                     <div className={dialog["actions"]}>

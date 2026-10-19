@@ -108,6 +108,8 @@ test("loads summaries first, reads text only on demand, switches files and retur
     expect(read).toHaveBeenLastCalledWith(plan, "/qa/pi");
     await userEvent.click(button);
     await screen.findByRole("dialog");
+    await screen.findByRole("region", { name: "Differences" });
+    await userEvent.click(screen.getByText("Show full configuration text"));
     await screen.findByText("Planned configuration");
     expect(read).toHaveBeenLastCalledWith(plan, "/qa/pi", 0);
     await userEvent.click(
@@ -152,6 +154,8 @@ test("detail failures offer retry without replacing the plan", async () => {
     );
     await screen.findByRole("alert");
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await screen.findByRole("region", { name: "Differences" });
+    await userEvent.click(screen.getByText("Show full configuration text"));
     await screen.findByText("Planned configuration");
     expect(read).toHaveBeenLastCalledWith(plan, "/qa/pi", 0);
 });

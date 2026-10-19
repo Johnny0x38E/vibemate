@@ -1,22 +1,47 @@
-/* Complete-text dialog for version restore: file switcher, two read-only panes
-   and a line diff. Layout uses shared tokens; colors come from the palette
-   layer so light and dark system themes keep readable contrast. */
+/* Complete-text / version-plan dialogs: file switcher, primary line diff and
+   optional full-text panes. Modal layers stay below the titlebar strip so macOS
+   traffic lights remain reachable. Theme tokens only — no extra surface layers. */
 
 .backdrop {
     position: fixed;
-    inset: 0;
+    top: var(--titlebar-height);
+    right: 0;
+    bottom: 0;
+    left: 0;
     z-index: var(--layer-dialog-backdrop);
     background: rgb(0 0 0 / 35%);
 }
 
 .popup {
     position: fixed;
-    inset: 50% auto auto 50%;
+    top: calc(var(--titlebar-height) + (100dvh - var(--titlebar-height)) / 2);
+    left: 50%;
     z-index: var(--layer-dialog);
     display: grid;
     gap: var(--space-sm);
     width: min(72rem, calc(100vw - 32px));
-    max-height: calc(100vh - 32px);
+    max-width: calc(100vw - 32px);
+    max-height: calc(100dvh - var(--titlebar-height) - 24px);
+    overflow: auto;
+    transform: translate(-50%, -50%);
+    padding: var(--space-md);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    background: var(--color-surface);
+    box-shadow: 0 16px 56px rgb(0 0 0 / 24%);
+}
+
+/* Narrower popup for the version-restore plan confirmation. */
+.popupCompact {
+    position: fixed;
+    top: calc(var(--titlebar-height) + (100dvh - var(--titlebar-height)) / 2);
+    left: 50%;
+    z-index: var(--layer-dialog);
+    display: grid;
+    gap: var(--space-sm);
+    width: min(40rem, calc(100vw - 32px));
+    max-width: calc(100vw - 32px);
+    max-height: calc(100dvh - var(--titlebar-height) - 24px);
     overflow: auto;
     transform: translate(-50%, -50%);
     padding: var(--space-md);
@@ -66,6 +91,7 @@
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
     gap: var(--space-sm);
+    margin-top: var(--space-sm);
 }
 
 .side {
@@ -89,7 +115,7 @@
     padding: 8px;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-control, 6px);
-    background: var(--color-surface-alt, transparent);
+    background: transparent;
     color: var(--color-text);
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     font-size: 0.75rem;
@@ -135,7 +161,7 @@
     margin: 0;
     padding: 0;
     list-style: none;
-    max-height: 40vh;
+    max-height: min(40vh, calc(100dvh - var(--titlebar-height) - 12rem));
     overflow: auto;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-control, 6px);
@@ -175,6 +201,25 @@
 .diffText {
     overflow-wrap: anywhere;
     white-space: pre-wrap;
+}
+
+.fullText {
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.fullTextSummary {
+    cursor: pointer;
+    color: var(--color-text);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    line-height: 1.5;
+}
+
+.fullTextSummary:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
 }
 
 .actions {

@@ -461,16 +461,19 @@ test("the version preview lists sanitized field changes and confirms the reviewe
     await mount();
     await openVersionPreview();
     expect(
-        await screen.findByRole("region", {
+        await screen.findByRole("dialog", {
             name: "Version restore preview",
         }),
     ).toBeTruthy();
     expect(screen.getByText("model")).toBeTruthy();
     expect(screen.getAllByText("Replaced").length).toBeGreaterThan(0);
-    expect(screen.getByText(/current-model → retained-model/u)).toBeTruthy();
-    expect(
-        screen.getByText(new RegExp(`${SECRET} → ${SECRET}`, "u")),
-    ).toBeTruthy();
+    const modelChange = screen.getByText("model").closest("li");
+    expect(modelChange?.textContent).toContain("current-model");
+    expect(modelChange?.textContent).toContain("retained-model");
+    const secretChange = screen
+        .getByText("credential value hidden")
+        .closest("li");
+    expect(secretChange?.textContent).toContain(SECRET);
     expect(screen.getByText("credential value hidden")).toBeTruthy();
     expect(
         screen.getByText(/Start a new Agent session for the restored/u),
@@ -591,7 +594,7 @@ test("a version preview read failure is reported and can be retried", async () =
         screen.getByRole("button", { name: "Review version" }),
     );
     expect(
-        await screen.findByRole("region", {
+        await screen.findByRole("dialog", {
             name: "Version restore preview",
         }),
     ).toBeTruthy();

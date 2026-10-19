@@ -2,8 +2,7 @@
     --sidebar-width: 200px;
     --sidebar-bottom-inset: 12px;
     --sidebar-action-height: 44px;
-    /* One row height for the traffic lights and both drag areas. */
-    --titlebar-height: 44px;
+    /* Titlebar strip height comes from :root (--titlebar-height). */
     display: grid;
     grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
     grid-template-rows: var(--titlebar-height) minmax(0, 1fr);

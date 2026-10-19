@@ -1,5 +1,6 @@
+import { Dialog } from "@base-ui/react/dialog";
 import type { TFunction } from "i18next";
-import type { JSX } from "react";
+import { useRef, type JSX } from "react";
 import { useTranslation } from "react-i18next";
 import { DetailPanel } from "../../components/DetailForm";
 import buttons from "../../components/actionButtons.module.css";
@@ -11,6 +12,7 @@ import type {
 import styles from "./AgentList.module.css";
 import card from "./ConfigPreview.module.css";
 import restore from "./RestoreView.module.css";
+import dialog from "./VersionTextDialog.module.css";
 import { formatTime } from "./formatTime";
 
 type Translator = TFunction;
@@ -18,9 +20,10 @@ type Translator = TFunction;
 /**
  * Sanitized current-to-retained preview for one history entry.
  *
- * The default layer lists field changes; the complete-text dialog is a separate
- * button per file so a large document is only loaded on demand. Confirmation is
- * offered only when Rust marked the whole entry restorable.
+ * Opens as a contained modal (below the titlebar strip). The default layer lists
+ * field changes; the complete-text dialog is a separate button per file so a
+ * large document is only loaded on demand. Confirmation is offered only when
+ * Rust marked the whole entry restorable.
  */
 export function VersionRestorePlanCard({
     plan,
@@ -28,6 +31,8 @@ export function VersionRestorePlanCard({
     restoring,
     onConfirm,
     onViewDetails,
+    onClose,
+    returnFocus,
 }: {
     plan: VersionRestorePlan;
     /** Language used for the timestamp; the app language decides it. */
@@ -36,74 +41,117 @@ export function VersionRestorePlanCard({
     restoring: boolean;
     onConfirm: () => void;
     onViewDetails: (file: VersionRestoreFile) => void;
+    onClose: () => void;
+    returnFocus: () => HTMLElement | null;
 }): JSX.Element {
     const { t } = useTranslation();
+    const title = useRef<HTMLHeadingElement>(null);
     const blocked = plan.files.some((file) => file.action === "blocked");
     return (
-        <DetailPanel label={t("agents.version.previewHeading")}>
-            <div className={card["summary"]}>
-                <span className={card["path"]}>
-                    {t("agents.version.previewFor", {
-                        kind: t(`agents.restore.intents.${plan.intent}`),
-                        time: formatTime(plan.createdAt, locale),
-                    })}
-                </span>
-                {plan.ownerRef !== null && (
-                    <span className={card["note"]}>
-                        {t("agents.version.ownerRef", { id: plan.ownerRef })}
-                    </span>
-                )}
-            </div>
-            {plan.reason !== null && (
-                <p className={styles["hint"]}>
-                    {t(`agents.version.planReasons.${plan.reason}`)}
-                </p>
-            )}
-            <ul className={card["changes"]}>
-                {plan.files.map((file) => (
-                    <VersionFilePreview
-                        key={file.revisionId ?? `step:${String(file.ordinal)}`}
-                        file={file}
-                        onViewDetails={() => {
-                            onViewDetails(file);
-                        }}
-                    />
-                ))}
-            </ul>
-            {blocked && (
-                <p className={styles["hint"]}>
-                    {t("agents.version.blockedHint")}
-                </p>
-            )}
-            {plan.restorable ? (
-                <>
-                    <p className={styles["hint"]}>
-                        {t("agents.version.keyNotice")}
-                    </p>
-                    <p className={styles["hint"]}>
-                        {t("agents.version.sessionNotice")}
-                    </p>
-                    <div className={card["actions"]}>
+        <Dialog.Root
+            open
+            onOpenChange={(open) => {
+                if (!open && !restoring) onClose();
+            }}
+        >
+            <Dialog.Portal>
+                <Dialog.Backdrop className={dialog["backdrop"]} />
+                <Dialog.Popup
+                    className={dialog["popupCompact"]}
+                    initialFocus={title}
+                    finalFocus={returnFocus}
+                >
+                    <Dialog.Title
+                        ref={title}
+                        tabIndex={-1}
+                        className={dialog["title"]}
+                    >
+                        {t("agents.version.previewHeading")}
+                    </Dialog.Title>
+                    <div className={card["summary"]}>
+                        <span className={card["path"]}>
+                            {t("agents.version.previewFor", {
+                                kind: t(
+                                    `agents.restore.intents.${plan.intent}`,
+                                ),
+                                time: formatTime(plan.createdAt, locale),
+                            })}
+                        </span>
+                        {plan.ownerRef !== null && (
+                            <span className={card["note"]}>
+                                {t("agents.version.ownerRef", {
+                                    id: plan.ownerRef,
+                                })}
+                            </span>
+                        )}
+                    </div>
+                    {plan.reason !== null && (
+                        <p className={styles["hint"]}>
+                            {t(`agents.version.planReasons.${plan.reason}`)}
+                        </p>
+                    )}
+                    <ul className={card["changes"]}>
+                        {plan.files.map((file) => (
+                            <VersionFilePreview
+                                key={
+                                    file.revisionId ??
+                                    `step:${String(file.ordinal)}`
+                                }
+                                file={file}
+                                onViewDetails={() => {
+                                    onViewDetails(file);
+                                }}
+                            />
+                        ))}
+                    </ul>
+                    {blocked && (
+                        <p className={styles["hint"]}>
+                            {t("agents.version.blockedHint")}
+                        </p>
+                    )}
+                    {plan.restorable ? (
+                        <>
+                            <p className={styles["hint"]}>
+                                {t("agents.version.keyNotice")}
+                            </p>
+                            <p className={styles["hint"]}>
+                                {t("agents.version.sessionNotice")}
+                            </p>
+                        </>
+                    ) : (
+                        plan.reason === null && (
+                            <p className={styles["hint"]}>
+                                {t("agents.version.nothingToRestore")}
+                            </p>
+                        )
+                    )}
+                    <div className={dialog["actions"]}>
                         <button
                             type="button"
-                            className={buttons["primary"]}
+                            className={buttons["secondary"]}
                             aria-disabled={restoring}
-                            onClick={onConfirm}
+                            onClick={() => {
+                                if (!restoring) onClose();
+                            }}
                         >
-                            {restoring
-                                ? t("agents.version.restoring")
-                                : t("agents.version.confirm")}
+                            {t("agents.version.textClose")}
                         </button>
+                        {plan.restorable && (
+                            <button
+                                type="button"
+                                className={buttons["primary"]}
+                                aria-disabled={restoring}
+                                onClick={onConfirm}
+                            >
+                                {restoring
+                                    ? t("agents.version.restoring")
+                                    : t("agents.version.confirm")}
+                            </button>
+                        )}
                     </div>
-                </>
-            ) : (
-                plan.reason === null && (
-                    <p className={styles["hint"]}>
-                        {t("agents.version.nothingToRestore")}
-                    </p>
-                )
-            )}
-        </DetailPanel>
+                </Dialog.Popup>
+            </Dialog.Portal>
+        </Dialog.Root>
     );
 }
 
@@ -145,7 +193,9 @@ function VersionFilePreview({
     );
 }
 
-/** The default field-level layer of the two-layer preview. */
+/** The default field-level layer of the two-layer preview.
+ * Reuses the ConfigPreview field-summary row: path, change kind, old → new.
+ */
 export function VersionSummary({
     file,
 }: {
@@ -169,17 +219,28 @@ export function VersionSummary({
     }
     return (
         <>
-            <ul className={card["notices"]}>
+            <ul className={card["changes"]}>
                 {summary.changes.map((change, index) => (
-                    <li key={`${change.path}:${String(index)}`}>
-                        <span className={card["path"]}>{change.path}</span>{" "}
+                    <li
+                        key={`${change.path}:${String(index)}`}
+                        className={card["change"]}
+                    >
+                        <span className={card["key"]}>{change.path}</span>
                         <span className={restore["action"]}>
                             {t(`agents.version.kinds.${change.kind}`)}
-                        </span>{" "}
-                        <span className={card["note"]}>
-                            {displayValue(change.before, t)}
-                            {" → "}
-                            {displayValue(change.after, t)}
+                        </span>
+                        <span className={card["transition"]}>
+                            <span className={card["before"]}>
+                                {displayValue(change.before, t)}
+                            </span>
+                            {/* Decorative: path, kind and both values already
+                                describe the change; the arrow is visual only. */}
+                            <span className={card["arrow"]} aria-hidden="true">
+                                →
+                            </span>
+                            <span className={card["after"]}>
+                                {displayValue(change.after, t)}
+                            </span>
                         </span>
                         {change.secret && (
                             <span className={card["note"]}>

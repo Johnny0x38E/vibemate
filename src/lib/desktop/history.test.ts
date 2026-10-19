@@ -102,6 +102,7 @@ function page(
                     }
                   : current(status),
         active: { kind: "unknown" },
+        currentEntry: status === "matched" ? row : null,
         entries: [row],
         nextCursor: null,
     };
@@ -128,16 +129,15 @@ test.each<ConfigurableAgent>(["claudeCode", "pi", "grokBuild"])(
     },
 );
 
-test("accepts a direct version-restore batch entry", async () => {
+test("rejects an operation-log restore batch in the configuration-version list", async () => {
     const batch: HistoryEntry = {
         ...entry(),
         entryKey: "batch:direct-restore",
         intent: "version_restore",
     };
     vi.mocked(invoke).mockResolvedValue(page(batch));
-    expect(await readConfigurationHistory("pi")).toEqual({
-        kind: "desktop",
-        page: page(batch),
+    await expect(readConfigurationHistory("pi")).rejects.toMatchObject({
+        code: "invalid_response",
     });
 });
 
@@ -159,6 +159,7 @@ test("passes a validated seek cursor unchanged and accepts the empty final page"
         .mockResolvedValueOnce({
             current: current("unrecorded"),
             active: { kind: "unknown" },
+            currentEntry: null,
             entries: [],
             nextCursor: null,
         });
@@ -172,6 +173,7 @@ test("passes a validated seek cursor unchanged and accepts the empty final page"
         page: {
             current: current("unrecorded"),
             active: { kind: "unknown" },
+            currentEntry: null,
             entries: [],
             nextCursor: null,
         },
@@ -190,6 +192,32 @@ test.each([0, 51, -1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER])(
         expect(invoke).not.toHaveBeenCalled();
     },
 );
+
+test("rejects a current pin whose original written files do not match the live digests", async () => {
+    for (const currentEntry of [
+        null,
+        { ...base, sourceSteps: [{ ...step, appliedDigest: BEFORE }] },
+        {
+            ...base,
+            sourceSteps: [{ ...step, targetPath: "/other/settings.json" }],
+        },
+        {
+            ...base,
+            sourceSteps: [
+                step,
+                { ...step, ordinal: 1, targetPath: "/other/settings.json" },
+            ],
+        },
+    ]) {
+        vi.mocked(invoke).mockResolvedValue({
+            ...page(base, "matched"),
+            currentEntry,
+        });
+        await expect(readConfigurationHistory("pi")).rejects.toMatchObject({
+            code: "invalid_response",
+        });
+    }
+});
 
 test("rejects an extended or malformed outgoing cursor without IPC", async () => {
     for (const cursor of [
@@ -430,6 +458,7 @@ test("rejects oversized, misordered and repeated pages without hiding bad rows",
     vi.mocked(invoke).mockResolvedValue({
         current: current("unrecorded"),
         active: { kind: "unknown" },
+        currentEntry: null,
         entries: [base, older],
         nextCursor: null,
     });
@@ -438,6 +467,7 @@ test("rejects oversized, misordered and repeated pages without hiding bad rows",
         page: {
             current: current("unrecorded"),
             active: { kind: "unknown" },
+            currentEntry: null,
             entries: [base, older],
             nextCursor: null,
         },
@@ -487,7 +517,7 @@ test.each<HistoryRevision>([
     },
 );
 
-test("retains legacy attempts and separate partial multi-file restore/compensation batches", async () => {
+test("rejects hidden restore and compensation batches even when their journals are valid", async () => {
     const legacy = {
         ...entry(),
         revisions: [],
@@ -543,9 +573,8 @@ test("retains legacy attempts and separate partial multi-file restore/compensati
         // Batches have their own sort time rather than their source's time.
         row.createdAt = 100;
         vi.mocked(invoke).mockResolvedValue(response);
-        expect(await readConfigurationHistory("pi")).toEqual({
-            kind: "desktop",
-            page: response,
+        await expect(readConfigurationHistory("pi")).rejects.toMatchObject({
+            code: "invalid_response",
         });
     }
 });

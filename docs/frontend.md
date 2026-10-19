@@ -484,8 +484,11 @@ boundary modules are not migrated in this slice.
 Schemas check bounded arrays, paths, identities, nullable digests, journal states,
 source-step ordinals and reconciliation relationships. Page checks enforce seek
 ordering, unique identities, requested size and a next cursor anchored to the last
-entry. A malformed page is rejected as a whole, not partially displayed as a
-complete history. `HistoryRequestError` contains only an allowlisted safe code;
+entry. The page also requires a separately loaded `currentEntry`: matched
+markers must agree with its apply identity, complete file set and written
+digests. Other marker states require `null`; restore/compensation rows are
+refused in the configuration-version list. A malformed page is rejected as a
+whole, not partially displayed as complete history. `HistoryRequestError` contains only an allowlisted safe code;
 Zod issues and raw transport diagnostics are discarded, including unknown field
 names. Do not log the original response or validation error.
 
@@ -498,9 +501,12 @@ confirmation, not permission inferred from the history row.
 
 ## Shared two-layer configuration preview
 
-Model configuration and retained-version restore share `VersionSummary` and
-`ConfigurationTextDialog`. The default layer shows field paths, add/remove/replace
-kinds and sanitized old/new values. The detail dialog requests one complete
+Model configuration and retained-version restore share `VersionSummary` for
+field paths, add/remove/replace kinds and sanitized old/new values. Expanded
+history rows show this summary, necessary errors, one concise key/session warning
+and **Use this configuration**, without repeated backup, owner or timestamp
+metadata. Model previews additionally expose `ConfigurationTextDialog` for complete
+text. The detail dialog requests one complete
 native JSON/TOML file only when opened or switched; React never reconstructs a
 configuration from displayed fields. Missing, empty and unavailable sides are
 separate states. Both original and sanitized text are limited to 1 MiB; the line
@@ -1102,15 +1108,18 @@ The Agent detail page shows History, Skill, MCP and Install & paths segments. Th
 shared `RestoreView` lists only the selected Agent's recorded writes from the
 root-scoped paginated history, choosing its commands from one per-Agent table; the
 backend independently checks operation ownership before previewing or restoring any
-target. It pins the backend-reported current configuration above the list, marks the
-matching history row, shows per-file backup availability, loads older entries by
-cursor and offers version restore, resolution review and confirmed deletion. The
+target. It pins the separately loaded matched version once above chronological
+apply-only rows, even outside the current seek page. Restore/compensation batches
+remain internal audit records. Expanded rows preview the selected apply's written
+result from its independent snapshots, not its pre-write backups. The view loads
+older versions by cursor and offers selection, resolution review and confirmed
+version-only deletion. The
 pin's **Detailed configuration** dialog reads and sanitizes the live file directly,
 so it stays enabled after an external edit no longer matches a retained version;
 the taller dialog shows only the current text, without a current-configuration
 heading or original-size row.
-Interrupted mutations set `requiresResolution` on a history row, withholding the
-legacy restore button. `src/lib/desktop/recovery.ts` validates metadata-only reviews
+Interrupted mutations set `requiresResolution` on a history row, withholding
+configuration selection until the interrupted operation is reviewed. `src/lib/desktop/recovery.ts` validates metadata-only reviews
 and sends only the fixed Agent identity, operation ID and complete backend plan's
 approval digest. `ResolutionReviewCard` displays the observations and backend
 eligibility; confirmation records observations only, discards approval and refreshes

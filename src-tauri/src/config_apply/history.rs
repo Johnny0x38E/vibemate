@@ -286,8 +286,8 @@ pub struct HistoryCurrentFile {
 /// Fixed current-config summary, independent of history pagination.
 ///
 /// Always returned with every page so the interface can pin it above the list.
-/// Matching compares live digests to retained previous/intended digests; it does
-/// not treat the newest apply/restore as current by itself.
+/// Matching compares live digests to complete, successful operation results;
+/// pre-write snapshots never make their source operation current.
 #[derive(Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryCurrentConfig {
@@ -324,6 +324,9 @@ pub struct HistoryCurrentConfig {
 pub struct HistoryPage {
     /// Live configuration pin; identical for every page of the same scope.
     pub current: HistoryCurrentConfig,
+    /// Matched apply loaded independently of the seek page for the version UI.
+    #[serde(skip)]
+    pub(crate) current_entry: Option<HistoryEntry>,
     /// Newest first; every multi-file batch stays inside one entry.
     pub entries: Vec<HistoryEntry>,
     /// Seek position for more entries, absent when this read reached the end.
@@ -351,6 +354,31 @@ pub fn configuration_history(
     limit: u32,
     backups: &BackupStore,
 ) -> Result<HistoryPage, WriteError> {
+    read_history_page(storage, scope, after, limit, backups, false)
+}
+
+/// Read apply versions only, with the current version outside the seek page.
+///
+/// Recovery batches stay in the journal but are not configuration versions.
+/// Errors and scope checks are identical to [`configuration_history`].
+pub fn configuration_versions(
+    storage: &Storage,
+    scope: &HistoryScope,
+    after: Option<&HistoryCursor>,
+    limit: u32,
+    backups: &BackupStore,
+) -> Result<HistoryPage, WriteError> {
+    read_history_page(storage, scope, after, limit, backups, true)
+}
+
+fn read_history_page(
+    storage: &Storage,
+    scope: &HistoryScope,
+    after: Option<&HistoryCursor>,
+    limit: u32,
+    backups: &BackupStore,
+    versions_only: bool,
+) -> Result<HistoryPage, WriteError> {
     if !(1..=MAX_PAGE_SIZE).contains(&limit) {
         return Err(WriteError::InvalidRequest);
     }
@@ -365,7 +393,7 @@ pub fn configuration_history(
     let transaction = connection
         .transaction()
         .map_err(|_| WriteError::LogReadFailed)?;
-    let mut candidates = read_candidates(&transaction, scope, after, limit + 1)?;
+    let mut candidates = read_candidates(&transaction, scope, after, limit + 1, versions_only)?;
     let has_more = candidates.len() > limit as usize;
     if has_more {
         candidates.pop();
@@ -383,12 +411,38 @@ pub fn configuration_history(
     } else {
         None
     };
-    let current = identify_current(&transaction, scope)?;
+    let current = identify_current(&transaction, scope, versions_only)?;
+    let current_entry = if versions_only {
+        match current
+            .matched_entry_key
+            .as_deref()
+            .and_then(|key| key.strip_prefix("operation:"))
+        {
+            Some(id) => {
+                let operation =
+                    read_operation(&transaction, id)?.ok_or(WriteError::InvalidStoredOperation)?;
+                Some(read_entry(
+                    &transaction,
+                    scope,
+                    Candidate {
+                        entry_key: format!("operation:{id}"),
+                        operation_id: id.to_owned(),
+                        created_at: operation.created_at,
+                    },
+                    backups,
+                )?)
+            }
+            None => None,
+        }
+    } else {
+        None
+    };
     transaction
         .commit()
         .map_err(|_| WriteError::LogReadFailed)?;
     Ok(HistoryPage {
         current,
+        current_entry,
         entries,
         next_cursor,
     })
@@ -408,6 +462,7 @@ type EntryVersionDigests = (
 fn identify_current(
     connection: &Connection,
     scope: &HistoryScope,
+    versions_only: bool,
 ) -> Result<HistoryCurrentConfig, WriteError> {
     let files = observe_current_files(scope);
     if files.iter().any(|file| !file.readable) {
@@ -424,28 +479,29 @@ fn identify_current(
         .iter()
         .map(|file| (file.target_path.as_str(), file.current_digest.as_deref()))
         .collect();
-    let candidates = read_candidates(connection, scope, None, MAX_CURRENT_SCAN)?;
-    let mut previous_matches: Vec<(i64, String, HistoryIntent)> = Vec::new();
-    let mut intended_matches: Vec<(i64, String, HistoryIntent)> = Vec::new();
+    let candidates = read_candidates(connection, scope, None, MAX_CURRENT_SCAN, versions_only)?;
+    let mut intended_matches: Vec<(i64, String)> = Vec::new();
     let mut saw_partial = false;
     for candidate in candidates {
         // A damaged older row must not hide the current page. Pagination still
         // fails closed when that row is selected; matching simply ignores it.
-        let Ok((previous, intended, intent)) = entry_version_digests(connection, scope, &candidate)
+        let Ok((previous, intended, _intent)) =
+            entry_version_digests(connection, scope, &candidate)
         else {
             continue;
         };
         let previous_full = previous.as_ref().is_some_and(|map| maps_equal(map, &live));
         let intended_full = intended.as_ref().is_some_and(|map| maps_equal(map, &live));
-        if previous_full {
-            previous_matches.push((candidate.created_at, candidate.entry_key.clone(), intent));
-        } else if intended_full {
-            intended_matches.push((candidate.created_at, candidate.entry_key.clone(), intent));
-        } else if is_partial(&previous, &intended, &live) {
+        if intended_full {
+            intended_matches.push((candidate.created_at, candidate.entry_key.clone()));
+        } else if !previous_full && is_partial(&previous, &intended, &live) {
             saw_partial = true;
         }
     }
-    let matched_entry_key = pick_matched_entry(&previous_matches, &intended_matches);
+    // A row describes an operation, not the backup it retained. Only the
+    // operation's successful result can make that row current. Prefer the
+    // newest matching result, including restore and compensation batches.
+    let matched_entry_key = intended_matches.into_iter().max().map(|(_, key)| key);
     let status = if matched_entry_key.is_some() {
         HistoryCurrentStatus::Matched
     } else if saw_partial {
@@ -518,46 +574,6 @@ fn is_partial(
     false
 }
 
-fn pick_matched_entry(
-    previous: &[(i64, String, HistoryIntent)],
-    intended: &[(i64, String, HistoryIntent)],
-) -> Option<String> {
-    // Prefer a restorable snapshot match (previous). Among those, prefer the
-    // original apply identity, then the oldest entry so restoring B pins B.
-    if let Some((_, key, _)) = select_match(previous, true) {
-        return Some(key);
-    }
-    // Otherwise the latest write whose intended digests still hold.
-    select_match(intended, false).map(|(_, key, _)| key)
-}
-
-fn select_match(
-    matches: &[(i64, String, HistoryIntent)],
-    oldest: bool,
-) -> Option<(i64, String, HistoryIntent)> {
-    if matches.is_empty() {
-        return None;
-    }
-    let apply_only: Vec<_> = matches
-        .iter()
-        .filter(|(_, key, intent)| *intent == HistoryIntent::Apply && key.starts_with("operation:"))
-        .cloned()
-        .collect();
-    let pool = if apply_only.is_empty() {
-        matches.to_vec()
-    } else {
-        apply_only
-    };
-    pool.into_iter().reduce(|left, right| {
-        let take_left = if oldest {
-            (left.0, &left.1) <= (right.0, &right.1)
-        } else {
-            (left.0, &left.1) >= (right.0, &right.1)
-        };
-        if take_left { left } else { right }
-    })
-}
-
 /// Full previous/intended digest maps when the entry covers every scoped file.
 fn entry_version_digests(
     connection: &Connection,
@@ -589,14 +605,20 @@ fn entry_version_digests(
             )
         }),
     );
+    // Prepared, failed and unknown mutations are not proven write results.
+    // Their snapshots remain useful for restore/inspection, but must not make
+    // an attempted operation appear current merely because its plan matches.
     let intended_from_revisions = complete_map(
         scope,
-        stored.iter().map(|row| {
-            (
-                row.target_path.clone(),
-                row.revision.intended_digest.clone(),
-            )
-        }),
+        stored
+            .iter()
+            .filter(|row| row.revision.state == HistoryRevisionState::Completed)
+            .map(|row| {
+                (
+                    row.target_path.clone(),
+                    row.revision.intended_digest.clone(),
+                )
+            }),
     );
     if batch.is_some() {
         return Ok((previous_from_revisions, intended_from_revisions, intent));
@@ -658,6 +680,7 @@ fn read_candidates(
     scope: &HistoryScope,
     after: Option<&HistoryCursor>,
     limit: u32,
+    versions_only: bool,
 ) -> Result<Vec<Candidate>, WriteError> {
     // Only placeholder numbers are formatted into SQL. Paths, kinds and cursor
     // values remain bound parameters; `%` and `_` in roots are literal text.
@@ -668,10 +691,16 @@ fn read_candidates(
     let time_parameter = scope.targets.len() + 2;
     let key_parameter = time_parameter + 1;
     let limit_parameter = time_parameter + 2;
+    let include_batches = if versions_only { "0" } else { "1" };
+    let version_filter = if versions_only {
+        "AND EXISTS (SELECT 1 FROM config_version v WHERE v.id = o.id AND v.state != 'deleted')"
+    } else {
+        ""
+    };
     let sql = format!(
         "WITH scoped AS (
             SELECT o.id, o.created_at FROM config_operation o
-            WHERE o.kind = ?1
+            WHERE o.kind = ?1 {version_filter}
               AND EXISTS (SELECT 1 FROM config_operation_step s WHERE s.operation_id = o.id)
               AND NOT EXISTS (SELECT 1 FROM config_operation_step s
                 WHERE s.operation_id = o.id AND s.target_path NOT IN ({path_parameters}))
@@ -680,7 +709,7 @@ fn read_candidates(
             UNION ALL
             SELECT 'batch:' || r.batch_id, r.operation_id, r.created_at
             FROM config_file_revision r JOIN scoped s ON s.id = r.operation_id
-            WHERE r.intent != 'apply' AND r.rowid = (
+            WHERE {include_batches} AND r.intent != 'apply' AND r.rowid = (
                 SELECT min(first.rowid) FROM config_file_revision first
                 WHERE first.batch_id = r.batch_id AND first.operation_id = r.operation_id
                     AND first.intent != 'apply')

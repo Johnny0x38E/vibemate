@@ -47,7 +47,18 @@ pub fn run() {
                     // Managed skill copies live next to the database, so both move
                     // together and a backup of the app-data folder stays complete.
                     app.manage(skills::SkillLibrary::new(data_directory.join("skills")));
-                    storage::StorageStatus::open_in_directory(&data_directory)
+                    let status = storage::StorageStatus::open_in_directory(&data_directory);
+                    if let Ok(storage) = status.storage()
+                        && let Err(error) = config_apply::materialize_configuration_versions(
+                            storage,
+                            &config_apply::BackupStore::new(data_directory.join("backups")),
+                        )
+                    {
+                        // Only the safe code is logged; copied configuration
+                        // bytes and credentials never enter diagnostics.
+                        log::error!(target: "vibemate", "event=configuration_versions_unavailable reason={}", error.code());
+                    }
+                    status
                 }
                 Err(_) => {
                     storage::StorageStatus::Unavailable(storage::StorageError::LocateDataDirectory)

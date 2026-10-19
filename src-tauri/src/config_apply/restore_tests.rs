@@ -241,7 +241,8 @@ fn a_restore_puts_the_previous_bytes_back_and_keeps_the_original_copy() {
         fs::read_to_string(restored_copy).unwrap(),
         "{\"model\":\"two\"}\n"
     );
-    assert_eq!(fs::read_dir(fixture.backups().root()).unwrap().count(), 2);
+    // Original recovery, restore recovery, and the independent written version.
+    assert_eq!(fs::read_dir(fixture.backups().root()).unwrap().count(), 3);
 }
 
 #[test]

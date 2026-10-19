@@ -237,6 +237,7 @@ const pageSchema = z.strictObject({
     // Model the Agent currently names in its live configuration, classified
     // as vibemate's, the user's own, or unreadable.
     active: activeSchema,
+    currentEntry: entrySchema.nullable(),
     entries: z.array(entrySchema).max(50),
     nextCursor: cursorSchema.nullable(),
 });
@@ -301,6 +302,24 @@ function parsePage(
         new Set(page.current.files.map((file) => file.targetPath)).size !==
             page.current.files.length ||
         page.entries.length > limit ||
+        page.entries.some((entry) => entry.intent !== "apply") ||
+        (page.current.status === "matched"
+            ? page.currentEntry === null ||
+              page.currentEntry.intent !== "apply" ||
+              page.currentEntry.entryKey !== page.current.matchedEntryKey ||
+              page.currentEntry.sourceSteps.length !==
+                  page.current.files.length ||
+              page.currentEntry.sourceSteps.some(
+                  (step) =>
+                      step.state !== "applied" ||
+                      !page.current.files.some(
+                          (file) =>
+                              file.targetPath === step.targetPath &&
+                              file.readable &&
+                              file.currentDigest === step.appliedDigest,
+                      ),
+              )
+            : page.currentEntry !== null) ||
         page.entries.some((entry, index, entries) => {
             const previous = index === 0 ? after : entries[index - 1];
             return previous != null && !isOlder(entry, previous);

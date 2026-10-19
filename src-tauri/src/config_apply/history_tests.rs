@@ -935,7 +935,7 @@ fn history_marks_absence_snapshots_as_backup_not_needed() {
     fixture
         .apply(
             OperationKind::ClaudeCodeSettings,
-            &[fixture.file("agent/settings.json", b"created")],
+            &[file_at(&fixture, "agent", "settings.json", b"created")],
         )
         .unwrap();
     let scope = scope(
@@ -984,10 +984,8 @@ fn history_pins_current_by_digest_not_latest_operation_and_keeps_it_off_paginati
         Some(format!("operation:{_c}").as_str())
     );
 
-    // Restore to B's pre-image (content B) by writing B's previous digest bytes.
-    // B's previous is content after A (= "B" wait): A wrote B, so B's previous is "B"?
-    // Start A: file "A". Apply A writes "B" (previous "A"). Apply B writes "C" (previous "B"). Apply C writes "D" (previous "C").
-    // Restore to entry B means restore previous of B = "B". Pin should be B via previous.
+    // Copy B's pre-image back externally: these are A's written result bytes.
+    // A, not B, must receive the current marker.
     let revisions = fixture.revisions();
     let b_revision = revisions
         .iter()
@@ -1011,10 +1009,10 @@ fn history_pins_current_by_digest_not_latest_operation_and_keeps_it_off_paginati
     assert_eq!(page.current.status, HistoryCurrentStatus::Matched);
     assert_eq!(
         page.current.matched_entry_key.as_deref(),
-        Some(format!("operation:{b}").as_str())
+        Some(format!("operation:{a}").as_str())
     );
-    // Pagination still returns the newest history row, but the pin stays on B.
-    assert_ne!(page.entries[0].entry_key, format!("operation:{b}"));
+    // Pagination still returns the newest history row, but the pin stays on A.
+    assert_ne!(page.entries[0].entry_key, format!("operation:{a}"));
     let older = configuration_history(
         &fixture.storage,
         &scope,
@@ -1036,7 +1034,6 @@ fn history_pins_current_by_digest_not_latest_operation_and_keeps_it_off_paginati
     assert_eq!(external.current.status, HistoryCurrentStatus::Unrecorded);
     assert_eq!(external.current.matched_entry_key, None);
     assert!(external.current.files[0].readable);
-    assert_ne!(a, b); // silence unused if any
 }
 
 #[test]

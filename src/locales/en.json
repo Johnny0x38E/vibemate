@@ -531,7 +531,7 @@
             "review": "Review version",
             "reviewing": "Building the version preview…",
             "previewHeading": "Version restore preview",
-            "previewFor": "Restore the configuration to its state before {{kind}} from {{time}}",
+            "previewFor": "Use the configuration written {{time}}",
             "ownerRef": "Recorded owner reference: {{id}}",
             "actions": {
                 "restore": "Write this retained content back",
@@ -569,7 +569,8 @@
             "blockedHint": "This version cannot be restored safely. Resolve the listed file reasons and review again.",
             "keyNotice": "The restored files get back whatever they held at that time, including plain text API keys if they contained one. OS credential storage is not changed.",
             "sessionNotice": "Start a new Agent session for the restored configuration to be read; running sessions keep the values they loaded.",
-            "confirm": "Restore this version",
+            "switchNotice": "This may restore old API keys; OS credentials stay unchanged. Start a new Agent session afterwards.",
+            "confirm": "Use this configuration",
             "restoring": "Restoring this version…",
             "nothingToRestore": "This version already matches the current files.",
             "planReasons": {
@@ -584,7 +585,7 @@
                 "failed": "restore did not finish",
                 "unknown": "result unverified"
             },
-            "resultHint": "Recheck history to see the new restore entry. It retains what it replaced, so it can be undone from the same list.",
+            "resultHint": "The list marks and pins the configuration matching the current files. To switch again, select another saved configuration; recovery records stay internal.",
             "textTitle": "Detailed configuration",
             "textClose": "Close",
             "textFiles": "Files in this version",
@@ -914,7 +915,7 @@
             "delete": {
                 "label": "Delete this record and its backups",
                 "title": "Delete configuration history entry?",
-                "body": "This permanently removes the history entry and its exclusive pre-mutation backups. It cannot be undone. It does not change the Agent’s current configuration files, does not delete Providers or credentials, and does not drop model alias ownership.",
+                "body": "This deletes the saved configuration and its own snapshots. Other versions, current Agent files, credentials, and recovery logs with their backups are kept. This cannot be undone.",
                 "confirm": "Delete record",
                 "cancel": "Cancel",
                 "deleting": "Deleting…",
@@ -940,6 +941,7 @@
                 }
             },
             "fieldProvider": "Provider",
+            "providerRemoved": "Removed provider",
             "providerRemovedNote": "(no longer in the library)"
         },
         "segments": {

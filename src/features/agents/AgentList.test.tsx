@@ -683,6 +683,7 @@ test("list cards omit provider|model when history has no writable summary", asyn
                 modelLabel: null,
             },
             active: { kind: "own" },
+            currentEntry: null,
             entries: [],
             nextCursor: null,
         },
@@ -762,6 +763,7 @@ test("list cards show a single provider | model line from history current", asyn
                 modelId: "deepseek/deepseek-v4.1-flash",
                 modelLabel: "deepseek/deepseek-v4.1-flash",
             },
+            currentEntry: null,
             entries: [
                 {
                     entryKey,
@@ -851,6 +853,7 @@ test("list cards show the current active model when the live file is unmatched",
                 modelId: "deepseek/deepseek-v4.1-flash",
                 modelLabel: "Flash Alias",
             },
+            currentEntry: null,
             entries: [],
             nextCursor: null,
         },

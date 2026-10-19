@@ -92,9 +92,9 @@ fn an_apply_step_replaces_every_file_and_settles_as_applied() {
     );
     assert_eq!(fixture.content("settings.json"), "{\"old\":false}\n");
     assert_eq!(fixture.content("models.json"), "{\"models\":[\"one\"]}\n");
-    // Both replaced files have their previous content stored, and each step
-    // reports where that copy is.
-    assert_eq!(fs::read_dir(backups.root()).unwrap().count(), 2);
+    // Each file has an independent written-version copy and a recovery copy.
+    // Step acknowledgments report only the latter, not configuration bytes.
+    assert_eq!(fs::read_dir(backups.root()).unwrap().count(), 4);
     for step in &result.steps {
         let backup = step.backup_path.as_ref().expect("backup path");
         assert!(Path::new(backup).is_file());
@@ -233,7 +233,21 @@ fn a_failing_first_file_changes_nothing_and_settles_as_failed() {
         .unwrap();
     assert_eq!(record.state, OperationState::Failed);
     assert_eq!(record.steps[1].state, StepState::Pending);
-    assert!(!fixture.backups().root().exists());
+    // Planned-version copies are retained, but no pre-write revision exists
+    // because the first file failed its concurrency check before replacement.
+    assert_eq!(fs::read_dir(fixture.backups().root()).unwrap().count(), 2);
+    assert_eq!(
+        fixture
+            .storage
+            .lock()
+            .unwrap()
+            .query_row("SELECT count(*) FROM config_file_revision", [], |row| row
+                .get::<_, u32>(
+                0
+            ))
+            .unwrap(),
+        0
+    );
 }
 
 #[test]

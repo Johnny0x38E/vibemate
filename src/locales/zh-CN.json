@@ -531,7 +531,7 @@
             "review": "查看版本",
             "reviewing": "正在生成版本预览…",
             "previewHeading": "版本恢复预览",
-            "previewFor": "将配置恢复到 {{time}} 的“{{kind}}”之前状态",
+            "previewFor": "使用 {{time}} 写入的配置",
             "ownerRef": "记录的归属引用：{{id}}",
             "actions": {
                 "restore": "写回这个保留版本",
@@ -569,7 +569,8 @@
             "blockedHint": "这个版本无法安全恢复。请先处理列出的文件原因，再重新预览。",
             "keyNotice": "恢复后的文件会回到当时的内容，其中可能包含明文 API 密钥。系统凭据存储不会改动。",
             "sessionNotice": "新建 Agent 会话后才会读取恢复后的配置；运行中的会话保留已加载的值。",
-            "confirm": "恢复这个版本",
+            "switchNotice": "可能恢复旧 API 密钥，系统凭据不变。切换后请新建 Agent 会话。",
+            "confirm": "使用此配置",
             "restoring": "正在恢复这个版本…",
             "nothingToRestore": "这个版本已与当前文件一致。",
             "planReasons": {
@@ -584,7 +585,7 @@
                 "failed": "恢复未完成",
                 "unknown": "结果未确认"
             },
-            "resultHint": "重新检查历史可看到新的恢复记录；它保留了被替换的内容，因此可从同一列表撤销。",
+            "resultHint": "列表会将与当前文件一致的配置标记并置顶。再次切换时选择另一条历史配置即可；恢复记录仅在内部保留。",
             "textTitle": "详细配置",
             "textClose": "关闭",
             "textFiles": "此版本涉及的文件",
@@ -914,7 +915,7 @@
             "delete": {
                 "label": "删除此记录及备份",
                 "title": "删除配置历史记录？",
-                "body": "将永久删除这条历史记录及其独占的改写前备份，不可恢复。不会改动 Agent 当前配置文件，不会删除服务商或凭据，也不会丢失模型别名归属。",
+                "body": "将删除这条历史配置及其独立快照，且不可撤销。其他版本、Agent 当前文件、系统凭据，以及恢复日志和对应备份均会保留。",
                 "confirm": "删除记录",
                 "cancel": "取消",
                 "deleting": "正在删除…",
@@ -940,6 +941,7 @@
                 }
             },
             "fieldProvider": "服务商",
+            "providerRemoved": "服务商已删除",
             "providerRemovedNote": "（已不在库中）"
         },
         "segments": {

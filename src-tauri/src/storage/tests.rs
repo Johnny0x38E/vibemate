@@ -34,6 +34,54 @@ impl Drop for TestDirectory {
 }
 
 #[test]
+fn version_migration_keeps_old_journals_and_does_not_invent_snapshot_bytes() {
+    let directory = TestDirectory::new("independent-versions-upgrade");
+    let path = directory.path.join(DATABASE_FILE_NAME);
+    let id = "0123456789abcdef0123456789abcdef";
+    {
+        let old = Storage::open_file(&path, &MIGRATIONS[..24]).unwrap();
+        old.lock()
+            .unwrap()
+            .execute(
+                "INSERT INTO config_operation(id, kind, state, created_at, updated_at)
+             VALUES (?1, 'claude_code_settings', 'applied', 1, 1)",
+                [id],
+            )
+            .unwrap();
+    }
+    let upgraded = Storage::open_in_directory(&directory.path).unwrap();
+    let connection = upgraded.lock().unwrap();
+    assert_eq!(
+        connection
+            .query_row(
+                "SELECT state FROM config_version WHERE id = ?1",
+                [id],
+                |row| row.get::<_, String>(0)
+            )
+            .unwrap(),
+        "legacy"
+    );
+    assert_eq!(
+        connection
+            .query_row("SELECT count(*) FROM config_version_file", [], |row| row
+                .get::<_, u32>(0))
+            .unwrap(),
+        0
+    );
+    assert_eq!(
+        connection
+            .query_row(
+                "SELECT state FROM config_operation WHERE id = ?1",
+                [id],
+                |row| row.get::<_, String>(0)
+            )
+            .unwrap(),
+        "applied"
+    );
+    assert!(connection.execute("INSERT INTO config_version_file VALUES (?1, 0, '/target', 'invalid-digest', 'copy', '/copy')", [id]).is_err());
+}
+
+#[test]
 fn mcp_migration_preserves_provider_models_and_preferences() {
     let directory = TestDirectory::new("mcp-upgrade");
     let path = directory.path.join(DATABASE_FILE_NAME);

@@ -33,7 +33,9 @@ fn apply_at(
     content: &[u8],
 ) -> String {
     fs::create_dir_all(root).unwrap();
-    fs::write(root.join("settings.json"), BEFORE).unwrap();
+    if !root.join("settings.json").exists() {
+        fs::write(root.join("settings.json"), BEFORE).unwrap();
+    }
     let target = read_target_bytes(&root.join("settings.json")).unwrap().0;
     fixture
         .apply(
@@ -93,7 +95,7 @@ fn the_surface_previews_and_applies_one_reviewed_entry() {
     .unwrap();
     assert_eq!(outcome.files.len(), 1);
     assert_eq!(outcome.entry_key, request.entry_key);
-    assert_eq!(fs::read(root.join("settings.json")).unwrap(), BEFORE);
+    assert_eq!(fs::read(root.join("settings.json")).unwrap(), FIRST);
 }
 
 #[test]
@@ -102,7 +104,6 @@ fn already_restored_entries_keep_present_target_tokens_and_complete_text() {
     let environment = environment(&fixture);
     let root = environment.home.join(".claude");
     let operation = apply_at(&fixture, OperationKind::ClaudeCodeSettings, &root, FIRST);
-    fs::write(root.join("settings.json"), BEFORE).unwrap();
     let request = VersionRestoreRequest {
         agent: ConfigurationAgent::ClaudeCode,
         entry_key: format!("operation:{operation}"),
@@ -130,12 +131,12 @@ fn already_restored_entries_keep_present_target_tokens_and_complete_text() {
     let VersionTextSide::Present { text, .. } = text.target else {
         panic!("present retained file");
     };
-    assert!(text.contains("before"));
-    assert!(!text.contains("synthetic-old-secret"));
+    assert!(text.contains("first"));
+    assert!(!text.contains("synthetic-first-secret"));
 }
 
 #[test]
-fn already_absent_entries_have_no_invalid_root_field_change() {
+fn an_independent_written_version_can_recreate_a_missing_live_file() {
     let fixture = Fixture::new();
     let environment = environment(&fixture);
     let root = environment.home.join(".claude");
@@ -161,11 +162,11 @@ fn already_absent_entries_have_no_invalid_root_field_change() {
         &fixture.backups(),
     )
     .unwrap();
-    assert!(!plan.restorable);
-    assert_eq!(plan.files[0].action, VersionRestoreAction::Skip);
+    assert!(plan.restorable);
+    assert_eq!(plan.files[0].action, VersionRestoreAction::Restore);
     assert_eq!(plan.files[0].current_digest, None);
-    assert_eq!(plan.files[0].target_digest, None);
-    assert!(plan.files[0].summary.changes.is_empty());
+    assert!(plan.files[0].target_digest.is_some());
+    assert_eq!(plan.files[0].reason, None);
 }
 
 #[test]
@@ -205,8 +206,8 @@ fn the_text_surface_returns_sanitized_current_and_retained_text() {
     let VersionTextSide::Present { text: target, .. } = text.target else {
         panic!("expected target text");
     };
-    assert!(target.contains("\"before\""));
-    assert!(!target.contains("synthetic-old-secret"));
+    assert!(target.contains("\"first\""));
+    assert!(!target.contains("synthetic-first-secret"));
 
     request.current_digest = Some("f".repeat(64));
     assert_eq!(

@@ -1,4 +1,10 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+    cleanup,
+    render,
+    screen,
+    waitFor,
+    within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StrictMode } from "react";
 import { I18nextProvider } from "react-i18next";
@@ -207,7 +213,19 @@ function page(
     nextCursor: HistoryCursor | null = null,
     current: HistoryPage["current"] = currentConfig(),
 ): HistoryPage {
-    return { current, active: { kind: "unknown" }, entries, nextCursor };
+    const currentEntry =
+        current.status === "matched"
+            ? (entries.find(
+                  (entry) => entry.entryKey === current.matchedEntryKey,
+              ) ?? null)
+            : null;
+    return {
+        current,
+        currentEntry,
+        active: { kind: "unknown" },
+        entries,
+        nextCursor,
+    };
 }
 
 /** Listed entry is not HistoryCurrentConfig.matchedEntryKey (not live current). */
@@ -332,33 +350,21 @@ test("Recheck sits outside the history list card", async () => {
     ).toBeTruthy();
 });
 
-test("a recorded write shows its intent, state, time, provider and file", async () => {
+test("a saved configuration expands the preview for its own identity", async () => {
     await mount();
-    expect(
-        await screen.findByText(
-            rowSummary("Apply · Written · Current configuration"),
-        ),
-    ).toBeTruthy();
+    await screen.findByText(
+        rowSummary("Apply · Written · Current configuration"),
+    );
     expect(screen.getByText("DeepSeek Work")).toBeTruthy();
-    expect(screen.getByText("Available")).toBeTruthy();
-    expect(screen.getByText("1 file")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Show details" })).toBeTruthy();
-    // The current-config pin always lists managed paths; long backup sentences
-    // on the history row stay collapsed until expanded.
-    expect(screen.getByText(SETTINGS)).toBeTruthy();
-    expect(
-        screen.queryByText(
-            /Independent pre-mutation backup is available and matches its digest/u,
-        ),
-    ).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "Show details" }));
-    expect(screen.getAllByText(SETTINGS).length).toBeGreaterThan(0);
+    await screen.findByRole("region", { name: "Version restore preview" });
+    expect(previewVersion).toHaveBeenCalledWith("claudeCode", entry.entryKey);
     expect(
-        screen.getByText(
-            /Independent pre-mutation backup is available and matches its digest/u,
-        ),
-    ).toBeTruthy();
-    expect(screen.queryByText(String(entry.createdAt))).toBeNull();
+        screen
+            .getByRole("button", { name: "Hide details" })
+            .getAttribute("aria-expanded"),
+    ).toBe("true");
+    expect(screen.getByText("model")).toBeTruthy();
 });
 
 test("pins the live current configuration above the list and marks a matched entry", async () => {
@@ -382,23 +388,31 @@ test("pins the live current configuration above the list and marks a matched ent
     ).toBeTruthy();
 });
 
-test("current matched entry expands without Restore this version", async () => {
+test("the current written version does not offer a redundant restore", async () => {
     previewVersion.mockResolvedValue({
         kind: "desktop",
-        plan: versionPlan,
+        plan: {
+            ...versionPlan,
+            restorable: false,
+            files: [
+                {
+                    ...versionFile,
+                    action: "skip",
+                    currentDigest: APPLIED_DIGEST,
+                    summary: { ...versionFile.summary, changes: [] },
+                },
+            ],
+        },
     });
-    // Default page() marks entry as matched current via currentConfig().
     await mount();
     await openVersionPreview();
+    await screen.findByRole("region", { name: "Version restore preview" });
     expect(
-        await screen.findByRole("region", { name: "Version restore preview" }),
+        screen.getByText("This version already matches the current files."),
     ).toBeTruthy();
-    // Field diffs still visible.
-    expect(screen.getByText("model")).toBeTruthy();
     expect(
-        screen.queryByRole("button", { name: "Restore this version" }),
+        screen.queryByRole("button", { name: "Use this configuration" }),
     ).toBeNull();
-    expect(screen.getByRole("button", { name: "Close" })).toBeTruthy();
 });
 
 test("an unrecorded current pin stays fixed when older history loads", async () => {
@@ -456,12 +470,11 @@ test("an unrecorded current pin stays fixed when older history loads", async () 
     ).toBeNull();
 });
 
-test("backup unavailable text is shown without inventing a restore action", async () => {
+test("recovery backup availability does not decide whether a saved version can be used", async () => {
     const step = entry.sourceSteps[0];
     const revision = entry.revisions[0];
-    if (step === undefined || revision === undefined) {
-        throw new Error("fixture entry must include a step and revision");
-    }
+    if (step === undefined || revision === undefined)
+        throw new Error("incomplete fixture");
     const unavailable: HistoryEntry = {
         ...entry,
         sourceSteps: [{ ...step, backupState: "unavailable" }],
@@ -472,18 +485,14 @@ test("backup unavailable text is shown without inventing a restore action", asyn
         page: page([unavailable], null, currentConfig("partial")),
     });
     await mount();
-    expect(await screen.findByText("Unavailable")).toBeTruthy();
-    expect(
-        screen.getByRole("region", { name: "Current configuration" }),
-    ).toBeTruthy();
-    expect(screen.queryByText(/Current configuration · Partial/u)).toBeNull();
-    await userEvent.click(screen.getByRole("button", { name: "Show details" }));
-    expect(
-        screen.getByText(
-            /Independent pre-mutation backup is missing, damaged or unreadable/u,
-        ),
-    ).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Hide details" })).toBeTruthy();
+    await userEvent.click(
+        await screen.findByRole("button", { name: "Show details" }),
+    );
+    const use = await screen.findByRole("button", {
+        name: "Use this configuration",
+    });
+    expect(use.getAttribute("aria-disabled")).toBe("false");
+    expect(previewVersion).toHaveBeenCalledWith("claudeCode", entry.entryKey);
 });
 
 test("closing the inline version plan fully collapses the history row", async () => {
@@ -539,13 +548,11 @@ test("the version preview lists sanitized field changes and confirms the reviewe
         .closest("li");
     expect(secretChange?.textContent).toContain(SECRET);
     expect(screen.getByText("credential value hidden")).toBeTruthy();
-    expect(
-        screen.getByText(/Start a new Agent session for the restored/u),
-    ).toBeTruthy();
+    expect(screen.getByText(/OS credentials stay unchanged/u)).toBeTruthy();
 
     const reads = loadHistory.mock.calls.length;
     await userEvent.click(
-        screen.getByRole("button", { name: "Restore this version" }),
+        screen.getByRole("button", { name: "Use this configuration" }),
     );
     await waitFor(() => {
         expect(restoreVersion).toHaveBeenCalledWith(
@@ -562,7 +569,7 @@ test("the version preview lists sanitized field changes and confirms the reviewe
     expect(screen.getByText(`${SETTINGS} — restored`)).toBeTruthy();
     expect(loadHistory).toHaveBeenCalledTimes(reads + 1);
     expect(
-        screen.queryByRole("button", { name: "Restore this version" }),
+        screen.queryByRole("button", { name: "Use this configuration" }),
     ).toBeNull();
 });
 
@@ -593,10 +600,7 @@ test("a blocked version cannot be confirmed and explains each file", async () =>
         (await screen.findAllByText(/retained copy is missing/u)).length,
     ).toBeGreaterThan(0);
     expect(
-        screen.getByText(/This version cannot be restored safely/u),
-    ).toBeTruthy();
-    expect(
-        screen.queryByRole("button", { name: "Restore this version" }),
+        screen.queryByRole("button", { name: "Use this configuration" }),
     ).toBeNull();
 });
 
@@ -616,7 +620,7 @@ test("an unresolved entry withholds the version confirmation", async () => {
         await screen.findByText(/interrupted writes. Inspect and record/u),
     ).toBeTruthy();
     expect(
-        screen.queryByRole("button", { name: "Restore this version" }),
+        screen.queryByRole("button", { name: "Use this configuration" }),
     ).toBeNull();
 });
 
@@ -632,7 +636,7 @@ test("a stale version confirmation is refused and the history is re-read", async
     await openVersionPreview();
     const reads = loadHistory.mock.calls.length;
     await userEvent.click(
-        await screen.findByRole("button", { name: "Restore this version" }),
+        await screen.findByRole("button", { name: "Use this configuration" }),
     );
     expect(
         await screen.findByText(
@@ -640,7 +644,7 @@ test("a stale version confirmation is refused and the history is re-read", async
         ),
     ).toBeTruthy();
     expect(
-        screen.queryByRole("button", { name: "Restore this version" }),
+        screen.queryByRole("button", { name: "Use this configuration" }),
     ).toBeNull();
     await waitFor(() => {
         expect(loadHistory.mock.calls.length).toBeGreaterThan(reads);
@@ -669,56 +673,72 @@ test("a version preview read failure is reported and can be retried", async () =
     expect(previewVersion).toHaveBeenCalledTimes(2);
 });
 
-test("restore and compensation batches offer the version preview", async () => {
-    const batch: HistoryEntry = {
+test("pins an older current version outside the page and moves the badge after switching", async () => {
+    const older: HistoryEntry = {
         ...entry,
-        entryKey: "batch:restore-batch",
-        intent: "restore",
-        sourceState: "compensated",
+        entryKey: `operation:${"e".repeat(32)}`,
+        operationId: "e".repeat(32),
+        ownerLabel: "Older configuration",
+        createdAt: entry.createdAt - 1_000,
+        updatedAt: entry.updatedAt - 1_000,
     };
     loadHistory.mockResolvedValue({
         kind: "desktop",
-        page: pageNotCurrent([batch]),
-    });
-    previewVersion.mockResolvedValue({
-        kind: "desktop",
-        plan: {
-            ...versionPlan,
-            entryKey: batch.entryKey,
-            intent: "version_restore",
+        page: {
+            ...page([entry], CURSOR, currentConfig("matched", older.entryKey)),
+            currentEntry: older,
         },
     });
     await mount();
-    expect(
-        await screen.findByText("Restore · File result recorded"),
-    ).toBeTruthy();
-    await userEvent.click(screen.getByRole("button", { name: "Show details" }));
+    await screen.findByText("Older configuration");
+    const rows = screen.getAllByRole("listitem");
+    expect(rows).toHaveLength(2);
+    expect(rows[0]?.textContent).toContain("Older configuration");
+    expect(rows[0]?.textContent).toContain("Current configuration");
+    expect(rows[1]?.textContent).not.toContain("Current configuration");
+    const control = screen.getAllByRole("button", { name: "Show details" })[1];
+    if (control === undefined) throw new Error("missing newer version");
+    await userEvent.click(control);
+    await screen.findByRole("region", { name: "Version restore preview" });
+    loadHistory.mockResolvedValue({
+        kind: "desktop",
+        page: page([entry, older]),
+    });
+    await userEvent.click(
+        screen.getByRole("button", { name: "Use this configuration" }),
+    );
     await waitFor(() => {
-        expect(previewVersion).toHaveBeenCalledWith(
+        expect(restoreVersion).toHaveBeenCalledWith(
             "claudeCode",
-            batch.entryKey,
+            entry.entryKey,
+            [{ revisionId: REVISION, currentDigest: CURRENT_DIGEST }],
+        );
+        const versionsList = within(
+            screen.getByRole("region", { name: "Configuration history" }),
+        ).getAllByRole("list")[0];
+        if (versionsList === undefined) throw new Error("missing version list");
+        const refreshed = Array.from(versionsList.children);
+        expect(refreshed).toHaveLength(2);
+        expect(refreshed[0]?.textContent).toContain("DeepSeek Work");
+        expect(refreshed[0]?.textContent).toContain("Current configuration");
+        expect(refreshed[1]?.textContent).not.toContain(
+            "Current configuration",
         );
     });
 });
 
-test("a legacy apply entry without retained bytes keeps the rollback entry", async () => {
+test("a legacy apply entry previews its written version, not its pre-write rollback", async () => {
     loadHistory.mockResolvedValue({
         kind: "desktop",
         page: page([{ ...entry, revisions: [] }]),
     });
-    // The legacy listing shape is separate from the paginated entry; this test
-    // only needs the action to reach planAgentRestore.
-    previewLegacy.mockResolvedValue({ kind: "desktop", plan: legacyPlan });
     await mount();
     await userEvent.click(
         await screen.findByRole("button", { name: "Preview restore" }),
     );
-    await waitFor(() => {
-        expect(previewLegacy).toHaveBeenCalledWith("claudeCode", OPERATION_ID);
-    });
-    expect(
-        await screen.findByRole("dialog", { name: "Restore preview" }),
-    ).toBeTruthy();
+    await screen.findByRole("region", { name: "Version restore preview" });
+    expect(previewVersion).toHaveBeenCalledWith("claudeCode", entry.entryKey);
+    expect(previewLegacy).not.toHaveBeenCalled();
 });
 
 test("loads more history without replacing the entries already read", async () => {
@@ -825,7 +845,6 @@ test("deletes a history entry after confirmation and reloads the list", async ()
             name: "Delete configuration history entry?",
         }),
     ).toBeTruthy();
-    expect(screen.getByText(/does not change the Agent/u)).toBeTruthy();
     await userEvent.click(
         screen.getByRole("button", { name: "Delete record" }),
     );

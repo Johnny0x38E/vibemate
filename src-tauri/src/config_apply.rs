@@ -754,6 +754,7 @@ mod service;
 mod snapshots;
 mod version_restore;
 pub(crate) mod version_text;
+mod versions;
 
 pub use cleanup::{
     BackupCleanupOutcome, BackupInventory, UnreferencedBackup, cleanup_backup_copies,
@@ -762,10 +763,11 @@ pub use cleanup::{
 pub use history::{
     HistoryCurrentConfig, HistoryCurrentFile, HistoryCurrentStatus, HistoryCursor, HistoryEntry,
     HistoryIntent, HistoryPage, HistoryResolution, HistoryRevision, HistoryRevisionState,
-    HistoryScope, HistorySourceStep, configuration_history,
+    HistoryScope, HistorySourceStep, configuration_history, configuration_versions,
 };
 pub use history_delete::{
-    HistoryDeleteLeftover, HistoryDeleteOutcome, HistoryDeleteState, delete_history_entry,
+    HistoryDeleteLeftover, HistoryDeleteOutcome, HistoryDeleteState, delete_configuration_version,
+    delete_history_entry,
 };
 pub use inspection::{
     RevisionBackupState, RevisionInspection, RevisionMatch, inspect_interrupted_revisions,
@@ -787,11 +789,13 @@ pub use service::{AppliedOperation, PlannedFile, StepOutcome, apply_files, compe
 pub use version_restore::{
     CurrentConfigText, ReviewedVersionFile, VersionRestoreAction, VersionRestoreFile,
     VersionRestoreFileOutcome, VersionRestoreOutcome, VersionRestorePlan, apply_version_restore,
-    plan_version_restore, read_current_text, read_version_text,
+    apply_written_version, plan_version_restore, plan_written_version, read_current_text,
+    read_version_text, read_written_version_text,
 };
 pub use version_text::{
     ConfigFormat, FieldChange, FieldChangeKind, VersionFileSummary, VersionText, VersionTextSide,
 };
+pub use versions::materialize_configuration_versions;
 
 #[cfg(test)]
 mod operation_tests;

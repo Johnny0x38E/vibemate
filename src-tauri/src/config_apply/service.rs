@@ -114,11 +114,16 @@ fn apply_with_mode(
     let _mutation_lock = storage
         .lock_configuration()
         .map_err(|_| WriteError::StorageUnavailable)?;
+    super::versions::materialize_locked(storage, backups)?;
     if files.is_empty() {
         return Err(WriteError::InvalidRequest);
     }
     let targets: Vec<WriteTarget> = files.iter().map(|file| file.target.clone()).collect();
     let operation_id = begin_operation(storage, kind, owner, &targets)?;
+    if let Err(error) = super::versions::prepare(storage, &operation_id, files, backups) {
+        finish_operation(storage, &operation_id, OperationState::Failed)?;
+        return Err(error);
+    }
     let mut steps = Vec::with_capacity(files.len());
     for (index, file) in files.iter().enumerate() {
         let ordinal = u32::try_from(index).map_err(|_| WriteError::InvalidRequest)?;
@@ -203,6 +208,7 @@ fn apply_with_mode(
         }
     }
     finish_operation(storage, &operation_id, OperationState::Applied)?;
+    super::versions::publish(storage, &operation_id)?;
     Ok(AppliedOperation {
         operation_id,
         state: OperationState::Applied,

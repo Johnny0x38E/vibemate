@@ -42,7 +42,7 @@ pub fn delete_history_entry(
         return Err(ClaudeCodeRestoreError::InvalidRequest);
     }
     let scope = history_scope(request.agent, environment)?;
-    Ok(config_apply::delete_history_entry(
+    Ok(config_apply::delete_configuration_version(
         storage,
         &scope,
         &request.entry_key,

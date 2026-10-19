@@ -29,7 +29,7 @@ it, verify, and allow restore.
 
 ## Preview presentation
 
-Every configuration preview uses the same two layers:
+Model configuration previews expose two layers:
 
 1. **Field summary.** Per file, the field paths with added, removed, replaced or
    container changes, and sanitized old/new values. Absent, unset, empty string
@@ -37,9 +37,15 @@ Every configuration preview uses the same two layers:
 2. **Complete text.** On request, a dialog shows the full native JSON or TOML for
    each file, read-only and highlighted, with a bounded line diff and file
    switching. The model preview compares the current file with the planned
-   result; a history restore compares the current file with the retained version.
+   result. The history panel uses the same field-summary data, comparing current
+   bytes with the selected configuration's written result.
 
-Rust builds both layers from the same native plan that apply will use, so the
+History rows keep the inline field differences, necessary failure messages,
+one key/session warning and **Use this configuration**. They do not repeat
+backup details, internal Provider references or the row's timestamp. The live
+configuration's separate detail action still reads sanitized current text.
+
+Rust builds previews from the same native plan that apply will use, so the
 frontend never assembles a configuration by itself. Text is masked for
 credential-like keys across the whole document, not only the keys vibemate owns.
 An unparsable document is reported as unavailable instead of being shown raw.
@@ -56,7 +62,7 @@ a stale restore is refused with `plan_stale` and writes nothing.
 
 ## Write journal
 
-`schema v16–v23` extend the journal that makes a write recoverable.
+`schema v16–v25` record recoverable writes and independent configuration versions.
 
 - Before any target is replaced, an operation row and its per-file steps are
   written in a transaction. A multi-file write cannot be a filesystem
@@ -75,6 +81,10 @@ a stale restore is refused with `plan_stale` and writes nothing.
 - Schema v23 adds a durable delete journal (`prepared` / `failed` / `completed`)
   and exclusive backup-target rows, so a delete can be retried without hiding a
   history entry while copies that may hold secrets still exist.
+- Schema v25 adds `config_version` and `config_version_file`. Each apply owns a
+  complete result copy for every planned file, including unchanged files. These
+  copies must persist before the first target write and become available only
+  after a successful apply. They are separate from pre-write recovery backups.
 
 Apply, manual restore, compensation and explicit resolution take a permanent
 exclusive `.config-lock` file next to the database before the SQLite lock, using
@@ -91,21 +101,23 @@ seek cursor and a page size; Rust resolves the configuration root from the same
 environment precedence as discovery, so history stays readable after an
 installation or directory is removed.
 
-- Entries are newest first. An apply operation and each restore or compensation
-  batch are separate entries. A multi-file batch is never split across pages.
-- Each entry lists time, kind, result, per-file state, the recorded Provider name
-  (or the retained reference when the Provider was deleted), and per-file backup
-  availability. Only a retained private copy with a matching digest counts as
-  available; a journal reference alone does not.
-- Every page also returns the live `current` configuration, compared by actual
-  file digests with retained versions. A full match names one history entry and,
-  for that entry, the Provider display name plus the live model ID and its saved
-  alias. External edits, unreadable files and partial multi-file matches are
-  reported as `unrecorded`, `unreadable` or `partial` instead of naming the last
-  operation as current.
-- No response contains configuration bytes, backup paths or recovery approval.
-- Interrupted writes set `requiresResolution` and withdraw the legacy restore
-  action.
+- Chronological entries contain original apply records only. Restore and
+  compensation batches remain in the full internal audit journal, not as extra
+  saved configurations in the interface.
+- Every page returns the live `current` configuration and the separately loaded
+  `currentEntry`. A successful original apply is matched by every scoped file's
+  written digest, never by its pre-write backup. The matching version is pinned
+  once before the chronological rows, even outside the requested seek page.
+- Current Provider/model metadata comes from that matched apply and live model
+  fields, not from whichever page was requested. External edits, unreadable
+  files and partial multi-file matches are reported as `unrecorded`,
+  `unreadable` or `partial` rather than mislabeled as the newest operation.
+- Backup metadata is retained for recovery checks; a backup reference alone
+  proves neither the selected written version's availability nor permission to
+  restore it. Expanded rows use the version preview instead of backup prose.
+- No history response contains configuration bytes, backup paths or recovery
+  approval. Interrupted writes retain `requiresResolution` and an inspection
+  action; they cannot be selected until the interruption is resolved.
 
 The frontend boundary (`src/lib/desktop/history.ts`) validates the nested
 response with strict Zod schemas: unknown fields, contradictory journal or
@@ -128,41 +140,49 @@ never reads credentials and never changes configuration.
 
 ### Restoring a retained version
 
-Any retained apply entry or restore/compensation batch can be restored to its
-pre-entry state, including the oldest original state. Restoring does not require
-undoing later writes one by one, and an already restored entry remains a valid
-source.
+A row selects the bytes that its original apply wrote. After A → B → C,
+selecting A restores A itself, not the state before A and not B's recovery
+backup. Each version owns full independent copies, including Pi's unchanged
+second file. Selecting one never consumes its copies or borrows another row's.
 
-- The scope is exact: the Agent's configuration root and its owned direct child
-  files. A symbolic link, an unreadable or oversized target, a read-only target, a
-  missing or damaged snapshot, or an unresolved interrupted write blocks the
-  whole entry.
-- The preview returns current digests. Confirmation rebuilds the plan under the
-  shared lock and refuses any changed file, snapshot or journal entry with
-  `plan_stale`.
-- A restore first stores the current bytes, so it is itself a new undoable batch.
-  No retained snapshot is consumed.
-- Restoring can write back an old plain-text key. The dialog says so, and the
-  saved OS credential is not changed.
+- The scope is exact: the Agent's root and owned files. Symlinks, unreadable or
+  oversized targets, read-only targets, damaged copies and unresolved writes
+  block selection. A missing live file can be recreated from its saved copy.
+- Confirmation rebuilds the preview under the shared mutation lock and refuses
+  changed live digests, copies or journal state with `plan_stale`.
+- Before a restore writes, it saves the current bytes in a separate recovery
+  batch. That batch remains in the audit journal and does not create a new
+  visible configuration version. The current badge moves to the original row.
+- Restoring can put an old plain-text API key back into an Agent file. The
+  interface warns before confirmation; OS credentials are unchanged. A new
+  Agent session may be needed for the saved files to take effect.
 
-### Deleting history
+For pre-v25 data, a one-time conversion copies exact, digest-verified result
+bytes from live files or old journal snapshots into version-owned storage.
+Interrupted copying resumes after restart. Missing bytes make a version
+explicitly unavailable; no configuration is guessed from a model name or a
+chain of differences. The old pre-entry APIs remain internal recovery tools.
 
-Each deletable entry, including the earliest and already restored versions, has a
-bilingual confirmation that states the scope and that the deletion cannot be
-undone. Deletion removes only that entry's exclusive private copies and its
-journal row.
+### Deleting a saved configuration
 
-- Unfinished writes (`history_active`), interrupted revisions
-  (`history_unresolved`) and apply entries that still have restore or
-  compensation batches (`history_referenced`) are refused.
-- Shared backup references are never removed because another entry still uses
-  them.
-- Database and file deletion are not one transaction. The durable state and idempotent
-  retry mean an interrupted or failed delete stays discoverable and retryable
-  instead of leaving an unowned copy that may hold secrets. File deletion is not
-  secure erasure.
-- Deletion does not change the Agent's current configuration, the Provider, the
-  saved credential or the model alias ownership.
+Deletion removes that version's own full copies, then marks it deleted. It does
+not remove the original audit operation or its recovery backups. The bilingual
+confirmation explains that scope, the retained data and irreversibility.
+
+- Earliest, intermediate and previously restored versions are independently
+  deletable. Completed hidden restore batches do not create permanent deletion
+  dependencies between versions.
+- Unfinished writes (`history_active`) and interrupted revisions
+  (`history_unresolved`) remain protected. A failed delete rechecks them before
+  touching files when retried.
+- File deletion and SQLite cannot be one transaction. The durable journal and
+  idempotent retry keep incomplete deletion visible until its copies are gone.
+  Tombstoned versions do not reappear after migration or restart.
+- Deletion never writes Agent configuration, changes credentials or drops alias
+  ownership. Deleting the current version leaves its bytes in place; the live
+  marker becomes unrecorded unless another successful retained version matches.
+- Deletion is not secure erasure: audit/recovery logs and their backups remain.
+  Internal audit-record deletion retains its separate reference protections.
 
 ## Module layout
 
@@ -172,9 +192,10 @@ journal row.
 | `src-tauri/src/config_apply.rs`       | Facade for the write facade and its submodules.                             |
 | `config_apply/operations.rs`          | Journal rows, step states, listing and unfinished operations.               |
 | `config_apply/service.rs`             | The write sequence: checks, backup, atomic replacement and compensation.    |
+| `config_apply/versions.rs`            | Complete written-version copies and legacy conversion.                      |
 | `config_apply/revisions.rs`           | Independent pre-write snapshots.                                            |
 | `config_apply/history.rs`             | Root-scoped paginated reads and the current-configuration pin.              |
-| `config_apply/version_restore.rs`     | Restore rules for any retained version.                                     |
+| `config_apply/version_restore.rs`     | Written-version selection and internal pre-entry recovery.                  |
 | `config_apply/version_text.rs`        | Field summaries, sanitized complete text and credential masking.            |
 | `config_apply/history_delete.rs`      | Durable deletion state and cleanup.                                         |
 | `config_apply/cleanup.rs`             | Explicit cleanup of unreferenced private copies (backend only).             |
@@ -189,7 +210,14 @@ symbolic links, read-only targets and directories, failed replacement, partial
 multi-file writes, backup and journal failures, restart, stale approvals and
 deletion refusals, using temporary directories and real SQLite.
 
-An isolated macOS Tauri run with synthetic OS credentials verified all three
+The latest isolated macOS Tauri run passed 23 assertions for independent
+configuration selection and deletion: A/B/C switching, an off-page current pin,
+deleting intermediate and previously selected versions, and deleting the current
+version without changing its Agent file bytes. It used a separate app identifier,
+temporary Claude Code roots and a synthetic OS credential that was removed after
+the run. All three Agents are covered by the independent-version Rust tests.
+
+An earlier isolated macOS Tauri run with synthetic OS credentials verified all three
 Agents' A→B→C→A→C restore chain, stale reads and writes, independent snapshots
 and exact-byte restoration, including Pi's absent-file state, plus a browser
 review of both languages, keyboard and focus, retry, JSON/TOML and a 720×560

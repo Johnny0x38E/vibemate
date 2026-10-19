@@ -140,7 +140,8 @@ impl References {
             .prepare(
                 "SELECT backup_id, backup_path, 1 FROM config_operation_step
                  WHERE backup_id IS NOT NULL OR backup_path IS NOT NULL
-                 UNION ALL SELECT id, backup_path, 0 FROM config_file_revision",
+                 UNION ALL SELECT id, backup_path, 0 FROM config_file_revision
+                 UNION ALL SELECT copy_id, copy_path, 1 FROM config_version_file",
             )
             .map_err(|_| WriteError::LogReadFailed)?;
         let rows = statement

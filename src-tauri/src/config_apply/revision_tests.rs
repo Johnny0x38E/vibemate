@@ -19,6 +19,8 @@ mod resolution_tests;
 mod version_restore_surface_tests;
 #[path = "version_restore_tests.rs"]
 mod version_restore_tests;
+#[path = "versions_tests.rs"]
+mod versions_tests;
 
 use super::*;
 use crate::{config_plan::read_target_bytes, storage::Storage};

@@ -44,6 +44,8 @@ planned.
   per-Agent request settings that are not implemented yet.
 - [`plans/backend-modularity.md`](plans/backend-modularity.md): backend module
   boundaries and the unplanned future integrations.
+- [`plans/configuration-versions.md`](plans/configuration-versions.md): independent
+  saved-version storage and selection, with remaining acceptance in `todo.md`.
 
 Completed designs and process records are not kept in a separate archive. Use
 Git history and [`CHANGELOG.md`](../CHANGELOG.md) for what shipped and why.

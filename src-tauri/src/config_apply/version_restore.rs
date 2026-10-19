@@ -166,7 +166,7 @@ pub fn plan_version_restore(
     entry_key: &str,
     backups: &BackupStore,
 ) -> Result<VersionRestorePlan, WriteError> {
-    Ok(build_plan(storage, scope, entry_key, backups)?.into_view())
+    Ok(build_plan(storage, scope, entry_key, backups, false)?.into_view())
 }
 
 /// Carry out a reviewed version restore, or refuse when its tokens no longer hold.
@@ -187,10 +187,51 @@ pub fn apply_version_restore(
     reviewed: &[ReviewedVersionFile],
     backups: &BackupStore,
 ) -> Result<VersionRestoreOutcome, WriteError> {
+    apply_selected_version(storage, scope, entry_key, reviewed, backups, false)
+}
+
+/// Preview an apply's written result rather than its pre-write backup.
+///
+/// Scope and errors follow [`plan_version_restore`]. Unavailable result bytes
+/// block the preview; they are never replaced with a different version.
+pub fn plan_written_version(
+    storage: &Storage,
+    scope: &HistoryScope,
+    entry_key: &str,
+    backups: &BackupStore,
+) -> Result<VersionRestorePlan, WriteError> {
+    Ok(build_plan(storage, scope, entry_key, backups, true)?.into_view())
+}
+
+/// Restore a reviewed apply result and retain the displaced live bytes.
+///
+/// The plan is rebuilt under the configuration lock. Errors and file outcomes
+/// follow [`apply_version_restore`]; the original apply row stays unchanged.
+pub fn apply_written_version(
+    storage: &Storage,
+    scope: &HistoryScope,
+    entry_key: &str,
+    reviewed: &[ReviewedVersionFile],
+    backups: &BackupStore,
+) -> Result<VersionRestoreOutcome, WriteError> {
+    apply_selected_version(storage, scope, entry_key, reviewed, backups, true)
+}
+
+fn apply_selected_version(
+    storage: &Storage,
+    scope: &HistoryScope,
+    entry_key: &str,
+    reviewed: &[ReviewedVersionFile],
+    backups: &BackupStore,
+    written: bool,
+) -> Result<VersionRestoreOutcome, WriteError> {
     let _mutation_lock = storage
         .lock_configuration()
         .map_err(|_| WriteError::StorageUnavailable)?;
-    let plan = build_plan(storage, scope, entry_key, backups)?;
+    if written {
+        super::versions::materialize_locked(storage, backups)?;
+    }
+    let plan = build_plan(storage, scope, entry_key, backups, written)?;
     if plan.reason.is_some()
         || plan
             .files
@@ -429,6 +470,7 @@ fn build_plan(
     scope: &HistoryScope,
     entry_key: &str,
     backups: &BackupStore,
+    written: bool,
 ) -> Result<ResolvedVersionPlan, WriteError> {
     if !valid_entry_key(entry_key) {
         return Err(WriteError::InvalidRequest);
@@ -445,52 +487,65 @@ fn build_plan(
             reason: Some(HISTORY_UNRESOLVED.to_owned()),
         });
     }
-    let pending = match entry_key.strip_prefix("operation:") {
-        Some(_) => {
-            let mut pending = Vec::with_capacity(source.steps.len());
-            for step in &source.steps {
-                // A revision and its source step must describe the same
-                // pre-state; otherwise the journal cannot be trusted.
-                match stored
-                    .iter()
-                    .find(|row| row.revision.ordinal == step.ordinal)
-                {
-                    Some(row) => {
-                        if row.revision.previous_digest != step.expected_digest {
-                            return Err(WriteError::InvalidStoredOperation);
+    if written
+        && (intent != HistoryIntent::Apply
+            || source
+                .steps
+                .iter()
+                .any(|step| step.state != super::StepState::Applied))
+    {
+        return Err(WriteError::InvalidRequest);
+    }
+    let pending = if written {
+        written_files(storage, &source)?
+    } else {
+        match entry_key.strip_prefix("operation:") {
+            Some(_) => {
+                let mut pending = Vec::with_capacity(source.steps.len());
+                for step in &source.steps {
+                    // A revision and its source step must describe the same
+                    // pre-state; otherwise the journal cannot be trusted.
+                    match stored
+                        .iter()
+                        .find(|row| row.revision.ordinal == step.ordinal)
+                    {
+                        Some(row) => {
+                            if row.revision.previous_digest != step.expected_digest {
+                                return Err(WriteError::InvalidStoredOperation);
+                            }
+                            pending.push(PendingVersion {
+                                revision_id: Some(row.revision.revision_id.clone()),
+                                ordinal: step.ordinal,
+                                target_path: step.target_path.clone(),
+                                target_digest: row.revision.previous_digest.clone(),
+                                snapshot_path: row.backup_path.clone(),
+                            });
                         }
-                        pending.push(PendingVersion {
-                            revision_id: Some(row.revision.revision_id.clone()),
+                        // Old logs and no-change steps have no retained bytes. The
+                        // plan can still skip a file that is already at the state,
+                        // but a changed file cannot be produced.
+                        None => pending.push(PendingVersion {
+                            revision_id: None,
                             ordinal: step.ordinal,
                             target_path: step.target_path.clone(),
-                            target_digest: row.revision.previous_digest.clone(),
-                            snapshot_path: row.backup_path.clone(),
-                        });
+                            target_digest: step.expected_digest.clone(),
+                            snapshot_path: None,
+                        }),
                     }
-                    // Old logs and no-change steps have no retained bytes. The
-                    // plan can still skip a file that is already at the state,
-                    // but a changed file cannot be produced.
-                    None => pending.push(PendingVersion {
-                        revision_id: None,
-                        ordinal: step.ordinal,
-                        target_path: step.target_path.clone(),
-                        target_digest: step.expected_digest.clone(),
-                        snapshot_path: None,
-                    }),
                 }
+                pending
             }
-            pending
+            None => stored
+                .into_iter()
+                .map(|row| PendingVersion {
+                    revision_id: Some(row.revision.revision_id),
+                    ordinal: row.revision.ordinal,
+                    target_path: row.target_path,
+                    target_digest: row.revision.previous_digest,
+                    snapshot_path: row.backup_path,
+                })
+                .collect(),
         }
-        None => stored
-            .into_iter()
-            .map(|row| PendingVersion {
-                revision_id: Some(row.revision.revision_id),
-                ordinal: row.revision.ordinal,
-                target_path: row.target_path,
-                target_digest: row.revision.previous_digest,
-                snapshot_path: row.backup_path,
-            })
-            .collect(),
     };
     let mut files = Vec::with_capacity(pending.len());
     for file in pending {
@@ -505,6 +560,64 @@ fn build_plan(
         files,
         reason: None,
     })
+}
+
+/// A version owns its complete result. No lookup into other versions or old
+/// recovery copies is allowed during preview, selection, or deletion.
+fn written_files(
+    storage: &Storage,
+    source: &super::OperationRecord,
+) -> Result<Vec<PendingVersion>, WriteError> {
+    let connection = storage.lock().map_err(|_| WriteError::StorageUnavailable)?;
+    let state: Option<String> = connection
+        .query_row(
+            "SELECT state FROM config_version WHERE id = ?1",
+            [&source.id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|_| WriteError::LogReadFailed)?;
+    if state.as_deref() == Some("deleted") || state.is_none() {
+        return Err(WriteError::InvalidRequest);
+    }
+    let files = super::versions::files(&connection, &source.id)?;
+    if state.as_deref() != Some("available") || files.len() != source.steps.len() {
+        // Keep a legacy/unavailable version visible, but never borrow its
+        // result from another record at read time.
+        return Ok(source
+            .steps
+            .iter()
+            .map(|step| PendingVersion {
+                revision_id: None,
+                ordinal: step.ordinal,
+                target_path: step.target_path.clone(),
+                target_digest: step.applied_digest.clone(),
+                snapshot_path: None,
+            })
+            .collect());
+    }
+    files
+        .into_iter()
+        .map(|file| {
+            let step = source
+                .steps
+                .iter()
+                .find(|step| step.ordinal == file.ordinal)
+                .ok_or(WriteError::InvalidStoredOperation)?;
+            if step.target_path != file.target_path
+                || step.applied_digest.as_deref() != Some(&file.digest)
+            {
+                return Err(WriteError::InvalidStoredOperation);
+            }
+            Ok(PendingVersion {
+                revision_id: Some(file.copy_id),
+                ordinal: file.ordinal,
+                target_path: file.target_path,
+                target_digest: Some(file.digest),
+                snapshot_path: Some(file.copy_path),
+            })
+        })
+        .collect()
 }
 
 /// Read and validate the source operation and its entry revisions.
@@ -759,10 +872,52 @@ pub fn read_version_text(
     current_digest: Option<&str>,
     backups: &BackupStore,
 ) -> Result<VersionText, WriteError> {
+    read_selected_text(
+        storage,
+        scope,
+        entry_key,
+        revision_id,
+        current_digest,
+        backups,
+        false,
+    )
+}
+
+/// Read sanitized current and written-result text for an apply version.
+///
+/// Errors, scope validation and stale-token checks follow [`read_version_text`].
+pub fn read_written_version_text(
+    storage: &Storage,
+    scope: &HistoryScope,
+    entry_key: &str,
+    revision_id: &str,
+    current_digest: Option<&str>,
+    backups: &BackupStore,
+) -> Result<VersionText, WriteError> {
+    read_selected_text(
+        storage,
+        scope,
+        entry_key,
+        revision_id,
+        current_digest,
+        backups,
+        true,
+    )
+}
+
+fn read_selected_text(
+    storage: &Storage,
+    scope: &HistoryScope,
+    entry_key: &str,
+    revision_id: &str,
+    current_digest: Option<&str>,
+    backups: &BackupStore,
+    written: bool,
+) -> Result<VersionText, WriteError> {
     if !valid_revision_id(revision_id) {
         return Err(WriteError::InvalidRequest);
     }
-    let plan = build_plan(storage, scope, entry_key, backups)?;
+    let plan = build_plan(storage, scope, entry_key, backups, written)?;
     if plan.reason.is_some() {
         return Err(WriteError::PlanStale);
     }
@@ -776,7 +931,11 @@ pub fn read_version_text(
     }
     let format = version_text::format_for(scope.operation_kind());
     let current = current_text(file, format)?;
-    let target = target_text(file, format, backups);
+    let target = if file.action == VersionRestoreAction::Skip {
+        current.clone()
+    } else {
+        target_text(file, format, backups)
+    };
     Ok(VersionText {
         revision_id: revision_id.to_owned(),
         target_path: file.target_path.clone(),

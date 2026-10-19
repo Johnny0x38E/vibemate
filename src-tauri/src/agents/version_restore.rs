@@ -1,4 +1,4 @@
-//! Strict IPC boundary for direct restore of any retained version (H2).
+//! Strict IPC boundary for selecting a recorded apply's written configuration.
 //!
 //! The frontend names one Agent and one history entry; Rust selects the active
 //! configuration root and owned files from the trusted desktop environment. No
@@ -31,7 +31,7 @@ pub struct VersionTextRequest {
     pub agent: ConfigurationAgent,
     /// Entry the preview described.
     pub entry_key: String,
-    /// Revision whose pre-mutation bytes are the target side.
+    /// Snapshot token the written-version preview supplied for the target side.
     pub revision_id: String,
     /// Current digest the preview showed; a change makes the dialog stale.
     pub current_digest: Option<String>,
@@ -53,7 +53,7 @@ pub struct CurrentConfigTextRequest {
 pub struct VersionRestoreRequest {
     /// Adapter whose history the user is viewing.
     pub agent: ConfigurationAgent,
-    /// `operation:<id>` or `batch:<id>` from the history page.
+    /// `operation:<id>` of the original apply configuration.
     pub entry_key: String,
 }
 
@@ -81,7 +81,7 @@ pub fn plan_version_restore(
     backups: &BackupStore,
 ) -> Result<VersionRestorePlan, ClaudeCodeRestoreError> {
     let scope = history_scope(request.agent, environment)?;
-    Ok(config_apply::plan_version_restore(
+    Ok(config_apply::plan_written_version(
         storage,
         &scope,
         &request.entry_key,
@@ -114,7 +114,7 @@ pub fn apply_version_restore(
         return Err(ClaudeCodeRestoreError::InvalidRequest);
     }
     let scope = history_scope(request.agent, environment)?;
-    Ok(config_apply::apply_version_restore(
+    Ok(config_apply::apply_written_version(
         storage,
         &scope,
         &request.entry_key,
@@ -148,7 +148,7 @@ pub fn read_version_text(
         return Err(ClaudeCodeRestoreError::InvalidRequest);
     }
     let scope = history_scope(request.agent, environment)?;
-    Ok(config_apply::read_version_text(
+    Ok(config_apply::read_written_version_text(
         storage,
         &scope,
         &request.entry_key,

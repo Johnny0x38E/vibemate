@@ -155,7 +155,7 @@ fn history_surface_overrides_isolate_roots_agents_and_unowned_files() {
 }
 
 #[test]
-fn history_surface_pages_restore_batches_and_survives_restart_without_mutation() {
+fn history_surface_hides_restore_batches_and_survives_restart_without_mutation() {
     let fixture = Fixture::new();
     let environment = environment(&fixture);
     let root = environment.home.join(".pi/agent");
@@ -179,14 +179,14 @@ fn history_surface_pages_restore_batches_and_survives_restart_without_mutation()
         &fixture.backups(),
     )
     .unwrap();
-    assert_eq!(before.entries.len(), 13);
+    assert_eq!(before.entries.len(), 12);
     assert_eq!(
         before
             .entries
             .iter()
-            .filter(|entry| entry.entry.intent == HistoryIntent::Restore)
+            .filter(|entry| entry.entry.intent != HistoryIntent::Apply)
             .count(),
-        1
+        0
     );
     assert!(
         before
@@ -210,7 +210,7 @@ fn history_surface_pages_restore_batches_and_survives_restart_without_mutation()
             break;
         }
     }
-    assert_eq!(keys.len(), 13);
+    assert_eq!(keys.len(), 12);
     let after = configuration_history_page(
         &fixture.storage,
         &environment,
@@ -421,9 +421,8 @@ fn history_surface_includes_current_pin_for_empty_and_matched_pages() {
     assert_eq!(empty.current.matched_entry_key, None);
     assert_eq!(empty.current.files.len(), 1);
     assert!(
-        empty.current.files[0]
-            .target_path
-            .ends_with(".claude/settings.json"),
+        std::path::Path::new(&empty.current.files[0].target_path)
+            .ends_with(std::path::Path::new(".claude").join("settings.json")),
         "{}",
         empty.current.files[0].target_path
     );
@@ -793,6 +792,195 @@ api_key = "secret"
     )
     .unwrap();
     assert_eq!(grok.active, ActiveAgentModel::Own);
+}
+
+#[test]
+fn restored_current_owner_and_alias_are_independent_of_source_entry_and_page() {
+    for (agent, kind, directory, names) in [
+        (
+            ConfigurationAgent::ClaudeCode,
+            OperationKind::ClaudeCodeSettings,
+            ".claude",
+            &["settings.json"][..],
+        ),
+        (
+            ConfigurationAgent::Pi,
+            OperationKind::PiSettings,
+            ".pi/agent",
+            &["models.json", "settings.json"][..],
+        ),
+        (
+            ConfigurationAgent::GrokBuild,
+            OperationKind::GrokSettings,
+            ".grok",
+            &["config.toml"][..],
+        ),
+    ] {
+        let fixture = Fixture::new();
+        let environment = environment(&fixture);
+        let root = environment.home.join(directory);
+        fs::create_dir_all(&root).unwrap();
+        let scope = HistoryScope::new(kind, &root, names).unwrap();
+        let mut operations = Vec::new();
+        for label in ["First", "Second", "Third"] {
+            let provider = crate::providers::create_provider(
+                &fixture.storage,
+                &FakeStore::default(),
+                CreateProviderRequest {
+                    kind: "deepseek".into(),
+                    display_name: label.into(),
+                    base_url: "https://api.deepseek.com".into(),
+                    protocol: "chat_completions".into(),
+                    extensions: BTreeMap::new(),
+                    secret: Secret::new("synthetic-history-key".into()),
+                },
+                42,
+            )
+            .unwrap();
+            // The same model id has a different alias on each Provider. Using
+            // the source operation's owner would return the wrong saved alias.
+            crate::models::add_manual_model(
+                &fixture.storage,
+                &crate::models::AddManualModelRequest {
+                    provider_id: provider.id.as_str().into(),
+                    model_id: "shared-model".into(),
+                    alias: Some(format!("{label} alias")),
+                    capability_overrides: Default::default(),
+                    context_window: None,
+                    max_output_tokens: None,
+                    thinking_effort: None,
+                },
+                42,
+            )
+            .unwrap();
+            let files: Vec<_> = names
+                .iter()
+                .map(|name| {
+                    let path = root.join(name);
+                    let content = if *name == "config.toml" {
+                        format!("provider = \"{label}\"\n").into_bytes()
+                    } else if *name == "models.json" {
+                        serde_json::to_vec(&json!({"provider": label})).unwrap()
+                    } else {
+                        // Pi's settings bytes deliberately stay identical between
+                        // Providers; ownership must compare the whole file set.
+                        serde_json::to_vec(&json!({
+                            "env": {"ANTHROPIC_MODEL": "shared-model"},
+                            "defaultModel": "shared-model",
+                            "provider": if matches!(agent, ConfigurationAgent::Pi) { "same" } else { label }
+                        }))
+                        .unwrap()
+                    };
+                    PlannedFile {
+                        target: WriteTarget::from_plan(&read_target_bytes(&path).unwrap().0),
+                        content,
+                    }
+                })
+                .collect();
+            operations.push(
+                apply_files(
+                    &fixture.storage,
+                    kind,
+                    Some(provider.id.as_str()),
+                    &files,
+                    &fixture.backups(),
+                )
+                .unwrap()
+                .operation_id,
+            );
+        }
+        let restore = |key: &str| {
+            let plan =
+                plan_written_version(&fixture.storage, &scope, key, &fixture.backups()).unwrap();
+            let reviewed: Vec<_> = plan
+                .files
+                .iter()
+                .filter(|file| {
+                    matches!(
+                        file.action,
+                        VersionRestoreAction::Restore | VersionRestoreAction::Remove
+                    )
+                })
+                .map(|file| ReviewedVersionFile {
+                    revision_id: file.revision_id.clone().unwrap(),
+                    current_digest: file.current_digest.clone(),
+                })
+                .collect();
+            let outcome =
+                apply_written_version(&fixture.storage, &scope, key, &reviewed, &fixture.backups())
+                    .unwrap();
+            assert!(
+                outcome
+                    .files
+                    .iter()
+                    .all(|file| file.state == RestoreState::Restored)
+            );
+        };
+        let check = |index: usize, expected: &str, alias: &str| {
+            let mut input = request(agent, 1);
+            loop {
+                let page = configuration_history_page(
+                    &fixture.storage,
+                    &environment,
+                    &input,
+                    &fixture.backups(),
+                )
+                .unwrap();
+                assert_eq!(page.current.status, HistoryCurrentStatus::Matched);
+                let key = format!("operation:{}", operations[index]);
+                assert_eq!(
+                    page.current.matched_entry_key.as_deref(),
+                    Some(key.as_str())
+                );
+                assert_eq!(page.current_entry.as_ref().unwrap().entry.entry_key, key);
+                assert!(
+                    page.entries
+                        .iter()
+                        .all(|entry| entry.entry.intent == HistoryIntent::Apply)
+                );
+                assert_eq!(page.current.provider_label.as_deref(), Some(expected));
+                if !matches!(agent, ConfigurationAgent::GrokBuild) {
+                    assert_eq!(page.current.model_id.as_deref(), Some("shared-model"));
+                    assert_eq!(page.current.model_label.as_deref(), Some(alias));
+                }
+                assert!(
+                    serde_json::to_value(&page.current)
+                        .unwrap()
+                        .get("recordedOwnerRef")
+                        .is_none()
+                );
+                let Some(cursor) = page.next_cursor else {
+                    break;
+                };
+                input.after = Some(cursor);
+            }
+        };
+        check(2, "Third", "Third alias");
+        for (index, label) in [(0, "First"), (2, "Third"), (1, "Second"), (0, "First")] {
+            restore(&format!("operation:{}", operations[index]));
+            check(index, label, &format!("{label} alias"));
+        }
+        // Switches retain audit batches and snapshots but never create visible
+        // configuration versions or steal the marker from the original apply.
+        let journal =
+            configuration_history(&fixture.storage, &scope, None, 50, &fixture.backups()).unwrap();
+        assert_eq!(
+            journal
+                .entries
+                .iter()
+                .filter(|entry| entry.intent == HistoryIntent::VersionRestore)
+                .count(),
+            4
+        );
+        let page = configuration_history_page(
+            &fixture.storage,
+            &environment,
+            &request(agent, 50),
+            &fixture.backups(),
+        )
+        .unwrap();
+        assert_eq!(page.entries.len(), 3);
+    }
 }
 
 #[test]

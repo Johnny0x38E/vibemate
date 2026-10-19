@@ -489,6 +489,30 @@ const MIGRATIONS: &[Migration] = &[
         CREATE INDEX grok_model_binding_last_written
             ON grok_model_binding(config_root, last_written_at DESC);",
     },
+    Migration {
+        version: 25,
+        // A configuration version owns complete result copies. It deliberately
+        // has no foreign key to another version or to the recovery journal.
+        // Legacy bytes are copied by Rust under the configuration lock; SQL
+        // cannot verify private files or reconstruct missing content.
+        sql: "ALTER TABLE config_history_delete ADD COLUMN version_only INTEGER NOT NULL
+            DEFAULT 0 CHECK(version_only IN (0,1));
+        CREATE TABLE config_version (
+            id TEXT PRIMARY KEY CHECK(length(id)=32 AND id NOT GLOB '*[^0-9a-f]*'),
+            state TEXT NOT NULL CHECK(state IN ('legacy','migrating','prepared','available','unavailable','deleted'))
+        ) STRICT;
+        CREATE TABLE config_version_file (
+            version_id TEXT NOT NULL REFERENCES config_version(id) ON DELETE RESTRICT,
+            ordinal INTEGER NOT NULL CHECK(ordinal BETWEEN 0 AND 15),
+            target_path TEXT NOT NULL CHECK(length(target_path) BETWEEN 1 AND 4096),
+            digest TEXT NOT NULL CHECK(length(digest)=64 AND digest NOT GLOB '*[^0-9a-f]*'),
+            copy_id TEXT NOT NULL UNIQUE CHECK(length(copy_id) BETWEEN 1 AND 128),
+            copy_path TEXT NOT NULL CHECK(length(copy_path) BETWEEN 1 AND 4096),
+            PRIMARY KEY(version_id, ordinal),
+            UNIQUE(version_id, target_path)
+        ) STRICT, WITHOUT ROWID;
+        INSERT INTO config_version(id, state) SELECT id, 'legacy' FROM config_operation;",
+    },
 ];
 
 /// Errors from opening or migrating the private database.

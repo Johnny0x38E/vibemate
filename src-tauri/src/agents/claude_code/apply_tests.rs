@@ -295,5 +295,7 @@ fn applying_the_same_plan_again_touches_the_file_once() {
     assert_eq!(second.steps[0].backup_path, None);
     assert_eq!(fixture.content(), written);
     assert_ne!(first.operation_id, second.operation_id);
-    assert_eq!(fixture.backups(), 1);
+    // The file is replaced once: one recovery copy. Each recorded apply also
+    // owns a full version copy, including the unchanged second apply.
+    assert_eq!(fixture.backups(), 3);
 }

@@ -1,5 +1,4 @@
 import { useEffect, useId, useRef, useState, type JSX } from "react";
-import { Dialog } from "@base-ui/react/dialog";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { DetailPanel } from "../../components/DetailForm";
@@ -8,18 +7,9 @@ import { IconButton } from "../../components/IconButton";
 import listActions from "../../components/listActions.module.css";
 import {
     RestoreRequestError,
-    planAgentRestore,
-    applyAgentRestore,
     type ApplyState as JournalApplyState,
-    type ClaudeCodeRestorePlan,
     type ConfigurableAgent,
     type RestoreErrorCode,
-    type RestoreOutcome,
-    type RestorePlanStep,
-    type RestoreReasonCode,
-    type RestoreState,
-    type RestoreStepOutcome,
-    type WriteErrorCode,
 } from "../../lib/desktop/agents";
 import {
     HistoryRequestError,
@@ -37,11 +27,9 @@ import {
     type VersionRestoreOutcome,
     type VersionRestorePlan,
 } from "../../lib/desktop/versionRestore";
-import hierarchy from "../../components/textHierarchy.module.css";
 import styles from "./AgentList.module.css";
 import card from "./ConfigPreview.module.css";
 import restore from "./RestoreView.module.css";
-import dialog from "./VersionTextDialog.module.css";
 import { ResolutionReviewCard } from "./ResolutionReviewCard";
 import {
     VersionRestorePlanInline,
@@ -68,6 +56,8 @@ type ListState =
           kind: "ready";
           /** Live pin from every page; independent of the seek cursor. */
           current: HistoryCurrentConfig;
+          /** Loaded independently so the current version can always be first. */
+          currentEntry: HistoryEntry | null;
           /** Newest first; every multi-file batch stays inside one entry. */
           entries: HistoryEntry[];
           /** Seek position for the next page, or null at the end. */
@@ -77,28 +67,22 @@ type ListState =
           moreError: RestoreErrorCode | null;
       };
 
-/** `loading` keeps the row it belongs to, so only that row shows progress. */
+/** Interrupted-write review state, independent of configuration selection. */
 type PreviewState =
     | { kind: "idle" }
-    | { kind: "loading"; operationId: string }
     | { kind: "inspecting"; operationId: string }
     | { kind: "resolution"; review: ResolutionReview }
     | { kind: "resolutionError"; code: RestoreErrorCode }
-    | { kind: "preview" }
-    | { kind: "error"; code: RestoreErrorCode }
-    | { kind: "ready"; plan: ClaudeCodeRestorePlan };
+    | { kind: "preview" };
 
-/** The restore's own outcome; it outlives the plan it was built from. */
+/** Recording an observation never restores configuration files. */
 type ApplyState =
     | { kind: "idle" }
-    | { kind: "applying" }
     | { kind: "resolving" }
     | { kind: "resolved"; result: ResolutionOutcome }
-    | { kind: "resolutionError"; code: RestoreErrorCode }
-    | { kind: "error"; code: RestoreErrorCode }
-    | { kind: "done"; result: RestoreOutcome };
+    | { kind: "resolutionError"; code: RestoreErrorCode };
 
-/** H2 version restore preview, separate from the legacy operation rollback. */
+/** Written-version preview, separate from interrupted-operation inspection. */
 type VersionPlanState =
     | { kind: "idle" }
     | { kind: "preview" }
@@ -114,15 +98,13 @@ type VersionApplyState =
     | { kind: "done"; result: VersionRestoreOutcome };
 
 /**
- * Configuration writes vibemate recorded for one Agent, with a preview of what
- * undoing one would do.
+ * Recorded configuration versions for one Agent, with its live version first.
  *
- * Read-only until the user confirms a preview: the list carries paths, states
- * and digests, never file content, and the restore only writes the content the
- * recorded write replaced. A file that changed after its write stays a conflict
- * the user resolves by hand, and every answer replaces the previously shown
- * preview, so a confirmation always belongs to what is on screen. Rust keeps the
- * histories apart, so a Claude Code row can never restore a Pi or Grok file.
+ * Rows identify original apply results, never the backups preceding those
+ * writes or later recovery batches. Selection previews and restores the chosen
+ * written bytes. Rust rechecks current digests and retained snapshots at
+ * confirmation; the interface refreshes the matching row after every attempt.
+ * Scope checks prevent one Agent's history from writing another Agent's files.
  */
 export function RestoreView({
     agent = "claudeCode",
@@ -191,6 +173,7 @@ export function RestoreView({
                         : {
                               kind: "ready",
                               current: result.page.current,
+                              currentEntry: result.page.currentEntry,
                               entries: result.page.entries,
                               nextCursor: result.page.nextCursor,
                               loadingMore: false,
@@ -265,6 +248,7 @@ export function RestoreView({
                 kind: "ready",
                 // Every page repeats the same live pin; keep the freshest copy.
                 current: result.page.current,
+                currentEntry: result.page.currentEntry,
                 entries: [
                     ...snapshot.entries,
                     ...result.page.entries.filter(
@@ -294,7 +278,7 @@ export function RestoreView({
      *
      * Reads journal metadata and the current files; snapshots are verified but
      * no file is written and no credential is read. Starting this preview
-     * discards the legacy rollback preview so only one card is on screen.
+     * discards interrupted-operation inspection so only one card is on screen.
      */
     async function runVersionPreview(entryKey: string): Promise<void> {
         if (blocked || pending.current || readingMore) return;
@@ -370,93 +354,6 @@ export function RestoreView({
                 setAttempt((current) => current + 1);
             }
             setVersionApply({ kind: "error", code });
-        } finally {
-            pending.current = false;
-            busyCallback.current?.(false);
-        }
-    }
-
-    /**
-     * Ask Rust what undoing one recorded write would do.
-     *
-     * Read-only: the preview reads each file's change token and compares it with
-     * what the write left. Nothing is written and no credential is read.
-     */
-    async function runPreview(operationId: string): Promise<void> {
-        if (blocked || pending.current || readingMore) return;
-        setVersionPlan({ kind: "idle" });
-        setVersionApply({ kind: "idle" });
-        pending.current = true;
-        busyCallback.current?.(true);
-        // A new preview replaces the previous outcome, which described another
-        // write and would otherwise sit under the card it no longer belongs to.
-        setApply({ kind: "idle" });
-        setPreview({ kind: "loading", operationId });
-        try {
-            const result = await planAgentRestore(agent, operationId);
-            if (!mounted.current) return;
-            setPreview(
-                result.kind === "preview"
-                    ? { kind: "preview" }
-                    : { kind: "ready", plan: result.plan },
-            );
-        } catch (error: unknown) {
-            if (!mounted.current) return;
-            setPreview({
-                kind: "error",
-                code:
-                    error instanceof RestoreRequestError
-                        ? error.code
-                        : "operation_failed",
-            });
-        } finally {
-            pending.current = false;
-            busyCallback.current?.(false);
-        }
-    }
-
-    /**
-     * Put the reviewed content back.
-     *
-     * The digests the preview showed travel back with the request, so Rust
-     * refuses a file that changed again since the preview instead of overwriting
-     * it. Any answer clears the preview and re-reads the list: the write this
-     * card described is settled, and a second click must start from a fresh one.
-     */
-    async function runApply(plan: ClaudeCodeRestorePlan): Promise<void> {
-        if (blocked || pending.current || readingMore) return;
-        pending.current = true;
-        busyCallback.current?.(true);
-        setApply({ kind: "applying" });
-        try {
-            const result = await applyAgentRestore(
-                agent,
-                plan.operationId,
-                reviewedSteps(plan),
-            );
-            if (!mounted.current) return;
-            setPreview({ kind: "idle" });
-            setApply({ kind: "done", result });
-            // The settled states and the new conflict situation are read again,
-            // so the buttons under the list describe the files as they are now.
-            setAttempt((current) => current + 1);
-        } catch (error: unknown) {
-            if (!mounted.current) return;
-            const code =
-                error instanceof RestoreRequestError
-                    ? error.code
-                    : "operation_failed";
-            // A stale plan cannot be applied at all; the other refusals changed
-            // nothing, so the user can act on the cause and preview again.
-            if (
-                code === "plan_stale" ||
-                code === "invalid_response" ||
-                code === "operation_failed"
-            ) {
-                setPreview({ kind: "idle" });
-                setAttempt((current) => current + 1);
-            }
-            setApply({ kind: "error", code });
         } finally {
             pending.current = false;
             busyCallback.current?.(false);
@@ -547,9 +444,7 @@ export function RestoreView({
         blocked ||
         deleteBusy ||
         readingMore ||
-        preview.kind === "loading" ||
         preview.kind === "inspecting" ||
-        apply.kind === "applying" ||
         apply.kind === "resolving" ||
         versionPlan.kind === "loading" ||
         versionApply.kind === "applying";
@@ -607,13 +502,23 @@ export function RestoreView({
                                 agent={agent}
                             />
                         )}
-                        {list.entries.length === 0 ? (
+                        {list.entries.length === 0 &&
+                        list.currentEntry === null ? (
                             <p className={styles["hint"]}>
                                 {t("agents.restore.empty")}
                             </p>
                         ) : (
                             <ul className={restore["rows"]}>
-                                {list.entries.map((entry) => (
+                                {[
+                                    ...(list.currentEntry === null
+                                        ? []
+                                        : [list.currentEntry]),
+                                    ...list.entries.filter(
+                                        (entry) =>
+                                            entry.entryKey !==
+                                            list.currentEntry?.entryKey,
+                                    ),
+                                ].map((entry) => (
                                     <OperationRow
                                         key={entry.entryKey}
                                         agent={agent}
@@ -626,12 +531,14 @@ export function RestoreView({
                                         locale={i18n.language}
                                         busy={busy}
                                         previewing={
-                                            preview.kind === "loading" &&
-                                            preview.operationId ===
-                                                entry.operationId
+                                            versionPlan.kind === "loading" &&
+                                            versionPlan.entryKey ===
+                                                entry.entryKey
                                         }
                                         onPreview={() => {
-                                            void runPreview(entry.operationId);
+                                            void runVersionPreview(
+                                                entry.entryKey,
+                                            );
                                         }}
                                         inspecting={
                                             preview.kind === "inspecting" &&
@@ -731,27 +638,7 @@ export function RestoreView({
                         {t(`agents.resolution.errors.${preview.code}`)}
                     </p>
                 )}
-                {preview.kind === "error" && (
-                    <p className={styles["error"]} role="alert">
-                        {t(`agents.restore.errors.${preview.code}`)}
-                    </p>
-                )}
             </DetailPanel>
-            {preview.kind === "ready" && (
-                <RestorePlanCard
-                    plan={preview.plan}
-                    locale={i18n.language}
-                    restoring={apply.kind === "applying"}
-                    onConfirm={() => {
-                        void runApply(preview.plan);
-                    }}
-                    onDismiss={() => {
-                        if (apply.kind === "applying" || pending.current)
-                            return;
-                        setPreview({ kind: "idle" });
-                    }}
-                />
-            )}
             {preview.kind === "resolution" && (
                 <ResolutionReviewCard
                     review={preview.review}
@@ -772,17 +659,9 @@ export function RestoreView({
                     })}
                 </p>
             )}
-            {apply.kind === "done" && (
-                <RestoreResultCard result={apply.result} />
-            )}
             {apply.kind === "resolutionError" && (
                 <p className={styles["error"]} role="alert">
                     {t(`agents.resolution.errors.${apply.code}`)}
-                </p>
-            )}
-            {apply.kind === "error" && (
-                <p className={styles["error"]} role="alert">
-                    {t(`agents.restore.errors.${apply.code}`)}
                 </p>
             )}
             {versionPlan.kind === "error" && (
@@ -937,7 +816,7 @@ function OperationRow({
     locale: string;
     /** Another history read or restore action is in flight. */
     busy: boolean;
-    /** This row's legacy rollback preview is being built. */
+    /** This row's written-version preview is being built. */
     previewing: boolean;
     onPreview: () => void;
     inspecting: boolean;
@@ -956,10 +835,12 @@ function OperationRow({
     const { t } = useTranslation();
     const expandedBodyId = useId();
     const [expanded, setExpanded] = useState(false);
-    const showExpand = expanded || versionForceExpanded || versionPlan !== null;
+    const showExpand =
+        (entry.requiresResolution && expanded) ||
+        versionForceExpanded ||
+        versionPlan !== null;
     const state = entryState(entry);
-    const files = entryFiles(entry);
-    const fileCount = files.length;
+    const fileCount = entry.sourceSteps.length;
     const canExpand = fileCount > 0 || entry.revisions.length > 0;
 
     /** Full collapse: clear local expand and any parent plan / force-expand. */
@@ -976,27 +857,18 @@ function OperationRow({
             collapseRow();
             return;
         }
-        setExpanded(true);
-        if (entry.revisions.length > 0) {
+        if (entry.requiresResolution) {
+            setExpanded(true);
+        } else {
             onVersionPreview();
         }
     }
-    const backupShort =
-        files.length === 0
-            ? null
-            : files.every((file) => file.backupState === "available")
-              ? "available"
-              : files.every((file) => file.backupState === "not_needed")
-                ? "not_needed"
-                : files.some((file) => file.backupState === "unavailable")
-                  ? "unavailable"
-                  : "available";
     const deleteBlock = historyDeleteBlockReason(entry);
     const providerText =
         entry.ownerLabel !== null
             ? entry.ownerLabel
             : entry.ownerRef !== null
-              ? entry.ownerRef
+              ? t("agents.restore.providerRemoved")
               : null;
 
     return (
@@ -1040,13 +912,6 @@ function OperationRow({
                             <span className={restore["time"]}>
                                 {formatTime(entry.createdAt, locale)}
                             </span>
-                            {backupShort !== null && (
-                                <span className={restore["meta"]}>
-                                    {t(
-                                        `agents.restore.backupShort.${backupShort}`,
-                                    )}
-                                </span>
-                            )}
                             {fileCount > 0 && (
                                 <span className={restore["meta"]}>
                                     {t("agents.restore.fileCount", {
@@ -1079,11 +944,6 @@ function OperationRow({
                         <span className={restore["time"]}>
                             {formatTime(entry.createdAt, locale)}
                         </span>
-                        {backupShort !== null && (
-                            <span className={restore["meta"]}>
-                                {t(`agents.restore.backupShort.${backupShort}`)}
-                            </span>
-                        )}
                     </div>
                 )}
                 <div className={listActions["group"]}>
@@ -1125,50 +985,6 @@ function OperationRow({
             </div>
             {showExpand && (
                 <div id={expandedBodyId} className={restore["expandedBody"]}>
-                    <ul className={restore["files"]}>
-                        {files.map((file) => (
-                            <li key={file.key} className={restore["file"]}>
-                                <span className={card["path"]}>
-                                    {file.targetPath}
-                                </span>
-                                {file.note !== null && (
-                                    <span className={restore["stepState"]}>
-                                        {fileNoteText(file.note, t)}
-                                    </span>
-                                )}
-                                <span className={restore["stepState"]}>
-                                    {t(
-                                        `agents.restore.backups.${file.backupState}`,
-                                    )}
-                                </span>
-                            </li>
-                        ))}
-                    </ul>
-                    {entry.ownerLabel !== null && (
-                        <p className={restore["provider"]}>
-                            <span className={hierarchy["label"]}>
-                                {t("agents.restore.fieldProvider")}
-                            </span>
-                            {": "}
-                            <span className={hierarchy["value"]}>
-                                {entry.ownerLabel}
-                            </span>
-                        </p>
-                    )}
-                    {entry.ownerLabel === null && entry.ownerRef !== null && (
-                        <p className={restore["provider"]}>
-                            <span className={hierarchy["label"]}>
-                                {t("agents.restore.fieldProvider")}
-                            </span>
-                            {": "}
-                            <span className={hierarchy["value"]}>
-                                {entry.ownerRef}
-                            </span>{" "}
-                            <span className={hierarchy["hint"]}>
-                                {t("agents.restore.providerRemovedNote")}
-                            </span>
-                        </p>
-                    )}
                     {entry.requiresResolution && (
                         <p className={styles["hint"]}>
                             {t("agents.resolution.required")}
@@ -1177,9 +993,7 @@ function OperationRow({
                     {versionPlan !== null && (
                         <VersionRestorePlanInline
                             plan={versionPlan}
-                            locale={locale}
                             restoring={versionRestoring}
-                            isCurrent={isCurrent}
                             onConfirm={onVersionConfirm}
                             onDismiss={collapseRow}
                         />
@@ -1188,51 +1002,6 @@ function OperationRow({
             )}
         </li>
     );
-}
-
-/** One file row, carrying either the legacy rollback or the batch result. */
-type EntryFileNote =
-    | { group: "stepStates"; state: RestoreState }
-    | { group: "revisionStates"; state: HistoryRevisionState };
-
-/** Files an entry changed, with the state and backup check for each row. */
-function entryFiles(entry: HistoryEntry): {
-    key: string;
-    targetPath: string;
-    note: EntryFileNote | null;
-    backupState: HistoryEntry["sourceSteps"][number]["backupState"];
-}[] {
-    if (entry.intent === "apply") {
-        return entry.sourceSteps.map((step) => ({
-            key: `step:${String(step.ordinal)}`,
-            targetPath: step.targetPath,
-            note:
-                step.restoreState === null
-                    ? null
-                    : { group: "stepStates", state: step.restoreState },
-            // Apply rows report the source-step check; do not invent eligibility.
-            backupState: step.backupState,
-        }));
-    }
-    return entry.revisions.flatMap((revision) => {
-        // Rust rejects revisions whose ordinal has no source step. Keeping the
-        // guard explicit satisfies TypeScript's unchecked-index rule without
-        // pretending a missing step has a path.
-        const step = entry.sourceSteps[revision.ordinal];
-        return step === undefined
-            ? []
-            : [
-                  {
-                      key: revision.revisionId,
-                      targetPath: step.targetPath,
-                      note: {
-                          group: "revisionStates" as const,
-                          state: revision.state,
-                      },
-                      backupState: revision.backupState,
-                  },
-              ];
-    });
 }
 
 /** One summary state for the row; a batch keeps every file's own state below. */
@@ -1265,226 +1034,7 @@ function entryStateText(state: EntryState, t: Translator): string {
         : t(`agents.restore.revisionStates.${state.state}`);
 }
 
-/** Translate one file row's state from its own journal family. */
-function fileNoteText(note: EntryFileNote, t: Translator): string {
-    return note.group === "stepStates"
-        ? t(`agents.restore.stepStates.${note.state}`)
-        : t(`agents.restore.revisionStates.${note.state}`);
-}
-
-/** What restoring one recorded write would do — titlebar-safe dialog. */
-function RestorePlanCard({
-    plan,
-    locale,
-    restoring,
-    onConfirm,
-    onDismiss,
-}: {
-    plan: ClaudeCodeRestorePlan;
-    /** Language used for the timestamp; the app language decides it. */
-    locale: string;
-    restoring: boolean;
-    onConfirm: () => void;
-    onDismiss: () => void;
-}): JSX.Element {
-    const { t } = useTranslation();
-    const title = useRef<HTMLHeadingElement>(null);
-    // A conflict or a blocked file needs the user's decision before any retry,
-    // so the card explains what to do instead of only naming the state.
-    const stopped = plan.steps.some(
-        (step) => step.action === "conflict" || step.action === "blocked",
-    );
-    return (
-        <Dialog.Root
-            open
-            onOpenChange={(open) => {
-                if (!open && !restoring) onDismiss();
-            }}
-        >
-            <Dialog.Portal>
-                <Dialog.Backdrop className={dialog["backdrop"]} />
-                <Dialog.Popup
-                    className={dialog["popupCompact"]}
-                    initialFocus={title}
-                >
-                    <Dialog.Title
-                        ref={title}
-                        tabIndex={-1}
-                        className={dialog["title"]}
-                    >
-                        {t("agents.restore.previewHeading")}
-                    </Dialog.Title>
-                    <div className={card["summary"]}>
-                        <span className={card["path"]}>
-                            {t("agents.restore.previewFor", {
-                                time: formatTime(plan.createdAt, locale),
-                            })}
-                        </span>
-                        <span className={card["fileState"]}>
-                            {t(`agents.restore.states.${plan.state}`)}
-                        </span>
-                        {plan.providerLabel !== null && (
-                            <span className={card["note"]}>
-                                <span className={hierarchy["label"]}>
-                                    {t("agents.restore.fieldProvider")}
-                                </span>
-                                {": "}
-                                <span className={hierarchy["value"]}>
-                                    {plan.providerLabel}
-                                </span>
-                            </span>
-                        )}
-                    </div>
-                    <ul className={card["changes"]}>
-                        {plan.steps.map((step) => (
-                            <RestorePlanStepRow
-                                key={step.ordinal}
-                                step={step}
-                            />
-                        ))}
-                    </ul>
-                    {stopped && (
-                        <p className={styles["hint"]}>
-                            {t("agents.restore.conflictHint")}
-                        </p>
-                    )}
-                    {!plan.restorable && (
-                        <p className={styles["hint"]}>
-                            {t("agents.restore.nothingToRestore")}
-                        </p>
-                    )}
-                    {plan.restorable && (
-                        <p className={styles["hint"]}>
-                            {t("agents.restore.keyNotice")}
-                        </p>
-                    )}
-                    <div className={dialog["actions"]}>
-                        <button
-                            type="button"
-                            className={buttons["secondary"]}
-                            aria-disabled={restoring}
-                            onClick={() => {
-                                if (!restoring) onDismiss();
-                            }}
-                        >
-                            {t("agents.version.textClose")}
-                        </button>
-                        {plan.restorable && (
-                            <button
-                                type="button"
-                                className={buttons["primary"]}
-                                aria-disabled={restoring}
-                                onClick={onConfirm}
-                            >
-                                {restoring
-                                    ? t("agents.restore.restoring")
-                                    : t("agents.restore.confirm")}
-                            </button>
-                        )}
-                    </div>
-                </Dialog.Popup>
-            </Dialog.Portal>
-        </Dialog.Root>
-    );
-}
-
-/** One file of a restore preview: the action, its reason and the key owner. */
-function RestorePlanStepRow({ step }: { step: RestorePlanStep }): JSX.Element {
-    const { t } = useTranslation();
-    return (
-        <li className={card["change"]}>
-            <span className={card["path"]}>{step.targetPath}</span>
-            <span className={restore["action"]}>
-                {t(`agents.restore.actions.${step.action}`)}
-            </span>
-            {step.reason !== null && (
-                <span className={card["note"]}>
-                    {reasonText(step.reason, t)}
-                </span>
-            )}
-            {step.action === "restore" &&
-                step.restoredProviderLabel !== null && (
-                    <span className={card["note"]}>
-                        {t("agents.restore.restoredOwnerNamed", {
-                            name: step.restoredProviderLabel,
-                        })}
-                    </span>
-                )}
-            {step.action === "restore" &&
-                step.restoredProviderLabel === null &&
-                step.restoredProviderId !== null && (
-                    <span className={card["note"]}>
-                        {t("agents.restore.restoredOwnerRemoved", {
-                            id: step.restoredProviderId,
-                        })}
-                    </span>
-                )}
-            {step.action === "restore" && step.restoredProviderId === null && (
-                <span className={card["note"]}>
-                    {t("agents.restore.restoredOwnerUnknown")}
-                </span>
-            )}
-        </li>
-    );
-}
-
-/** What one confirmed restore did: per file, plus copies it could not remove. */
-function RestoreResultCard({
-    result,
-}: {
-    result: RestoreOutcome;
-}): JSX.Element {
-    const { t } = useTranslation();
-    return (
-        <DetailPanel label={t("agents.restore.outcomeHeading")}>
-            <div className={card["summary"]}>
-                <span className={card["path"]}>
-                    {t(`agents.restore.outcome.${result.state}`)}
-                </span>
-            </div>
-            <ul className={card["notices"]}>
-                {result.steps.map((step) => (
-                    <li key={step.ordinal}>
-                        {step.state === "restored"
-                            ? t(
-                                  step.action === "remove"
-                                      ? "agents.restore.stepRemoved"
-                                      : "agents.restore.stepRestored",
-                                  { path: step.targetPath },
-                              )
-                            : t("agents.restore.stepProblem", {
-                                  path: step.targetPath,
-                                  error: stepErrorText(step, t),
-                              })}
-                    </li>
-                ))}
-            </ul>
-            {result.leftovers.length > 0 && (
-                <>
-                    <p className={styles["hint"]}>
-                        {t("agents.restore.leftoversHeading")}
-                    </p>
-                    <ul className={card["notices"]}>
-                        {result.leftovers.map((path) => (
-                            <li key={path}>{path}</li>
-                        ))}
-                    </ul>
-                    <p className={styles["hint"]}>
-                        {t("agents.restore.leftoverHint")}
-                    </p>
-                </>
-            )}
-            <p className={styles["hint"]}>{t("agents.restore.resultHint")}</p>
-        </DetailPanel>
-    );
-}
-
 type Translator = TFunction;
-
-/** Translated reason a preview will not carry a step out. */
-function reasonText(reason: RestoreReasonCode, t: Translator): string {
-    return t(`agents.restore.reasons.${reason}`);
-}
 
 /** Tokens the version confirmation sends: exactly the files it would change. */
 function reviewedVersionFiles(
@@ -1500,27 +1050,4 @@ function reviewedVersionFiles(
             },
         ];
     });
-}
-
-/** Tokens the confirmation sends back: exactly the steps it would change. */
-function reviewedSteps(
-    plan: ClaudeCodeRestorePlan,
-): { ordinal: number; currentDigest: string | null }[] {
-    return plan.steps
-        .filter((step) => step.action === "restore" || step.action === "remove")
-        .map((step) => ({
-            ordinal: step.ordinal,
-            currentDigest: step.currentDigest,
-        }));
-}
-
-/**
- * Translated reason a step did not reach its previous content.
- *
- * A step that did not restore always carries its code; the boundary refuses
- * other shapes, and an unknown code must not render as an empty string.
- */
-function stepErrorText(step: RestoreStepOutcome, t: Translator): string {
-    const code: WriteErrorCode = step.errorCode ?? "outcome_unknown";
-    return t(`agents.restore.reasons.${code}`);
 }

@@ -39,7 +39,6 @@
 
 .rowSummary {
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     gap: 6px;
@@ -140,7 +139,6 @@
     gap: var(--space-sm, 8px);
     margin-top: 6px;
     padding-top: 6px;
-    border-top: 1px solid var(--color-border);
 }
 
 /* Label in column 1; every managed path stacks in column 2 so follow-on
@@ -154,6 +152,13 @@
 }
 
 .currentMark {
+    display: inline-flex;
+    padding: 1px 6px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    background: var(--color-surface);
+    font-size: 0.75rem;
+    white-space: nowrap;
     grid-column: 1;
     grid-row: 1;
     font-weight: 500;

@@ -97,7 +97,9 @@ pub struct ConfigurationHistoryPage {
     /// still one vibemate wrote. Classifies the model as ours, the user's own,
     /// or unreadable, for the list-card summary.
     pub active: ActiveAgentModel,
-    /// Newest first; every multi-file batch stays inside one entry.
+    /// Current written configuration, even when outside this chronological page.
+    pub current_entry: Option<ConfigurationHistoryEntry>,
+    /// Newest first; recovery batches are retained internally, not listed.
     pub entries: Vec<ConfigurationHistoryEntry>,
     /// Seek position for more entries, absent when this read reached the end.
     pub next_cursor: Option<HistoryCursor>,
@@ -122,7 +124,10 @@ pub(super) fn history_scope(
     Ok(HistoryScope::new(agent.kind(), &root, files)?)
 }
 
-/// Read retained apply/restore/compensation entries in the adapter's active root.
+/// Read apply configuration versions in the adapter's active root.
+///
+/// Restore/compensation batches remain internal journal records. The current
+/// apply is loaded separately so it stays available on every seek page.
 ///
 /// The environment is a trusted desktop snapshot, never frontend input. Resolves
 /// the root without launching/validating an installed CLI, then queries only the
@@ -145,7 +150,7 @@ pub fn configuration_history_page(
     backups: &BackupStore,
 ) -> Result<ConfigurationHistoryPage, ClaudeCodeRestoreError> {
     let scope = history_scope(request.agent, environment)?;
-    let page = config_apply::configuration_history(
+    let page = config_apply::configuration_versions(
         storage,
         &scope,
         request.after.as_ref(),
@@ -155,31 +160,34 @@ pub fn configuration_history_page(
     // Classify the live model before the entries are consumed. This reads the
     // Agent's own model setting, not a retained version.
     let active = active_agent_model(storage, request.agent, scope.root(), &page.current.files);
+    let enrich_entry = |entry: HistoryEntry| {
+        // The journal key is a bounded reference; only resolve it as a
+        // Provider when the row still exists. A removed Provider keeps its
+        // recorded reference and shows as removed in the interface.
+        let owner_label = entry.owner_ref.as_deref().and_then(|provider_id| {
+            crate::providers::get_provider(storage, provider_id)
+                .ok()
+                .map(|provider| provider.display_name)
+        });
+        let requires_resolution =
+            config_apply::operation_requires_resolution(storage, &entry.operation_id)?;
+        Ok(ConfigurationHistoryEntry {
+            entry,
+            requires_resolution,
+            owner_label,
+        })
+    };
+    let current_entry = page.current_entry.map(enrich_entry).transpose()?;
     let entries = page
         .entries
         .into_iter()
-        .map(|entry| {
-            // The journal key is a bounded reference; only resolve it as a
-            // Provider when the row still exists. A removed Provider keeps its
-            // recorded reference and shows as removed in the interface.
-            let owner_label = entry.owner_ref.as_deref().and_then(|provider_id| {
-                crate::providers::get_provider(storage, provider_id)
-                    .ok()
-                    .map(|provider| provider.display_name)
-            });
-            let requires_resolution =
-                config_apply::operation_requires_resolution(storage, &entry.operation_id)?;
-            Ok(ConfigurationHistoryEntry {
-                entry,
-                requires_resolution,
-                owner_label,
-            })
-        })
+        .map(enrich_entry)
         .collect::<Result<Vec<_>, ClaudeCodeRestoreError>>()?;
-    let current = enrich_current(storage, request.agent, page.current, &entries);
+    let current = enrich_current(storage, request.agent, page.current, current_entry.as_ref());
     Ok(ConfigurationHistoryPage {
         current,
         active,
+        current_entry,
         entries,
         next_cursor: page.next_cursor,
     })
@@ -190,21 +198,16 @@ fn enrich_current(
     storage: &Storage,
     agent: ConfigurationAgent,
     mut current: HistoryCurrentConfig,
-    entries: &[ConfigurationHistoryEntry],
+    current_entry: Option<&ConfigurationHistoryEntry>,
 ) -> HistoryCurrentConfig {
     if current.status != HistoryCurrentStatus::Matched {
         return current;
     }
-    let Some(matched_key) = current.matched_entry_key.as_deref() else {
-        return current;
-    };
-    let matched = entries
-        .iter()
-        .find(|entry| entry.entry.entry_key == matched_key);
-    // Provider label is the saved custom display name; never invent one from the
-    // raw owner_ref when the Provider row is gone.
-    current.provider_label = matched.and_then(|entry| entry.owner_label.clone());
-    let owner_ref = matched.and_then(|entry| entry.entry.owner_ref.as_deref());
+    // This entry produced the complete live bytes. It is loaded independently
+    // of the seek page, never inferred from a pre-write snapshot or restore's
+    // source operation.
+    current.provider_label = current_entry.and_then(|entry| entry.owner_label.clone());
+    let owner_ref = current_entry.and_then(|entry| entry.entry.owner_ref.as_deref());
     let Some(model_id) = live_model_id(agent, &current.files) else {
         return current;
     };

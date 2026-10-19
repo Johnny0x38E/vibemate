@@ -73,6 +73,7 @@ struct OpenDelete {
     entry_key: String,
     operation_id: String,
     state: String,
+    version_only: bool,
     targets: Vec<BackupTarget>,
 }
 
@@ -95,6 +96,38 @@ pub fn delete_history_entry(
     entry_key: &str,
     backups: &BackupStore,
 ) -> Result<HistoryDeleteOutcome, WriteError> {
+    delete_selected_entry(storage, scope, entry_key, backups, false)
+}
+
+/// Delete a configuration version and its exclusive complete result copies.
+///
+/// Recovery logs remain independent: completed restore batches do not prevent
+/// deletion. Active or unresolved operations still refuse. Filesystem failures
+/// use the same durable retry journal as [`delete_history_entry`]. Agent files,
+/// other versions, Provider rows and credentials are never changed.
+///
+/// # Errors
+/// Returns safe scope, active/unresolved, storage and copy errors. A completed
+/// deletion is idempotent; a failed copy deletion stays visible and retryable.
+pub fn delete_configuration_version(
+    storage: &Storage,
+    scope: &HistoryScope,
+    entry_key: &str,
+    backups: &BackupStore,
+) -> Result<HistoryDeleteOutcome, WriteError> {
+    if !entry_key.starts_with("operation:") {
+        return Err(WriteError::InvalidRequest);
+    }
+    delete_selected_entry(storage, scope, entry_key, backups, true)
+}
+
+fn delete_selected_entry(
+    storage: &Storage,
+    scope: &HistoryScope,
+    entry_key: &str,
+    backups: &BackupStore,
+    version_only: bool,
+) -> Result<HistoryDeleteOutcome, WriteError> {
     if !valid_entry_key(entry_key) {
         return Err(WriteError::InvalidRequest);
     }
@@ -102,12 +135,15 @@ pub fn delete_history_entry(
         .lock_configuration()
         .map_err(|_| WriteError::StorageUnavailable)?;
 
+    if !version_only {
+        super::versions::materialize_locked(storage, backups)?;
+    }
     let open = {
         let mut connection = storage.lock().map_err(|_| WriteError::StorageUnavailable)?;
         let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(|_| WriteError::LogWriteFailed)?;
-        let prepared = prepare_delete(&transaction, scope, entry_key, backups)?;
+        let prepared = prepare_delete(&transaction, scope, entry_key, backups, version_only)?;
         transaction
             .commit()
             .map_err(|_| WriteError::LogWriteFailed)?;
@@ -134,8 +170,9 @@ fn prepare_delete(
     scope: &HistoryScope,
     entry_key: &str,
     backups: &BackupStore,
+    version_only: bool,
 ) -> Result<OpenDelete, WriteError> {
-    if let Some(existing) = read_open_delete(connection, entry_key)? {
+    if let Some(mut existing) = read_open_delete(connection, entry_key)? {
         if existing.operation_id.is_empty() {
             return Err(WriteError::InvalidStoredOperation);
         }
@@ -143,11 +180,52 @@ fn prepare_delete(
         let source = read_operation(connection, &existing.operation_id)?
             .ok_or(WriteError::InvalidStoredOperation)?;
         check_scope(scope, &source)?;
+        // A failed delete releases the mutation lock. A later restore may have
+        // introduced interrupted work, so refuse before removing any copies,
+        // not merely when finalizing the retry after filesystem changes.
+        if existing.version_only {
+            refuse_active(connection, &source)?;
+        } else {
+            refuse_protected(connection, &source, entry_key.strip_prefix("batch:"))?;
+        }
+        // A pre-upgrade journal delete may already own its old copy targets.
+        // Preserve that intent and add newly materialized version copies before
+        // retrying, so migration cannot strand an untracked private directory.
+        if !existing.version_only {
+            for target in version_targets(connection, backups, &source.id)? {
+                if existing.targets.iter().any(|old| old.id == target.id) {
+                    continue;
+                }
+                connection.execute(
+                    "INSERT INTO config_history_delete_backup(delete_id, backup_id, backup_dir) VALUES (?1, ?2, ?3)",
+                    params![existing.id, target.id, path_text(&target.dir)?],
+                ).map_err(|_| WriteError::LogWriteFailed)?;
+                existing.targets.push(target);
+            }
+        }
         return Ok(existing);
     }
 
     // Idempotent success: the entry is already gone and nothing is open.
-    if entry_absent(connection, entry_key)? {
+    let absent = if version_only {
+        super::versions::is_deleted(
+            connection,
+            entry_key
+                .strip_prefix("operation:")
+                .ok_or(WriteError::InvalidRequest)?,
+        )?
+    } else {
+        entry_absent(connection, entry_key)?
+    };
+    if absent {
+        if version_only {
+            let id = entry_key
+                .strip_prefix("operation:")
+                .ok_or(WriteError::InvalidRequest)?;
+            let source =
+                read_operation(connection, id)?.ok_or(WriteError::InvalidStoredOperation)?;
+            check_scope(scope, &source)?;
+        }
         let id = new_delete_id(connection)?;
         let now = shared::current_unix_millis().map_err(|_| WriteError::LogWriteFailed)?;
         connection
@@ -170,27 +248,37 @@ fn prepare_delete(
             entry_key: entry_key.to_owned(),
             operation_id: "00000000000000000000000000000000".to_owned(),
             state: "completed".to_owned(),
+            version_only,
             targets: Vec::new(),
         });
     }
 
     let (source, batch) = resolve_entry(connection, scope, entry_key)?;
-    refuse_protected(connection, &source, batch)?;
-    let targets = exclusive_backups(connection, backups, &source, batch)?;
+    if version_only {
+        refuse_active(connection, &source)?;
+    } else {
+        refuse_protected(connection, &source, batch)?;
+    }
+    let targets = if version_only {
+        version_targets(connection, backups, &source.id)?
+    } else {
+        exclusive_backups(connection, backups, &source, batch)?
+    };
     let id = new_delete_id(connection)?;
     let now = shared::current_unix_millis().map_err(|_| WriteError::LogWriteFailed)?;
     connection
         .execute(
             "INSERT INTO config_history_delete
              (id, entry_key, operation_id, scope_kind, state, leftovers, error_code,
-              created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, 'prepared', NULL, NULL, ?5, ?5)",
+              created_at, updated_at, version_only)
+             VALUES (?1, ?2, ?3, ?4, 'prepared', NULL, NULL, ?5, ?5, ?6)",
             params![
                 id,
                 entry_key,
                 source.id,
                 scope.operation_kind().as_str(),
-                now
+                now,
+                version_only
             ],
         )
         .map_err(|_| WriteError::LogWriteFailed)?;
@@ -209,6 +297,7 @@ fn prepare_delete(
         entry_key: entry_key.to_owned(),
         operation_id: source.id,
         state: "prepared".to_owned(),
+        version_only,
         targets,
     })
 }
@@ -261,8 +350,13 @@ fn finish_delete(
         check_scope(scope, &source)?;
         let batch = open.entry_key.strip_prefix("batch:");
         // Re-check protections under the same write transaction.
-        refuse_protected(connection, &source, batch)?;
-        remove_journal_rows(connection, &source, batch)?;
+        if open.version_only {
+            refuse_active(connection, &source)?;
+            remove_version_rows(connection, &source.id)?;
+        } else {
+            refuse_protected(connection, &source, batch)?;
+            remove_journal_rows(connection, &source, batch)?;
+        }
     }
 
     connection
@@ -284,6 +378,53 @@ fn finish_delete(
         state: HistoryDeleteState::Completed,
         leftovers: Vec::new(),
     })
+}
+
+fn refuse_active(connection: &Connection, source: &OperationRecord) -> Result<(), WriteError> {
+    if source.state.is_unfinished() {
+        return Err(WriteError::HistoryActive);
+    }
+    if has_interrupted_revisions(connection, &source.id)? {
+        return Err(WriteError::HistoryUnresolved);
+    }
+    Ok(())
+}
+
+/// Version directories are exclusive by construction, not reference counted.
+fn version_targets(
+    connection: &Connection,
+    backups: &BackupStore,
+    id: &str,
+) -> Result<Vec<BackupTarget>, WriteError> {
+    super::versions::files(connection, id)?
+        .into_iter()
+        .map(|file| {
+            let dir = backups.root().join(&file.copy_id);
+            if Path::new(&file.copy_path).parent() != Some(dir.as_path()) {
+                return Err(WriteError::InvalidStoredOperation);
+            }
+            Ok(BackupTarget {
+                id: file.copy_id,
+                dir,
+            })
+        })
+        .collect()
+}
+
+fn remove_version_rows(connection: &Connection, id: &str) -> Result<(), WriteError> {
+    connection
+        .execute(
+            "DELETE FROM config_version_file WHERE version_id = ?1",
+            [id],
+        )
+        .map_err(|_| WriteError::LogWriteFailed)?;
+    connection
+        .execute(
+            "UPDATE config_version SET state = 'deleted' WHERE id = ?1",
+            [id],
+        )
+        .map_err(|_| WriteError::LogWriteFailed)?;
+    Ok(())
 }
 
 fn refuse_protected(
@@ -387,7 +528,11 @@ fn exclusive_backups(
     batch: Option<&str>,
 ) -> Result<Vec<BackupTarget>, WriteError> {
     let candidates = backup_candidates(connection, source, batch)?;
-    let mut exclusive = Vec::new();
+    let mut exclusive = if batch.is_none() {
+        version_targets(connection, backups, &source.id)?
+    } else {
+        Vec::new()
+    };
     let mut seen = BTreeSet::new();
     for candidate in candidates {
         if !seen.insert(candidate.id.clone()) {
@@ -573,6 +718,7 @@ fn remove_journal_rows(
             }
         }
         None => {
+            remove_version_rows(connection, &source.id)?;
             connection
                 .execute(
                     "DELETE FROM config_revision_resolution WHERE revision_id IN (
@@ -648,7 +794,7 @@ fn read_open_delete(
 ) -> Result<Option<OpenDelete>, WriteError> {
     let row = connection
         .query_row(
-            "SELECT id, entry_key, operation_id, state FROM config_history_delete
+            "SELECT id, entry_key, operation_id, state, version_only FROM config_history_delete
              WHERE entry_key = ?1 AND state IN ('prepared', 'failed')",
             [entry_key],
             |row| {
@@ -657,12 +803,13 @@ fn read_open_delete(
                     row.get::<_, String>(1)?,
                     row.get::<_, String>(2)?,
                     row.get::<_, String>(3)?,
+                    row.get::<_, bool>(4)?,
                 ))
             },
         )
         .optional()
         .map_err(|_| WriteError::LogReadFailed)?;
-    let Some((id, entry_key, operation_id, state)) = row else {
+    let Some((id, entry_key, operation_id, state, version_only)) = row else {
         return Ok(None);
     };
     let mut query = connection
@@ -688,6 +835,7 @@ fn read_open_delete(
         entry_key,
         operation_id,
         state,
+        version_only,
         targets,
     }))
 }

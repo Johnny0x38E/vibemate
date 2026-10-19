@@ -33,7 +33,9 @@ fn pre_log_failure_is_discoverable_after_restart_and_cleanup_never_changes_targe
     let reopened = Storage::open_in_directory(&fixture.root).unwrap();
     let found = inspect_backup_copies(&reopened, &fixture.backups()).unwrap();
     assert_eq!(found.unreferenced.len(), 1);
-    assert!(found.retained.is_empty());
+    // The failed journal insert leaves a pre-write orphan, but the complete
+    // planned-version copy was already durably owned and must not be cleaned.
+    assert_eq!(found.retained.len(), 1);
     assert!(found.blocked.is_empty());
     let before = recent_operations(&reopened, OperationKind::PiSettings, 50).unwrap();
     let result = cleanup_backup_copies(&reopened, &fixture.backups(), &found.unreferenced).unwrap();
@@ -76,9 +78,16 @@ fn old_steps_and_revisions_independently_protect_copies_including_failed_and_int
         }
         let found = inventory(&fixture);
         assert!(found.unreferenced.is_empty(), "{reference}");
-        assert_eq!(
-            found.retained,
-            vec![PathBuf::from(&backup).parent().unwrap().to_str().unwrap()]
+        assert_eq!(found.retained.len(), 2);
+        assert!(
+            found.retained.contains(
+                &PathBuf::from(&backup)
+                    .parent()
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .to_owned()
+            )
         );
         assert_eq!(fs::read(backup).unwrap(), b"original");
         assert!(
@@ -103,7 +112,9 @@ fn restore_and_compensation_snapshots_are_not_cleanup_candidates() {
     assert_eq!(applied.state, OperationState::Compensated);
     let found = inventory(&fixture);
     assert!(found.unreferenced.is_empty());
-    assert_eq!(found.retained.len(), 4);
+    // Four recovery copies plus complete copies for the one-file and
+    // two-file configuration attempts are retained independently.
+    assert_eq!(found.retained.len(), 7);
     assert_eq!(fs::read(fixture.root.join("a")).unwrap(), b"A");
 }
 

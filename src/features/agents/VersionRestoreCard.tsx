@@ -3,7 +3,6 @@ import type { JSX } from "react";
 import { useTranslation } from "react-i18next";
 import { DetailPanel } from "../../components/DetailForm";
 import buttons from "../../components/actionButtons.module.css";
-import hierarchy from "../../components/textHierarchy.module.css";
 import type {
     VersionRestoreFile,
     VersionRestoreOutcome,
@@ -12,7 +11,6 @@ import type {
 import styles from "./AgentList.module.css";
 import card from "./ConfigPreview.module.css";
 import restore from "./RestoreView.module.css";
-import { formatTime } from "./formatTime";
 
 type Translator = TFunction;
 
@@ -26,56 +24,28 @@ type Translator = TFunction;
  */
 export function VersionRestorePlanInline({
     plan,
-    locale,
     restoring,
-    isCurrent = false,
     onConfirm,
     onDismiss,
 }: {
     plan: VersionRestorePlan;
-    /** Language used for the timestamp; the app language decides it. */
-    locale: string;
     /** A restore is in flight, so the confirmation waits. */
     restoring: boolean;
-    /**
-     * True when this entry is HistoryCurrentConfig's matchedEntryKey (live
-     * digests fully match this retained version). Expand/view stays available;
-     * restore-to-self confirm is hidden.
-     */
-    isCurrent?: boolean;
     onConfirm: () => void;
     /** Collapse / clear this inline preview without restoring. */
     onDismiss: () => void;
 }): JSX.Element {
     const { t } = useTranslation();
     const blocked = plan.files.some((file) => file.action === "blocked");
-    // Offer confirm only when Rust says restorable AND this is not already current.
-    const canConfirm = plan.restorable && !isCurrent;
+    // Rust compares the written version with the live files. Only its plan
+    // can decide whether selecting this version would actually change them.
+    const canConfirm = plan.restorable;
     return (
         <div
             className={restore["versionInline"]}
             role="region"
             aria-label={t("agents.version.previewHeading")}
         >
-            <div className={card["summary"]}>
-                <span className={card["path"]}>
-                    {t("agents.version.previewFor", {
-                        kind: t(`agents.restore.intents.${plan.intent}`),
-                        time: formatTime(plan.createdAt, locale),
-                    })}
-                </span>
-                {plan.ownerRef !== null && (
-                    <span className={card["note"]}>
-                        <span className={hierarchy["label"]}>
-                            {t("agents.version.fieldOwnerRef")}
-                        </span>
-                        {": "}
-                        <span className={hierarchy["value"]}>
-                            {plan.ownerRef}
-                        </span>
-                    </span>
-                )}
-            </div>
             {plan.reason !== null && (
                 <p className={styles["hint"]}>
                     {t(`agents.version.planReasons.${plan.reason}`)}
@@ -89,24 +59,13 @@ export function VersionRestorePlanInline({
                     />
                 ))}
             </ul>
-            {blocked && (
-                <p className={styles["hint"]}>
-                    {t("agents.version.blockedHint")}
-                </p>
-            )}
             {canConfirm ? (
-                <>
-                    <p className={styles["hint"]}>
-                        {t("agents.version.keyNotice")}
-                    </p>
-                    <p className={styles["hint"]}>
-                        {t("agents.version.sessionNotice")}
-                    </p>
-                </>
+                <p className={styles["hint"]}>
+                    {t("agents.version.switchNotice")}
+                </p>
             ) : (
-                !isCurrent &&
                 plan.reason === null &&
-                !plan.restorable && (
+                !blocked && (
                     <p className={styles["hint"]}>
                         {t("agents.version.nothingToRestore")}
                     </p>
@@ -150,15 +109,19 @@ function VersionFilePreview({
     return (
         <li className={card["change"]}>
             <span className={card["path"]}>{file.targetPath}</span>
-            <span className={restore["action"]}>
-                {t(`agents.version.actions.${file.action}`)}
-            </span>
+            {file.action === "remove" && (
+                <span className={restore["action"]}>
+                    {t("agents.version.actions.remove")}
+                </span>
+            )}
             {file.reason !== null && (
                 <span className={card["note"]}>
                     {t(reasonKey(file.reason))}
                 </span>
             )}
-            <VersionSummary file={file} />
+            {file.action !== "blocked" && file.action !== "skip" && (
+                <VersionSummary file={file} />
+            )}
         </li>
     );
 }
@@ -250,7 +213,6 @@ export function VersionRestoreResultCard({
                     </li>
                 ))}
             </ul>
-            <p className={styles["hint"]}>{t("agents.version.resultHint")}</p>
         </DetailPanel>
     );
 }

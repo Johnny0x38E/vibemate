@@ -991,6 +991,9 @@ fn parse_error(code: &str) -> Result<WriteError, WriteError> {
         WriteError::LogReadFailed,
         WriteError::InvalidStoredOperation,
         WriteError::PlanStale,
+        WriteError::HistoryActive,
+        WriteError::HistoryUnresolved,
+        WriteError::HistoryReferenced,
     ]
     .into_iter()
     .find(|error| error.code() == code)

@@ -296,6 +296,9 @@ fn every_restore_error_code_matches_its_serialized_form() {
         ClaudeCodeRestoreError::InvalidRequest,
         ClaudeCodeRestoreError::StorageUnavailable,
         ClaudeCodeRestoreError::OperationFailed,
+        ClaudeCodeRestoreError::HistoryActive,
+        ClaudeCodeRestoreError::HistoryUnresolved,
+        ClaudeCodeRestoreError::HistoryReferenced,
     ];
     for error in errors {
         assert_eq!(

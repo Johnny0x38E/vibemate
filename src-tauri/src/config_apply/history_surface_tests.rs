@@ -431,7 +431,10 @@ fn history_surface_includes_current_pin_for_empty_and_matched_pages() {
     assert_eq!(empty.current.files[0].current_digest, None);
     let empty_json = serde_json::to_value(&empty).unwrap();
     assert!(empty_json.get("current").is_some());
-    assert_eq!(empty_json["current"]["matchedEntryKey"], serde_json::Value::Null);
+    assert_eq!(
+        empty_json["current"]["matchedEntryKey"],
+        serde_json::Value::Null
+    );
     assert_eq!(empty_json["current"]["status"], "unrecorded");
 
     // Matched live files: pin names the matching entry and matches the core page.
@@ -459,14 +462,10 @@ fn history_surface_includes_current_pin_for_empty_and_matched_pages() {
         matched.current.matched_entry_key.as_deref(),
         Some(format!("operation:{id}").as_str())
     );
-    let scope = HistoryScope::new(
-        OperationKind::ClaudeCodeSettings,
-        &root,
-        &["settings.json"],
-    )
-    .unwrap();
-    let core = configuration_history(&fixture.storage, &scope, None, 50, &fixture.backups())
-        .unwrap();
+    let scope =
+        HistoryScope::new(OperationKind::ClaudeCodeSettings, &root, &["settings.json"]).unwrap();
+    let core =
+        configuration_history(&fixture.storage, &scope, None, 50, &fixture.backups()).unwrap();
     assert_eq!(matched.current, core.current);
     let matched_json = serde_json::to_value(&matched).unwrap();
     assert_eq!(

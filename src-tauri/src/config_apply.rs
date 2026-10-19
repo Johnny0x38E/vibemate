@@ -150,6 +150,12 @@ pub enum WriteError {
     InvalidStoredOperation,
     /// The reviewed restore plan no longer matches the files on disk.
     PlanStale,
+    /// The history entry belongs to an unfinished recorded write.
+    HistoryActive,
+    /// Interrupted mutations must be inspected before this entry can go.
+    HistoryUnresolved,
+    /// Other retained history still depends on this entry's journal rows.
+    HistoryReferenced,
 }
 
 impl WriteError {
@@ -172,6 +178,9 @@ impl WriteError {
             Self::LogReadFailed => "log_read_failed",
             Self::InvalidStoredOperation => "invalid_stored_operation",
             Self::PlanStale => "plan_stale",
+            Self::HistoryActive => "history_active",
+            Self::HistoryUnresolved => "history_unresolved",
+            Self::HistoryReferenced => "history_referenced",
         }
     }
 }
@@ -194,6 +203,11 @@ impl std::fmt::Display for WriteError {
             Self::LogReadFailed => "Recorded write operations could not be read.",
             Self::InvalidStoredOperation => "A recorded write operation is invalid.",
             Self::PlanStale => "The reviewed restore plan no longer matches the files.",
+            Self::HistoryActive => "The history entry belongs to an unfinished write.",
+            Self::HistoryUnresolved => {
+                "Interrupted history must be resolved before this entry can be deleted."
+            }
+            Self::HistoryReferenced => "Other retained history still depends on this entry.",
         })
     }
 }
@@ -730,6 +744,7 @@ fn sync_directory(_: &Path) -> Result<(), WriteError> {
 
 mod cleanup;
 mod history;
+mod history_delete;
 mod inspection;
 mod operations;
 mod resolution;
@@ -748,6 +763,9 @@ pub use history::{
     HistoryCurrentConfig, HistoryCurrentFile, HistoryCurrentStatus, HistoryCursor, HistoryEntry,
     HistoryIntent, HistoryPage, HistoryResolution, HistoryRevision, HistoryRevisionState,
     HistoryScope, HistorySourceStep, configuration_history,
+};
+pub use history_delete::{
+    HistoryDeleteLeftover, HistoryDeleteOutcome, HistoryDeleteState, delete_history_entry,
 };
 pub use inspection::{
     RevisionBackupState, RevisionInspection, RevisionMatch, inspect_interrupted_revisions,

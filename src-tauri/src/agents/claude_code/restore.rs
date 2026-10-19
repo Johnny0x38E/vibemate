@@ -45,6 +45,12 @@ pub enum ClaudeCodeRestoreError {
     StorageUnavailable,
     /// The restore did not complete for a reason the interface cannot act on.
     OperationFailed,
+    /// The history entry belongs to an unfinished recorded write.
+    HistoryActive,
+    /// Interrupted mutations must be inspected before deletion.
+    HistoryUnresolved,
+    /// Other retained history still depends on this entry.
+    HistoryReferenced,
 }
 
 impl ClaudeCodeRestoreError {
@@ -57,6 +63,9 @@ impl ClaudeCodeRestoreError {
             Self::InvalidRequest => "invalid_request",
             Self::StorageUnavailable => "storage_unavailable",
             Self::OperationFailed => "operation_failed",
+            Self::HistoryActive => "history_active",
+            Self::HistoryUnresolved => "history_unresolved",
+            Self::HistoryReferenced => "history_referenced",
         }
     }
 }
@@ -69,6 +78,11 @@ impl std::fmt::Display for ClaudeCodeRestoreError {
             Self::InvalidRequest => "The restore request is invalid.",
             Self::StorageUnavailable => "Private storage is unavailable.",
             Self::OperationFailed => "The restore could not be completed.",
+            Self::HistoryActive => "The history entry belongs to an unfinished write.",
+            Self::HistoryUnresolved => {
+                "Interrupted history must be resolved before this entry can be deleted."
+            }
+            Self::HistoryReferenced => "Other retained history still depends on this entry.",
         })
     }
 }
@@ -84,6 +98,9 @@ impl From<WriteError> for ClaudeCodeRestoreError {
         match error {
             WriteError::PlanStale => Self::PlanStale,
             WriteError::InvalidRequest => Self::InvalidRequest,
+            WriteError::HistoryActive => Self::HistoryActive,
+            WriteError::HistoryUnresolved => Self::HistoryUnresolved,
+            WriteError::HistoryReferenced => Self::HistoryReferenced,
             WriteError::StorageUnavailable
             | WriteError::LogWriteFailed
             | WriteError::LogReadFailed

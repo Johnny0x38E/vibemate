@@ -195,7 +195,7 @@ theme = "dark"
 
 #[test]
 fn full_model_preview_is_bound_to_native_plan_and_preserves_unowned_toml() {
-    use crate::configuration_preview::{read_preview, PreviewError, PreviewRequest};
+    use crate::configuration_preview::{PreviewError, PreviewRequest, read_preview};
     let f = Fixture::new();
     let environment = f.installed();
     f.write(
@@ -302,15 +302,17 @@ fn preview_creates_the_tables_a_new_document_needs() {
     // No file existed, so the plan reports it as absent and still names its keys.
     assert!(!plan.file.target.exists);
     assert!(plan.model_alias.starts_with("vibemate-"));
-    assert!(plan
-        .notices
-        .iter()
-        .any(|notice| notice.code == NoticeCode::CredentialFromStore));
+    assert!(
+        plan.notices
+            .iter()
+            .any(|notice| notice.code == NoticeCode::CredentialFromStore)
+    );
     assert_eq!(plan.precedence.len(), PRECEDENCE_FILES.len());
-    assert!(plan
-        .precedence
-        .iter()
-        .all(|file| file.state == GrokLayerState::Absent));
+    assert!(
+        plan.precedence
+            .iter()
+            .all(|file| file.state == GrokLayerState::Absent)
+    );
 }
 
 #[test]
@@ -327,10 +329,11 @@ fn preview_reports_a_policy_layer_it_did_not_read() {
         .find(|file| file.name == "requirements.toml")
         .expect("requirements layer listed");
     assert_eq!(requirements.state, GrokLayerState::Present);
-    assert!(plan
-        .notices
-        .iter()
-        .any(|notice| notice.code == NoticeCode::OverridesNotChecked));
+    assert!(
+        plan.notices
+            .iter()
+            .any(|notice| notice.code == NoticeCode::OverridesNotChecked)
+    );
     // Existence is the whole claim: the file's content stays on disk.
     let rendered = serde_json::to_string(&plan).unwrap();
     assert!(!rendered.contains("pinned-value"));

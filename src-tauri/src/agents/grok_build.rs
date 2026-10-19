@@ -18,21 +18,21 @@
 
 use super::{AgentId, ConfigApplied, ConfigApplyError, DiscoveryEnvironment, DiscoveryInput};
 use crate::config_apply::{
-    apply_private_files, BackupStore, OperationKind, OperationState, PlannedFile, StepState,
-    WriteTarget,
+    BackupStore, OperationKind, OperationState, PlannedFile, StepState, WriteTarget,
+    apply_private_files,
 };
 use crate::config_plan::{
-    digest_hex, read_target_bytes, ConfigChange, NoticeCode, PlanError, PlanNotice, PlanSource,
-    TargetFile, SECRET_PLACEHOLDER,
+    ConfigChange, NoticeCode, PlanError, PlanNotice, PlanSource, SECRET_PLACEHOLDER, TargetFile,
+    digest_hex, read_target_bytes,
 };
 use crate::credentials::CredentialStore;
 use crate::models::{ModelSnapshot, ProviderModel};
-use crate::providers::{base_url_for_protocol, ProviderProtocol, ProviderRecord};
+use crate::providers::{ProviderProtocol, ProviderRecord, base_url_for_protocol};
 use crate::storage::Storage;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use toml_edit::{table, value, DocumentMut, Item, Table};
+use toml_edit::{DocumentMut, Item, Table, table, value};
 
 /// Grok reads all user settings from this one file below its configuration root.
 const CONFIG_FILE: &str = "config.toml";

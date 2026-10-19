@@ -10,6 +10,7 @@ pub mod pi;
 pub mod recovery;
 pub use configuration::{ConfigApplied, ConfigApplyError};
 mod discovery;
+pub mod history_delete;
 mod version_probe;
 pub mod version_restore;
 pub use claude_code::{

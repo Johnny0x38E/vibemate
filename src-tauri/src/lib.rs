@@ -88,6 +88,7 @@ pub fn run() {
             commands::agents::configuration_history_page,
             commands::agents::plan_configuration_version_restore,
             commands::agents::apply_configuration_version_restore,
+            commands::agents::delete_configuration_history_entry,
             commands::agents::read_configuration_version_text,
             commands::configuration_preview::read_model_configuration_preview,
             commands::agents::review_configuration_resolution,

@@ -605,6 +605,9 @@ fn every_error_code_matches_its_serialized_form() {
         WriteError::LogReadFailed,
         WriteError::InvalidStoredOperation,
         WriteError::PlanStale,
+        WriteError::HistoryActive,
+        WriteError::HistoryUnresolved,
+        WriteError::HistoryReferenced,
     ];
     for error in errors {
         assert_eq!(

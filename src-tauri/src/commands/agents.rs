@@ -310,6 +310,36 @@ pub(crate) async fn plan_configuration_version_restore(
     .map_err(|_| ClaudeCodeRestoreError::OperationFailed)?
 }
 
+/// Delete one history entry and its exclusive private backups (H3).
+///
+/// Accepts only Agent + entryKey. Roots and backup locations come from the
+/// desktop environment. Does not change Agent configuration files, credentials
+/// or alias ownership. Retryable leftovers return as an outcome, not an error.
+#[tauri::command]
+pub(crate) async fn delete_configuration_history_entry(
+    app: tauri::AppHandle,
+    input: agents::history_delete::DeleteHistoryRequest,
+) -> Result<crate::config_apply::HistoryDeleteOutcome, ClaudeCodeRestoreError> {
+    let environment = environment(&app).map_err(|_| ClaudeCodeRestoreError::OperationFailed)?;
+    let backups = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| ClaudeCodeRestoreError::StorageUnavailable)?
+        .join("backups");
+    tauri::async_runtime::spawn_blocking(move || {
+        with_restore_storage(&app, |storage| {
+            agents::history_delete::delete_history_entry(
+                storage,
+                &environment,
+                &input,
+                &crate::config_apply::BackupStore::new(backups),
+            )
+        })
+    })
+    .await
+    .map_err(|_| ClaudeCodeRestoreError::OperationFailed)?
+}
+
 /// Apply a reviewed version restore, keeping every snapshot for a later undo.
 #[tauri::command]
 pub(crate) async fn apply_configuration_version_restore(

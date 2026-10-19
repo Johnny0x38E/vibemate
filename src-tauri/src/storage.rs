@@ -444,6 +444,39 @@ const MIGRATIONS: &[Migration] = &[
         CREATE INDEX config_file_revision_direct
             ON config_file_revision(operation_id, ordinal, direct);",
     },
+    Migration {
+        version: 23,
+        // H3 user-requested history deletion is not atomic across SQLite and the
+        // private backup store. A durable delete row records prepared / failed /
+        // completed so an interrupted attempt can retry without first hiding the
+        // journal while secret-bearing copies remain unmanaged. Targets list only
+        // backup identities this entry exclusively owns; shared refs stay.
+        sql: "CREATE TABLE config_history_delete (
+            id TEXT PRIMARY KEY CHECK(length(id)=32 AND id NOT GLOB '*[^0-9a-f]*'),
+            entry_key TEXT NOT NULL CHECK(length(entry_key) BETWEEN 7 AND 160),
+            operation_id TEXT NOT NULL CHECK(length(operation_id)=32
+                AND operation_id NOT GLOB '*[^0-9a-f]*'),
+            scope_kind TEXT NOT NULL CHECK(length(scope_kind) BETWEEN 1 AND 64),
+            state TEXT NOT NULL CHECK(state IN ('prepared','completed','failed')),
+            leftovers TEXT CHECK(leftovers IS NULL OR json_valid(leftovers)),
+            error_code TEXT CHECK(error_code IS NULL OR length(error_code) BETWEEN 1 AND 64),
+            created_at INTEGER NOT NULL CHECK(created_at >= 0),
+            updated_at INTEGER NOT NULL CHECK(updated_at >= created_at),
+            CHECK (
+                (state = 'completed' AND leftovers IS NULL AND error_code IS NULL)
+                OR (state = 'prepared' AND leftovers IS NULL)
+                OR state = 'failed'
+            )
+        ) STRICT;
+        CREATE UNIQUE INDEX config_history_delete_open
+            ON config_history_delete(entry_key) WHERE state IN ('prepared', 'failed');
+        CREATE TABLE config_history_delete_backup (
+            delete_id TEXT NOT NULL REFERENCES config_history_delete(id) ON DELETE CASCADE,
+            backup_id TEXT NOT NULL CHECK(length(backup_id) BETWEEN 1 AND 128),
+            backup_dir TEXT NOT NULL CHECK(length(backup_dir) BETWEEN 1 AND 4096),
+            PRIMARY KEY (delete_id, backup_id)
+        ) STRICT, WITHOUT ROWID;",
+    },
 ];
 
 /// Errors from opening or migrating the private database.

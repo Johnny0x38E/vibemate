@@ -94,11 +94,23 @@ function deferred() {
     });
     return { promise, resolve };
 }
+async function expandInstallPaths(
+    locale: "en" | "zh-CN" = "en",
+): Promise<void> {
+    const name = locale === "zh-CN" ? "安装与路径" : "Install & paths";
+    const summary = await screen.findByText(name);
+    // Closed <details> hides the path field from role queries.
+    if (summary.closest("details")?.open !== true) {
+        fireEvent.click(summary);
+    }
+}
+
 async function openPiDetail(): Promise<void> {
     fireEvent.click(
         await screen.findByRole("button", { name: "Open Pi details" }),
     );
     await screen.findByRole("heading", { name: /Pi/u });
+    await expandInstallPaths();
 }
 
 test("manual paths scan only on Rediscover and never show connected state", async () => {
@@ -144,6 +156,7 @@ test("shows browser preview without fabricated entries or a refresh call", async
         6,
     );
     fireEvent.click(screen.getByRole("button", { name: "Open Codex details" }));
+    await expandInstallPaths();
     expect(
         await screen.findByRole("textbox", { name: "Codex entry path" }),
     ).toHaveProperty("readOnly", true);
@@ -161,6 +174,7 @@ test("keeps absent entries visible and allows manual paths from their detail", a
         6,
     );
     fireEvent.click(button);
+    await expandInstallPaths();
     expect(
         await screen.findByRole("textbox", { name: "Grok Build entry path" }),
     ).toBeDefined();
@@ -201,6 +215,7 @@ test.each(["en", "zh-CN"] as const)(
                             : `打开 ${name} 详情`,
                 }),
             );
+            await expandInstallPaths(locale);
             fireEvent.change(
                 screen.getByRole("textbox", {
                     name:
@@ -302,6 +317,7 @@ test("catalog is visible while checking and failed refresh labels previous obser
     fireEvent.click(
         screen.getByRole("button", { name: "Open Claude Code details" }),
     );
+    await expandInstallPaths();
     expect(
         await screen.findByRole("textbox", { name: "Claude Code entry path" }),
     ).toBeDefined();
@@ -430,6 +446,7 @@ test("an unavailable entry reports its state and cannot launch a version probe",
     await mount();
     await screen.findByText("Cannot inspect");
     fireEvent.click(screen.getByRole("button", { name: "Open Pi details" }));
+    await expandInstallPaths();
     expect(
         screen
             .getByRole("button", { name: "Read version" })
@@ -543,6 +560,7 @@ test("keyboard Enter submits both paths and locale switching preserves them with
             name: "Open Grok Build details",
         }),
     );
+    await expandInstallPaths();
     await screen.findByRole("heading", { name: /Grok Build/u });
     const user = userEvent.setup();
     await user.click(
@@ -595,6 +613,7 @@ test("filename version remains unverified and unavailable config roots do not sh
             name: "Open Grok Build details",
         }),
     );
+    await expandInstallPaths();
     const versionBadge = await screen.findByText("1.0.50");
     // This detail page also mounts the configuration and history cards, and each
     // one lands with its own browser-preview notice a tick after the scan reply.
@@ -621,4 +640,32 @@ test("filename version remains unverified and unavailable config roots do not sh
     expect(screen.getByText("User config (config.toml)")).toBeDefined();
     expect(screen.getAllByText("Cannot inspect").length).toBe(3);
     expect(screen.queryByText("Not found")).toBeNull();
+});
+
+test("list cards reserve empty Provider model Skill MCP summary slots", async () => {
+    await mount();
+    await screen.findByRole("button", { name: "Open Pi details" });
+    // Configurable agents show dash slots, never a fake zero count.
+    expect(screen.getAllByText(/Provider —/u).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Model —/u).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Skill —/u).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/MCP —/u).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Skill 0/u)).toBeNull();
+    expect(screen.queryByText(/MCP 0/u)).toBeNull();
+    // Agents without a write adapter show the shared empty summary line.
+    const hermes = screen.getByRole("button", {
+        name: "Open Hermes details",
+    });
+    expect(within(hermes).getByText("No configuration summary")).toBeTruthy();
+});
+
+test("agent detail defaults to the History segment with a current-config pin", async () => {
+    await mount();
+    await openPiDetail();
+    expect(
+        screen.getByRole("tab", { name: "History", selected: true }),
+    ).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Write" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Skill" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "MCP" })).toBeTruthy();
 });

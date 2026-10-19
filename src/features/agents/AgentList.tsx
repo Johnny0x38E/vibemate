@@ -32,7 +32,9 @@ import { IconButton } from "../../components/IconButton";
 import { AgentPage } from "./AgentPage";
 import { AgentVersionPanel } from "./AgentVersionPanel";
 import { ConfigPreview } from "./ConfigPreview";
-import { RestoreView } from "./RestoreView";
+import { CurrentConfigPin, RestoreView } from "./RestoreView";
+import underlineTabs from "../../components/underlineTabs.module.css";
+import type { HistoryCurrentConfig } from "../../lib/desktop/history";
 import {
     probeAgentVersion,
     type AgentVersionResult,
@@ -46,6 +48,8 @@ type State =
     | { kind: "error"; code: DiscoveryErrorCode };
 
 type AgentsPage = { kind: "list" } | { kind: "detail"; id: AgentId };
+
+type AgentSegment = "write" | "history" | "skill" | "mcp";
 
 function failure(error: unknown): DiscoveryErrorCode {
     return error instanceof DiscoveryRequestError
@@ -80,6 +84,10 @@ export function AgentList({
     /** Last successful desktop report; kept across refresh errors and loading. */
     const [snapshot, setSnapshot] = useState<AgentObservation[]>([]);
     const [page, setPage] = useState<AgentsPage>({ kind: "list" });
+    const [segment, setSegment] = useState<AgentSegment>("history");
+    const [currentConfig, setCurrentConfig] =
+        useState<HistoryCurrentConfig | null>(null);
+    const [installOpen, setInstallOpen] = useState(false);
     const [versions, setVersions] = useState<
         Partial<Record<AgentId, AgentVersionResult>>
     >({});
@@ -356,12 +364,17 @@ export function AgentList({
 
     function openDetail(id: AgentId): void {
         if (state.kind === "loading" || versionBusy) return;
+        setSegment(hasConfigAdapter(id) ? "history" : "skill");
+        setCurrentConfig(null);
+        setInstallOpen(false);
         setPage({ kind: "detail", id });
     }
 
     function returnToList(from: AgentId): void {
         if (pending.current) return;
         focusCard.current = from;
+        setCurrentConfig(null);
+        setInstallOpen(false);
         setPage({ kind: "list" });
     }
 
@@ -640,6 +653,72 @@ export function AgentList({
                                                         : null}
                                                 </span>
                                             </span>
+                                            {hasConfigAdapter(id) ? (
+                                                <>
+                                                    <span
+                                                        className={
+                                                            styles[
+                                                                "cardSummary"
+                                                            ]
+                                                        }
+                                                    >
+                                                        {t(
+                                                            "agents.summary.provider",
+                                                            {
+                                                                value: t(
+                                                                    "agents.summary.dash",
+                                                                ),
+                                                            },
+                                                        )}
+                                                        {t(
+                                                            "agents.summary.separator",
+                                                        )}
+                                                        {t(
+                                                            "agents.summary.model",
+                                                            {
+                                                                value: t(
+                                                                    "agents.summary.dash",
+                                                                ),
+                                                            },
+                                                        )}
+                                                    </span>
+                                                    <span
+                                                        className={
+                                                            styles[
+                                                                "cardSummary"
+                                                            ]
+                                                        }
+                                                    >
+                                                        {t(
+                                                            "agents.summary.skill",
+                                                            {
+                                                                value: t(
+                                                                    "agents.summary.dash",
+                                                                ),
+                                                            },
+                                                        )}
+                                                        {t(
+                                                            "agents.summary.separator",
+                                                        )}
+                                                        {t(
+                                                            "agents.summary.mcp",
+                                                            {
+                                                                value: t(
+                                                                    "agents.summary.dash",
+                                                                ),
+                                                            },
+                                                        )}
+                                                    </span>
+                                                </>
+                                            ) : (
+                                                <span
+                                                    className={
+                                                        styles["cardSummary"]
+                                                    }
+                                                >
+                                                    {t("agents.summary.none")}
+                                                </span>
+                                            )}
                                         </span>
                                     </button>
                                 </li>
@@ -659,6 +738,10 @@ export function AgentList({
             pathValue.trim() === ""
                 ? row?.source !== "manual"
                 : pathValue.trim() === row?.entryPath;
+        const configurable = hasConfigAdapter(id);
+        const segments: AgentSegment[] = configurable
+            ? ["write", "history", "skill", "mcp"]
+            : ["skill", "mcp"];
 
         return (
             <AgentPage
@@ -693,107 +776,184 @@ export function AgentList({
                     </p>
                 ) : null}
                 <section className={styles["detailGroup"]} data-layout="page">
-                    {/* A configuration card leads the page where an adapter can
-                        write; below it the recorded-write history for that same
-                        Agent, then the remaining facts, the manual entry path and
-                        the version read share one card. */}
-                    {hasConfigAdapter(id) && (
-                        <ConfigPreview
-                            key={JSON.stringify([id, row?.entryPath])}
-                            onApplied={() => {
-                                setConfigEpoch((value) => value + 1);
-                            }}
-                            blocked={blocked}
-                            agent={id}
-                            entryPath={row?.entryPath ?? null}
-                            onBusyChange={(busy) => {
-                                pending.current = busy;
-                                if (mounted.current) setVersionBusy(busy);
-                            }}
-                        />
+                    {configurable && currentConfig !== null && (
+                        <CurrentConfigPin current={currentConfig} />
                     )}
-                    {hasConfigAdapter(id) && (
-                        <RestoreView
-                            key={JSON.stringify([id, configEpoch])}
-                            blocked={blocked}
-                            agent={id}
-                            onBusyChange={(busy) => {
-                                pending.current = busy;
-                                if (mounted.current) setVersionBusy(busy);
-                            }}
-                        />
-                    )}
-                    <DetailPanel label={t("agents.detail.detailsHeading")}>
-                        {row !== undefined && details(row)}
-                        <form
-                            className={detailForm["row"]}
-                            aria-label={t("agents.detail.manualPathTitle")}
-                            onSubmit={(event) => {
-                                event.preventDefault();
-                                void refresh();
-                            }}
-                        >
-                            <label
-                                className={detailForm["label"]}
-                                htmlFor={`agent-entry-path-${id}`}
+                    <div
+                        className={[
+                            underlineTabs["tabs"],
+                            styles["segments"],
+                        ].join(" ")}
+                        role="tablist"
+                        aria-label={t("agents.segments.ariaLabel")}
+                    >
+                        {segments.map((idSegment) => (
+                            <button
+                                key={idSegment}
+                                type="button"
+                                className={underlineTabs["tab"]}
+                                role="tab"
+                                aria-selected={segment === idSegment}
+                                id={`agent-segment-${id}-${idSegment}`}
+                                aria-controls={`agent-panel-${id}-${idSegment}`}
+                                tabIndex={segment === idSegment ? 0 : -1}
+                                onClick={() => {
+                                    setSegment(idSegment);
+                                }}
                             >
-                                {t("agents.pathLabel", { name })}
-                            </label>
-                            <span className={styles["pathField"]}>
-                                <input
-                                    id={`agent-entry-path-${id}`}
-                                    className={[
-                                        editForm["input"],
-                                        styles["pathInput"],
-                                    ].join(" ")}
-                                    value={pathValue}
-                                    readOnly={blocked}
-                                    spellCheck={false}
-                                    autoComplete="off"
-                                    placeholder={t("agents.pathPlaceholder")}
-                                    onChange={(event) => {
-                                        setPaths({
-                                            ...paths,
-                                            [id]: event.currentTarget.value,
-                                        });
-                                    }}
-                                />
-                                <IconButton
-                                    type="submit"
-                                    icon="refresh"
-                                    label={t("agents.detail.applyPath")}
-                                    blocked={blocked}
-                                />
-                            </span>
-                        </form>
-                        <AgentVersionPanel
-                            key={JSON.stringify([
-                                confirmationEpoch,
-                                id,
-                                row?.entryPath,
-                                row?.resolvedPath,
-                            ])}
-                            row={row}
-                            enabled={
-                                !blocked &&
-                                !autoProbeBusy &&
-                                state.kind === "desktop" &&
-                                pathMatches
-                            }
-                            hidden={hidden}
-                            onBusyChange={(busy) => {
-                                pending.current = busy;
-                                if (mounted.current) setVersionBusy(busy);
-                            }}
-                            onResult={(result) => {
-                                if (mounted.current && !hidden)
-                                    setVersions((previous) => ({
-                                        ...previous,
-                                        [result.id]: result,
-                                    }));
-                            }}
-                        />
-                    </DetailPanel>
+                                {t(`agents.segments.${idSegment}`)}
+                            </button>
+                        ))}
+                    </div>
+                    {configurable && (
+                        <div
+                            role="tabpanel"
+                            id={`agent-panel-${id}-write`}
+                            aria-labelledby={`agent-segment-${id}-write`}
+                            hidden={segment !== "write"}
+                        >
+                            <ConfigPreview
+                                key={JSON.stringify([id, row?.entryPath])}
+                                onApplied={() => {
+                                    setConfigEpoch((value) => value + 1);
+                                }}
+                                blocked={blocked}
+                                agent={id}
+                                entryPath={row?.entryPath ?? null}
+                                onBusyChange={(busy) => {
+                                    pending.current = busy;
+                                    if (mounted.current) setVersionBusy(busy);
+                                }}
+                            />
+                        </div>
+                    )}
+                    {configurable && (
+                        <div
+                            role="tabpanel"
+                            id={`agent-panel-${id}-history`}
+                            aria-labelledby={`agent-segment-${id}-history`}
+                            hidden={segment !== "history"}
+                        >
+                            <RestoreView
+                                key={JSON.stringify([id, configEpoch])}
+                                blocked={blocked}
+                                agent={id}
+                                hidePin
+                                onCurrentChange={(current) => {
+                                    if (mounted.current)
+                                        setCurrentConfig(current);
+                                }}
+                                onBusyChange={(busy) => {
+                                    pending.current = busy;
+                                    if (mounted.current) setVersionBusy(busy);
+                                }}
+                            />
+                        </div>
+                    )}
+                    <div
+                        role="tabpanel"
+                        id={`agent-panel-${id}-skill`}
+                        aria-labelledby={`agent-segment-${id}-skill`}
+                        hidden={segment !== "skill"}
+                    >
+                        <p className={styles["hint"]}>
+                            {t("agents.skillPanel.empty")}
+                        </p>
+                    </div>
+                    <div
+                        role="tabpanel"
+                        id={`agent-panel-${id}-mcp`}
+                        aria-labelledby={`agent-segment-${id}-mcp`}
+                        hidden={segment !== "mcp"}
+                    >
+                        <p className={styles["hint"]}>
+                            {t("agents.mcpPanel.empty")}
+                        </p>
+                    </div>
+                    <details
+                        className={styles["installPaths"]}
+                        open={installOpen}
+                        onToggle={(event) => {
+                            setInstallOpen(event.currentTarget.open);
+                        }}
+                    >
+                        <summary className={styles["installSummary"]}>
+                            {t("agents.installPaths.heading")}
+                        </summary>
+                        <DetailPanel label={t("agents.detail.detailsHeading")}>
+                            {row !== undefined && details(row)}
+                            <form
+                                className={detailForm["row"]}
+                                aria-label={t("agents.detail.manualPathTitle")}
+                                onSubmit={(event) => {
+                                    event.preventDefault();
+                                    void refresh();
+                                }}
+                            >
+                                <label
+                                    className={detailForm["label"]}
+                                    htmlFor={`agent-entry-path-${id}`}
+                                >
+                                    {t("agents.pathLabel", { name })}
+                                </label>
+                                <span className={styles["pathField"]}>
+                                    <input
+                                        id={`agent-entry-path-${id}`}
+                                        className={[
+                                            editForm["input"],
+                                            styles["pathInput"],
+                                        ].join(" ")}
+                                        value={pathValue}
+                                        readOnly={blocked}
+                                        spellCheck={false}
+                                        autoComplete="off"
+                                        placeholder={t(
+                                            "agents.pathPlaceholder",
+                                        )}
+                                        onChange={(event) => {
+                                            setPaths({
+                                                ...paths,
+                                                [id]: event.currentTarget.value,
+                                            });
+                                        }}
+                                    />
+                                    <IconButton
+                                        type="submit"
+                                        icon="refresh"
+                                        label={t("agents.detail.applyPath")}
+                                        blocked={blocked}
+                                    />
+                                </span>
+                            </form>
+                            <AgentVersionPanel
+                                key={JSON.stringify([
+                                    confirmationEpoch,
+                                    id,
+                                    row?.entryPath,
+                                    row?.resolvedPath,
+                                ])}
+                                row={row}
+                                enabled={
+                                    !blocked &&
+                                    !autoProbeBusy &&
+                                    state.kind === "desktop" &&
+                                    pathMatches
+                                }
+                                hidden={hidden}
+                                onBusyChange={(busy) => {
+                                    pending.current = busy;
+                                    if (mounted.current) setVersionBusy(busy);
+                                }}
+                                onResult={(result) => {
+                                    if (mounted.current && !hidden)
+                                        setVersions((previous) => ({
+                                            ...previous,
+                                            [result.id]: result,
+                                        }));
+                                }}
+                            />
+                        </DetailPanel>
+                    </details>
                 </section>
             </AgentPage>
         );

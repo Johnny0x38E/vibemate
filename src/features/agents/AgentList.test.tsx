@@ -785,7 +785,7 @@ test("list cards show a single provider | model line from history current", asyn
     await waitFor(() => {
         expect(
             within(pi).getByText(
-                "Command Code GOAT | deepseek/deepseek-v4.1-flash",
+                "Command Code GOAT · deepseek/deepseek-v4.1-flash",
             ),
         ).toBeTruthy();
     });

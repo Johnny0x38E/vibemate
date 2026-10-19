@@ -671,6 +671,15 @@ export function AgentList({
                                       model: summary.modelLabel,
                                   }
                                 : null;
+                        // One string feeds the summary and its tooltip, so a
+                        // truncated name stays readable on hover.
+                        const providerModelText =
+                            providerModel === null
+                                ? null
+                                : t(
+                                      "agents.summary.providerModel",
+                                      providerModel,
+                                  );
                         const statusText =
                             state.kind === "desktop" && row?.state === "found"
                                 ? (reported?.version ??
@@ -710,11 +719,12 @@ export function AgentList({
                                                         className={
                                                             styles["rowSummary"]
                                                         }
+                                                        title={
+                                                            providerModelText ??
+                                                            undefined
+                                                        }
                                                     >
-                                                        {t(
-                                                            "agents.summary.providerModel",
-                                                            providerModel,
-                                                        )}
+                                                        {providerModelText}
                                                     </span>
                                                 ) : null
                                             ) : (

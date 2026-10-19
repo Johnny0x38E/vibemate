@@ -369,7 +369,7 @@ fn preview_never_adopts_an_alias_the_user_already_wrote() {
 }
 
 #[test]
-fn preview_sets_name_to_vibemate_model_slug_not_user_alias() {
+fn preview_shows_the_provider_marker_and_model_id_in_the_native_name() {
     let f = Fixture::new();
     let plan = f.plan();
     let name = plan
@@ -378,21 +378,30 @@ fn preview_sets_name_to_vibemate_model_slug_not_user_alias() {
         .iter()
         .find(|change| change.key_path == format!("model.{}.name", plan.model_alias))
         .expect("name planned");
-    assert_eq!(name.after, "vibemate-deepseek-flash");
-    // A slash in the model id uses the same slug helper as alias candidates.
+    // Readable text, not a slug: the fixed marker, then the model ID untouched.
+    assert_eq!(name.after, "(vibemate-Grok-test) deepseek-flash");
+    // A slashed, organization-prefixed ID keeps its separators; neither the
+    // Provider name nor the user's alias replaces the native name.
     let slashed = model(|m| {
-        m.model_id = "org/deepseek-flash".into();
+        m.model_id = "deepseek/deepseek-v4.1-flash".into();
         m.alias = Some("Pretty label".into());
         m.upstream_name = Some("Upstream Pretty".into());
     });
-    let plan = f.plan_with(&f.provider, &slashed);
+    let provider = ProviderRecord {
+        display_name: "Command Code GOAT".into(),
+        ..f.provider.clone()
+    };
+    let plan = f.plan_with(&provider, &slashed);
     let name = plan
         .file
         .changes
         .iter()
         .find(|change| change.key_path == format!("model.{}.name", plan.model_alias))
         .expect("name planned");
-    assert_eq!(name.after, "vibemate-org-deepseek-flash");
+    assert_eq!(
+        name.after,
+        "(vibemate-Command-Code-GOAT) deepseek/deepseek-v4.1-flash"
+    );
 }
 
 #[test]
@@ -436,11 +445,11 @@ fn preview_writes_when_model_id_differs_from_existing_alias_names() {
         .iter()
         .find(|change| change.key_path == format!("model.{}.name", plan.model_alias))
         .expect("name planned");
-    assert_eq!(name.after, "vibemate-deepseek-flash");
+    assert_eq!(name.after, "(vibemate-Grok-test) deepseek-flash");
 }
 
 #[test]
-fn preview_updates_owned_binding_name_to_vibemate_slug() {
+fn preview_updates_an_owned_binding_to_the_current_name_format() {
     let f = Fixture::new();
     let alias = f.plan().model_alias;
     f.write(
@@ -460,7 +469,7 @@ fn preview_updates_owned_binding_name_to_vibemate_slug() {
         .find(|change| change.key_path == format!("model.{alias}.name"))
         .expect("name planned");
     assert_eq!(name.before.as_deref(), Some("My flash"));
-    assert_eq!(name.after, "vibemate-deepseek-flash");
+    assert_eq!(name.after, "(vibemate-Grok-test) deepseek-flash");
 }
 
 #[test]
@@ -781,7 +790,8 @@ fn apply_writes_the_key_and_keeps_every_field_the_plan_does_not_own() {
     let alias = f.plan().model_alias;
     assert!(written.contains(&format!("[model.{alias}]")));
     assert!(written.contains(&format!("api_key = \"{KEY}\"")));
-    assert!(written.contains("name = \"vibemate-deepseek-flash\""));
+    // The picker shows readable text; the table name stays the alias.
+    assert!(written.contains("name = \"(vibemate-Grok-test) deepseek-flash\""));
     assert!(written.contains("api_backend = \"chat_completions\""));
     assert!(written.contains("context_window = 128000"));
     assert!(written.contains(&format!("default = \"{alias}\"")));
@@ -910,20 +920,53 @@ fn a_grok_write_can_be_restored_byte_for_byte_and_stays_out_of_other_histories()
     // The recorded write and its ownership stay: the alias was written once and
     // the history still describes what happened.
     assert_eq!(f.bindings().len(), 1);
-    let listed = crate::agents::list_config_operations(&f.storage, OperationKind::GrokSettings)
-        .expect("history");
-    assert_eq!(listed.len(), 1);
+    // The paginated history keeps the entry as a record of what happened.
+    let page = crate::config_apply::configuration_history(
+        &f.storage,
+        &crate::config_apply::HistoryScope::new(
+            OperationKind::GrokSettings,
+            &f.root,
+            &["config.toml"],
+        )
+        .unwrap(),
+        None,
+        50,
+        &BackupStore::new(f.root.join("backups")),
+    )
+    .unwrap();
+    // The apply and the manual restore each occupy their own entry, newest
+    // first: the restore was the last thing that happened.
+    assert_eq!(page.entries.len(), 2);
     assert_eq!(
-        listed[0].steps[0].target_path,
+        page.entries[0].intent,
+        crate::config_apply::HistoryIntent::Restore
+    );
+    let apply = page
+        .entries
+        .iter()
+        .find(|entry| entry.intent == crate::config_apply::HistoryIntent::Apply)
+        .expect("apply entry");
+    assert_eq!(
+        apply.source_steps[0].target_path,
         f.root.join("config.toml").to_string_lossy()
     );
-    // The row stays visible as a record, but after a full restore there is
-    // nothing left to undo.
-    assert!(!listed[0].restorable);
+    // Another Agent's scope never sees this write.
     assert!(
-        crate::agents::list_config_operations(&f.storage, OperationKind::ClaudeCodeSettings,)
-            .expect("other history")
-            .is_empty()
+        crate::config_apply::configuration_history(
+            &f.storage,
+            &crate::config_apply::HistoryScope::new(
+                OperationKind::ClaudeCodeSettings,
+                &f.root,
+                &["settings.json"],
+            )
+            .unwrap(),
+            None,
+            50,
+            &BackupStore::new(f.root.join("backups")),
+        )
+        .unwrap()
+        .entries
+        .is_empty()
     );
 }
 

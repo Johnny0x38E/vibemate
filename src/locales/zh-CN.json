@@ -962,7 +962,7 @@
             "none": "暂无配置摘要",
             "separator": " · ",
             "notWritten": "未写入",
-            "providerModel": "{{provider}} | {{model}}"
+            "providerModel": "{{provider}} · {{model}}"
         },
         "skillPanel": {
             "empty": "即将在技能模块管理；此处稍后显示只读状态。"

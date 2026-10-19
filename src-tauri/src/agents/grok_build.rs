@@ -7,9 +7,10 @@
 //! maintainer's own models, MCP servers, UI settings — must survive untouched,
 //! which is what the preview promises. Alias ownership lives in the private
 //! `grok_model_binding` table, so an entry the user wrote by hand is never taken
-//! over. Owned entries always set TOML `name` to `vibemate-<slug(model_id)>`,
-//! and a plan whose API `model` id exactly matches an existing `[model.<alias>]`
-//! table name is refused as a target conflict. The preview reads no OS
+//! over. Owned entries always set TOML `name` to
+//! `(vibemate-<Provider>) <model ID>`, and a plan whose API `model` id
+//! exactly matches an existing `[model.<alias>]` table name is refused as a
+//! target conflict. The preview reads no OS
 //! credential and writes nothing; only the apply step takes the key and
 //! replaces the file through the shared writer, which backs up, atomically
 //! replaces and can roll the write back. Grok itself is never launched here,
@@ -361,12 +362,13 @@ pub(crate) fn build(
     let mut changes = Vec::new();
     let models = root_table(&mut target.document, "model")?;
     let entry = named_table(models, &alias)?;
-    // Display `name` is always vibemate-owned and derived from the model id.
-    // The user's model alias / upstream label may still appear elsewhere; they
-    // no longer become the TOML `name` field.
-    let display_name = format!(
-        "vibemate-{}",
-        slug(&model.model_id, 60).unwrap_or_else(|| String::from("model"))
+    // The TOML `name` is what Grok's model picker shows, so it reads as
+    // `(vibemate-<Provider>) <model ID>` with a reserved place for a reasoning
+    // level. The table name (`alias`) stays a separate configuration identity.
+    let display_name = crate::shared::agent_model_display_name(
+        &provider.display_name,
+        &model.model_id,
+        crate::shared::MAX_AGENT_MODEL_NAME_CHARS,
     );
     set_text(
         entry,

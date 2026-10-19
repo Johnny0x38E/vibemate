@@ -488,6 +488,37 @@ fn readable_provider_names_are_stable_and_separate_accounts_with_the_same_label(
 }
 
 #[test]
+fn model_names_carry_the_marker_and_model_id_not_the_user_alias() {
+    let mut f = Fixture::new();
+    f.provider.display_name = "Command Code GOAT".into();
+    f.provider.revision += 1;
+    f.model.model.model_id = "deepseek/deepseek-v4.1-flash".into();
+    f.model.model.alias = Some("Pretty label".into());
+    f.model.model.upstream_name = Some("Upstream Pretty".into());
+    f.model.content_digest = "c".repeat(64);
+    let plan = serde_json::to_string(&f.plan()).unwrap();
+    assert!(
+        plan.contains("(vibemate-Command-Code-GOAT) deepseek/deepseek-v4.1-flash"),
+        "the planned name carries the marker and the model ID: {plan}"
+    );
+    assert!(!plan.contains("Pretty label"));
+    f.apply(&f.reviewed()).unwrap();
+    let document: Value = serde_json::from_str(&f.text("models.json")).unwrap();
+    let models = document["providers"]["vibemate-Command-Code-GOAT"]["models"]
+        .as_array()
+        .unwrap();
+    let written = models
+        .iter()
+        .find(|model| model["id"] == "deepseek/deepseek-v4.1-flash")
+        .expect("selected model written");
+    // The model id stays the identity; only the display name is combined.
+    assert_eq!(
+        written["name"],
+        "(vibemate-Command-Code-GOAT) deepseek/deepseek-v4.1-flash"
+    );
+}
+
+#[test]
 fn applying_renames_a_recorded_uuid_provider_and_preserves_every_model() {
     let f = Fixture::new();
     let legacy = format!("vibemate-{ID}");

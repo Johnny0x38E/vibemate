@@ -401,15 +401,18 @@ pub(crate) fn build(
         false,
         &mut model_changes,
     )?;
-    let name = model
-        .alias
-        .as_ref()
-        .or(model.upstream_name.as_ref())
-        .unwrap_or(&model.model_id);
+    // Pi shows this text in its model picker, so it reads as
+    // `(vibemate-<Provider>) <model ID>`. The model `id` remains the identity;
+    // `name` is display text only.
+    let model_name = crate::shared::agent_model_display_name(
+        &provider.display_name,
+        &model.model_id,
+        crate::shared::MAX_AGENT_MODEL_NAME_CHARS,
+    );
     set_value(
         selected,
         "name",
-        json!(name),
+        json!(model_name),
         &prefix,
         false,
         &mut model_changes,

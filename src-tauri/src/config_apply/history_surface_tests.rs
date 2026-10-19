@@ -6,6 +6,7 @@ use crate::agents::{
     history::{ConfigurationHistoryRequest, configuration_history_page},
     recovery::ConfigurationAgent,
 };
+use crate::config_apply::{HistoryCurrentStatus, HistoryScope, configuration_history};
 use crate::credentials::{Secret, fake::FakeStore};
 use crate::providers::CreateProviderRequest;
 use serde_json::json;
@@ -85,7 +86,11 @@ fn history_surface_defaults_work_without_installations_targets_or_backups() {
         assert_eq!(page.entries.len(), 1);
         assert_eq!(page.entries[0].entry.operation_id, id);
         assert_eq!(page.entries[0].entry.source_steps.len(), names.len());
+        // Current pin always ships with the IPC page, even when live files are gone.
+        assert_eq!(page.current.files.len(), names.len());
+        assert_eq!(page.current.matched_entry_key, None);
         let serialized = serde_json::to_string(&page).unwrap();
+        assert!(serialized.contains("\"current\""));
         assert!(!serialized.contains("synthetic-private"));
         assert!(!serialized.contains("backupPath"));
         assert!(!serialized.contains(fixture.backups().root().to_str().unwrap()));
@@ -396,4 +401,77 @@ fn history_surface_payload_rejects_unsupported_agents_paths_and_cursor_extension
         .unwrap_err(),
         ClaudeCodeRestoreError::InvalidRequest
     );
+}
+
+#[test]
+fn history_surface_includes_current_pin_for_empty_and_matched_pages() {
+    let fixture = Fixture::new();
+    let environment = environment(&fixture);
+    // Empty journal: IPC page still carries the current pin (unrecorded, no match).
+    let empty = configuration_history_page(
+        &fixture.storage,
+        &environment,
+        &request(ConfigurationAgent::ClaudeCode, 50),
+        &fixture.backups(),
+    )
+    .unwrap();
+    assert!(empty.entries.is_empty());
+    assert!(empty.next_cursor.is_none());
+    assert_eq!(empty.current.status, HistoryCurrentStatus::Unrecorded);
+    assert_eq!(empty.current.matched_entry_key, None);
+    assert_eq!(empty.current.files.len(), 1);
+    assert!(
+        empty.current.files[0]
+            .target_path
+            .ends_with(".claude/settings.json"),
+        "{}",
+        empty.current.files[0].target_path
+    );
+    assert!(empty.current.files[0].readable);
+    assert_eq!(empty.current.files[0].current_digest, None);
+    let empty_json = serde_json::to_value(&empty).unwrap();
+    assert!(empty_json.get("current").is_some());
+    assert_eq!(empty_json["current"]["matchedEntryKey"], serde_json::Value::Null);
+    assert_eq!(empty_json["current"]["status"], "unrecorded");
+
+    // Matched live files: pin names the matching entry and matches the core page.
+    let root = environment.home.join(".claude");
+    let id = apply_in(
+        &fixture,
+        OperationKind::ClaudeCodeSettings,
+        &root,
+        &["settings.json"],
+    );
+    let matched = configuration_history_page(
+        &fixture.storage,
+        &environment,
+        &request(ConfigurationAgent::ClaudeCode, 50),
+        &fixture.backups(),
+    )
+    .unwrap();
+    assert_eq!(matched.entries.len(), 1);
+    assert_eq!(matched.current.status, HistoryCurrentStatus::Matched);
+    assert_eq!(
+        matched.current.matched_entry_key.as_deref(),
+        Some(matched.entries[0].entry.entry_key.as_str())
+    );
+    assert_eq!(
+        matched.current.matched_entry_key.as_deref(),
+        Some(format!("operation:{id}").as_str())
+    );
+    let scope = HistoryScope::new(
+        OperationKind::ClaudeCodeSettings,
+        &root,
+        &["settings.json"],
+    )
+    .unwrap();
+    let core = configuration_history(&fixture.storage, &scope, None, 50, &fixture.backups())
+        .unwrap();
+    assert_eq!(matched.current, core.current);
+    let matched_json = serde_json::to_value(&matched).unwrap();
+    assert_eq!(
+        matched_json["current"]["matchedEntryKey"].as_str(),
+        Some(format!("operation:{id}").as_str())
+    );
+    assert_eq!(matched_json["current"]["status"], "matched");
 }

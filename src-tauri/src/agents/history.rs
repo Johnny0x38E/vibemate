@@ -10,7 +10,9 @@ use super::{
     AgentId, ClaudeCodeRestoreError, DiscoveryEnvironment, discovery, recovery::ConfigurationAgent,
 };
 use crate::{
-    config_apply::{self, BackupStore, HistoryCursor, HistoryEntry, HistoryScope},
+    config_apply::{
+        self, BackupStore, HistoryCurrentConfig, HistoryCursor, HistoryEntry, HistoryScope,
+    },
     storage::Storage,
 };
 
@@ -49,6 +51,8 @@ pub struct ConfigurationHistoryEntry {
 #[derive(Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigurationHistoryPage {
+    /// Live configuration pin; identical for every page of the same scope.
+    pub current: HistoryCurrentConfig,
     /// Newest first; every multi-file batch stays inside one entry.
     pub entries: Vec<ConfigurationHistoryEntry>,
     /// Seek position for more entries, absent when this read reached the end.
@@ -120,6 +124,7 @@ pub fn configuration_history_page(
         })
         .collect::<Result<Vec<_>, ClaudeCodeRestoreError>>()?;
     Ok(ConfigurationHistoryPage {
+        current: page.current,
         entries,
         next_cursor: page.next_cursor,
     })

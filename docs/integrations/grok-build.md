@@ -116,6 +116,17 @@ API key 放进共享仓库」。也就是说用户级 `config.toml` 里的 `api_
 别名是配置身份，因此需要区分 vibemate 拥有的条目与用户手写条目：只有私有存储里有归属记录的
 `[model.<alias>]` 才能被本适配器改写，同名但无记录的条目一律拒绝接管。
 
+### 适配器写入的 `name` 与别名（2026-10-19）
+
+vibemate 拥有的 `[model.<alias>]` 条目写入时：
+
+- **`name` 字段**一律为 `vibemate-<slug(model_id)>`（与别名候选共用同一套 slug：非字母数字改为连字符、小写、截断）。例如 `deepseek-flash` → `name = "vibemate-deepseek-flash"`；带 `/` 的 id（如 `org/deepseek-flash`）→ `vibemate-org-deepseek-flash`。不再使用用户模型显示别名或 `upstream_name` 作为 TOML `name`。
+- **配置别名（表名）**仍由 `choose_alias` 决定：优先复用本根下已记录的归属；否则按 `vibemate-{provider}-{model}` 等候选选取空闲名。**不会**接管同名但无归属记录的用户手写表。
+- **碰撞拒绝**：若计划写入的 API `model` 字段值（即 `model_id`）与当前 `config.toml` 里某个已有 `[model.<alias>]` 表名**完全相同**，预览以 `TargetConflict` / `target_conflict` 拒绝，不静默改写。典型场景：用户已手写 `[model.deepseek-flash]`，而 vibemate 又要写 `model = "deepseek-flash"`。
+- **再应用**：对已归属的别名再次预览/写入时，会把该条目的 `name` 更新为上述 `vibemate-…` 格式（仅 vibemate 拥有的条目）。
+
+`name` 与 alias 故意分开：alias 带 provider 段以降低跨 Provider 碰撞并保持归属键稳定；`name` 只标记 vibemate 来源与模型 slug，便于在 Grok UI 中辨认。若将来把两者都收成 `vibemate-<model_slug>`，需另做绑定迁移与冲突评估。
+
 环境引用依赖独立启动 Grok 的终端环境；桌面设置不能自动传播到已有终端。
 中央 OS 凭据引用也不能直接充当 `env_key` 值。若目标需要私有明文配置，应明确
 预览、权限、脱敏与私有备份策略。认证文件（如 `auth.json`、`mcp_credentials.json`）
@@ -190,7 +201,7 @@ MCP；兼容来源还可能以 disabled 状态列出。因此适配器必须结�
 [model.vibemate-deepseek]
 model = "deepseek-flash"
 base_url = "https://api.deepseek.com"
-name = "DeepSeek through vibemate"
+name = "vibemate-deepseek-flash"
 env_key = "VIBEMATE_DEEPSEEK_API_KEY"
 api_backend = "chat_completions"
 

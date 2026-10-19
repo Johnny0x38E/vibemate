@@ -16,6 +16,8 @@ GitHub release notes are extracted from the matching version section only.
 
 ### Fixed
 
+- Grok Build owned model entries now always set TOML `name` to `vibemate-<slug(model_id)>` (not the user display alias or upstream name). Preview refuses with `TargetConflict` when the planned API `model` id exactly matches an existing `[model.<alias>]` table name, so a handwritten alias cannot collide with vibemate's `model = "…"` write. Alias ownership via `choose_alias` is unchanged. Re-applying an owned binding updates that entry's `name` to the new format.
+
 - Version-restore previews now retain the target digest when a present file already matches its retained version, so the strict frontend boundary accepts the skipped file and its complete text remains viewable. Two absent file states no longer invent an invalid root-level change, and an external scalar JSON root edit uses an explicit `$` field path instead of an empty one. Regression tests cover these native desktop findings.
 
 - Added the typed frontend boundary for complete configuration history. Strict Zod schemas reject unexpected fields, contradictory journal/reconciliation metadata, invalid ordering and mismatched pagination cursors; errors discard raw responses and validation diagnostics. Browser preview does not invoke IPC or invent history. Zod 4.6.7 (stable, MIT) is now an explicit application dependency, with the lockfile updated. Verified with 79 new boundary tests, the full frontend checks (989 tests), Rust formatting/Clippy/tests (514 passed, 1 ignored), and the locked macOS no-bundle build. Existing history screens have not switched to this wrapper; native invocation acceptance and Windows/Linux verification remain pending. The existing large-chunk advisory remains.

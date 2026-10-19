@@ -7,29 +7,32 @@
 //! maintainer's own models, MCP servers, UI settings — must survive untouched,
 //! which is what the preview promises. Alias ownership lives in the private
 //! `grok_model_binding` table, so an entry the user wrote by hand is never taken
-//! over. The preview reads no OS credential and writes nothing; only the apply
-//! step takes the key and replaces the file through the shared writer, which
-//! backs up, atomically replaces and can roll the write back. Grok itself is
-//! never launched here, and the verified field set and refusals are recorded in
+//! over. Owned entries always set TOML `name` to `vibemate-<slug(model_id)>`,
+//! and a plan whose API `model` id exactly matches an existing `[model.<alias>]`
+//! table name is refused as a target conflict. The preview reads no OS
+//! credential and writes nothing; only the apply step takes the key and
+//! replaces the file through the shared writer, which backs up, atomically
+//! replaces and can roll the write back. Grok itself is never launched here,
+//! and the verified field set and refusals are recorded in
 //! `docs/integrations/grok-build.md`.
 
 use super::{AgentId, ConfigApplied, ConfigApplyError, DiscoveryEnvironment, DiscoveryInput};
 use crate::config_apply::{
-    BackupStore, OperationKind, OperationState, PlannedFile, StepState, WriteTarget,
-    apply_private_files,
+    apply_private_files, BackupStore, OperationKind, OperationState, PlannedFile, StepState,
+    WriteTarget,
 };
 use crate::config_plan::{
-    ConfigChange, NoticeCode, PlanError, PlanNotice, PlanSource, SECRET_PLACEHOLDER, TargetFile,
-    digest_hex, read_target_bytes,
+    digest_hex, read_target_bytes, ConfigChange, NoticeCode, PlanError, PlanNotice, PlanSource,
+    TargetFile, SECRET_PLACEHOLDER,
 };
 use crate::credentials::CredentialStore;
 use crate::models::{ModelSnapshot, ProviderModel};
-use crate::providers::{ProviderProtocol, ProviderRecord, base_url_for_protocol};
+use crate::providers::{base_url_for_protocol, ProviderProtocol, ProviderRecord};
 use crate::storage::Storage;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use toml_edit::{DocumentMut, Item, Table, table, value};
+use toml_edit::{table, value, DocumentMut, Item, Table};
 
 /// Grok reads all user settings from this one file below its configuration root.
 const CONFIG_FILE: &str = "config.toml";
@@ -245,7 +248,8 @@ fn verify_extracted_contract(root: &Path, version: &str) -> Result<(), PlanError
 /// credential mapping, `BaseUrlUnverified` for an address outside the vendor's
 /// documented ones, `TargetUnreadable` for a file that does not parse as TOML,
 /// and `TargetConflict` when a field or alias this plan needs is already
-/// occupied by something the adapter does not own.
+/// occupied by something the adapter does not own, or when the planned API
+/// `model` id exactly matches an existing `[model.<alias>]` table name.
 pub fn plan_grok_settings(
     storage: &Storage,
     root: &Path,
@@ -324,6 +328,13 @@ pub(crate) fn build(
     let existing_alias = holds_alias(&target.document, &alias);
     let prefix = format!("model.{alias}");
     let mut notices = Vec::new();
+    // Grok treats `[model.<alias>]` names as configuration identities. Writing
+    // `model = "<id>"` when `<id>` is already a table name would collide with
+    // that identity (for example a handwritten `[model.deepseek-flash]`), so
+    // the plan stops instead of producing an ambiguous document.
+    if holds_alias(&target.document, &model.model_id) {
+        return Err(PlanError::TargetConflict);
+    }
     // A disabled or unlisted alias would be written but never selectable, and
     // vibemate does not silently re-enable a model the user turned off.
     if list_contains(&target.document, "models", "disabled_models", &alias)? {
@@ -350,11 +361,13 @@ pub(crate) fn build(
     let mut changes = Vec::new();
     let models = root_table(&mut target.document, "model")?;
     let entry = named_table(models, &alias)?;
-    let display_name = model
-        .alias
-        .as_ref()
-        .or(model.upstream_name.as_ref())
-        .unwrap_or(&model.model_id);
+    // Display `name` is always vibemate-owned and derived from the model id.
+    // The user's model alias / upstream label may still appear elsewhere; they
+    // no longer become the TOML `name` field.
+    let display_name = format!(
+        "vibemate-{}",
+        slug(&model.model_id, 60).unwrap_or_else(|| String::from("model"))
+    );
     set_text(
         entry,
         "model",
@@ -364,7 +377,7 @@ pub(crate) fn build(
         &mut changes,
     )?;
     set_text(entry, "base_url", &base, &prefix, false, &mut changes)?;
-    set_text(entry, "name", display_name, &prefix, false, &mut changes)?;
+    set_text(entry, "name", &display_name, &prefix, false, &mut changes)?;
     set_text(entry, "api_backend", backend, &prefix, false, &mut changes)?;
     set_text(
         entry,

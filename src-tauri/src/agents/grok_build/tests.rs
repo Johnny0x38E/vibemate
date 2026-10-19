@@ -195,7 +195,7 @@ theme = "dark"
 
 #[test]
 fn full_model_preview_is_bound_to_native_plan_and_preserves_unowned_toml() {
-    use crate::configuration_preview::{PreviewError, PreviewRequest, read_preview};
+    use crate::configuration_preview::{read_preview, PreviewError, PreviewRequest};
     let f = Fixture::new();
     let environment = f.installed();
     f.write(
@@ -302,17 +302,15 @@ fn preview_creates_the_tables_a_new_document_needs() {
     // No file existed, so the plan reports it as absent and still names its keys.
     assert!(!plan.file.target.exists);
     assert!(plan.model_alias.starts_with("vibemate-"));
-    assert!(
-        plan.notices
-            .iter()
-            .any(|notice| notice.code == NoticeCode::CredentialFromStore)
-    );
+    assert!(plan
+        .notices
+        .iter()
+        .any(|notice| notice.code == NoticeCode::CredentialFromStore));
     assert_eq!(plan.precedence.len(), PRECEDENCE_FILES.len());
-    assert!(
-        plan.precedence
-            .iter()
-            .all(|file| file.state == GrokLayerState::Absent)
-    );
+    assert!(plan
+        .precedence
+        .iter()
+        .all(|file| file.state == GrokLayerState::Absent));
 }
 
 #[test]
@@ -329,11 +327,10 @@ fn preview_reports_a_policy_layer_it_did_not_read() {
         .find(|file| file.name == "requirements.toml")
         .expect("requirements layer listed");
     assert_eq!(requirements.state, GrokLayerState::Present);
-    assert!(
-        plan.notices
-            .iter()
-            .any(|notice| notice.code == NoticeCode::OverridesNotChecked)
-    );
+    assert!(plan
+        .notices
+        .iter()
+        .any(|notice| notice.code == NoticeCode::OverridesNotChecked));
     // Existence is the whole claim: the file's content stays on disk.
     let rendered = serde_json::to_string(&plan).unwrap();
     assert!(!rendered.contains("pinned-value"));
@@ -366,6 +363,101 @@ fn preview_never_adopts_an_alias_the_user_already_wrote() {
     );
     let rendered = serde_json::to_string(&plan).unwrap();
     assert!(!rendered.contains(PRIVATE));
+}
+
+#[test]
+fn preview_sets_name_to_vibemate_model_slug_not_user_alias() {
+    let f = Fixture::new();
+    let plan = f.plan();
+    let name = plan
+        .file
+        .changes
+        .iter()
+        .find(|change| change.key_path == format!("model.{}.name", plan.model_alias))
+        .expect("name planned");
+    assert_eq!(name.after, "vibemate-deepseek-flash");
+    // A slash in the model id uses the same slug helper as alias candidates.
+    let slashed = model(|m| {
+        m.model_id = "org/deepseek-flash".into();
+        m.alias = Some("Pretty label".into());
+        m.upstream_name = Some("Upstream Pretty".into());
+    });
+    let plan = f.plan_with(&f.provider, &slashed);
+    let name = plan
+        .file
+        .changes
+        .iter()
+        .find(|change| change.key_path == format!("model.{}.name", plan.model_alias))
+        .expect("name planned");
+    assert_eq!(name.after, "vibemate-org-deepseek-flash");
+}
+
+#[test]
+fn preview_refuses_when_model_id_matches_an_existing_alias_table() {
+    let f = Fixture::new();
+    // Handwritten `[model.deepseek-flash]` would collide with `model = "deepseek-flash"`.
+    f.write(
+        "config.toml",
+        &format!(
+            "[model.{MODEL}]\nmodel = \"someone-elses\"\nname = \"handwritten\"\napi_key = \"{PRIVATE}\"\n"
+        ),
+    );
+    assert_eq!(
+        f.error(&f.provider.clone(), &f.model),
+        PlanError::TargetConflict
+    );
+    // The file is untouched and the private key never leaves the disk content.
+    assert!(f.text("config.toml").contains(PRIVATE));
+}
+
+#[test]
+fn preview_writes_when_model_id_differs_from_existing_alias_names() {
+    let f = Fixture::new();
+    f.write(
+        "config.toml",
+        "[model.my-flash]\nmodel = \"other\"\nname = \"Mine\"\n\n[models]\ndefault = \"my-flash\"\n",
+    );
+    let plan = f.plan();
+    assert_ne!(plan.model_alias, "my-flash");
+    assert_ne!(plan.model_alias, MODEL);
+    let model_field = plan
+        .file
+        .changes
+        .iter()
+        .find(|change| change.key_path == format!("model.{}.model", plan.model_alias))
+        .expect("model planned");
+    assert_eq!(model_field.after, MODEL);
+    let name = plan
+        .file
+        .changes
+        .iter()
+        .find(|change| change.key_path == format!("model.{}.name", plan.model_alias))
+        .expect("name planned");
+    assert_eq!(name.after, "vibemate-deepseek-flash");
+}
+
+#[test]
+fn preview_updates_owned_binding_name_to_vibemate_slug() {
+    let f = Fixture::new();
+    let alias = f.plan().model_alias;
+    f.write(
+        "config.toml",
+        &format!(
+            "[model.{alias}]\nmodel = \"{MODEL}\"\nname = \"My flash\"\napi_key = \"{PRIVATE}\"\n"
+        ),
+    );
+    f.bind(&alias);
+    let plan = f.plan();
+    assert_eq!(plan.model_alias, alias);
+    assert!(plan.existing_alias);
+    let name = plan
+        .file
+        .changes
+        .iter()
+        .find(|change| change.key_path == format!("model.{alias}.name"))
+        .expect("name planned");
+    assert_eq!(name.before.as_deref(), Some("My flash"));
+    assert_eq!(name.after, "vibemate-deepseek-flash");
 }
 
 #[test]
@@ -686,7 +778,7 @@ fn apply_writes_the_key_and_keeps_every_field_the_plan_does_not_own() {
     let alias = f.plan().model_alias;
     assert!(written.contains(&format!("[model.{alias}]")));
     assert!(written.contains(&format!("api_key = \"{KEY}\"")));
-    assert!(written.contains("name = \"My flash\""));
+    assert!(written.contains("name = \"vibemate-deepseek-flash\""));
     assert!(written.contains("api_backend = \"chat_completions\""));
     assert!(written.contains("context_window = 128000"));
     assert!(written.contains(&format!("default = \"{alias}\"")));

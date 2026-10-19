@@ -156,8 +156,9 @@ export function HistoryDeleteAction({
                             ref={cancelButton}
                             type="button"
                             className={buttons["secondary"]}
-                            disabled={deleting}
+                            aria-disabled={deleting}
                             onClick={() => {
+                                if (deleting) return;
                                 setOpen(false);
                             }}
                         >

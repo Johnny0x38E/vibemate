@@ -30,7 +30,9 @@ beforeEach(() => {
 
 test("browser preview requires the desktop app", async () => {
     vi.mocked(isTauri).mockReturnValue(false);
-    await expect(deleteHistoryEntry("claudeCode", `operation:${ID}`)).rejects.toMatchObject({
+    await expect(
+        deleteHistoryEntry("claudeCode", `operation:${ID}`),
+    ).rejects.toMatchObject({
         code: "desktop_required",
     });
     expect(invoke).not.toHaveBeenCalled();
@@ -65,9 +67,9 @@ test("accepts a failed outcome with leftovers", async () => {
         ],
     });
     vi.mocked(invoke).mockResolvedValue(failed);
-    await expect(
-        deleteHistoryEntry("pi", `batch:${BACKUP}`),
-    ).resolves.toEqual(failed);
+    await expect(deleteHistoryEntry("pi", `batch:${BACKUP}`)).resolves.toEqual(
+        failed,
+    );
 });
 
 test("rejects completed outcomes that still list leftovers", async () => {

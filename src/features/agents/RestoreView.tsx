@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { DetailPanel } from "../../components/DetailForm";
 import buttons from "../../components/actionButtons.module.css";
+import { IconButton } from "../../components/IconButton";
+import listActions from "../../components/listActions.module.css";
 import {
     RestoreRequestError,
     planAgentRestore,
@@ -44,6 +46,10 @@ import {
     VersionRestoreResultCard,
 } from "./VersionRestoreCard";
 import { VersionTextDialog } from "./VersionTextDialog";
+import {
+    HistoryDeleteAction,
+    historyDeleteBlockReason,
+} from "./HistoryDeleteAction";
 import { formatTime } from "./formatTime";
 import {
     reviewConfigurationResolution,
@@ -120,10 +126,16 @@ export function RestoreView({
     agent = "claudeCode",
     onBusyChange,
     blocked = false,
+    hidePin = false,
+    onCurrentChange,
 }: {
     agent?: ConfigurableAgent;
     onBusyChange?: (busy: boolean) => void;
     blocked?: boolean;
+    /** When true, the page-level top owns the current-config pin. */
+    hidePin?: boolean;
+    /** Notifies the parent whenever the live pin from a page changes. */
+    onCurrentChange?: (current: HistoryCurrentConfig | null) => void;
 }): JSX.Element {
     const { t, i18n } = useTranslation();
     const [list, setList] = useState<ListState>({ kind: "loading" });
@@ -141,6 +153,7 @@ export function RestoreView({
     } | null>(null);
     const textTrigger = useRef<HTMLElement | null>(null);
     const [attempt, setAttempt] = useState(0);
+    const [deleteBusy, setDeleteBusy] = useState(false);
     const pending = useRef(false);
     const busyCallback = useRef(onBusyChange);
     useEffect(() => {
@@ -195,6 +208,11 @@ export function RestoreView({
             listGeneration.current += 1;
         };
     }, [attempt, agent]);
+
+    useEffect(() => {
+        if (list.kind === "ready") onCurrentChange?.(list.current);
+        else onCurrentChange?.(null);
+    }, [list, onCurrentChange]);
 
     // A page read and a restore action share one list; do not let them interleave
     // so a late page cannot re-add rows an action has already settled.
@@ -516,6 +534,7 @@ export function RestoreView({
 
     const busy =
         blocked ||
+        deleteBusy ||
         readingMore ||
         preview.kind === "loading" ||
         preview.kind === "inspecting" ||
@@ -553,7 +572,9 @@ export function RestoreView({
                 )}
                 {list.kind === "ready" && (
                     <>
-                        <CurrentConfigPin current={list.current} />
+                        {!hidePin && (
+                            <CurrentConfigPin current={list.current} />
+                        )}
                         {list.entries.length === 0 ? (
                             <p className={styles["hint"]}>
                                 {t("agents.restore.empty")}
@@ -563,6 +584,7 @@ export function RestoreView({
                                 {list.entries.map((entry) => (
                                     <OperationRow
                                         key={entry.entryKey}
+                                        agent={agent}
                                         entry={entry}
                                         isCurrent={
                                             list.current.status === "matched" &&
@@ -598,6 +620,21 @@ export function RestoreView({
                                             void runVersionPreview(
                                                 entry.entryKey,
                                             );
+                                        }}
+                                        onDeleted={() => {
+                                            setPreview({ kind: "idle" });
+                                            setVersionPlan({ kind: "idle" });
+                                            setVersionApply({ kind: "idle" });
+                                            setApply({ kind: "idle" });
+                                            setList({ kind: "loading" });
+                                            setAttempt(
+                                                (current) => current + 1,
+                                            );
+                                        }}
+                                        onDeleteBusy={(deleting) => {
+                                            pending.current = deleting;
+                                            setDeleteBusy(deleting);
+                                            busyCallback.current?.(deleting);
                                         }}
                                     />
                                 ))}
@@ -756,17 +793,19 @@ export function RestoreView({
 }
 
 /**
- * Fixed pin for the live configuration summary returned with every page.
+ * Page-level or inline pin for the live configuration summary.
  *
- * It sits above the history list and does not move when older pages append.
  * Matching a retained entry only marks that row; it never invents restore rights.
+ * Provider / model / Skill / MCP slots stay "—" until real data exists.
  */
-function CurrentConfigPin({
+export function CurrentConfigPin({
     current,
 }: {
     current: HistoryCurrentConfig;
 }): JSX.Element {
     const { t } = useTranslation();
+    const [filesOpen, setFilesOpen] = useState(false);
+    const dash = t("agents.summary.dash");
     return (
         <div
             className={restore["currentPin"]}
@@ -776,12 +815,31 @@ function CurrentConfigPin({
             <div className={restore["rowSummary"]}>
                 <span className={restore["state"]}>
                     {t("agents.restore.current.title")}
+                    {" · "}
+                    {t(`agents.restore.current.statusShort.${current.status}`)}
                 </span>
+                {current.files.length > 0 && (
+                    <button
+                        type="button"
+                        className={restore["expandToggle"]}
+                        aria-expanded={filesOpen}
+                        onClick={() => {
+                            setFilesOpen((open) => !open);
+                        }}
+                    >
+                        {filesOpen
+                            ? t("agents.restore.hideFiles")
+                            : t("agents.restore.showFiles")}
+                    </button>
+                )}
             </div>
-            <p className={restore["provider"]}>
-                {t(`agents.restore.current.statuses.${current.status}`)}
-            </p>
-            {current.files.length > 0 && (
+            <div className={restore["slotRow"]}>
+                <span>{t("agents.summary.provider", { value: dash })}</span>
+                <span>{t("agents.summary.model", { value: dash })}</span>
+                <span>{t("agents.summary.skill", { value: dash })}</span>
+                <span>{t("agents.summary.mcp", { value: dash })}</span>
+            </div>
+            {filesOpen && current.files.length > 0 && (
                 <ul className={restore["files"]}>
                     {current.files.map((file) => (
                         <li key={file.targetPath} className={restore["file"]}>
@@ -805,8 +863,9 @@ function CurrentConfigPin({
     );
 }
 
-/** One journal entry: when it ran, what it did, and its restore entry. */
+/** One journal entry: compact summary by default, files on expand. */
 function OperationRow({
+    agent,
     entry,
     isCurrent,
     locale,
@@ -817,7 +876,10 @@ function OperationRow({
     onInspect,
     versionPreviewing,
     onVersionPreview,
+    onDeleted,
+    onDeleteBusy,
 }: {
+    agent: ConfigurableAgent;
     entry: HistoryEntry;
     /** Backend named this entry as the full current-configuration match. */
     isCurrent: boolean;
@@ -833,108 +895,164 @@ function OperationRow({
     /** This row's retained-version preview is being built. */
     versionPreviewing: boolean;
     onVersionPreview: () => void;
+    onDeleted: () => void;
+    onDeleteBusy: (busy: boolean) => void;
 }): JSX.Element {
     const { t } = useTranslation();
+    const [expanded, setExpanded] = useState(false);
     const state = entryState(entry);
+    const files = entryFiles(entry);
+    const fileCount = files.length;
+    const backupShort =
+        files.length === 0
+            ? null
+            : files.every((file) => file.backupState === "available")
+              ? "available"
+              : files.every((file) => file.backupState === "not_needed")
+                ? "not_needed"
+                : files.some((file) => file.backupState === "unavailable")
+                  ? "unavailable"
+                  : "available";
+    const deleteBlock = historyDeleteBlockReason(entry);
+    const providerText =
+        entry.ownerLabel !== null
+            ? entry.ownerLabel
+            : entry.ownerRef !== null
+              ? entry.ownerRef
+              : null;
+
     return (
         <li className={restore["row"]}>
             <div className={restore["rowSummary"]}>
-                <span className={restore["state"]}>
-                    {t(`agents.restore.intents.${entry.intent}`)}
-                    {" · "}
-                    {entryStateText(state, t)}
-                    {isCurrent && (
-                        <>
-                            {" · "}
-                            <span className={restore["currentMark"]}>
-                                {t("agents.restore.current.mark")}
-                            </span>
-                        </>
-                    )}
-                </span>
-                <span className={restore["time"]}>
-                    {formatTime(entry.createdAt, locale)}
-                </span>
-            </div>
-            <ul className={restore["files"]}>
-                {entryFiles(entry).map((file) => (
-                    <li key={file.key} className={restore["file"]}>
-                        <span className={card["path"]}>{file.targetPath}</span>
-                        {file.note !== null && (
-                            <span className={restore["stepState"]}>
-                                {fileNoteText(file.note, t)}
-                            </span>
+                <div className={restore["rowMain"]}>
+                    <span className={restore["state"]}>
+                        {t(`agents.restore.intents.${entry.intent}`)}
+                        {" · "}
+                        {entryStateText(state, t)}
+                        {isCurrent && (
+                            <>
+                                {" · "}
+                                <span className={restore["currentMark"]}>
+                                    {t("agents.restore.current.mark")}
+                                </span>
+                            </>
                         )}
-                        <span className={restore["stepState"]}>
-                            {t(`agents.restore.backups.${file.backupState}`)}
+                    </span>
+                    {providerText !== null && (
+                        <span className={restore["meta"]}>{providerText}</span>
+                    )}
+                    <span className={restore["time"]}>
+                        {formatTime(entry.createdAt, locale)}
+                    </span>
+                    {backupShort !== null && (
+                        <span className={restore["meta"]}>
+                            {t(`agents.restore.backupShort.${backupShort}`)}
                         </span>
-                    </li>
-                ))}
-            </ul>
-            {entry.ownerLabel !== null && (
-                <p className={restore["provider"]}>
-                    {t("agents.restore.provider", {
-                        name: entry.ownerLabel,
-                    })}
-                </p>
-            )}
-            {entry.ownerLabel === null && entry.ownerRef !== null && (
-                <p className={restore["provider"]}>
-                    {t("agents.restore.providerRemoved", {
-                        id: entry.ownerRef,
-                    })}
-                </p>
-            )}
-            {entry.requiresResolution ? (
-                <>
-                    <p className={styles["hint"]}>
-                        {t("agents.resolution.required")}
-                    </p>
-                    <div className={card["actions"]}>
+                    )}
+                    {fileCount > 0 && (
                         <button
                             type="button"
-                            className={buttons["secondary"]}
-                            aria-disabled={busy}
-                            onClick={onInspect}
+                            className={restore["expandToggle"]}
+                            aria-expanded={expanded}
+                            onClick={() => {
+                                setExpanded((open) => !open);
+                            }}
                         >
-                            {inspecting
-                                ? t("agents.resolution.inspecting")
-                                : t("agents.resolution.inspect")}
+                            {t("agents.restore.fileCount", {
+                                count: fileCount,
+                            })}
                         </button>
-                    </div>
+                    )}
+                </div>
+                <div className={listActions["group"]}>
+                    {entry.requiresResolution ? (
+                        <IconButton
+                            icon="check"
+                            label={
+                                inspecting
+                                    ? t("agents.resolution.inspecting")
+                                    : t("agents.resolution.inspect")
+                            }
+                            blocked={busy}
+                            onClick={onInspect}
+                        />
+                    ) : entry.revisions.length > 0 ? (
+                        <IconButton
+                            icon="logFile"
+                            label={
+                                versionPreviewing
+                                    ? t("agents.version.reviewing")
+                                    : t("agents.version.review")
+                            }
+                            blocked={busy}
+                            onClick={onVersionPreview}
+                        />
+                    ) : entry.intent === "apply" ? (
+                        <IconButton
+                            icon="logFile"
+                            label={
+                                previewing
+                                    ? t("agents.restore.previewing")
+                                    : t("agents.restore.preview")
+                            }
+                            blocked={busy}
+                            onClick={onPreview}
+                        />
+                    ) : null}
+                    <HistoryDeleteAction
+                        agent={agent}
+                        entryKey={entry.entryKey}
+                        blocked={busy}
+                        blockReason={deleteBlock}
+                        onDeleted={() => {
+                            onDeleted();
+                        }}
+                        onBusyChange={onDeleteBusy}
+                    />
+                </div>
+            </div>
+            {expanded && (
+                <>
+                    <ul className={restore["files"]}>
+                        {files.map((file) => (
+                            <li key={file.key} className={restore["file"]}>
+                                <span className={card["path"]}>
+                                    {file.targetPath}
+                                </span>
+                                {file.note !== null && (
+                                    <span className={restore["stepState"]}>
+                                        {fileNoteText(file.note, t)}
+                                    </span>
+                                )}
+                                <span className={restore["stepState"]}>
+                                    {t(
+                                        `agents.restore.backups.${file.backupState}`,
+                                    )}
+                                </span>
+                            </li>
+                        ))}
+                    </ul>
+                    {entry.ownerLabel !== null && (
+                        <p className={restore["provider"]}>
+                            {t("agents.restore.provider", {
+                                name: entry.ownerLabel,
+                            })}
+                        </p>
+                    )}
+                    {entry.ownerLabel === null && entry.ownerRef !== null && (
+                        <p className={restore["provider"]}>
+                            {t("agents.restore.providerRemoved", {
+                                id: entry.ownerRef,
+                            })}
+                        </p>
+                    )}
+                    {entry.requiresResolution && (
+                        <p className={styles["hint"]}>
+                            {t("agents.resolution.required")}
+                        </p>
+                    )}
                 </>
-            ) : entry.revisions.length > 0 ? (
-                // A retained version exists: restore any file to its pre-entry
-                // state, including after later legitimate writes.
-                <div className={card["actions"]}>
-                    <button
-                        type="button"
-                        className={buttons["secondary"]}
-                        aria-disabled={busy}
-                        onClick={onVersionPreview}
-                    >
-                        {versionPreviewing
-                            ? t("agents.version.reviewing")
-                            : t("agents.version.review")}
-                    </button>
-                </div>
-            ) : entry.intent === "apply" ? (
-                // Legacy logs without retained bytes keep the old rollback
-                // entry, which only touches a file that still holds the
-                // operation's applied content.
-                <div className={card["actions"]}>
-                    <button
-                        type="button"
-                        className={buttons["secondary"]}
-                        aria-disabled={busy}
-                        onClick={onPreview}
-                    >
-                        {previewing
-                            ? t("agents.restore.previewing")
-                            : t("agents.restore.preview")}
-                    </button>
-                </div>
-            ) : null}
+            )}
         </li>
     );
 }

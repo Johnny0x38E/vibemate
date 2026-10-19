@@ -24,6 +24,10 @@ import {
     type VersionRestoreOutcome,
     type VersionRestorePlan,
 } from "../../lib/desktop/versionRestore";
+import {
+    deleteHistoryEntry,
+    HistoryDeleteRequestError,
+} from "../../lib/desktop/historyDelete";
 import { RestoreView } from "./RestoreView";
 
 vi.mock(import("../../lib/desktop/agents"), async (original) => ({
@@ -40,6 +44,10 @@ vi.mock(import("../../lib/desktop/versionRestore"), async (original) => ({
     applyVersionRestore: vi.fn(),
     planVersionRestore: vi.fn(),
     readVersionText: vi.fn(),
+}));
+vi.mock(import("../../lib/desktop/historyDelete"), async (original) => ({
+    ...(await original()),
+    deleteHistoryEntry: vi.fn(),
 }));
 
 const SETTINGS = "/Users/test/.claude/settings.json";
@@ -223,6 +231,7 @@ const loadHistory = vi.mocked(readConfigurationHistory);
 const previewVersion = vi.mocked(planVersionRestore);
 const restoreVersion = vi.mocked(applyVersionRestore);
 const previewLegacy = vi.mocked(planAgentRestore);
+const removeEntry = vi.mocked(deleteHistoryEntry);
 
 beforeEach(() => {
     loadHistory
@@ -235,6 +244,11 @@ beforeEach(() => {
     previewLegacy.mockReset().mockResolvedValue({
         kind: "desktop",
         plan: legacyPlan,
+    });
+    removeEntry.mockReset().mockResolvedValue({
+        entryKey: entry.entryKey,
+        state: "completed",
+        leftovers: [],
     });
 });
 afterEach(cleanup);
@@ -322,8 +336,13 @@ test("a recorded write shows its intent, state, time, provider and file", async 
             rowSummary("Apply · Written · Current configuration"),
         ),
     ).toBeTruthy();
+    expect(screen.getByText("DeepSeek Work")).toBeTruthy();
+    expect(screen.getByText("Available")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "1 file" })).toBeTruthy();
+    // Paths and long backup sentences stay collapsed until expanded.
+    expect(screen.queryByText(SETTINGS)).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "1 file" }));
     expect(screen.getAllByText(SETTINGS).length).toBeGreaterThan(0);
-    expect(screen.getByText("Provider: DeepSeek Work")).toBeTruthy();
     expect(
         screen.getByText(
             /Independent pre-mutation backup is available and matches its digest/u,
@@ -337,9 +356,14 @@ test("pins the live current configuration above the list and marks a matched ent
     expect(
         await screen.findByRole("region", { name: "Current configuration" }),
     ).toBeTruthy();
+    expect(screen.getByText(/Current configuration · Matched/u)).toBeTruthy();
     expect(
-        screen.getByText(/Matches one retained history version/u),
+        screen.getByRole("button", { name: "Show managed files" }),
     ).toBeTruthy();
+    expect(screen.queryByText("Readable")).toBeNull();
+    await userEvent.click(
+        screen.getByRole("button", { name: "Show managed files" }),
+    );
     expect(screen.getByText("Readable")).toBeTruthy();
     expect(
         screen.getByText(rowSummary("Apply · Written · Current configuration")),
@@ -368,7 +392,7 @@ test("an unrecorded current pin stays fixed when older history loads", async () 
     );
     await mount();
     expect(
-        await screen.findByText(/Does not match any retained history version/u),
+        await screen.findByText(/Current configuration · Unrecorded/u),
     ).toBeTruthy();
     expect(
         screen.queryByText(
@@ -384,10 +408,17 @@ test("an unrecorded current pin stays fixed when older history loads", async () 
         ).toHaveLength(2);
     });
     expect(
-        screen.getByText(/Does not match any retained history version/u),
+        screen.getByText(/Current configuration · Unrecorded/u),
     ).toBeTruthy();
     // The pin is one status region above the list, not a second history row.
-    expect(screen.getAllByText("Current configuration")).toHaveLength(1);
+    expect(
+        screen.getAllByRole("region", { name: "Current configuration" }),
+    ).toHaveLength(1);
+    expect(
+        screen.queryByText(
+            rowSummary("Apply · Written · Current configuration"),
+        ),
+    ).toBeNull();
 });
 
 test("backup unavailable text is shown without inventing a restore action", async () => {
@@ -406,14 +437,12 @@ test("backup unavailable text is shown without inventing a restore action", asyn
         page: page([unavailable], null, currentConfig("partial")),
     });
     await mount();
-    expect(
-        await screen.findByText(
-            /Independent pre-mutation backup is missing, damaged or unreadable/u,
-        ),
-    ).toBeTruthy();
+    expect(await screen.findByText("Unavailable")).toBeTruthy();
+    expect(screen.getByText(/Current configuration · Partial/u)).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "1 file" }));
     expect(
         screen.getByText(
-            /Only some managed files match a retained history version/u,
+            /Independent pre-mutation backup is missing, damaged or unreadable/u,
         ),
     ).toBeTruthy();
     expect(screen.getByRole("button", { name: "Review version" })).toBeTruthy();
@@ -706,4 +735,98 @@ test("each Agent asks for its own history and version preview", async () => {
             entry.entryKey,
         );
     });
+});
+
+test("deletes a history entry after confirmation and reloads the list", async () => {
+    await mount();
+    await screen.findByRole("button", { name: "Review version" });
+    const reads = loadHistory.mock.calls.length;
+    await userEvent.click(
+        screen.getByRole("button", {
+            name: "Delete this record and its backups",
+        }),
+    );
+    expect(
+        await screen.findByRole("heading", {
+            name: "Delete configuration history entry?",
+        }),
+    ).toBeTruthy();
+    expect(screen.getByText(/does not change the Agent/u)).toBeTruthy();
+    await userEvent.click(
+        screen.getByRole("button", { name: "Delete record" }),
+    );
+    await waitFor(() => {
+        expect(removeEntry).toHaveBeenCalledWith("claudeCode", entry.entryKey);
+    });
+    await waitFor(() => {
+        expect(loadHistory.mock.calls.length).toBeGreaterThan(reads);
+    });
+});
+
+test("an unresolved entry disables delete with a reason", async () => {
+    loadHistory.mockResolvedValue({
+        kind: "desktop",
+        page: page([{ ...entry, requiresResolution: true, revisions: [] }]),
+    });
+    await mount();
+    const trash = await screen.findByRole("button", {
+        name: /Interrupted writes still need review before deletion/u,
+    });
+    expect(trash.getAttribute("aria-disabled")).toBe("true");
+    expect(removeEntry).not.toHaveBeenCalled();
+});
+
+test("failed leftovers stay visible with a retry", async () => {
+    removeEntry
+        .mockResolvedValueOnce({
+            entryKey: entry.entryKey,
+            state: "failed",
+            leftovers: [
+                {
+                    backupId: "backup-1",
+                    path: "/tmp/vibemate/backups/backup-1",
+                    errorCode: "backup_unavailable",
+                },
+            ],
+        })
+        .mockResolvedValueOnce({
+            entryKey: entry.entryKey,
+            state: "completed",
+            leftovers: [],
+        });
+    await mount();
+    await userEvent.click(
+        await screen.findByRole("button", {
+            name: "Delete this record and its backups",
+        }),
+    );
+    await userEvent.click(
+        screen.getByRole("button", { name: "Delete record" }),
+    );
+    expect(
+        await screen.findByText(/These private copies could not be removed/u),
+    ).toBeTruthy();
+    expect(screen.getByText("/tmp/vibemate/backups/backup-1")).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Retry delete" }));
+    await waitFor(() => {
+        expect(removeEntry).toHaveBeenCalledTimes(2);
+    });
+});
+
+test("a referenced refusal surfaces in the confirm dialog", async () => {
+    removeEntry.mockRejectedValue(
+        new HistoryDeleteRequestError("history_referenced"),
+    );
+    await mount();
+    await userEvent.click(
+        await screen.findByRole("button", {
+            name: "Delete this record and its backups",
+        }),
+    );
+    await userEvent.click(
+        screen.getByRole("button", { name: "Delete record" }),
+    );
+    expect(
+        await screen.findByText(/Other history still depends on this entry/u),
+    ).toBeTruthy();
 });

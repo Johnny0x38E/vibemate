@@ -1,12 +1,10 @@
 /*
- * Configuration-history card for the Claude Code detail page.
+ * Configuration-history card for the Agent detail page.
  *
  * The card surface, the action row and the notice list come from the shared
- * `DetailPanel` and the neighbouring plan card, so this module owns only the
- * history rows: one bordered row per recorded write, with the state and time on
- * one line, the changed files under it, and this row's restore entry at the end.
- * Borders separate rows instead of extra containers, matching the change list
- * next door.
+ * DetailPanel and neighbouring plan cards. This module owns compact history
+ * rows: one summary line by default, expandable file details, and a row-end
+ * icon group. Borders separate rows; no extra painted surface layers.
  */
 
 .rows {
@@ -18,29 +16,46 @@
 
 .row {
     display: grid;
-    gap: 4px;
-    padding: 10px 0;
+    gap: 2px;
+    padding: 6px 0;
     border-top: 1px solid var(--color-border);
 }
 
 .rowSummary {
     display: flex;
     flex-wrap: wrap;
-    align-items: baseline;
+    align-items: center;
     justify-content: space-between;
     gap: 6px;
+    min-width: 0;
+}
+
+.rowMain {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+    flex: 1 1 auto;
 }
 
 .state {
     font-size: 0.8125rem;
     font-weight: 500;
-    line-height: 1.5;
+    line-height: 1.4;
+}
+
+.meta {
+    color: var(--color-summary);
+    font-size: 0.75rem;
+    line-height: 1.4;
 }
 
 .time {
     color: var(--color-summary);
     font-size: 0.75rem;
     line-height: 1.4;
+    flex-shrink: 0;
 }
 
 .files {
@@ -77,8 +92,8 @@
 }
 
 /*
- * Live current-configuration pin above the history list. Reuses the same
- * summary/time hierarchy as a row; borders keep it separate from pagination.
+ * Live current-configuration pin. Reuses summary hierarchy; borders separate
+ * it from the list. Empty Provider/model/Skill/MCP slots use "—", never 0.
  */
 .currentPin {
     display: grid;
@@ -91,4 +106,43 @@
 .currentMark {
     font-weight: 500;
     color: var(--color-text);
+}
+
+.slotRow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    color: var(--color-summary);
+    font-size: 0.75rem;
+    line-height: 1.4;
+}
+
+.expandToggle {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--color-summary);
+    font: inherit;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    text-align: start;
+    cursor: pointer;
+}
+
+.expandToggle:hover {
+    color: var(--color-text);
+}
+
+.expandToggle:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+}
+
+.rowActions {
+    display: flex;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
 }

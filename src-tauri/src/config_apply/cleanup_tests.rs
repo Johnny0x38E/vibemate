@@ -14,6 +14,7 @@ fn orphan(fixture: &Fixture, id: &str, bytes: &[u8]) -> UnreferencedBackup {
     }
 }
 
+#[cfg(unix)]
 fn cleanup(fixture: &Fixture, copies: &[UnreferencedBackup]) -> Vec<BackupCleanupOutcome> {
     cleanup_backup_copies(&fixture.storage, &fixture.backups(), copies).unwrap()
 }

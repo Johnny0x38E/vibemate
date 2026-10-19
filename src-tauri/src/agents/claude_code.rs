@@ -383,7 +383,7 @@ fn put_credential(
 }
 
 /// Whether the text is a lowercase SHA-256 token, the model digest format.
-fn is_digest(value: &str) -> bool {
+pub(super) fn is_digest(value: &str) -> bool {
     value.len() == 64
         && value
             .chars()

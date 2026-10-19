@@ -87,10 +87,22 @@ deferred to the release-time platform check.
    Explicit backend resolution now atomically records reviewed observations and
    repairs legacy results (schema v21), including completed file results whose
    legacy step result was lost. Shared cross-instance file locking excludes live
-   mutations; ambiguous, changed or unreadable observations remain blocked. These
-   APIs have no IPC/UI entry yet. Next, manage unreferenced private copies before
-   adding resolution/recovery entry points, complete history browsing and
-   current-version detection. H1 as a whole is not accepted.
+   mutations; ambiguous, changed or unreadable observations remain blocked.
+   The three supported Agent history views now expose user-triggered inspection
+   and explicit observation recording through strict IPC. Approval binds the full
+   backend plan; recording never restores files, and any restore still needs its
+   own preview and confirmation. Backend inspection and explicit cleanup now
+   manage unreferenced private copies under the same cross-instance lock and a
+   SQLite write transaction, protecting all legacy/revision references and leaving
+   failed cleanup discoverable after restart; cleanup still has no IPC/UI entry.
+   A backend-only history reader now combines original operations and independent
+   restore/compensation batches, retaining reconciliation audits. Exact Agent/root
+   file scopes and bounded seek cursors keep other configurations out; each page
+   reads one SQLite snapshot without opening target or backup files. Existing
+   history IPC/UI still uses the latest-ten, Agent-only listing; it has not been
+   switched to this reader. Nothing runs automatically. Next, integrate complete
+   history browsing and root isolation into IPC/UI, verify backup availability and
+   detect/pin the current version. H1 as a whole is not accepted.
    P24.a–P24.d explicitly
    deliver verified per-Agent mappings and UI for reasoning capabilities/efforts,
    context windows, output metadata and supported request settings. The remaining

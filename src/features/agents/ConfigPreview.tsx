@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type JSX } from "react";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { DetailPanel } from "../../components/DetailForm";
 import {
     FieldSelect,
@@ -729,7 +730,7 @@ function AppliedCard({
     );
 }
 
-type Translator = ReturnType<typeof useTranslation>["t"];
+type Translator = TFunction;
 
 /** Display text for one side of a change; an empty value stays visible. */
 function valueText(value: string, t: Translator): string {

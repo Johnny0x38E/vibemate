@@ -390,10 +390,9 @@ fn damaged_unreadable_diverged_and_ambiguous_observations_do_not_unlock_recovery
                 WriteError::OutcomeUnknown
             }
         };
-        assert_eq!(
-            resolve(&fixture, &plan(&fixture, &id)).unwrap_err(),
-            expected
-        );
+        let approval = plan(&fixture, &id);
+        assert!(!approval.resolvable);
+        assert_eq!(resolve(&fixture, &approval).unwrap_err(), expected);
         assert_eq!(fixture.revisions()[0].state, "prepared");
         assert_eq!(audit_count(&fixture), 0);
     }
@@ -423,8 +422,10 @@ fn an_older_uncertain_revision_cannot_override_a_later_mutation_of_the_same_step
         previous_digest, next_digest, backup_path, 'failed', 'write_failed', created_at, updated_at
         FROM config_file_revision;",
     );
+    let approval = plan(&fixture, &id);
+    assert!(!approval.resolvable);
     assert_eq!(
-        resolve(&fixture, &plan(&fixture, &id)).unwrap_err(),
+        resolve(&fixture, &approval).unwrap_err(),
         WriteError::OutcomeUnknown
     );
     assert_eq!(audit_count(&fixture), 0);

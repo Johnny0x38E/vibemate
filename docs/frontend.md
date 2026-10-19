@@ -1011,5 +1011,16 @@ navigation and other configuration actions blocked while the native operation is
 pending. The shared `RestoreView` lists only the selected Agent's recorded writes,
 choosing its three commands from one per-Agent table; the backend independently
 checks operation ownership before previewing or restoring any target.
+Interrupted mutations set `requiresResolution` on a history row, withholding the
+legacy restore button. `src/lib/desktop/recovery.ts` validates metadata-only reviews
+and sends only the fixed Agent identity, operation ID and complete backend plan's
+approval digest. `ResolutionReviewCard` displays the observations and backend
+eligibility; confirmation records observations only, discards approval and refreshes
+history. It never chains a configuration restore. Stale/blocked observations require
+fresh inspection; all actions share the existing navigation and single-flight guard.
+The Agent detail keys this view by Agent/configuration epoch, so changing its scope
+unmounts it and late replies cannot update the new view. History still lists only the
+latest ten operations; full browsing, root isolation and current-version detection
+remain planned.
 Provider/model selections stay local, and browser preview never invents a plan or a
 completed write.

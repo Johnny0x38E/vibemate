@@ -1,6 +1,12 @@
 //! Integration tests for pre-mutation snapshots using temporary files and the
 //! real SQLite log. Fault injection uses local triggers, never real credentials.
 
+#[path = "cleanup_tests.rs"]
+mod cleanup_tests;
+#[path = "history_tests.rs"]
+mod history_tests;
+#[path = "recovery_surface_tests.rs"]
+mod recovery_surface_tests;
 #[path = "resolution_tests.rs"]
 mod resolution_tests;
 

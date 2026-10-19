@@ -84,6 +84,8 @@ pub fn run() {
             commands::agents::claude_code_operations,
             commands::agents::plan_claude_code_restore,
             commands::agents::apply_claude_code_restore,
+            commands::agents::review_configuration_resolution,
+            commands::agents::resolve_configuration_operation,
             commands::mcp::list_mcp_definitions,
             commands::mcp::get_mcp_definition,
             commands::mcp::save_mcp_definition,

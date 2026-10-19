@@ -10,7 +10,9 @@
 
 .actions {
     display: flex;
+    flex-wrap: wrap;
     justify-content: flex-end;
+    gap: var(--space-sm);
     /* Matches the fact-row rhythm above while keeping its own divider. */
     padding: 10px 0 4px;
 }

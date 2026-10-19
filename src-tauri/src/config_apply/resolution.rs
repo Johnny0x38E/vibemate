@@ -25,6 +25,9 @@ pub struct RevisionResolutionPlan {
     pub operation_digest: String,
     /// All interrupted revisions in inspection order; a subset cannot be approved.
     pub revisions: Vec<RevisionInspection>,
+    /// Whether every candidate currently passes the same checks as resolution.
+    /// This is advisory: confirmation always rebuilds and validates the plan.
+    pub resolvable: bool,
 }
 
 /// Prepare a metadata-only resolution approval without changing files or logs.
@@ -116,10 +119,28 @@ fn build_plan(
     backups: &BackupStore,
 ) -> Result<RevisionResolutionPlan, WriteError> {
     let metadata = serde_json::to_vec(record).map_err(|_| WriteError::InvalidStoredOperation)?;
+    let revisions = inspect_record(connection, record, backups)?;
+    let mut resolvable = !revisions.is_empty();
+    for revision in &revisions {
+        match validate_resolution(connection, record, revision) {
+            Ok(()) => {}
+            // Keep blocked observations visible, but do not turn an actual
+            // database read failure into a seemingly valid eligibility result.
+            Err(
+                WriteError::OutcomeUnknown
+                | WriteError::BackupUnavailable
+                | WriteError::InvalidStoredOperation,
+            ) => {
+                resolvable = false;
+            }
+            Err(error) => return Err(error),
+        }
+    }
     Ok(RevisionResolutionPlan {
         operation_id: record.id.clone(),
         operation_digest: digest_hex(&metadata),
-        revisions: inspect_record(connection, record, backups)?,
+        revisions,
+        resolvable,
     })
 }
 

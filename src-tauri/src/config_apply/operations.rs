@@ -43,7 +43,7 @@ fn random_id(connection: &Connection) -> Result<String, WriteError> {
 /// The storage CHECK constraints enforce the same format; this check keeps a
 /// malformed value out of the log before SQLite sees it, and catches it again
 /// when a row written by other means is read back.
-fn is_digest(value: &str) -> bool {
+pub(super) fn is_digest(value: &str) -> bool {
     value.len() == 64
         && value
             .bytes()

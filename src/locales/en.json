@@ -666,6 +666,54 @@
                 "unknown": "A file result could not be verified. Review the files and backups before retrying."
             }
         },
+        "resolution": {
+            "title": "Interrupted write review",
+            "required": "This write has interrupted journal results. Inspect them before restoring.",
+            "inspect": "Inspect interrupted write",
+            "inspecting": "Inspecting…",
+            "notice": "This review only records what the files match now. It does not prove who wrote them, change configuration, restore backups, or make a running Agent reload. Any restore requires a separate preview and confirmation.",
+            "empty": "No interrupted mutations remain. Close this review and recheck history.",
+            "direction": "{{intent}} — {{state}}",
+            "observedDigest": "Observed SHA-256: {{digest}}",
+            "absent": "file absent",
+            "unreadable": "unreadable",
+            "blocked": "These observations cannot be settled safely. A file may have changed, a backup may be unavailable, or a newer mutation may supersede this one. Keep the files and backups, resolve the cause, then inspect again; no configuration was changed.",
+            "confirm": "Record these observations",
+            "recording": "Recording observations…",
+            "cancel": "Close review",
+            "recorded": "Observations recorded; journal state: {{state}}. Configuration files were not changed. Preview a restore separately if needed.",
+            "errors": {
+                "operation_not_found": "That recorded write no longer exists in this Agent's history. Recheck the list.",
+                "plan_stale": "Files, backups or journal records changed since inspection. Inspect again; this action does not restore configuration.",
+                "invalid_request": "The observation-review request was not valid. Inspect the write again.",
+                "storage_unavailable": "The configuration journal is unavailable. Recheck history or restart vibemate.",
+                "operation_failed": "The observations could not be recorded or verified. Recheck history and inspect again; this action never restores configuration.",
+                "desktop_required": "Reviewing and recording observations needs the vibemate desktop app.",
+                "invalid_response": "The desktop app returned an unexpected observation result. Recheck history before trying again."
+            },
+            "intents": {
+                "apply": "Apply",
+                "restore": "Restore",
+                "compensation": "Automatic compensation"
+            },
+            "stages": {
+                "prepared": "result not recorded",
+                "unknown": "result unverified",
+                "completed": "file result recorded; legacy step result missing"
+            },
+            "matches": {
+                "previous": "Current file matches only the pre-mutation state.",
+                "intended": "Current file matches only the intended state.",
+                "both": "Both states match; the result remains ambiguous.",
+                "diverged": "Current file matches neither recorded state.",
+                "unreadable": "Current file cannot be safely read."
+            },
+            "backups": {
+                "not_needed": "The pre-mutation state was absence; no backup file is needed.",
+                "available": "The independent pre-mutation backup is available and its digest matches.",
+                "unavailable": "The independent pre-mutation backup is missing, damaged or unreadable."
+            }
+        },
         "restore": {
             "title": "Configuration history",
             "previewMode": "The browser preview cannot read configuration files or the write history. Open the Agents page in the vibemate desktop app.",

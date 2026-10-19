@@ -1,5 +1,5 @@
-//! Thin Agent IPC: static discovery, a separately confirmed version launch, and
-//! the read-only Claude Code configuration preview.
+//! Thin Agent IPC: discovery, explicit version launch, Claude Code configuration,
+//! and Agent-scoped review/recording of interrupted mutation observations.
 //!
 //! Discovery, preview and restore planning read the filesystem; the version
 //! launch is the only operation that runs another program, and it is not a
@@ -248,6 +248,48 @@ pub(crate) async fn apply_claude_code_restore(
     tauri::async_runtime::spawn_blocking(move || {
         with_restore_storage(&app, |storage| {
             agents::apply_claude_code_restore(storage, &input, &backups)
+        })
+    })
+    .await
+    .map_err(|_| ClaudeCodeRestoreError::OperationFailed)?
+}
+
+/// Inspect one supported Agent's interrupted write using the private backup root.
+/// Reads metadata/files on the blocking pool; never reads credential storage.
+#[tauri::command]
+pub(crate) async fn review_configuration_resolution(
+    app: tauri::AppHandle,
+    input: agents::recovery::ReviewResolutionRequest,
+) -> Result<agents::recovery::ConfigurationResolutionReview, ClaudeCodeRestoreError> {
+    let backups = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| ClaudeCodeRestoreError::StorageUnavailable)?
+        .join("backups");
+    tauri::async_runtime::spawn_blocking(move || {
+        with_restore_storage(&app, |storage| {
+            agents::recovery::review_configuration_resolution(storage, &input, &backups)
+        })
+    })
+    .await
+    .map_err(|_| ClaudeCodeRestoreError::OperationFailed)?
+}
+
+/// Record reviewed observations only; restoration requires separate confirmation.
+/// The domain checks Agent ownership and approval digest before locked resolution.
+#[tauri::command]
+pub(crate) async fn resolve_configuration_operation(
+    app: tauri::AppHandle,
+    input: agents::recovery::ResolveConfigurationRequest,
+) -> Result<agents::recovery::ConfigurationResolutionOutcome, ClaudeCodeRestoreError> {
+    let backups = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| ClaudeCodeRestoreError::StorageUnavailable)?
+        .join("backups");
+    tauri::async_runtime::spawn_blocking(move || {
+        with_restore_storage(&app, |storage| {
+            agents::recovery::resolve_configuration_operation(storage, &input, &backups)
         })
     })
     .await

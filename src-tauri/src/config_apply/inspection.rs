@@ -72,6 +72,23 @@ pub struct RevisionInspection {
     pub backup_state: RevisionBackupState,
 }
 
+/// Check whether a recorded operation needs explicit observation before recovery.
+///
+/// Reads journal metadata only, not target files or backups. A history listing
+/// uses this to withhold the legacy restore action until reconciliation.
+///
+/// # Errors
+/// Returns `InvalidRequest` for a malformed or absent identity and storage/log
+/// errors for unreadable or malformed source records.
+pub fn operation_requires_resolution(
+    storage: &Storage,
+    operation_id: &str,
+) -> Result<bool, WriteError> {
+    let connection = storage.lock().map_err(|_| WriteError::StorageUnavailable)?;
+    read_operation(&connection, operation_id)?.ok_or(WriteError::InvalidRequest)?;
+    has_interrupted_revisions(&connection, operation_id)
+}
+
 /// Inspect unresolved mutations belonging to one recorded operation.
 ///
 /// Returns `None` for a missing operation and an empty list for an operation

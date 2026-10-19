@@ -666,6 +666,54 @@
                 "unknown": "无法核实某个文件的结果，请检查配置文件与备份后再试。"
             }
         },
+        "resolution": {
+            "title": "核对中断写入",
+            "required": "这次写入存在中断日志，请先核对再恢复。",
+            "inspect": "核对中断写入",
+            "inspecting": "正在核对…",
+            "notice": "本次核对只记录文件当前与哪个状态匹配，不证明是谁写入，不改配置、不恢复备份，也不表示运行中的 Agent 已重新加载。恢复配置仍需另行预览和确认。",
+            "empty": "已无待核对的中断改写。请关闭本次核对并重新检查历史。",
+            "direction": "{{intent}} — {{state}}",
+            "observedDigest": "当前 SHA-256：{{digest}}",
+            "absent": "文件不存在",
+            "unreadable": "无法读取",
+            "blocked": "无法安全记录这些观察结果。文件可能已变化、备份不可用，或这次改写已被后续改写取代。请保留配置和备份，处理原因后重新核对；配置未被改动。",
+            "confirm": "记录本次观察",
+            "recording": "正在记录观察…",
+            "cancel": "关闭核对",
+            "recorded": "已记录观察，日志状态：{{state}}。配置文件未被改动；如需恢复，请另行预览。",
+            "errors": {
+                "operation_not_found": "此 Agent 的历史中已无这次写入，请重新检查列表。",
+                "plan_stale": "核对后文件、备份或日志记录已变化，请重新核对；本操作不恢复配置。",
+                "invalid_request": "观察核对请求无效，请重新核对这次写入。",
+                "storage_unavailable": "无法访问配置日志，请重新检查历史或重启 vibemate。",
+                "operation_failed": "无法记录或核实观察结果。请重新检查历史后再核对；本操作不会恢复配置。",
+                "desktop_required": "核对和记录观察需要 vibemate 桌面应用。",
+                "invalid_response": "桌面应用返回了无法识别的观察结果，请先重新检查历史再试。"
+            },
+            "intents": {
+                "apply": "应用配置",
+                "restore": "手动恢复",
+                "compensation": "自动补偿"
+            },
+            "stages": {
+                "prepared": "结果尚未记录",
+                "unknown": "结果无法核实",
+                "completed": "文件结果已记录，旧步骤结果缺失"
+            },
+            "matches": {
+                "previous": "当前文件仅匹配改写前状态。",
+                "intended": "当前文件仅匹配预期目标状态。",
+                "both": "两种状态均匹配，结果仍有歧义。",
+                "diverged": "当前文件与两种记录状态均不匹配。",
+                "unreadable": "无法安全读取当前文件。"
+            },
+            "backups": {
+                "not_needed": "改写前文件不存在，无需备份文件。",
+                "available": "独立的改写前备份可用，摘要一致。",
+                "unavailable": "独立的改写前备份缺失、损坏或无法读取。"
+            }
+        },
         "restore": {
             "title": "配置历史",
             "previewMode": "浏览器预览无法读取配置文件与写入历史，请在 vibemate 桌面应用的 Agent 页面查看。",

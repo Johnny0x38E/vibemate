@@ -728,6 +728,8 @@ fn sync_directory(_: &Path) -> Result<(), WriteError> {
     Ok(())
 }
 
+mod cleanup;
+mod history;
 mod inspection;
 mod operations;
 mod resolution;
@@ -735,8 +737,17 @@ mod restore;
 mod revisions;
 mod service;
 
+pub use cleanup::{
+    BackupCleanupOutcome, BackupInventory, UnreferencedBackup, cleanup_backup_copies,
+    inspect_backup_copies,
+};
+pub use history::{
+    HistoryCursor, HistoryEntry, HistoryIntent, HistoryPage, HistoryResolution, HistoryRevision,
+    HistoryRevisionState, HistoryScope, HistorySourceStep, configuration_history,
+};
 pub use inspection::{
     RevisionBackupState, RevisionInspection, RevisionMatch, inspect_interrupted_revisions,
+    operation_requires_resolution,
 };
 pub use operations::{
     begin_operation, finish_operation, has_recorded_target, operation, recent_operations,

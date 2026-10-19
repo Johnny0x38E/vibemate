@@ -114,6 +114,8 @@ pub struct ClaudeCodeOperation {
     pub updated_at: i64,
     /// Whether the files as they are now leave something to restore.
     pub restorable: bool,
+    /// Interrupted mutation metadata must be explicitly reviewed before restoring.
+    pub requires_resolution: bool,
     /// One entry per file the write covers.
     pub steps: Vec<ClaudeCodeOperationStep>,
 }
@@ -258,8 +260,15 @@ pub fn list_config_operations(
     for record in records {
         // The listing says whether a restore is worth offering; whether a
         // specific step is a conflict is answered again by the preview.
-        let plan =
-            plan_restore(storage, &record.id)?.ok_or(ClaudeCodeRestoreError::OperationFailed)?;
+        let requires_resolution =
+            crate::config_apply::operation_requires_resolution(storage, &record.id)?;
+        let restorable = if requires_resolution {
+            false
+        } else {
+            plan_restore(storage, &record.id)?
+                .ok_or(ClaudeCodeRestoreError::OperationFailed)?
+                .restorable
+        };
         listed.push(ClaudeCodeOperation {
             operation_id: record.id,
             state: record.state,
@@ -270,7 +279,8 @@ pub fn list_config_operations(
                 .and_then(|provider_id| provider_label(storage, provider_id)),
             created_at: record.created_at,
             updated_at: record.updated_at,
-            restorable: plan.restorable,
+            restorable,
+            requires_resolution,
             steps: record
                 .steps
                 .iter()

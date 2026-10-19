@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type JSX } from "react";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { DetailPanel } from "../../components/DetailForm";
 import buttons from "../../components/actionButtons.module.css";
 import {
@@ -20,6 +21,13 @@ import {
 import styles from "./AgentList.module.css";
 import card from "./ConfigPreview.module.css";
 import restore from "./RestoreView.module.css";
+import { ResolutionReviewCard } from "./ResolutionReviewCard";
+import {
+    reviewConfigurationResolution,
+    resolveConfigurationOperation,
+    type ResolutionReview,
+    type ResolutionOutcome,
+} from "../../lib/desktop/recovery";
 
 type ListState =
     | { kind: "loading" }
@@ -31,6 +39,9 @@ type ListState =
 type PreviewState =
     | { kind: "idle" }
     | { kind: "loading"; operationId: string }
+    | { kind: "inspecting"; operationId: string }
+    | { kind: "resolution"; review: ResolutionReview }
+    | { kind: "resolutionError"; code: RestoreErrorCode }
     | { kind: "preview" }
     | { kind: "error"; code: RestoreErrorCode }
     | { kind: "ready"; plan: ClaudeCodeRestorePlan };
@@ -39,6 +50,9 @@ type PreviewState =
 type ApplyState =
     | { kind: "idle" }
     | { kind: "applying" }
+    | { kind: "resolving" }
+    | { kind: "resolved"; result: ResolutionOutcome }
+    | { kind: "resolutionError"; code: RestoreErrorCode }
     | { kind: "error"; code: RestoreErrorCode }
     | { kind: "done"; result: RestoreOutcome };
 
@@ -200,6 +214,71 @@ export function RestoreView({
         }
     }
 
+    /** Inspect interrupted metadata separately from any configuration restore. */
+    async function runInspection(operationId: string): Promise<void> {
+        if (blocked || pending.current) return;
+        pending.current = true;
+        busyCallback.current?.(true);
+        setApply({ kind: "idle" });
+        setPreview({ kind: "inspecting", operationId });
+        try {
+            const result = await reviewConfigurationResolution(
+                agent,
+                operationId,
+            );
+            if (!mounted.current) return;
+            setPreview(
+                result.kind === "preview"
+                    ? { kind: "preview" }
+                    : { kind: "resolution", review: result.review },
+            );
+        } catch (error: unknown) {
+            if (!mounted.current) return;
+            setPreview({
+                kind: "resolutionError",
+                code:
+                    error instanceof RestoreRequestError
+                        ? error.code
+                        : "operation_failed",
+            });
+        } finally {
+            pending.current = false;
+            busyCallback.current?.(false);
+        }
+    }
+
+    /** Record only the reviewed observations. Never chain a restore afterwards. */
+    async function runResolution(review: ResolutionReview): Promise<void> {
+        if (blocked || pending.current || !review.resolvable) return;
+        pending.current = true;
+        busyCallback.current?.(true);
+        setApply({ kind: "resolving" });
+        try {
+            const result = await resolveConfigurationOperation(agent, review);
+            if (!mounted.current) return;
+            setApply({ kind: "resolved", result });
+        } catch (error: unknown) {
+            if (!mounted.current) return;
+            setApply({
+                kind: "resolutionError",
+                code:
+                    error instanceof RestoreRequestError
+                        ? error.code
+                        : "operation_failed",
+            });
+        } finally {
+            // A refusal may be stale or an uncertain IPC result. Always discard
+            // approval and reread history; recording is never blindly repeated.
+            if (mounted.current) {
+                setPreview({ kind: "idle" });
+                setList({ kind: "loading" });
+                setAttempt((current) => current + 1);
+            }
+            pending.current = false;
+            busyCallback.current?.(false);
+        }
+    }
+
     if (list.kind === "preview") {
         return (
             <DetailPanel label={t("agents.restore.title")}>
@@ -211,7 +290,11 @@ export function RestoreView({
     }
 
     const busy =
-        blocked || preview.kind === "loading" || apply.kind === "applying";
+        blocked ||
+        preview.kind === "loading" ||
+        preview.kind === "inspecting" ||
+        apply.kind === "applying" ||
+        apply.kind === "resolving";
 
     return (
         <>
@@ -262,6 +345,16 @@ export function RestoreView({
                                     onPreview={() => {
                                         void runPreview(operation.operationId);
                                     }}
+                                    inspecting={
+                                        preview.kind === "inspecting" &&
+                                        preview.operationId ===
+                                            operation.operationId
+                                    }
+                                    onInspect={() => {
+                                        void runInspection(
+                                            operation.operationId,
+                                        );
+                                    }}
                                 />
                             ))}
                         </ul>
@@ -271,6 +364,8 @@ export function RestoreView({
                                 className={buttons["secondary"]}
                                 aria-disabled={busy}
                                 onClick={() => {
+                                    if (busy || pending.current) return;
+                                    setPreview({ kind: "idle" });
                                     setAttempt((current) => current + 1);
                                 }}
                             >
@@ -278,6 +373,11 @@ export function RestoreView({
                             </button>
                         </div>
                     </>
+                )}
+                {preview.kind === "resolutionError" && (
+                    <p className={styles["error"]} role="alert">
+                        {t(`agents.resolution.errors.${preview.code}`)}
+                    </p>
                 )}
                 {preview.kind === "error" && (
                     <p className={styles["error"]} role="alert">
@@ -295,8 +395,33 @@ export function RestoreView({
                     }}
                 />
             )}
+            {preview.kind === "resolution" && (
+                <ResolutionReviewCard
+                    review={preview.review}
+                    busy={busy}
+                    onConfirm={() => {
+                        void runResolution(preview.review);
+                    }}
+                    onCancel={() => {
+                        if (busy || pending.current) return;
+                        setPreview({ kind: "idle" });
+                    }}
+                />
+            )}
+            {apply.kind === "resolved" && (
+                <p className={styles["hint"]} role="status">
+                    {t("agents.resolution.recorded", {
+                        state: t(`agents.restore.states.${apply.result.state}`),
+                    })}
+                </p>
+            )}
             {apply.kind === "done" && (
                 <RestoreResultCard result={apply.result} />
+            )}
+            {apply.kind === "resolutionError" && (
+                <p className={styles["error"]} role="alert">
+                    {t(`agents.resolution.errors.${apply.code}`)}
+                </p>
             )}
             {apply.kind === "error" && (
                 <p className={styles["error"]} role="alert">
@@ -314,6 +439,8 @@ function OperationRow({
     busy,
     previewing,
     onPreview,
+    inspecting,
+    onInspect,
 }: {
     operation: RecordedOperation;
     /** Language used for the timestamp; the app language decides it. */
@@ -323,6 +450,8 @@ function OperationRow({
     /** This row's preview is being built. */
     previewing: boolean;
     onPreview: () => void;
+    inspecting: boolean;
+    onInspect: () => void;
 }): JSX.Element {
     const { t } = useTranslation();
     return (
@@ -364,7 +493,25 @@ function OperationRow({
                         })}
                     </p>
                 )}
-            {operation.restorable ? (
+            {operation.requiresResolution ? (
+                <>
+                    <p className={styles["hint"]}>
+                        {t("agents.resolution.required")}
+                    </p>
+                    <div className={card["actions"]}>
+                        <button
+                            type="button"
+                            className={buttons["secondary"]}
+                            aria-disabled={busy}
+                            onClick={onInspect}
+                        >
+                            {inspecting
+                                ? t("agents.resolution.inspecting")
+                                : t("agents.resolution.inspect")}
+                        </button>
+                    </div>
+                </>
+            ) : operation.restorable ? (
                 <div className={card["actions"]}>
                     <button
                         type="button"
@@ -553,7 +700,7 @@ function RestoreResultCard({
     );
 }
 
-type Translator = ReturnType<typeof useTranslation>["t"];
+type Translator = TFunction;
 
 /** Translated reason a preview will not carry a step out. */
 function reasonText(reason: RestoreReasonCode, t: Translator): string {

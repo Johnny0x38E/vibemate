@@ -629,6 +629,7 @@ const recorded: RecordedOperation = {
     createdAt: 1_700_000_000_000,
     updatedAt: 1_700_000_000_500,
     restorable: true,
+    requiresResolution: false,
     steps: [recordedStep],
 };
 const restorePlanStep: RestorePlanStep = {
@@ -790,6 +791,8 @@ const malformedListings: unknown[] = [
     [{ ...recorded, providerLabel: "Named", providerId: null }],
     [{ ...recorded, updatedAt: 1 }],
     [{ ...recorded, restorable: "yes" }],
+    [{ ...recorded, requiresResolution: undefined }],
+    [{ ...recorded, requiresResolution: true }],
     [{ ...recorded, steps: [] }],
     [{ ...recorded, steps: [{ ...recordedStep, extra: true }] }],
     [{ ...recorded, steps: [{ ...recordedStep, ordinal: 1 }] }],

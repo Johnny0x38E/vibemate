@@ -39,6 +39,7 @@ const operation: RecordedOperation = {
     createdAt: 1_700_000_000_000,
     updatedAt: 1_700_000_000_500,
     restorable: true,
+    requiresResolution: false,
     steps: [
         {
             ordinal: 0,

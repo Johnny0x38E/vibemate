@@ -73,7 +73,7 @@ function choice<T extends string>(value: unknown, choices: readonly T[]): T {
     return invalid();
 }
 /** Absolute, bounded, control-free path text; shared by both validators. */
-function isSafePath(value: unknown): value is string {
+export function isSafePath(value: unknown): value is string {
     return (
         typeof value === "string" &&
         new TextEncoder().encode(value).length <= 4096 &&
@@ -777,6 +777,7 @@ export interface RecordedOperation {
     createdAt: number;
     updatedAt: number;
     restorable: boolean;
+    requiresResolution: boolean;
     steps: RecordedOperationStep[];
 }
 /** One file of a restore preview. */
@@ -918,9 +919,12 @@ function recordedOperation(value: unknown): RecordedOperation {
             "createdAt",
             "updatedAt",
             "restorable",
+            "requiresResolution",
             "steps",
         ]) ||
-        typeof value["restorable"] !== "boolean"
+        typeof value["restorable"] !== "boolean" ||
+        typeof value["requiresResolution"] !== "boolean" ||
+        (value["requiresResolution"] && value["restorable"])
     )
         return restoreInvalid();
     const id = operationId(value["operationId"]);
@@ -948,6 +952,7 @@ function recordedOperation(value: unknown): RecordedOperation {
         createdAt,
         updatedAt,
         restorable: value["restorable"],
+        requiresResolution: value["requiresResolution"],
         steps: rawSteps.map((entry: unknown, index: number) =>
             recordedOperationStep(entry, index),
         ),

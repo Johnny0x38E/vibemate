@@ -723,35 +723,63 @@ fn model_rows_are_constrained_and_follow_their_provider() {
 #[test]
 fn resolution_migration_preserves_v20_snapshots_without_inventing_resolutions() {
     use crate::config_apply::{
-        BackupStore, OperationKind, PlannedFile, WriteTarget, apply_files, operation,
+        OperationKind, OperationState, WriteTarget, begin_operation, finish_operation, operation,
+        record_step_applied,
     };
     let directory = TestDirectory::new("resolution-upgrade");
     let path = directory.path.join(DATABASE_FILE_NAME);
     let old = Storage::open_file(&path, &MIGRATIONS[..20]).unwrap();
     let target = directory.path.join("settings.json");
     std::fs::write(&target, b"original").unwrap();
-    let file = PlannedFile {
-        target: WriteTarget {
-            path: target.clone(),
-            expected_digest: Some(crate::config_plan::digest_hex(b"original")),
-        },
-        content: b"changed".to_vec(),
-    };
-    let applied = apply_files(
+    // The current writer knows the v22 `direct` column, so this pre-v22 fixture
+    // records the operation and its snapshot reference with the old shape.
+    let operation_id = begin_operation(
         &old,
         OperationKind::PiSettings,
         None,
-        &[file],
-        &BackupStore::new(directory.path.join("backups")),
+        &[WriteTarget {
+            path: target.clone(),
+            expected_digest: Some(crate::config_plan::digest_hex(b"original")),
+        }],
     )
     .unwrap();
-    let before = operation(&old, &applied.operation_id).unwrap().unwrap();
+    record_step_applied(
+        &old,
+        &operation_id,
+        0,
+        None,
+        &crate::config_plan::digest_hex(b"changed"),
+        true,
+    )
+    .unwrap();
+    finish_operation(&old, &operation_id, OperationState::Applied).unwrap();
+    old.lock()
+        .unwrap()
+        .execute(
+            "INSERT INTO config_file_revision
+             (id, batch_id, operation_id, ordinal, intent, target_path,
+              previous_digest, next_digest, backup_path, state, error_code,
+              created_at, updated_at)
+             VALUES ('v20-revision', ?1, ?1, 0, 'apply', ?2, ?3, ?4, ?5,
+                     'completed', NULL, 1, 1)",
+            rusqlite::params![
+                operation_id,
+                target.to_string_lossy(),
+                crate::config_plan::digest_hex(b"original"),
+                crate::config_plan::digest_hex(b"changed"),
+                directory
+                    .path
+                    .join("backups/v20-revision/settings.json")
+                    .to_string_lossy()
+            ],
+        )
+        .unwrap();
+    std::fs::write(&target, b"changed").unwrap();
+    let before = operation(&old, &operation_id).unwrap().unwrap();
     drop(old);
     let upgraded = Storage::open_in_directory(&directory.path).unwrap();
     assert_eq!(
-        operation(&upgraded, &applied.operation_id)
-            .unwrap()
-            .unwrap(),
+        operation(&upgraded, &operation_id).unwrap().unwrap(),
         before
     );
     let connection = upgraded.lock().unwrap();
@@ -764,6 +792,12 @@ fn resolution_migration_preserves_v20_snapshots_without_inventing_resolutions() 
         .unwrap();
     assert_eq!(state, "completed");
     assert_eq!(digest, crate::config_plan::digest_hex(b"original"));
+    let direct: i64 = connection
+        .query_row("SELECT direct FROM config_file_revision", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    assert_eq!(direct, 0, "legacy rows are not direct version restores");
     let count: i64 = connection
         .query_row(
             "SELECT count(*) FROM config_revision_resolution",

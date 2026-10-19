@@ -132,6 +132,7 @@ test.each<RevisionObservation>([
         currentDigest: null,
         currentMatch: "intended",
     },
+    { ...revision, intent: "version_restore" },
     { ...revision, previousDigest: null, backupState: "not_needed" },
     {
         ...revision,

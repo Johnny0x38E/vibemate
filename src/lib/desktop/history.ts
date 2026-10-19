@@ -126,7 +126,7 @@ const entrySchema = z
     .strictObject({
         entryKey,
         operationId,
-        intent: z.enum(["apply", "restore", "compensation"]),
+        intent: z.enum(["apply", "restore", "compensation", "version_restore"]),
         // This is a bounded journal reference, not necessarily a Provider ID.
         ownerRef: z
             .string()

@@ -175,23 +175,29 @@ fn validate_resolution(
         .iter()
         .find(|step| step.ordinal == revision.ordinal)
         .ok_or(WriteError::InvalidStoredOperation)?;
-    let valid = if revision.intent == "apply" {
-        step.expected_digest == revision.previous_digest
-            && revision.intended_digest.is_some()
-            && step.restore_state.is_none()
-            && (step.state == StepState::Pending
-                || (step.state == StepState::Applied
-                    && step.applied_digest == revision.intended_digest
-                    && step.previous_existed == Some(revision.previous_digest.is_some())
-                    && step.backup.as_ref().map(|copy| copy.id.as_str())
-                        == revision
-                            .previous_digest
-                            .as_ref()
-                            .map(|_| revision.id.as_str())))
-    } else {
-        step.state == StepState::Applied
-            && step.applied_digest == revision.previous_digest
-            && restore_destination_matches(step, revision)
+    let valid = match revision.intent.as_str() {
+        "apply" => {
+            step.expected_digest == revision.previous_digest
+                && revision.intended_digest.is_some()
+                && step.restore_state.is_none()
+                && (step.state == StepState::Pending
+                    || (step.state == StepState::Applied
+                        && step.applied_digest == revision.intended_digest
+                        && step.previous_existed == Some(revision.previous_digest.is_some())
+                        && step.backup.as_ref().map(|copy| copy.id.as_str())
+                            == revision
+                                .previous_digest
+                                .as_ref()
+                                .map(|_| revision.id.as_str())))
+        }
+        // A direct version restore is not tied to the legacy step result: any
+        // prior version can be its target, so only the source row is required.
+        "version_restore" => true,
+        _ => {
+            step.state == StepState::Applied
+                && step.applied_digest == revision.previous_digest
+                && restore_destination_matches(step, revision)
+        }
     };
     if !valid {
         return Err(WriteError::InvalidStoredOperation);
@@ -248,15 +254,19 @@ fn repair_revision(
     if updated != 1 {
         return Err(WriteError::LogWriteFailed);
     }
-    if revision.intent == "apply" {
-        repair_apply(connection, operation_id, revision, backups, intended, now)?;
-    } else {
-        connection.execute(
-            "UPDATE config_operation_step SET restore_state = ?3, updated_at = max(updated_at, ?4)
-             WHERE operation_id = ?1 AND ordinal = ?2",
-            params![operation_id, revision.ordinal,
-                if intended { RestoreState::Restored } else { RestoreState::Failed }.as_str(), now],
-        ).map_err(|_| WriteError::LogWriteFailed)?;
+    match revision.intent.as_str() {
+        "apply" => repair_apply(connection, operation_id, revision, backups, intended, now)?,
+        // A direct restore only settles its own revision row; the source
+        // operation's legacy rollback result is unrelated and must stay put.
+        "version_restore" => {}
+        _ => {
+            connection.execute(
+                "UPDATE config_operation_step SET restore_state = ?3, updated_at = max(updated_at, ?4)
+                 WHERE operation_id = ?1 AND ordinal = ?2",
+                params![operation_id, revision.ordinal,
+                    if intended { RestoreState::Restored } else { RestoreState::Failed }.as_str(), now],
+            ).map_err(|_| WriteError::LogWriteFailed)?;
+        }
     }
     Ok(())
 }

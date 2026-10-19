@@ -52,7 +52,8 @@ pub struct RevisionInspection {
     pub batch_id: String,
     /// Position in the source operation, not in this inspection result.
     pub ordinal: u32,
-    /// Recorded direction: `apply`, `restore` or `compensation`.
+    /// Recorded direction: `apply`, `restore`, `compensation`, or
+    /// `version_restore` for a direct H2 restore stored with `direct = 1`.
     pub intent: String,
     /// `prepared`, `unknown`, or `completed` with a missing legacy step result.
     pub state: String,
@@ -159,7 +160,11 @@ pub(super) fn inspect_record(
             id: row.id,
             batch_id: row.batch_id,
             ordinal: row.ordinal,
-            intent: row.intent,
+            intent: if row.direct == 1 {
+                "version_restore".to_owned()
+            } else {
+                row.intent
+            },
             state: row.state,
             target_path: row.target_path,
             previous_digest: row.previous_digest,
@@ -186,6 +191,7 @@ struct PendingRevision {
     error_code: Option<String>,
     created_at: i64,
     updated_at: i64,
+    direct: i64,
 }
 
 impl PendingRevision {
@@ -208,6 +214,8 @@ impl PendingRevision {
         if !identity(&self.id)
             || !identity(&self.batch_id)
             || !matches!(self.intent.as_str(), "apply" | "restore" | "compensation")
+            || !matches!(self.direct, 0 | 1)
+            || (self.direct == 1 && self.intent != "restore")
             || !matches!(self.state.as_str(), "prepared" | "unknown" | "completed")
             || (self.state != "unknown" && self.error_code.is_some())
             || (self.state == "unknown" && self.error_code.as_deref() != Some("outcome_unknown"))
@@ -240,7 +248,7 @@ impl PendingRevision {
 // regardless of age, and resolution refuses them if a newer mutation exists.
 const INTERRUPTED_PREDICATE: &str = "r.operation_id = ?1 AND (
     r.state IN ('prepared', 'unknown') OR (
-        r.state = 'completed'
+        r.state = 'completed' AND r.direct = 0
         AND NOT EXISTS (SELECT 1 FROM config_file_revision newer
             WHERE newer.operation_id = r.operation_id AND newer.ordinal = r.ordinal
                 AND newer.rowid > r.rowid)
@@ -275,7 +283,8 @@ fn read_pending(
     let mut query = connection
         .prepare(&format!(
             "SELECT r.id, r.batch_id, r.ordinal, r.intent, r.state, r.target_path,
-             r.previous_digest, r.next_digest, r.backup_path, r.error_code, r.created_at, r.updated_at
+             r.previous_digest, r.next_digest, r.backup_path, r.error_code, r.created_at,
+             r.updated_at, r.direct
              FROM config_file_revision r WHERE {INTERRUPTED_PREDICATE} ORDER BY r.created_at, r.id"
         ))
         .map_err(|_| WriteError::LogReadFailed)?;
@@ -294,6 +303,7 @@ fn read_pending(
                 error_code: row.get(9)?,
                 created_at: row.get(10)?,
                 updated_at: row.get(11)?,
+                direct: row.get(12)?,
             })
         })
         .map_err(|_| WriteError::LogReadFailed)?;
@@ -302,31 +312,17 @@ fn read_pending(
 }
 
 fn inspect_backup(row: &PendingRevision, backups: &BackupStore) -> RevisionBackupState {
-    let Some(path) = &row.backup_path else {
-        return RevisionBackupState::NotNeeded;
+    let (Some(path), Some(digest)) = (&row.backup_path, &row.previous_digest) else {
+        return if row.backup_path.is_none() {
+            RevisionBackupState::NotNeeded
+        } else {
+            RevisionBackupState::Unavailable
+        };
     };
-    // Never inspect arbitrary paths planted in the log. The writer stores each
-    // snapshot at exactly <private-root>/<revision-id>/<target-file-name>.
-    let expected = backups
-        .root()
-        .join(&row.id)
-        .join(super::file_name(Path::new(&row.target_path)));
-    let regular_directory = |path: &Path| {
-        std::fs::symlink_metadata(path)
-            .is_ok_and(|metadata| metadata.is_dir() && !metadata.is_symlink())
-    };
-    if Path::new(path) != expected
-        || !regular_directory(backups.root())
-        || !regular_directory(expected.parent().expect("snapshot has a parent"))
-    {
-        return RevisionBackupState::Unavailable;
-    }
-    match read_target(&expected) {
-        Ok(target)
-            if !target.symlink && target.exists && target.content_digest == row.previous_digest =>
-        {
-            RevisionBackupState::Available
-        }
-        _ => RevisionBackupState::Unavailable,
+    // The shared reader refuses paths that do not match the private-store
+    // layout, links, oversized or unreadable files, and digest mismatches.
+    match super::snapshots::read_snapshot(backups, &row.id, &row.target_path, path, digest) {
+        Ok(_) => RevisionBackupState::Available,
+        Err(_) => RevisionBackupState::Unavailable,
     }
 }

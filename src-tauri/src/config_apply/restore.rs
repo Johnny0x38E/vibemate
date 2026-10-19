@@ -293,6 +293,7 @@ pub(crate) fn roll_back_operation(
             ordinal: step.ordinal,
             batch_id: &batch_id,
             intent,
+            direct: false,
         };
         let outcome = roll_back_step(step, backups, &revision)?;
         if let Some(path) = &outcome.leftover_path {
@@ -435,7 +436,7 @@ fn remove_created(
 }
 
 /// Preserve the complete current file before restoring an absent-file state.
-fn remove_recorded_file(
+pub(super) fn remove_recorded_file(
     path: &Path,
     applied_digest: &str,
     backups: &BackupStore,
@@ -596,7 +597,7 @@ fn classify(
                 Ok(_) => {
                     plan.action = RestoreAction::Restore;
                     plan.restored_owner_ref =
-                        owner_for_digest(storage, record, &backup.content_digest)?;
+                        owner_for_digest(storage, record.kind, &backup.content_digest)?;
                     Ok(plan)
                 }
                 Err(error) => Ok(plan.stopped(RestoreAction::Blocked, error.code())),
@@ -640,9 +641,9 @@ impl RestoreStepPlan {
 /// earlier operation when its applied digest matches, and that operation's owner
 /// is the Provider whose key the restored file will carry. `None` means no
 /// recorded write produced this content, so it came from outside vibemate.
-fn owner_for_digest(
+pub(super) fn owner_for_digest(
     storage: &Storage,
-    record: &OperationRecord,
+    kind: OperationKind,
     digest: &str,
 ) -> Result<Option<String>, WriteError> {
     let connection = storage.lock().map_err(|_| WriteError::StorageUnavailable)?;
@@ -654,7 +655,7 @@ fn owner_for_digest(
              WHERE owner.kind = ?1 AND step.applied_digest = ?2
              ORDER BY owner.created_at DESC, owner.id DESC
              LIMIT 1",
-            params![record.kind.as_str(), digest],
+            params![kind.as_str(), digest],
             |row| row.get::<_, Option<String>>(0),
         )
         .optional()

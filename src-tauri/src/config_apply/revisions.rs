@@ -43,6 +43,9 @@ pub(super) struct RevisionContext<'a> {
     pub batch_id: &'a str,
     /// Direction of this mutation, independent of the source operation kind.
     pub intent: RevisionIntent,
+    /// A direct version restore (H2), not the legacy rollback of the source
+    /// operation. Such a row must not update the source step's restore result.
+    pub direct: bool,
 }
 
 /// Do not let legacy recovery reinterpret an interrupted mutation as an undo
@@ -90,9 +93,9 @@ impl RevisionContext<'_> {
             .execute(
                 "INSERT INTO config_file_revision
                 (id, batch_id, operation_id, ordinal, intent, target_path,
-                 previous_digest, next_digest, backup_path, state, created_at, updated_at)
+                 previous_digest, next_digest, backup_path, state, created_at, updated_at, direct)
              SELECT ?1, ?2, operation_id, ordinal, ?5, target_path,
-                    ?7, ?8, ?9, 'prepared', ?10, ?10
+                    ?7, ?8, ?9, 'prepared', ?10, ?10, ?11
              FROM config_operation_step
              WHERE operation_id = ?3 AND ordinal = ?4 AND target_path = ?6",
                 params![
@@ -105,7 +108,8 @@ impl RevisionContext<'_> {
                     target.expected_digest,
                     next_digest,
                     backup.map(|copy| copy.path.as_str()),
-                    now
+                    now,
+                    i64::from(self.direct)
                 ],
             )
             .map_err(|_| WriteError::LogWriteFailed)?;

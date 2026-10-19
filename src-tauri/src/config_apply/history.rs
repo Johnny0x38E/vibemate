@@ -19,7 +19,7 @@ use super::{
 use crate::{config_plan::digest_hex, shared, storage::Storage};
 
 const MAX_PAGE_SIZE: u32 = 50;
-const MAX_SCOPE_FILES: usize = 16;
+pub(super) const MAX_SCOPE_FILES: usize = 16;
 
 /// Exact files owned by one adapter below one configuration root.
 ///
@@ -67,6 +67,19 @@ impl HistoryScope {
             digest: digest_hex(&bytes),
         })
     }
+
+    /// Operation kind this scope was built for.
+    pub(super) fn operation_kind(&self) -> OperationKind {
+        self.kind
+    }
+
+    /// Whether `target` is exactly one of the scope's owned files.
+    ///
+    /// Textual, not a path-prefix or filesystem-identity comparison, matching
+    /// how the history reader admits an operation.
+    pub(super) fn owns_target(&self, target: &str) -> bool {
+        self.targets.iter().any(|owned| owned == target)
+    }
 }
 
 /// Position after the last entry of a page, bound to its exact Agent/file scope.
@@ -87,10 +100,13 @@ pub struct HistoryCursor {
 pub enum HistoryIntent {
     /// The original feature apply attempt, including legacy/failed attempts.
     Apply,
-    /// A separately confirmed restore attempt.
+    /// A separately confirmed legacy restore attempt.
     Restore,
     /// A failed apply's automatic compensation attempt.
     Compensation,
+    /// A direct restore of any retained version (H2), stored as a restore
+    /// revision with `direct = 1`.
+    VersionRestore,
 }
 
 impl HistoryIntent {
@@ -375,10 +391,10 @@ fn read_entry(
         return Err(WriteError::InvalidStoredOperation);
     }
     let batch = candidate.entry_key.strip_prefix("batch:");
-    let (intent, revisions) = read_revisions(connection, &source, batch)?;
-    let updated_at = revisions
+    let (intent, stored) = read_revisions(connection, &source, batch)?;
+    let updated_at = stored
         .iter()
-        .map(|row| row.updated_at)
+        .map(|row| row.revision.updated_at)
         .fold(source.updated_at, i64::max);
     let mut source_steps = Vec::with_capacity(source.steps.len());
     for step in source.steps {
@@ -403,11 +419,24 @@ fn read_entry(
         created_at: candidate.created_at,
         updated_at,
         source_steps,
-        revisions,
+        revisions: stored.into_iter().map(|row| row.revision).collect(),
     })
 }
 
-struct StoredRevision {
+/// Validated journal row plus the private fields version restore needs.
+///
+/// `target_path` and `backup_path` never enter an IPC response; the history
+/// reader strips them when it builds [`HistoryRevision`].
+pub(super) struct StoredRevision {
+    /// Metadata safe to expose.
+    pub revision: HistoryRevision,
+    /// Exact file this revision describes.
+    pub target_path: String,
+    /// Private snapshot path recorded with the revision, when one exists.
+    pub backup_path: Option<String>,
+}
+
+struct RevisionRow {
     id: String,
     batch_id: String,
     operation_id: String,
@@ -421,13 +450,14 @@ struct StoredRevision {
     error_code: Option<String>,
     created_at: i64,
     updated_at: i64,
+    direct: i64,
 }
 
-fn read_revisions(
+pub(super) fn read_revisions(
     connection: &Connection,
     source: &OperationRecord,
     batch: Option<&str>,
-) -> Result<(HistoryIntent, Vec<HistoryRevision>), WriteError> {
+) -> Result<(HistoryIntent, Vec<StoredRevision>), WriteError> {
     let predicate = if batch.is_some() {
         "batch_id = ?1"
     } else {
@@ -436,7 +466,8 @@ fn read_revisions(
     let mut query = connection
         .prepare(&format!(
             "SELECT id, batch_id, operation_id, ordinal, intent, target_path,
-         previous_digest, next_digest, backup_path, state, error_code, created_at, updated_at
+         previous_digest, next_digest, backup_path, state, error_code, created_at, updated_at,
+         direct
          FROM config_file_revision WHERE {predicate} ORDER BY ordinal, id LIMIT ?2"
         ))
         .map_err(|_| WriteError::LogReadFailed)?;
@@ -447,7 +478,7 @@ fn read_revisions(
                 i64::try_from(MAX_SCOPE_FILES + 1).map_err(|_| WriteError::InvalidRequest)?
             ],
             |row| {
-                Ok(StoredRevision {
+                Ok(RevisionRow {
                     id: row.get(0)?,
                     batch_id: row.get(1)?,
                     operation_id: row.get(2)?,
@@ -461,30 +492,47 @@ fn read_revisions(
                     error_code: row.get(10)?,
                     created_at: row.get(11)?,
                     updated_at: row.get(12)?,
+                    direct: row.get(13)?,
                 })
             },
         )
         .map_err(|_| WriteError::LogReadFailed)?;
-    let mut revisions = Vec::new();
+    let mut revisions: Vec<StoredRevision> = Vec::new();
     let mut intent = None;
     for result in rows {
         let row = result.map_err(|_| WriteError::InvalidStoredOperation)?;
-        let row_intent = HistoryIntent::from_stored(&row.intent)?;
+        let stored_intent = HistoryIntent::from_stored(&row.intent)?;
+        // `direct` marks a version restore layered on the restore storage
+        // intent. Any other combination is a malformed row.
+        if !matches!(row.direct, 0 | 1)
+            || (row.direct == 1 && stored_intent != HistoryIntent::Restore)
+        {
+            return Err(WriteError::InvalidStoredOperation);
+        }
+        let row_intent = if row.direct == 1 {
+            HistoryIntent::VersionRestore
+        } else {
+            stored_intent
+        };
         let state = HistoryRevisionState::from_stored(&row.state)?;
         let error_code = row.error_code.as_deref().map(parse_error).transpose()?;
-        let source_step = source.steps.iter().find(|step| step.ordinal == row.ordinal);
+        let source_step = source
+            .steps
+            .iter()
+            .find(|step| step.ordinal == row.ordinal)
+            .ok_or(WriteError::InvalidStoredOperation)?;
         if revisions.len() >= MAX_SCOPE_FILES
             || !valid_revision_id(&row.id)
             || !valid_revision_id(&row.batch_id)
             || row.operation_id != source.id
-            || source_step.is_none_or(|step| step.target_path != row.target_path)
+            || source_step.target_path != row.target_path
             || row.batch_id != batch.unwrap_or(&source.id)
             || (batch.is_none() && row_intent != HistoryIntent::Apply)
             || (batch.is_some() && row_intent == HistoryIntent::Apply)
             || intent.is_some_and(|previous| previous != row_intent)
             || revisions
                 .iter()
-                .any(|previous: &HistoryRevision| previous.ordinal == row.ordinal)
+                .any(|previous| previous.revision.ordinal == row.ordinal)
             || row.created_at < 0
             || row.updated_at < row.created_at
             || row
@@ -506,17 +554,22 @@ fn read_revisions(
         }
         intent = Some(row_intent);
         let resolution = read_resolution(connection, &row, state)?;
-        revisions.push(HistoryRevision {
-            revision_id: row.id,
-            ordinal: row.ordinal,
-            previous_digest: row.previous_digest,
-            intended_digest: row.next_digest,
-            backup_recorded: row.backup_path.is_some(),
-            state,
-            resolution,
-            error_code,
-            created_at: row.created_at,
-            updated_at: row.updated_at,
+        let backup_path = row.backup_path.clone();
+        revisions.push(StoredRevision {
+            revision: HistoryRevision {
+                revision_id: row.id,
+                ordinal: row.ordinal,
+                previous_digest: row.previous_digest,
+                intended_digest: row.next_digest,
+                backup_recorded: row.backup_path.is_some(),
+                state,
+                resolution,
+                error_code,
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+            },
+            target_path: row.target_path,
+            backup_path,
         });
     }
     if batch.is_some() && revisions.is_empty() {
@@ -527,7 +580,7 @@ fn read_revisions(
 
 fn read_resolution(
     connection: &Connection,
-    revision: &StoredRevision,
+    revision: &RevisionRow,
     state: HistoryRevisionState,
 ) -> Result<Option<HistoryResolution>, WriteError> {
     let audit = connection
@@ -610,7 +663,7 @@ fn parse_error(code: &str) -> Result<WriteError, WriteError> {
     .ok_or(WriteError::InvalidStoredOperation)
 }
 
-fn valid_revision_id(value: &str) -> bool {
+pub(super) fn valid_revision_id(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 128
         && value
@@ -618,7 +671,7 @@ fn valid_revision_id(value: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
 }
 
-fn valid_entry_key(key: &str) -> bool {
+pub(super) fn valid_entry_key(key: &str) -> bool {
     if let Some(id) = key.strip_prefix("operation:") {
         shared::is_random_id(id)
     } else {

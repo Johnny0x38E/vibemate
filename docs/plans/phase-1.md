@@ -109,6 +109,12 @@ deferred to the release-time platform check.
    separately, older pages load by cursor, and interrupted writes keep their
    explicit review entry. Rows add the recorded Provider display name and carry
    no backup bytes, backup-availability claim or current-version inference.
+   H2 restore rules are implemented in the backend: any retained apply entry or
+   restore/compensation batch can be restored to its pre-entry state, with
+   exact Agent/root scope, verified snapshots, concurrent-change tokens, a new
+   independent pre-restore snapshot, and a `direct` marker that keeps the source
+   operation's legacy rollback result untouched. This backend slice has no IPC
+   or interface yet, and the shared two-layer preview remains pending.
    Nothing runs automatically. Native IPC runtime acceptance, backup availability
    checks and current-version detection/pinning remain pending. H1 as a whole is
    not accepted.

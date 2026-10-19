@@ -554,7 +554,7 @@ fn mixed_direction_duplicate_ordinal_and_cross_source_batch_collisions_fail_clos
                 fixture.storage.lock().unwrap().execute("UPDATE config_file_revision SET intent='compensation' WHERE batch_id=?1 AND ordinal=1", [&batch]).unwrap();
             }
             "ordinal" => {
-                fixture.storage.lock().unwrap().execute("INSERT INTO config_file_revision SELECT id || '-duplicate', batch_id, operation_id, ordinal, intent, target_path, previous_digest, next_digest, backup_path, state, error_code, created_at, updated_at FROM config_file_revision WHERE batch_id=?1 AND ordinal=0", [&batch]).unwrap();
+                fixture.storage.lock().unwrap().execute("INSERT INTO config_file_revision SELECT id || '-duplicate', batch_id, operation_id, ordinal, intent, target_path, previous_digest, next_digest, backup_path, state, error_code, created_at, updated_at, direct FROM config_file_revision WHERE batch_id=?1 AND ordinal=0", [&batch]).unwrap();
             }
             "source" => {
                 let other = apply_at(&fixture, kind, "pi-other", &[("settings", b"other")]);
@@ -781,7 +781,8 @@ fn malformed_source_steps_and_oversized_batches_are_not_returned_as_history() {
                             "INSERT INTO config_file_revision
                          SELECT id || ?1, batch_id, operation_id, ordinal, intent, target_path,
                          previous_digest, next_digest, backup_path, state, error_code,
-                         created_at, updated_at FROM config_file_revision WHERE rowid=1",
+                         created_at, updated_at, direct
+                         FROM config_file_revision WHERE rowid=1",
                             [format!("-extra-{index}")],
                         )
                         .unwrap();

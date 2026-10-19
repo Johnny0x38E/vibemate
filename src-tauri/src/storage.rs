@@ -431,6 +431,19 @@ const MIGRATIONS: &[Migration] = &[
             resolved_at INTEGER NOT NULL CHECK(resolved_at >= 0)
         ) STRICT;",
     },
+    Migration {
+        version: 22,
+        // H2 restores any retained version directly. It is stored as a restore
+        // revision because it changes a file the same way, but `direct = 1`
+        // says it is not the legacy rollback of the source operation: it must
+        // not update the source step's restore bookkeeping, and a completed row
+        // must not look like a missing legacy step result. Interrupted direct
+        // rows still block recovery until the user inspects them.
+        sql: "ALTER TABLE config_file_revision ADD COLUMN direct INTEGER NOT NULL
+            DEFAULT 0 CHECK(direct IN (0, 1));
+        CREATE INDEX config_file_revision_direct
+            ON config_file_revision(operation_id, ordinal, direct);",
+    },
 ];
 
 /// Errors from opening or migrating the private database.

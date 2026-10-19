@@ -694,7 +694,8 @@
             "intents": {
                 "apply": "应用配置",
                 "restore": "手动恢复",
-                "compensation": "自动补偿"
+                "compensation": "自动补偿",
+                "version_restore": "恢复历史版本"
             },
             "stages": {
                 "prepared": "结果尚未记录",
@@ -727,7 +728,8 @@
             "intents": {
                 "apply": "应用配置",
                 "restore": "手动恢复",
-                "compensation": "自动补偿"
+                "compensation": "自动补偿",
+                "version_restore": "恢复历史版本"
             },
             "revisionStates": {
                 "prepared": "结果尚未记录",

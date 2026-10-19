@@ -11,6 +11,8 @@ mod history_tests;
 mod recovery_surface_tests;
 #[path = "resolution_tests.rs"]
 mod resolution_tests;
+#[path = "version_restore_tests.rs"]
+mod version_restore_tests;
 
 use super::*;
 use crate::{config_plan::read_target_bytes, storage::Storage};
@@ -414,6 +416,7 @@ fn uncertain_mutations_retain_their_snapshot_and_require_reconciliation() {
         ordinal: 0,
         batch_id: "batch",
         intent: RevisionIntent::Apply,
+        direct: false,
     };
     revision
         .prepare(

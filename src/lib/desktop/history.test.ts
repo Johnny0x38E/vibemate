@@ -83,6 +83,19 @@ test.each<ConfigurableAgent>(["claudeCode", "pi", "grokBuild"])(
     },
 );
 
+test("accepts a direct version-restore batch entry", async () => {
+    const batch: HistoryEntry = {
+        ...entry(),
+        entryKey: "batch:direct-restore",
+        intent: "version_restore",
+    };
+    vi.mocked(invoke).mockResolvedValue(page(batch));
+    expect(await readConfigurationHistory("pi")).toEqual({
+        kind: "desktop",
+        page: page(batch),
+    });
+});
+
 test("browser preview does not manufacture an empty desktop history", async () => {
     vi.mocked(isTauri).mockReturnValue(false);
     expect(await readConfigurationHistory("pi")).toEqual({ kind: "preview" });

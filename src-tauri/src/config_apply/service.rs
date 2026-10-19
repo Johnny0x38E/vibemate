@@ -129,6 +129,7 @@ fn apply_with_mode(
             ordinal,
             batch_id: &operation_id,
             intent: RevisionIntent::Apply,
+            direct: false,
         };
         let result = apply_recorded_file(&file.target, &file.content, backups, private, &revision);
         match result {

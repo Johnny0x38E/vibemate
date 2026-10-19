@@ -21,7 +21,7 @@ export interface RevisionObservation {
     id: string;
     batchId: string;
     ordinal: number;
-    intent: "apply" | "restore" | "compensation";
+    intent: "apply" | "restore" | "compensation" | "version_restore";
     state: "prepared" | "unknown" | "completed";
     targetPath: string;
     previousDigest: string | null;
@@ -132,7 +132,12 @@ function observation(value: unknown): RevisionObservation {
         id: identity(value["id"]),
         batchId: identity(value["batchId"]),
         ordinal,
-        intent: member(value["intent"], ["apply", "restore", "compensation"]),
+        intent: member(value["intent"], [
+            "apply",
+            "restore",
+            "compensation",
+            "version_restore",
+        ]),
         state: member(value["state"], ["prepared", "unknown", "completed"]),
         targetPath,
         previousDigest,

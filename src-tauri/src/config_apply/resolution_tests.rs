@@ -419,7 +419,8 @@ fn an_older_uncertain_revision_cannot_override_a_later_mutation_of_the_same_step
     fixture.sql(
         "INSERT INTO config_file_revision
         SELECT 'later', batch_id, operation_id, ordinal, intent, target_path,
-        previous_digest, next_digest, backup_path, 'failed', 'write_failed', created_at, updated_at
+        previous_digest, next_digest, backup_path, 'failed', 'write_failed', created_at,
+        updated_at, direct
         FROM config_file_revision;",
     );
     let approval = plan(&fixture, &id);

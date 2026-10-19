@@ -694,7 +694,8 @@
             "intents": {
                 "apply": "Apply",
                 "restore": "Restore",
-                "compensation": "Automatic compensation"
+                "compensation": "Automatic compensation",
+                "version_restore": "Restore version"
             },
             "stages": {
                 "prepared": "result not recorded",
@@ -727,7 +728,8 @@
             "intents": {
                 "apply": "Apply",
                 "restore": "Restore",
-                "compensation": "Automatic compensation"
+                "compensation": "Automatic compensation",
+                "version_restore": "Restore version"
             },
             "revisionStates": {
                 "prepared": "Result not recorded",

@@ -736,6 +736,8 @@ mod resolution;
 mod restore;
 mod revisions;
 mod service;
+mod snapshots;
+mod version_restore;
 
 pub use cleanup::{
     BackupCleanupOutcome, BackupInventory, UnreferencedBackup, cleanup_backup_copies,
@@ -762,6 +764,10 @@ pub use restore::{
 };
 pub(crate) use service::apply_private_files;
 pub use service::{AppliedOperation, PlannedFile, StepOutcome, apply_files, compensate_operation};
+pub use version_restore::{
+    ReviewedVersionFile, VersionRestoreAction, VersionRestoreFile, VersionRestoreFileOutcome,
+    VersionRestoreOutcome, VersionRestorePlan, apply_version_restore, plan_version_restore,
+};
 
 #[cfg(test)]
 mod operation_tests;

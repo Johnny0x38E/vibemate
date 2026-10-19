@@ -721,6 +721,20 @@
             "empty": "vibemate 还没有写过这个配置文件。",
             "retry": "重试",
             "recheck": "重新检查",
+            "loadMore": "加载更多历史",
+            "loadingMore": "正在加载更多历史…",
+            "loadMoreFailed": "无法读取更多历史：{{error}}",
+            "intents": {
+                "apply": "应用配置",
+                "restore": "手动恢复",
+                "compensation": "自动补偿"
+            },
+            "revisionStates": {
+                "prepared": "结果尚未记录",
+                "completed": "文件结果已记录",
+                "failed": "写入失败",
+                "unknown": "结果无法核实"
+            },
             "preview": "预览恢复",
             "previewing": "正在生成恢复预览…",
             "previewFor": "{{time}} 那次写入的恢复预览",

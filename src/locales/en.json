@@ -721,6 +721,20 @@
             "empty": "vibemate has not written this configuration yet.",
             "retry": "Try again",
             "recheck": "Recheck",
+            "loadMore": "Load more history",
+            "loadingMore": "Loading more history…",
+            "loadMoreFailed": "More history could not be read: {{error}}",
+            "intents": {
+                "apply": "Apply",
+                "restore": "Restore",
+                "compensation": "Automatic compensation"
+            },
+            "revisionStates": {
+                "prepared": "Result not recorded",
+                "completed": "File result recorded",
+                "failed": "Write failed",
+                "unknown": "Result unverified"
+            },
             "preview": "Preview restore",
             "previewing": "Building the restore preview…",
             "previewFor": "Restore preview for the write made {{time}}",

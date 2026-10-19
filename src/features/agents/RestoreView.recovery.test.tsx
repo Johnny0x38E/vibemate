@@ -6,11 +6,13 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { createAppI18n } from "../../i18n";
 import {
     RestoreRequestError,
-    listAgentOperations,
     planAgentRestore,
     applyAgentRestore,
-    type RecordedOperation,
 } from "../../lib/desktop/agents";
+import {
+    readConfigurationHistory,
+    type HistoryEntry,
+} from "../../lib/desktop/history";
 import {
     reviewConfigurationResolution,
     resolveConfigurationOperation,
@@ -21,9 +23,12 @@ import { RestoreView } from "./RestoreView";
 
 vi.mock(import("../../lib/desktop/agents"), async (original) => ({
     ...(await original()),
-    listAgentOperations: vi.fn(),
     planAgentRestore: vi.fn(),
     applyAgentRestore: vi.fn(),
+}));
+vi.mock(import("../../lib/desktop/history"), async (original) => ({
+    ...(await original()),
+    readConfigurationHistory: vi.fn(),
 }));
 vi.mock(import("../../lib/desktop/recovery"), async (original) => ({
     ...(await original()),
@@ -32,17 +37,42 @@ vi.mock(import("../../lib/desktop/recovery"), async (original) => ({
 }));
 const ID = "a".repeat(32);
 const PATH = "/Users/test/.pi/agent/models.json";
-const operation: RecordedOperation = {
+const operation: HistoryEntry = {
+    entryKey: `operation:${ID}`,
     operationId: ID,
-    state: "unknown",
-    providerId: null,
-    providerLabel: null,
+    intent: "apply",
+    ownerRef: null,
+    ownerLabel: null,
+    requiresResolution: true,
+    sourceState: "unknown",
     createdAt: 1_700_000_000_000,
     updatedAt: 1_700_000_000_500,
-    restorable: false,
-    requiresResolution: true,
-    steps: [
-        { ordinal: 0, targetPath: PATH, state: "pending", restoreState: null },
+    sourceSteps: [
+        {
+            ordinal: 0,
+            targetPath: PATH,
+            expectedDigest: "b".repeat(64),
+            appliedDigest: null,
+            previousExisted: null,
+            backupRecorded: false,
+            state: "pending",
+            errorCode: null,
+            restoreState: null,
+        },
+    ],
+    revisions: [
+        {
+            revisionId: "100-1-0",
+            ordinal: 0,
+            previousDigest: "b".repeat(64),
+            intendedDigest: "c".repeat(64),
+            backupRecorded: true,
+            state: "prepared",
+            resolution: null,
+            errorCode: null,
+            createdAt: 1_700_000_000_000,
+            updatedAt: 1_700_000_000_500,
+        },
     ],
 };
 const review: ResolutionReview = {
@@ -66,14 +96,15 @@ const review: ResolutionReview = {
         },
     ],
 };
-const loadHistory = vi.mocked(listAgentOperations);
+const loadHistory = vi.mocked(readConfigurationHistory);
 const inspectWrite = vi.mocked(reviewConfigurationResolution);
 const resolveWrite = vi.mocked(resolveConfigurationOperation);
 
 beforeEach(() => {
-    loadHistory
-        .mockReset()
-        .mockResolvedValue({ kind: "desktop", operations: [operation] });
+    loadHistory.mockReset().mockResolvedValue({
+        kind: "desktop",
+        page: { entries: [operation], nextCursor: null },
+    });
     inspectWrite.mockReset().mockResolvedValue({ kind: "desktop", review });
     resolveWrite
         .mockReset()
@@ -152,14 +183,16 @@ test("confirmation is single-flight, refreshes history and never chains a restor
     expect(onBusyChange).toHaveBeenLastCalledWith(true);
     loadHistory.mockResolvedValue({
         kind: "desktop",
-        operations: [
-            {
-                ...operation,
-                state: "applied",
-                requiresResolution: false,
-                restorable: true,
-            },
-        ],
+        page: {
+            entries: [
+                {
+                    ...operation,
+                    sourceState: "applied",
+                    requiresResolution: false,
+                },
+            ],
+            nextCursor: null,
+        },
     });
     await act(async () => {
         complete?.({ operationId: ID, state: "applied" });

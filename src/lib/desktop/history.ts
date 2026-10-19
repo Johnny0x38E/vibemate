@@ -27,6 +27,22 @@ export class HistoryRequestError extends Error {
     }
 }
 
+/**
+ * Reject terminal control characters in Provider display text.
+ *
+ * Provider validation already enforces this in Rust; repeating the check here
+ * keeps a malformed journal/response from reaching the renderer.
+ */
+function isSafeLabel(value: string): boolean {
+    // `for...of` walks code points, so emoji and other surrogate pairs stay
+    // whole; only their control-character property matters here.
+    for (const character of value) {
+        const code = character.codePointAt(0) ?? 0;
+        if (code < 0x20 || (code >= 0x7f && code <= 0x9f)) return false;
+    }
+    return true;
+}
+
 const digest = z.string().regex(/^[0-9a-f]{64}$/u);
 const operationId = z.string().regex(/^[0-9a-f]{32}$/u);
 const revisionId = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/u);
@@ -116,6 +132,10 @@ const entrySchema = z
             .string()
             .regex(/^[\x20-\x7e]{1,64}$/u)
             .nullable(),
+        // Display text resolved by Rust from a still-saved Provider.
+        ownerLabel: z.string().min(1).max(64).refine(isSafeLabel).nullable(),
+        // Journal metadata only; a true value withholds the legacy restore action.
+        requiresResolution: z.boolean(),
         sourceState: z.enum(APPLY_STATES),
         createdAt: timestamp,
         updatedAt: timestamp,
@@ -154,9 +174,14 @@ export type HistoryCursor = z.infer<typeof cursorSchema>;
 export type HistorySourceStep = z.infer<typeof sourceStepSchema>;
 /** Recorded reconciliation observation, not proof of who changed a file. */
 export type HistoryResolution = z.infer<typeof resolutionSchema>;
+/** One file's recorded mutation result; `completed` may still need review. */
+export type HistoryRevisionState = z.infer<typeof revisionState>;
 /** Pre-mutation metadata; backupRecorded does not establish availability. */
 export type HistoryRevision = z.infer<typeof revisionSchema>;
-/** One original operation or an independent restore/compensation batch. */
+/**
+ * One original operation or an independent restore/compensation batch, with
+ * adapter-level Provider display text and interrupted-write status.
+ */
 export type HistoryEntry = z.infer<typeof entrySchema>;
 /** Complete bounded metadata page; includes no current-state or restore claims. */
 export type HistoryPage = z.infer<typeof pageSchema>;

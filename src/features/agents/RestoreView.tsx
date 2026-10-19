@@ -5,19 +5,26 @@ import { DetailPanel } from "../../components/DetailForm";
 import buttons from "../../components/actionButtons.module.css";
 import {
     RestoreRequestError,
-    listAgentOperations,
     planAgentRestore,
     applyAgentRestore,
+    type ApplyState as JournalApplyState,
     type ClaudeCodeRestorePlan,
     type ConfigurableAgent,
-    type RecordedOperation,
     type RestoreErrorCode,
     type RestoreOutcome,
     type RestorePlanStep,
     type RestoreReasonCode,
+    type RestoreState,
     type RestoreStepOutcome,
     type WriteErrorCode,
 } from "../../lib/desktop/agents";
+import {
+    HistoryRequestError,
+    readConfigurationHistory,
+    type HistoryCursor,
+    type HistoryEntry,
+    type HistoryRevisionState,
+} from "../../lib/desktop/history";
 import styles from "./AgentList.module.css";
 import card from "./ConfigPreview.module.css";
 import restore from "./RestoreView.module.css";
@@ -33,7 +40,16 @@ type ListState =
     | { kind: "loading" }
     | { kind: "preview" }
     | { kind: "error"; code: RestoreErrorCode }
-    | { kind: "ready"; operations: RecordedOperation[] };
+    | {
+          kind: "ready";
+          /** Newest first; every multi-file batch stays inside one entry. */
+          entries: HistoryEntry[];
+          /** Seek position for the next page, or null at the end. */
+          nextCursor: HistoryCursor | null;
+          loadingMore: boolean;
+          /** A failed "load more" keeps the entries already read. */
+          moreError: RestoreErrorCode | null;
+      };
 
 /** `loading` keeps the row it belongs to, so only that row shows progress. */
 type PreviewState =
@@ -104,13 +120,19 @@ export function RestoreView({
         // discarded first request and every read that a newer one replaced.
         listGeneration.current += 1;
         const generation = listGeneration.current;
-        listAgentOperations(agent).then(
+        readConfigurationHistory(agent).then(
             (result) => {
                 if (listGeneration.current !== generation) return;
                 setList(
                     result.kind === "preview"
                         ? { kind: "preview" }
-                        : { kind: "ready", operations: result.operations },
+                        : {
+                              kind: "ready",
+                              entries: result.page.entries,
+                              nextCursor: result.page.nextCursor,
+                              loadingMore: false,
+                              moreError: null,
+                          },
                 );
             },
             (error: unknown) => {
@@ -118,7 +140,7 @@ export function RestoreView({
                 setList({
                     kind: "error",
                     code:
-                        error instanceof RestoreRequestError
+                        error instanceof HistoryRequestError
                             ? error.code
                             : "operation_failed",
                 });
@@ -129,6 +151,69 @@ export function RestoreView({
         };
     }, [attempt, agent]);
 
+    // A page read and a restore action share one list; do not let them interleave
+    // so a late page cannot re-add rows an action has already settled.
+    const readingMore = list.kind === "ready" && list.loadingMore;
+
+    /**
+     * Append the next seek page without resetting previews or outcomes.
+     *
+     * The generation check makes a page read that a newer first-page load
+     * replaced harmless. A failure keeps the already-read rows and offers the
+     * same button again, rather than claiming the history ends there.
+     */
+    async function loadMore(): Promise<void> {
+        if (
+            list.kind !== "ready" ||
+            list.nextCursor === null ||
+            list.loadingMore ||
+            pending.current ||
+            blocked
+        )
+            return;
+        const generation = listGeneration.current;
+        const snapshot = list;
+        setList({ ...snapshot, loadingMore: true, moreError: null });
+        try {
+            const result = await readConfigurationHistory(
+                agent,
+                snapshot.nextCursor,
+            );
+            if (!mounted.current || generation !== listGeneration.current)
+                return;
+            if (result.kind === "preview") {
+                setList({ kind: "preview" });
+                return;
+            }
+            const seen = new Set(
+                snapshot.entries.map((entry) => entry.entryKey),
+            );
+            setList({
+                kind: "ready",
+                entries: [
+                    ...snapshot.entries,
+                    ...result.page.entries.filter(
+                        (entry) => !seen.has(entry.entryKey),
+                    ),
+                ],
+                nextCursor: result.page.nextCursor,
+                loadingMore: false,
+                moreError: null,
+            });
+        } catch (error: unknown) {
+            if (!mounted.current || generation !== listGeneration.current)
+                return;
+            setList({
+                ...snapshot,
+                loadingMore: false,
+                moreError:
+                    error instanceof HistoryRequestError
+                        ? error.code
+                        : "operation_failed",
+            });
+        }
+    }
+
     /**
      * Ask Rust what undoing one recorded write would do.
      *
@@ -136,7 +221,7 @@ export function RestoreView({
      * what the write left. Nothing is written and no credential is read.
      */
     async function runPreview(operationId: string): Promise<void> {
-        if (blocked || pending.current) return;
+        if (blocked || pending.current || readingMore) return;
         pending.current = true;
         busyCallback.current?.(true);
         // A new preview replaces the previous outcome, which described another
@@ -175,7 +260,7 @@ export function RestoreView({
      * card described is settled, and a second click must start from a fresh one.
      */
     async function runApply(plan: ClaudeCodeRestorePlan): Promise<void> {
-        if (blocked || pending.current) return;
+        if (blocked || pending.current || readingMore) return;
         pending.current = true;
         busyCallback.current?.(true);
         setApply({ kind: "applying" });
@@ -216,7 +301,7 @@ export function RestoreView({
 
     /** Inspect interrupted metadata separately from any configuration restore. */
     async function runInspection(operationId: string): Promise<void> {
-        if (blocked || pending.current) return;
+        if (blocked || pending.current || readingMore) return;
         pending.current = true;
         busyCallback.current?.(true);
         setApply({ kind: "idle" });
@@ -249,7 +334,8 @@ export function RestoreView({
 
     /** Record only the reviewed observations. Never chain a restore afterwards. */
     async function runResolution(review: ResolutionReview): Promise<void> {
-        if (blocked || pending.current || !review.resolvable) return;
+        if (blocked || pending.current || readingMore || !review.resolvable)
+            return;
         pending.current = true;
         busyCallback.current?.(true);
         setApply({ kind: "resolving" });
@@ -291,6 +377,7 @@ export function RestoreView({
 
     const busy =
         blocked ||
+        readingMore ||
         preview.kind === "loading" ||
         preview.kind === "inspecting" ||
         apply.kind === "applying" ||
@@ -323,42 +410,63 @@ export function RestoreView({
                         </p>
                     </>
                 )}
-                {list.kind === "ready" && list.operations.length === 0 && (
+                {list.kind === "ready" && list.entries.length === 0 && (
                     <p className={styles["hint"]}>
                         {t("agents.restore.empty")}
                     </p>
                 )}
-                {list.kind === "ready" && list.operations.length > 0 && (
+                {list.kind === "ready" && list.entries.length > 0 && (
                     <>
                         <ul className={restore["rows"]}>
-                            {list.operations.map((operation) => (
+                            {list.entries.map((entry) => (
                                 <OperationRow
-                                    key={operation.operationId}
-                                    operation={operation}
+                                    key={entry.entryKey}
+                                    entry={entry}
                                     locale={i18n.language}
                                     busy={busy}
                                     previewing={
                                         preview.kind === "loading" &&
                                         preview.operationId ===
-                                            operation.operationId
+                                            entry.operationId
                                     }
                                     onPreview={() => {
-                                        void runPreview(operation.operationId);
+                                        void runPreview(entry.operationId);
                                     }}
                                     inspecting={
                                         preview.kind === "inspecting" &&
                                         preview.operationId ===
-                                            operation.operationId
+                                            entry.operationId
                                     }
                                     onInspect={() => {
-                                        void runInspection(
-                                            operation.operationId,
-                                        );
+                                        void runInspection(entry.operationId);
                                     }}
                                 />
                             ))}
                         </ul>
+                        {list.moreError !== null && (
+                            <p className={styles["error"]} role="alert">
+                                {t("agents.restore.loadMoreFailed", {
+                                    error: t(
+                                        `agents.restore.errors.${list.moreError}`,
+                                    ),
+                                })}
+                            </p>
+                        )}
                         <div className={card["actions"]}>
+                            {list.nextCursor !== null && (
+                                <button
+                                    type="button"
+                                    className={buttons["secondary"]}
+                                    aria-disabled={busy}
+                                    onClick={() => {
+                                        void loadMore();
+                                    }}
+                                >
+                                    {list.loadingMore
+                                        ? t("agents.restore.loadingMore")
+                                        : t("agents.restore.loadMore")}
+                                </button>
+                            )}
                             <button
                                 type="button"
                                 className={buttons["secondary"]}
@@ -366,6 +474,7 @@ export function RestoreView({
                                 onClick={() => {
                                     if (busy || pending.current) return;
                                     setPreview({ kind: "idle" });
+                                    setList({ kind: "loading" });
                                     setAttempt((current) => current + 1);
                                 }}
                             >
@@ -432,9 +541,9 @@ export function RestoreView({
     );
 }
 
-/** One recorded write: when it ran, what it did, and its restore entry. */
+/** One journal entry: when it ran, what it did, and its restore entry. */
 function OperationRow({
-    operation,
+    entry,
     locale,
     busy,
     previewing,
@@ -442,10 +551,10 @@ function OperationRow({
     inspecting,
     onInspect,
 }: {
-    operation: RecordedOperation;
+    entry: HistoryEntry;
     /** Language used for the timestamp; the app language decides it. */
     locale: string;
-    /** Another restore action is in flight, so this one waits. */
+    /** Another history read or restore action is in flight. */
     busy: boolean;
     /** This row's preview is being built. */
     previewing: boolean;
@@ -454,46 +563,46 @@ function OperationRow({
     onInspect: () => void;
 }): JSX.Element {
     const { t } = useTranslation();
+    const state = entryState(entry);
     return (
         <li className={restore["row"]}>
             <div className={restore["rowSummary"]}>
                 <span className={restore["state"]}>
-                    {t(`agents.restore.states.${operation.state}`)}
+                    {t(`agents.restore.intents.${entry.intent}`)}
+                    {" · "}
+                    {entryStateText(state, t)}
                 </span>
                 <span className={restore["time"]}>
-                    {formatTime(operation.createdAt, locale)}
+                    {formatTime(entry.createdAt, locale)}
                 </span>
             </div>
             <ul className={restore["files"]}>
-                {operation.steps.map((step) => (
-                    <li key={step.ordinal} className={restore["file"]}>
-                        <span className={card["path"]}>{step.targetPath}</span>
-                        {step.restoreState !== null && (
+                {entryFiles(entry).map((file) => (
+                    <li key={file.key} className={restore["file"]}>
+                        <span className={card["path"]}>{file.targetPath}</span>
+                        {file.note !== null && (
                             <span className={restore["stepState"]}>
-                                {t(
-                                    `agents.restore.stepStates.${step.restoreState}`,
-                                )}
+                                {fileNoteText(file.note, t)}
                             </span>
                         )}
                     </li>
                 ))}
             </ul>
-            {operation.providerLabel !== null && (
+            {entry.ownerLabel !== null && (
                 <p className={restore["provider"]}>
                     {t("agents.restore.provider", {
-                        name: operation.providerLabel,
+                        name: entry.ownerLabel,
                     })}
                 </p>
             )}
-            {operation.providerLabel === null &&
-                operation.providerId !== null && (
-                    <p className={restore["provider"]}>
-                        {t("agents.restore.providerRemoved", {
-                            id: operation.providerId,
-                        })}
-                    </p>
-                )}
-            {operation.requiresResolution ? (
+            {entry.ownerLabel === null && entry.ownerRef !== null && (
+                <p className={restore["provider"]}>
+                    {t("agents.restore.providerRemoved", {
+                        id: entry.ownerRef,
+                    })}
+                </p>
+            )}
+            {entry.requiresResolution ? (
                 <>
                     <p className={styles["hint"]}>
                         {t("agents.resolution.required")}
@@ -511,7 +620,10 @@ function OperationRow({
                         </button>
                     </div>
                 </>
-            ) : operation.restorable ? (
+            ) : entry.intent === "apply" ? (
+                // The paginated reader never reads target files, so restore
+                // eligibility is answered by the read-only preview. A write with
+                // nothing left to undo reports that instead of hiding the row.
                 <div className={card["actions"]}>
                     <button
                         type="button"
@@ -524,13 +636,87 @@ function OperationRow({
                             : t("agents.restore.preview")}
                     </button>
                 </div>
-            ) : (
-                <p className={styles["hint"]}>
-                    {t("agents.restore.nothingToRestore")}
-                </p>
-            )}
+            ) : null}
         </li>
     );
+}
+
+/** One file row, carrying either the legacy rollback or the batch result. */
+type EntryFileNote =
+    | { group: "stepStates"; state: RestoreState }
+    | { group: "revisionStates"; state: HistoryRevisionState };
+
+/** Files an entry changed, with the state that belongs to each row. */
+function entryFiles(entry: HistoryEntry): {
+    key: string;
+    targetPath: string;
+    note: EntryFileNote | null;
+}[] {
+    if (entry.intent === "apply") {
+        return entry.sourceSteps.map((step) => ({
+            key: `step:${String(step.ordinal)}`,
+            targetPath: step.targetPath,
+            note:
+                step.restoreState === null
+                    ? null
+                    : { group: "stepStates", state: step.restoreState },
+        }));
+    }
+    return entry.revisions.flatMap((revision) => {
+        // Rust rejects revisions whose ordinal has no source step. Keeping the
+        // guard explicit satisfies TypeScript's unchecked-index rule without
+        // pretending a missing step has a path.
+        const step = entry.sourceSteps[revision.ordinal];
+        return step === undefined
+            ? []
+            : [
+                  {
+                      key: revision.revisionId,
+                      targetPath: step.targetPath,
+                      note: {
+                          group: "revisionStates" as const,
+                          state: revision.state,
+                      },
+                  },
+              ];
+    });
+}
+
+/** One summary state for the row; a batch keeps every file's own state below. */
+type EntryState =
+    | { group: "states"; state: JournalApplyState }
+    | { group: "revisionStates"; state: HistoryRevisionState };
+
+/** Summary state label: operation state or the batch's least certain result. */
+function entryState(entry: HistoryEntry): EntryState {
+    if (entry.intent === "apply") {
+        return { group: "states", state: entry.sourceState };
+    }
+    const states = entry.revisions.map((revision) => revision.state);
+    // A batch has no operation-level result. Report the least certain file
+    // result rather than claiming the whole batch completed.
+    const state: HistoryRevisionState = states.includes("unknown")
+        ? "unknown"
+        : states.includes("failed")
+          ? "failed"
+          : states.includes("prepared")
+            ? "prepared"
+            : "completed";
+    return { group: "revisionStates", state };
+}
+
+/** Translate a summary state without building an unchecked dynamic key. */
+function entryStateText(state: EntryState, t: Translator): string {
+    return state.group === "states"
+        ? t(`agents.restore.states.${state.state}`)
+        : t(`agents.restore.revisionStates.${state.state}`);
+}
+
+/** Translate one file row's state from its own journal family. */
+function fileNoteText(note: EntryFileNote, t: Translator): string {
+    return note.group === "stepStates"
+        ? t(`agents.restore.stepStates.${note.state}`)
+        : t(`agents.restore.revisionStates.${note.state}`);
 }
 
 /** What restoring one recorded write would do to each file it changed. */

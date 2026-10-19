@@ -260,7 +260,7 @@ pub(crate) async fn apply_claude_code_restore(
 pub(crate) async fn configuration_history_page(
     app: tauri::AppHandle,
     input: agents::history::ConfigurationHistoryRequest,
-) -> Result<crate::config_apply::HistoryPage, ClaudeCodeRestoreError> {
+) -> Result<agents::history::ConfigurationHistoryPage, ClaudeCodeRestoreError> {
     let environment = environment(&app).map_err(|_| ClaudeCodeRestoreError::OperationFailed)?;
     tauri::async_runtime::spawn_blocking(move || {
         with_restore_storage(&app, |storage| {

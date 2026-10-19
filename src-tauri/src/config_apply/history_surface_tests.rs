@@ -6,7 +6,10 @@ use crate::agents::{
     history::{ConfigurationHistoryRequest, configuration_history_page},
     recovery::ConfigurationAgent,
 };
+use crate::credentials::{Secret, fake::FakeStore};
+use crate::providers::CreateProviderRequest;
 use serde_json::json;
+use std::collections::BTreeMap;
 
 fn environment(fixture: &Fixture) -> DiscoveryEnvironment {
     DiscoveryEnvironment {
@@ -75,8 +78,8 @@ fn history_surface_defaults_work_without_installations_targets_or_backups() {
         let page = configuration_history_page(&fixture.storage, &environment, &request(agent, 50))
             .unwrap();
         assert_eq!(page.entries.len(), 1);
-        assert_eq!(page.entries[0].operation_id, id);
-        assert_eq!(page.entries[0].source_steps.len(), names.len());
+        assert_eq!(page.entries[0].entry.operation_id, id);
+        assert_eq!(page.entries[0].entry.source_steps.len(), names.len());
         let serialized = serde_json::to_string(&page).unwrap();
         assert!(!serialized.contains("synthetic-private"));
         assert!(!serialized.contains("backupPath"));
@@ -92,6 +95,7 @@ fn history_surface_defaults_work_without_installations_targets_or_backups() {
     .unwrap();
     assert!(
         page.entries[0]
+            .entry
             .revisions
             .iter()
             .all(|revision| revision.backup_recorded)
@@ -131,7 +135,7 @@ fn history_surface_overrides_isolate_roots_agents_and_unowned_files() {
         let page = configuration_history_page(&fixture.storage, &environment, &request(agent, 50))
             .unwrap();
         assert_eq!(page.entries.len(), 1);
-        assert_eq!(page.entries[0].operation_id, expected);
+        assert_eq!(page.entries[0].entry.operation_id, expected);
     }
 }
 
@@ -164,7 +168,7 @@ fn history_surface_pages_restore_batches_and_survives_restart_without_mutation()
         before
             .entries
             .iter()
-            .filter(|entry| entry.intent == HistoryIntent::Restore)
+            .filter(|entry| entry.entry.intent == HistoryIntent::Restore)
             .count(),
         1
     );
@@ -172,7 +176,7 @@ fn history_surface_pages_restore_batches_and_survives_restart_without_mutation()
         before
             .entries
             .iter()
-            .all(|entry| entry.source_steps.len() == 2)
+            .all(|entry| entry.entry.source_steps.len() == 2)
     );
     let reopened = Storage::open_in_directory(&fixture.root).unwrap();
     let mut page_request = request(ConfigurationAgent::Pi, 3);
@@ -180,8 +184,8 @@ fn history_surface_pages_restore_batches_and_survives_restart_without_mutation()
     loop {
         let page = configuration_history_page(&reopened, &environment, &page_request).unwrap();
         for entry in page.entries {
-            assert!(operations.contains(&entry.operation_id));
-            assert!(keys.insert(entry.entry_key));
+            assert!(operations.contains(&entry.entry.operation_id));
+            assert!(keys.insert(entry.entry.entry_key));
         }
         page_request.after = page.next_cursor;
         if page_request.after.is_none() {
@@ -255,6 +259,91 @@ fn history_surface_rejects_wrong_root_or_agent_cursor_and_invalid_environment() 
             ClaudeCodeRestoreError::InvalidRequest
         );
     }
+}
+
+#[test]
+fn history_surface_adds_provider_labels_and_resolution_state_without_file_bytes() {
+    let fixture = Fixture::new();
+    let environment = environment(&fixture);
+    let root = environment.home.join(".claude");
+    fs::create_dir_all(&root).unwrap();
+    let provider = crate::providers::create_provider(
+        &fixture.storage,
+        &FakeStore::default(),
+        CreateProviderRequest {
+            kind: "deepseek".to_owned(),
+            display_name: "History Provider".to_owned(),
+            base_url: "https://api.deepseek.com".to_owned(),
+            protocol: "chat_completions".to_owned(),
+            extensions: BTreeMap::new(),
+            secret: Secret::new("synthetic-history-key".to_owned()),
+        },
+        42,
+    )
+    .unwrap();
+    let path = root.join("settings.json");
+    fs::write(&path, b"synthetic-private-before").unwrap();
+    let target = read_target_bytes(&path).unwrap().0;
+    let applied = apply_files(
+        &fixture.storage,
+        OperationKind::ClaudeCodeSettings,
+        Some(provider.id.as_str()),
+        &[PlannedFile {
+            target: WriteTarget::from_plan(&target),
+            content: b"synthetic-private-after".to_vec(),
+        }],
+        &fixture.backups(),
+    )
+    .unwrap();
+    let request = request(ConfigurationAgent::ClaudeCode, 50);
+    let page = configuration_history_page(&fixture.storage, &environment, &request).unwrap();
+    assert_eq!(
+        page.entries[0].owner_label.as_deref(),
+        Some("History Provider")
+    );
+    assert!(!page.entries[0].requires_resolution);
+
+    // An interrupted file result must withhold the legacy restore action until
+    // the user records an observation; the page itself still only reports it.
+    fixture.sql(&format!(
+        "UPDATE config_file_revision SET state = 'prepared' WHERE operation_id = '{}'",
+        applied.operation_id
+    ));
+    let page = configuration_history_page(&fixture.storage, &environment, &request).unwrap();
+    assert!(page.entries[0].requires_resolution);
+    let serialized = serde_json::to_string(&page).unwrap();
+    assert!(serialized.contains("\"requiresResolution\":true"));
+    assert!(serialized.contains("\"ownerLabel\":\"History Provider\""));
+    assert!(!serialized.contains("synthetic-private"));
+    // The shared entry is flattened, so the frontend receives one object rather
+    // than a nested `entry` field it would have to unwrap.
+    let value = serde_json::to_value(&page).unwrap();
+    let entry = &value["entries"][0];
+    assert_eq!(
+        entry["operationId"].as_str(),
+        Some(applied.operation_id.as_str())
+    );
+    assert_eq!(entry["requiresResolution"].as_bool(), Some(true));
+    assert_eq!(entry["ownerLabel"].as_str(), Some("History Provider"));
+    assert!(entry.get("entry").is_none());
+
+    // A reference to an absent Provider is preserved without inventing a label.
+    let unowned = apply_in(
+        &fixture,
+        OperationKind::ClaudeCodeSettings,
+        &root,
+        &["settings.json"],
+    );
+    assert!(!unowned.is_empty());
+    let page = configuration_history_page(&fixture.storage, &environment, &request).unwrap();
+    let entry = page
+        .entries
+        .iter()
+        .find(|entry| entry.entry.operation_id == unowned)
+        .expect("unowned operation");
+    assert!(entry.entry.owner_ref.is_none());
+    assert!(entry.owner_label.is_none());
+    assert!(!serialized.contains("synthetic-history-key"));
 }
 
 #[test]

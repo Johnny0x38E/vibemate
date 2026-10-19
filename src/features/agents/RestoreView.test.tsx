@@ -7,45 +7,79 @@ import { createAppI18n } from "../../i18n";
 import {
     RestoreRequestError,
     applyAgentRestore,
-    listAgentOperations,
     planAgentRestore,
     type ClaudeCodeRestorePlan,
-    type RecordedOperation,
     type RestoreOutcome,
     type RestorePlanStep,
 } from "../../lib/desktop/agents";
+import {
+    HistoryRequestError,
+    readConfigurationHistory,
+    type HistoryCursor,
+    type HistoryEntry,
+    type HistoryPage,
+} from "../../lib/desktop/history";
 import { RestoreView } from "./RestoreView";
 
 vi.mock(import("../../lib/desktop/agents"), async (original) => ({
     ...(await original()),
     applyAgentRestore: vi.fn(),
-    listAgentOperations: vi.fn(),
     planAgentRestore: vi.fn(),
+}));
+vi.mock(import("../../lib/desktop/history"), async (original) => ({
+    ...(await original()),
+    readConfigurationHistory: vi.fn(),
 }));
 
 const SETTINGS = "/Users/test/.claude/settings.json";
 const BACKUP =
     "/Users/test/Library/Application Support/dev.vibemate.desktop/backups";
+const BEFORE_DIGEST = "a".repeat(64);
 const APPLIED_DIGEST = "b".repeat(64);
 const CURRENT_DIGEST = "c".repeat(64);
 const OPERATION_ID = "fedcba9876543210fedcba9876543210";
 const PROVIDER_ID = "0123456789abcdef0123456789abcdef";
+const CURSOR: HistoryCursor = {
+    scopeDigest: "d".repeat(64),
+    createdAt: 1_700_000_000_000,
+    entryKey: `operation:${OPERATION_ID}`,
+};
 
-const operation: RecordedOperation = {
+const entry: HistoryEntry = {
+    entryKey: `operation:${OPERATION_ID}`,
     operationId: OPERATION_ID,
-    state: "applied",
-    providerId: PROVIDER_ID,
-    providerLabel: "DeepSeek Work",
+    intent: "apply",
+    ownerRef: PROVIDER_ID,
+    ownerLabel: "DeepSeek Work",
+    requiresResolution: false,
+    sourceState: "applied",
     createdAt: 1_700_000_000_000,
     updatedAt: 1_700_000_000_500,
-    restorable: true,
-    requiresResolution: false,
-    steps: [
+    sourceSteps: [
         {
             ordinal: 0,
             targetPath: SETTINGS,
+            expectedDigest: BEFORE_DIGEST,
+            appliedDigest: APPLIED_DIGEST,
+            previousExisted: true,
+            backupRecorded: true,
             state: "applied",
+            errorCode: null,
             restoreState: null,
+        },
+    ],
+    revisions: [
+        {
+            revisionId: "100-1-0",
+            ordinal: 0,
+            previousDigest: BEFORE_DIGEST,
+            intendedDigest: APPLIED_DIGEST,
+            backupRecorded: true,
+            state: "completed",
+            resolution: null,
+            errorCode: null,
+            createdAt: 1_700_000_000_000,
+            updatedAt: 1_700_000_000_500,
         },
     ],
 };
@@ -65,7 +99,7 @@ const previewStep: RestorePlanStep = {
 const plan: ClaudeCodeRestorePlan = {
     operationId: OPERATION_ID,
     state: "applied",
-    createdAt: operation.createdAt,
+    createdAt: entry.createdAt,
     restorable: true,
     providerId: PROVIDER_ID,
     providerLabel: "DeepSeek Work",
@@ -87,14 +121,21 @@ const outcome: RestoreOutcome = {
     leftovers: [],
 };
 
-const loadHistory = vi.mocked(listAgentOperations);
+function page(
+    entries: HistoryEntry[] = [entry],
+    nextCursor: HistoryCursor | null = null,
+): HistoryPage {
+    return { entries, nextCursor };
+}
+
+const loadHistory = vi.mocked(readConfigurationHistory);
 const buildPreview = vi.mocked(planAgentRestore);
 const runRestore = vi.mocked(applyAgentRestore);
 
 beforeEach(() => {
     loadHistory
         .mockReset()
-        .mockResolvedValue({ kind: "desktop", operations: [operation] });
+        .mockResolvedValue({ kind: "desktop", page: page() });
     buildPreview.mockReset().mockResolvedValue({ kind: "desktop", plan });
     runRestore.mockReset().mockResolvedValue(outcome);
 });
@@ -111,7 +152,7 @@ async function mount(): Promise<void> {
     );
 }
 
-/** Open the preview for the one recorded write and wait for its card. */
+/** Open the preview for the one apply entry and wait for its card. */
 async function openPreview(): Promise<void> {
     await userEvent.click(
         await screen.findByRole("button", { name: "Preview restore" }),
@@ -136,8 +177,8 @@ test("a failed history read offers a retry that re-reads it", async () => {
     let failing = true;
     loadHistory.mockImplementation(() =>
         failing
-            ? Promise.reject(new RestoreRequestError("storage_unavailable"))
-            : Promise.resolve({ kind: "desktop", operations: [operation] }),
+            ? Promise.reject(new HistoryRequestError("storage_unavailable"))
+            : Promise.resolve({ kind: "desktop", page: page() }),
     );
     await mount();
     expect(
@@ -153,7 +194,7 @@ test("a failed history read offers a retry that re-reads it", async () => {
 });
 
 test("an empty history says that nothing was written yet", async () => {
-    loadHistory.mockResolvedValue({ kind: "desktop", operations: [] });
+    loadHistory.mockResolvedValue({ kind: "desktop", page: page([]) });
     await mount();
     expect(
         await screen.findByText(/has not written this configuration yet/u),
@@ -163,27 +204,143 @@ test("an empty history says that nothing was written yet", async () => {
     ).toBeNull();
 });
 
-test("a recorded write shows its state, time, provider and file", async () => {
+test("a recorded write shows its intent, state, time, provider and file", async () => {
     await mount();
-    expect(await screen.findByText("Written")).toBeTruthy();
+    expect(await screen.findByText("Apply · Written")).toBeTruthy();
     expect(screen.getByText(SETTINGS)).toBeTruthy();
     expect(screen.getByText("Provider: DeepSeek Work")).toBeTruthy();
     // The timestamp is formatted, never the raw millisecond value.
-    expect(screen.queryByText(String(operation.createdAt))).toBeNull();
+    expect(screen.queryByText(String(entry.createdAt))).toBeNull();
 });
 
-test("a write with nothing to restore offers no preview", async () => {
+test("restore and compensation batches are listed without a legacy restore action", async () => {
+    const revision = entry.revisions[0];
+    if (revision === undefined) throw new Error("missing revision fixture");
+    const batch: HistoryEntry = {
+        ...entry,
+        entryKey: "batch:restore-batch",
+        intent: "restore",
+        sourceState: "compensated",
+        revisions: [{ ...revision, state: "completed" }],
+    };
+    const compensation: HistoryEntry = {
+        ...batch,
+        entryKey: "batch:compensation-batch",
+        intent: "compensation",
+        revisions: [{ ...revision, revisionId: "101-1-0" }],
+    };
     loadHistory.mockResolvedValue({
         kind: "desktop",
-        operations: [{ ...operation, state: "compensated", restorable: false }],
+        page: page([compensation, batch]),
     });
     await mount();
     expect(
-        await screen.findByText(/nothing to restore in its current state/u),
+        await screen.findByText("Restore · File result recorded"),
     ).toBeTruthy();
+    expect(
+        screen.getByText("Automatic compensation · File result recorded"),
+    ).toBeTruthy();
+    expect(screen.getAllByText(SETTINGS)).toHaveLength(2);
     expect(
         screen.queryByRole("button", { name: "Preview restore" }),
     ).toBeNull();
+});
+
+test("an apply entry stays previewable; the preview reports nothing left to undo", async () => {
+    buildPreview.mockResolvedValue({
+        kind: "desktop",
+        plan: {
+            ...plan,
+            restorable: false,
+            steps: [
+                {
+                    ...previewStep,
+                    action: "skip",
+                    currentDigest: null,
+                    restoredProviderId: null,
+                    restoredProviderLabel: null,
+                },
+            ],
+        },
+    });
+    await mount();
+    await openPreview();
+    expect(await screen.findByText("Nothing to do")).toBeTruthy();
+    expect(
+        screen.queryByRole("button", { name: "Restore the previous content" }),
+    ).toBeNull();
+});
+
+test("loads more history without replacing the entries already read", async () => {
+    const older: HistoryEntry = {
+        ...entry,
+        entryKey: `operation:${"e".repeat(32)}`,
+        operationId: "e".repeat(32),
+        createdAt: entry.createdAt - 1_000,
+        updatedAt: entry.updatedAt - 1_000,
+    };
+    // Keyed by cursor rather than call order: StrictMode performs two initial
+    // reads, and only the second one is allowed to update the view.
+    loadHistory.mockImplementation((_agent, after = null) =>
+        after === null
+            ? Promise.resolve({
+                  kind: "desktop",
+                  page: page([entry], CURSOR),
+              })
+            : Promise.resolve({ kind: "desktop", page: page([older]) }),
+    );
+    await mount();
+    await screen.findByText("Apply · Written");
+    await userEvent.click(
+        screen.getByRole("button", { name: "Load more history" }),
+    );
+    await waitFor(() => {
+        expect(loadHistory).toHaveBeenLastCalledWith("claudeCode", CURSOR);
+    });
+    expect(
+        screen.getAllByRole("button", { name: "Preview restore" }),
+    ).toHaveLength(2);
+    expect(
+        screen.queryByRole("button", { name: "Load more history" }),
+    ).toBeNull();
+});
+
+test("a failed load more keeps the read entries and offers the button again", async () => {
+    const older: HistoryEntry = {
+        ...entry,
+        entryKey: `operation:${"f".repeat(32)}`,
+        operationId: "f".repeat(32),
+    };
+    let failing = true;
+    loadHistory.mockImplementation((_agent, after = null) => {
+        if (after === null)
+            return Promise.resolve({
+                kind: "desktop",
+                page: page([entry], CURSOR),
+            });
+        return failing
+            ? Promise.reject(new HistoryRequestError("storage_unavailable"))
+            : Promise.resolve({ kind: "desktop", page: page([older]) });
+    });
+    await mount();
+    await screen.findByText("Apply · Written");
+    await userEvent.click(
+        screen.getByRole("button", { name: "Load more history" }),
+    );
+    expect(
+        await screen.findByText(/More history could not be read/u),
+    ).toBeTruthy();
+    expect(screen.getByText("Apply · Written")).toBeTruthy();
+    failing = false;
+    await userEvent.click(
+        screen.getByRole("button", { name: "Load more history" }),
+    );
+    await waitFor(() => {
+        expect(
+            screen.getAllByRole("button", { name: "Preview restore" }),
+        ).toHaveLength(2);
+    });
+    expect(screen.queryByRole("alert")).toBeNull();
 });
 
 test("previews the files, the actions and the owner of the content", async () => {

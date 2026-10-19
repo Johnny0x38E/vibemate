@@ -379,6 +379,25 @@ pub(crate) async fn read_configuration_version_text(
     .map_err(|_| ClaudeCodeRestoreError::OperationFailed)?
 }
 
+/// Read the live, sanitized configuration text for one Agent scope file.
+///
+/// Independent of history matching: the dialog remains usable after an
+/// external edit changed the file. The input names an Agent and one of the
+/// paths the history response already showed; Rust revalidates it against the
+/// trusted scope and never treats it as an arbitrary filesystem path.
+#[tauri::command]
+pub(crate) async fn read_current_configuration_text(
+    app: tauri::AppHandle,
+    input: agents::version_restore::CurrentConfigTextRequest,
+) -> Result<crate::config_apply::CurrentConfigText, ClaudeCodeRestoreError> {
+    let environment = environment(&app).map_err(|_| ClaudeCodeRestoreError::OperationFailed)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        agents::version_restore::read_current_configuration_text(&environment, &input)
+    })
+    .await
+    .map_err(|_| ClaudeCodeRestoreError::OperationFailed)?
+}
+
 /// Inspect one supported Agent's interrupted write using the private backup root.
 /// Reads metadata/files on the blocking pool; never reads credential storage.
 #[tauri::command]

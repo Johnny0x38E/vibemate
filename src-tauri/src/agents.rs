@@ -7,6 +7,7 @@ mod configuration;
 pub mod grok_build;
 pub mod history;
 pub mod pi;
+mod pi_session;
 pub mod recovery;
 pub use configuration::{ConfigApplied, ConfigApplyError};
 mod discovery;

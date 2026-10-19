@@ -207,7 +207,7 @@ function page(
     nextCursor: HistoryCursor | null = null,
     current: HistoryPage["current"] = currentConfig(),
 ): HistoryPage {
-    return { current, entries, nextCursor };
+    return { current, active: { kind: "unknown" }, entries, nextCursor };
 }
 
 /** Listed entry is not HistoryCurrentConfig.matchedEntryKey (not live current). */

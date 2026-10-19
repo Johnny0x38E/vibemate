@@ -34,6 +34,7 @@ pub(super) const MAX_SCOPE_FILES: usize = 16;
 #[derive(Debug)]
 pub struct HistoryScope {
     kind: OperationKind,
+    root: String,
     targets: Vec<String>,
     digest: String,
 }
@@ -45,7 +46,8 @@ impl HistoryScope {
     /// Returns `InvalidRequest` for unusable paths, an empty/oversized file list,
     /// duplicate file names, or names containing directory components.
     pub fn new(kind: OperationKind, root: &Path, files: &[&str]) -> Result<Self, WriteError> {
-        if path_text(root).is_err() || files.is_empty() || files.len() > MAX_SCOPE_FILES {
+        let root = path_text(root)?;
+        if files.is_empty() || files.len() > MAX_SCOPE_FILES {
             return Err(WriteError::InvalidRequest);
         }
         let mut targets = Vec::with_capacity(files.len());
@@ -57,7 +59,9 @@ impl HistoryScope {
             {
                 return Err(WriteError::InvalidRequest);
             }
-            targets.push(path_text(&root.join(file)).map_err(|_| WriteError::InvalidRequest)?);
+            targets.push(
+                path_text(&Path::new(&root).join(file)).map_err(|_| WriteError::InvalidRequest)?,
+            );
         }
         targets.sort();
         if targets.windows(2).any(|pair| pair[0] == pair[1]) {
@@ -67,9 +71,19 @@ impl HistoryScope {
             .map_err(|_| WriteError::InvalidRequest)?;
         Ok(Self {
             kind,
+            root,
             targets,
             digest: digest_hex(&bytes),
         })
+    }
+
+    /// Exact configuration root this scope was built for, as printable text.
+    ///
+    /// Adapter-owned records such as Grok alias bindings are keyed by this
+    /// same root text, so history enrichment can look them up without
+    /// reconstructing a path from a target file.
+    pub(crate) fn root(&self) -> &str {
+        &self.root
     }
 
     /// Operation kind this scope was built for.
@@ -290,9 +304,11 @@ pub struct HistoryCurrentConfig {
     pub provider_label: Option<String>,
     /// Model id read from the matched live config files, when known.
     ///
-    /// Populated only by the Agent history surface after a full match. Null for
-    /// unmatched, partial, or unreadable pins, and when the live files do not
-    /// yield a valid id.
+    /// Populated only by the Agent history surface after a full match, for
+    /// adapters that read their model identity from the file. Null for
+    /// unmatched, partial, or unreadable pins, when the live files do not yield
+    /// a valid id, and for Grok Build, which reports its last alias write in a
+    /// separate field instead of reading `[models].default`.
     pub model_id: Option<String>,
     /// Model alias when the saved model still has one; otherwise the model id.
     ///

@@ -55,6 +55,34 @@ pub struct ConfigurationHistoryEntry {
     pub owner_label: Option<String>,
 }
 
+/// The model the Agent is currently configured to use, classified by owner.
+///
+/// This reads the live configuration, not history. A model that resolves to a
+/// still-saved vibemate Provider/model pair is `Ours`; a readable configuration
+/// that names any other model (or no model) is `Own`. `Unknown` means the file
+/// could not be read or parsed safely, so the interface must not claim either.
+#[derive(Debug, PartialEq, Eq, Serialize)]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "kind"
+)]
+pub enum ActiveAgentModel {
+    /// Current model resolves to a saved vibemate Provider/model pair.
+    Ours {
+        /// Provider display name resolved from the saved Provider row.
+        provider_label: String,
+        /// Model id the Agent configuration names.
+        model_id: String,
+        /// Saved model alias, or the model id when no alias is saved.
+        model_label: String,
+    },
+    /// The Agent has a readable configuration, but the current model is not ours.
+    Own,
+    /// The live files could not be read or parsed safely.
+    Unknown,
+}
+
 /// One enriched history page, including backup availability and the current pin.
 /// Still carries no backup paths or file bytes.
 #[derive(Debug, PartialEq, Eq, Serialize)]
@@ -62,6 +90,13 @@ pub struct ConfigurationHistoryEntry {
 pub struct ConfigurationHistoryPage {
     /// Live configuration pin; identical for every page of the same scope.
     pub current: HistoryCurrentConfig,
+    /// Model the Agent currently names in its live configuration.
+    ///
+    /// Independent of [`HistoryCurrentConfig::status`]: an external edit may
+    /// stop the file matching a retained version while the current model is
+    /// still one vibemate wrote. Classifies the model as ours, the user's own,
+    /// or unreadable, for the list-card summary.
+    pub active: ActiveAgentModel,
     /// Newest first; every multi-file batch stays inside one entry.
     pub entries: Vec<ConfigurationHistoryEntry>,
     /// Seek position for more entries, absent when this read reached the end.
@@ -95,9 +130,10 @@ pub(super) fn history_scope(
 /// availability; never returns paths or bytes, and does not authorize recovery.
 ///
 /// When `current.status` is `matched`, also attaches the matched Provider's
-/// user-custom display name and the model alias-or-id read from the live config
-/// files (and the saved model row when an alias still exists). Unmatched,
-/// partial, and unreadable pins leave those fields null.
+/// user-custom display name and, for Claude Code and Pi, the model alias-or-id
+/// read from the live config files. The separate `active` classification always
+/// reads the live model settings, independent of history matching, so the list
+/// can distinguish a current vibemate model from the user's own configuration.
 ///
 /// # Errors
 /// Returns safe request errors for invalid pagination, invalid/wrong-root cursors
@@ -116,6 +152,9 @@ pub fn configuration_history_page(
         request.limit,
         backups,
     )?;
+    // Classify the live model before the entries are consumed. This reads the
+    // Agent's own model setting, not a retained version.
+    let active = active_agent_model(storage, request.agent, scope.root(), &page.current.files);
     let entries = page
         .entries
         .into_iter()
@@ -140,6 +179,7 @@ pub fn configuration_history_page(
     let current = enrich_current(storage, request.agent, page.current, &entries);
     Ok(ConfigurationHistoryPage {
         current,
+        active,
         entries,
         next_cursor: page.next_cursor,
     })
@@ -196,10 +236,9 @@ fn live_model_id(agent: ConfigurationAgent, files: &[HistoryCurrentFile]) -> Opt
             let document = read_target_document(&path).ok()?.document;
             json_string(document.get("defaultModel")?).filter(|id| is_valid_model_id(id))
         }
-        ConfigurationAgent::GrokBuild => {
-            let path = owned_path(files, "config.toml")?;
-            grok_default_model_id(&path)
-        }
+        // Grok Build reports its last write separately in `written`, because
+        // its model identity does not come from `[models].default`.
+        ConfigurationAgent::GrokBuild => None,
     }
 }
 
@@ -214,27 +253,218 @@ fn json_string(value: &Value) -> Option<String> {
     value.as_str().map(str::to_owned)
 }
 
-/// Grok's default alias table carries `model = "<id>"` for the written entry.
-fn grok_default_model_id(path: &Path) -> Option<String> {
+/// Classify the model named by the Agent's current live configuration.
+fn active_agent_model(
+    storage: &Storage,
+    agent: ConfigurationAgent,
+    root: &str,
+    files: &[HistoryCurrentFile],
+) -> ActiveAgentModel {
+    if files.iter().any(|file| !file.readable) {
+        return ActiveAgentModel::Unknown;
+    }
+    match agent {
+        ConfigurationAgent::ClaudeCode => active_claude_code(storage, files),
+        ConfigurationAgent::Pi => active_pi(storage, root, files),
+        ConfigurationAgent::GrokBuild => active_grok(storage, root, files),
+    }
+}
+
+/// Claude Code's session model: `env.ANTHROPIC_MODEL`, then file `model`.
+fn active_claude_code(storage: &Storage, files: &[HistoryCurrentFile]) -> ActiveAgentModel {
+    let Some(path) = owned_path(files, "settings.json") else {
+        return ActiveAgentModel::Unknown;
+    };
+    let Ok(target) = read_target_document(&path) else {
+        return ActiveAgentModel::Unknown;
+    };
+    let document = target.document;
+    let Some(model_id) = document
+        .get("env")
+        .and_then(|env| env.get("ANTHROPIC_MODEL"))
+        .or_else(|| document.get("model"))
+        .and_then(Value::as_str)
+        .filter(|id| is_valid_model_id(id))
+    else {
+        return ActiveAgentModel::Own;
+    };
+    let base_url = document
+        .get("env")
+        .and_then(|env| env.get("ANTHROPIC_BASE_URL"))
+        .and_then(Value::as_str);
+    match claude_provider(storage, model_id, base_url) {
+        Some(provider_id) => ours(storage, &provider_id, model_id),
+        None => ActiveAgentModel::Own,
+    }
+}
+
+/// Pi's active model: the newest session's recorded switch, else the defaults.
+///
+/// `/model` in Pi is session-scoped, so `settings.json` can still name the
+/// startup model after the user has switched. The newest session's tail is the
+/// only local record of the model actually in use; when no session metadata is
+/// available, the settings defaults remain the best observation.
+fn active_pi(storage: &Storage, root: &str, files: &[HistoryCurrentFile]) -> ActiveAgentModel {
+    if let Some((provider_key, model_id)) = super::pi_session::latest_model(Path::new(root)) {
+        if !is_valid_model_id(&model_id) {
+            return ActiveAgentModel::Own;
+        }
+        return match pi_binding(storage, root, &provider_key) {
+            Some(provider_id) => ours(storage, &provider_id, &model_id),
+            None => ActiveAgentModel::Own,
+        };
+    }
+    let Some(path) = owned_path(files, "settings.json") else {
+        return ActiveAgentModel::Unknown;
+    };
+    let Ok(target) = read_target_document(&path) else {
+        return ActiveAgentModel::Unknown;
+    };
+    let document = target.document;
+    let Some(model_id) = document
+        .get("defaultModel")
+        .and_then(Value::as_str)
+        .filter(|id| is_valid_model_id(id))
+    else {
+        return ActiveAgentModel::Own;
+    };
+    let provider_id = match document.get("defaultProvider").and_then(Value::as_str) {
+        Some(key) => pi_binding(storage, root, key),
+        None => provider_by_model(storage, model_id),
+    };
+    match provider_id {
+        Some(provider_id) => ours(storage, &provider_id, model_id),
+        None => ActiveAgentModel::Own,
+    }
+}
+
+/// Grok's `[models].default` alias resolved through its alias binding.
+fn active_grok(storage: &Storage, root: &str, files: &[HistoryCurrentFile]) -> ActiveAgentModel {
+    let Some(path) = owned_path(files, "config.toml") else {
+        return ActiveAgentModel::Unknown;
+    };
+    let Some(document) = read_grok_document(&path) else {
+        return ActiveAgentModel::Unknown;
+    };
+    let Some(alias) = document
+        .get("models")
+        .and_then(|models| models.get("default"))
+        .and_then(|value| value.as_str())
+    else {
+        return ActiveAgentModel::Own;
+    };
+    let Some(live_model) = document
+        .get("model")
+        .and_then(|models| models.get(alias))
+        .and_then(|entry| entry.get("model"))
+        .and_then(|value| value.as_str())
+    else {
+        return ActiveAgentModel::Own;
+    };
+    let Some((provider_id, bound_model)) = grok_binding(storage, root, alias) else {
+        return ActiveAgentModel::Own;
+    };
+    if bound_model != live_model {
+        return ActiveAgentModel::Own;
+    }
+    ours(storage, &provider_id, live_model)
+}
+
+/// Build the `Ours` variant only while the saved pair still exists.
+fn ours(storage: &Storage, provider_id: &str, model_id: &str) -> ActiveAgentModel {
+    let Ok(provider) = crate::providers::get_provider(storage, provider_id) else {
+        return ActiveAgentModel::Own;
+    };
+    if get_model_snapshot(
+        storage,
+        &GetModelSnapshotRequest {
+            provider_id: provider_id.to_owned(),
+            model_id: model_id.to_owned(),
+        },
+    )
+    .is_err()
+    {
+        return ActiveAgentModel::Own;
+    }
+    let model_label =
+        saved_model_alias(storage, provider_id, model_id).unwrap_or_else(|| model_id.to_owned());
+    ActiveAgentModel::Ours {
+        provider_label: provider.display_name,
+        model_id: model_id.to_owned(),
+        model_label,
+    }
+}
+
+/// A Claude Code Provider by its written base URL, or by a unique saved model.
+fn claude_provider(storage: &Storage, model_id: &str, base_url: Option<&str>) -> Option<String> {
+    match base_url {
+        Some(base_url) => {
+            let kind = super::claude_code::gateway_kind_for_base_url(base_url)?;
+            provider_by_kind(storage, kind.as_str())
+        }
+        None => provider_by_model(storage, model_id),
+    }
+}
+
+fn provider_by_kind(storage: &Storage, kind: &str) -> Option<String> {
+    let connection = storage.lock().ok()?;
+    let mut statement = connection
+        .prepare("SELECT id FROM provider_instance WHERE kind = ?1")
+        .ok()?;
+    let ids: Vec<String> = statement
+        .query_map([kind], |row| row.get(0))
+        .ok()?
+        .filter_map(Result::ok)
+        .collect();
+    (ids.len() == 1).then(|| ids[0].clone())
+}
+
+fn provider_by_model(storage: &Storage, model_id: &str) -> Option<String> {
+    let connection = storage.lock().ok()?;
+    let mut statement = connection
+        .prepare("SELECT DISTINCT provider_id FROM provider_model WHERE model_id = ?1")
+        .ok()?;
+    let ids: Vec<String> = statement
+        .query_map([model_id], |row| row.get(0))
+        .ok()?
+        .filter_map(Result::ok)
+        .collect();
+    (ids.len() == 1).then(|| ids[0].clone())
+}
+
+fn pi_binding(storage: &Storage, root: &str, provider_key: &str) -> Option<String> {
+    let connection = storage.lock().ok()?;
+    connection
+        .query_row(
+            "SELECT provider_id FROM pi_provider_binding
+             WHERE config_root = ?1 AND provider_key = ?2",
+            [root, provider_key],
+            |row| row.get(0),
+        )
+        .ok()
+}
+
+fn grok_binding(storage: &Storage, root: &str, alias: &str) -> Option<(String, String)> {
+    let connection = storage.lock().ok()?;
+    connection
+        .query_row(
+            "SELECT provider_id, model_id FROM grok_model_binding
+             WHERE config_root = ?1 AND model_alias = ?2",
+            [root, alias],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .ok()
+}
+
+/// Parse a live Grok TOML file; an empty file is an empty document.
+fn read_grok_document(path: &Path) -> Option<DocumentMut> {
     let bytes = crate::config_plan::read_target_bytes(path).ok()?.1;
     let text = std::str::from_utf8(&bytes).ok()?;
-    let document = if text.chars().all(char::is_whitespace) {
-        DocumentMut::new()
+    if text.chars().all(char::is_whitespace) {
+        Some(DocumentMut::new())
     } else {
-        text.parse::<DocumentMut>().ok()?
-    };
-    let alias = document
-        .get("models")?
-        .get("default")?
-        .as_str()
-        .filter(|value| !value.is_empty())?;
-    let model_id = document
-        .get("model")?
-        .get(alias)?
-        .get("model")?
-        .as_str()
-        .filter(|value| is_valid_model_id(value))?;
-    Some(model_id.to_owned())
+        text.parse::<DocumentMut>().ok()
+    }
 }
 
 /// Prefer the user's saved model alias when that row still exists.

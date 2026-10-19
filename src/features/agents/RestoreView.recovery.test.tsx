@@ -120,6 +120,7 @@ beforeEach(() => {
                 modelId: null,
                 modelLabel: null,
             },
+            active: { kind: "unknown" },
             entries: [operation],
             nextCursor: null,
         },
@@ -218,6 +219,7 @@ test("confirmation is single-flight, refreshes history and never chains a restor
                 modelId: null,
                 modelLabel: null,
             },
+            active: { kind: "unknown" },
             entries: [
                 {
                     ...operation,

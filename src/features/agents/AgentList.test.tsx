@@ -199,9 +199,12 @@ test("keeps absent entries visible and allows manual paths from their detail", a
         "No entry was found in the checked locations",
     );
     fireEvent.click(screen.getByRole("button", { name: "Back to agents" }));
-    expect(
-        screen.getByRole("button", { name: "Open Grok Build details" }),
-    ).toBe(document.activeElement);
+    // Focus returns to the row, not the Detail icon whose tooltip opens on focus.
+    expect(document.querySelector('[data-agent-card="grokBuild"]')).toBe(
+        document.activeElement,
+    );
+    // Focusing the row must not open the Detail icon's hint.
+    expect(screen.queryByText("Open Grok Build details")).toBeNull();
     await openPiDetail();
     expect(screen.getByText("User settings (settings.json)")).toBeDefined();
 });
@@ -679,6 +682,7 @@ test("list cards omit provider|model when history has no writable summary", asyn
                 modelId: null,
                 modelLabel: null,
             },
+            active: { kind: "own" },
             entries: [],
             nextCursor: null,
         },
@@ -688,7 +692,8 @@ test("list cards omit provider|model when history has no writable summary", asyn
     await waitFor(() => {
         expect(loadHistory.mock.calls.length).toBeGreaterThan(0);
     });
-    // Unmatched / unresolved → omit the line; ban dual「未写入」and dash shells.
+    // Unmatched / unresolved → no invented provider or model. Found Agents
+    // report their own configuration; undiscovered ones keep the empty state.
     expect(screen.queryByText(/Provider not written/u)).toBeNull();
     expect(screen.queryByText(/Model not written/u)).toBeNull();
     expect(screen.queryByText(/Provider 未写入/u)).toBeNull();
@@ -697,6 +702,10 @@ test("list cards omit provider|model when history has no writable summary", asyn
     expect(screen.queryByText(/Model —/u)).toBeNull();
     expect(screen.queryByText(/Skill —/u)).toBeNull();
     expect(screen.queryByText(/MCP —/u)).toBeNull();
+    await waitFor(() => {
+        // Pi is the only discovered Agent in this fixture.
+        expect(screen.getAllByText("Own configuration")).toHaveLength(1);
+    });
     const hermes = screen
         .getByRole("button", {
             name: "Open Hermes details",
@@ -706,6 +715,24 @@ test("list cards omit provider|model when history has no writable summary", asyn
         throw new Error("missing Hermes row");
     }
     expect(within(hermes).getByText("No configuration summary")).toBeTruthy();
+});
+
+test("list puts discovered Agents first, then sorts each group by name", async () => {
+    await mount();
+    const list = await screen.findByRole("list", { name: "Agents" });
+    await waitFor(() => {
+        const rows = within(list).getAllByRole("listitem");
+        const text = rows.map((row) => row.textContent);
+        // Fixture: only Pi is found; the rest are undiscovered.
+        expect(text[0]).toContain("Pi");
+        expect(text.slice(1).map((row) => row.split("Not found")[0])).toEqual([
+            expect.stringContaining("Claude Code"),
+            expect.stringContaining("Codex"),
+            expect.stringContaining("Grok Build"),
+            expect.stringContaining("Hermes"),
+            expect.stringContaining("OpenCode"),
+        ]);
+    });
 });
 
 test("list cards show a single provider | model line from history current", async () => {
@@ -725,6 +752,12 @@ test("list cards show a single provider | model line from history current", asyn
                         readable: true,
                     },
                 ],
+                providerLabel: "Command Code GOAT",
+                modelId: "deepseek/deepseek-v4.1-flash",
+                modelLabel: "deepseek/deepseek-v4.1-flash",
+            },
+            active: {
+                kind: "ours",
                 providerLabel: "Command Code GOAT",
                 modelId: "deepseek/deepseek-v4.1-flash",
                 modelLabel: "deepseek/deepseek-v4.1-flash",
@@ -792,6 +825,49 @@ test("list cards show a single provider | model line from history current", asyn
     expect(within(pi).queryByText(/Provider /u)).toBeNull();
     expect(within(pi).queryByText(/Model /u)).toBeNull();
     expect(within(pi).queryByText(/未写入/u)).toBeNull();
+});
+
+test("list cards show the current active model when the live file is unmatched", async () => {
+    loadHistory.mockResolvedValue({
+        kind: "desktop",
+        page: {
+            current: {
+                status: "unrecorded",
+                matchedEntryKey: null,
+                files: [
+                    {
+                        targetPath: "/Users/test/.grok/config.toml",
+                        currentDigest: "c".repeat(64),
+                        readable: true,
+                    },
+                ],
+                providerLabel: null,
+                modelId: null,
+                modelLabel: null,
+            },
+            active: {
+                kind: "ours",
+                providerLabel: "Command Code GOAT",
+                modelId: "deepseek/deepseek-v4.1-flash",
+                modelLabel: "Flash Alias",
+            },
+            entries: [],
+            nextCursor: null,
+        },
+    });
+    await mount();
+    const grokDetail = await screen.findByRole("button", {
+        name: "Open Grok Build details",
+    });
+    const grok = grokDetail.closest("li");
+    if (!(grok instanceof HTMLElement)) {
+        throw new Error("missing Grok Build row");
+    }
+    await waitFor(() => {
+        expect(
+            within(grok).getByText("Command Code GOAT · Flash Alias"),
+        ).toBeTruthy();
+    });
 });
 
 test("agent detail defaults to History and has no Write tab", async () => {

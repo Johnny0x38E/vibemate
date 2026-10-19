@@ -37,6 +37,16 @@ pub struct VersionTextRequest {
     pub current_digest: Option<String>,
 }
 
+/// Request the live, sanitized text of one Agent scope file.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CurrentConfigTextRequest {
+    /// Adapter whose trusted file scope supplies the path.
+    pub agent: ConfigurationAgent,
+    /// Exact target path the history page reported for this Agent.
+    pub target_path: String,
+}
+
 /// Request one entry's version-restore preview.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -145,6 +155,26 @@ pub fn read_version_text(
         &request.revision_id,
         request.current_digest.as_deref(),
         backups,
+    )?)
+}
+
+/// Read the live, sanitized text of one file in this Agent's trusted scope.
+///
+/// No history entry is required: the dialog stays usable after an external edit
+/// changed the live digest. The caller supplies a path only to choose among the
+/// adapter's fixed files; Rust validates it against the scope.
+///
+/// # Errors
+/// Returns safe request or scope errors; per-file read/sanitize problems travel
+/// in the returned current side.
+pub fn read_current_configuration_text(
+    environment: &DiscoveryEnvironment,
+    request: &CurrentConfigTextRequest,
+) -> Result<crate::config_apply::CurrentConfigText, ClaudeCodeRestoreError> {
+    let scope = history_scope(request.agent, environment)?;
+    Ok(crate::config_apply::read_current_text(
+        &scope,
+        &request.target_path,
     )?)
 }
 

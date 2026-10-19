@@ -215,8 +215,28 @@ const currentSchema = z
         // Absence is represented by a null digest on a readable file.
         return true;
     });
+const activeSchema = z.discriminatedUnion("kind", [
+    z.strictObject({
+        kind: z.literal("ours"),
+        // Provider custom display name resolved from the still-saved Provider.
+        providerLabel: z.string().min(1).max(64).refine(isSafeLabel),
+        // Model id the Agent's live configuration currently names.
+        modelId: z
+            .string()
+            .min(1)
+            .max(256)
+            .refine((value) => isSafeLabel(value) && !/\s/u.test(value)),
+        // Saved alias when still present, else the recorded model id.
+        modelLabel: z.string().min(1).max(256).refine(isSafeLabel),
+    }),
+    z.strictObject({ kind: z.literal("own") }),
+    z.strictObject({ kind: z.literal("unknown") }),
+]);
 const pageSchema = z.strictObject({
     current: currentSchema,
+    // Model the Agent currently names in its live configuration, classified
+    // as vibemate's, the user's own, or unreadable.
+    active: activeSchema,
     entries: z.array(entrySchema).max(50),
     nextCursor: cursorSchema.nullable(),
 });
@@ -244,7 +264,15 @@ export type HistoryEntry = z.infer<typeof entrySchema>;
  * `providerLabel | modelLabel`. Fields stay separate; null when unknown.
  */
 export type HistoryCurrentConfig = z.infer<typeof currentSchema>;
-/** Complete bounded metadata page, including the fixed current-config pin. */
+/**
+ * Model the Agent currently names in its live configuration.
+ *
+ * `ours` means the model resolves to a still-saved vibemate Provider/model;
+ * `own` means the configuration is readable but names a different model (or
+ * none); `unknown` means the file could not be read safely.
+ */
+export type ActiveAgentModel = z.infer<typeof activeSchema>;
+/** Complete bounded metadata page, including the current pin and active model. */
 export type HistoryPage = z.infer<typeof pageSchema>;
 
 function isOlder(

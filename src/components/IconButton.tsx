@@ -1,5 +1,5 @@
 import { Tooltip } from "@base-ui/react/tooltip";
-import type { JSX } from "react";
+import { useState, type JSX } from "react";
 import { Icon, type IconName } from "./Icon";
 import styles from "./IconButton.module.css";
 
@@ -14,6 +14,8 @@ export interface IconButtonProps {
     blocked?: boolean;
     /** Apply danger styling; callers supply an appropriate removal icon. */
     destructive?: boolean;
+    /** Keep the icon target and focus ring while omitting its frame. */
+    borderless?: boolean;
     /** Identifies the provider row that owns this control. */
     dataProviderId?: string;
     /** When set, exposes expand/collapse state for disclosure controls. */
@@ -36,16 +38,25 @@ export function IconButton({
     type = "button",
     blocked = false,
     destructive = false,
+    borderless = false,
     dataProviderId,
     expanded,
     controls,
 }: IconButtonProps): JSX.Element {
+    // Hover/focus still owns the normal open state. A press closes the hint
+    // explicitly because its action can replace the page that owns this
+    // trigger (for example the Agent list opening a detail page), and a
+    // portaled hint must not outlive that unmount.
+    const [tooltipOpen, setTooltipOpen] = useState(false);
     return (
         <Tooltip.Provider delay={300}>
-            <Tooltip.Root>
+            <Tooltip.Root open={tooltipOpen} onOpenChange={setTooltipOpen}>
                 <Tooltip.Trigger
                     type={type}
-                    className={styles["button"]}
+                    className={[
+                        styles["button"],
+                        ...(borderless ? [styles["borderless"]] : []),
+                    ].join(" ")}
                     aria-label={label}
                     aria-disabled={blocked}
                     {...(dataProviderId !== undefined
@@ -58,7 +69,11 @@ export function IconButton({
                         ? { "aria-controls": controls }
                         : {})}
                     data-destructive={destructive || undefined}
+                    onPointerDown={() => {
+                        setTooltipOpen(false);
+                    }}
                     onClick={(event) => {
+                        setTooltipOpen(false);
                         if (blocked) {
                             event.preventDefault();
                             return;
@@ -68,17 +83,21 @@ export function IconButton({
                 >
                     <Icon name={icon} />
                 </Tooltip.Trigger>
-                <Tooltip.Portal>
-                    <Tooltip.Positioner
-                        className={styles["positioner"]}
-                        side="top"
-                        sideOffset={6}
-                    >
-                        <Tooltip.Popup className={styles["tooltip"]}>
-                            {label}
-                        </Tooltip.Popup>
-                    </Tooltip.Positioner>
-                </Tooltip.Portal>
+                {/* Mount the portal only while open: a page change can unmount
+                    this trigger, and a hidden portaled hint must not survive. */}
+                {tooltipOpen && (
+                    <Tooltip.Portal>
+                        <Tooltip.Positioner
+                            className={styles["positioner"]}
+                            side="top"
+                            sideOffset={6}
+                        >
+                            <Tooltip.Popup className={styles["tooltip"]}>
+                                {label}
+                            </Tooltip.Popup>
+                        </Tooltip.Positioner>
+                    </Tooltip.Portal>
+                )}
             </Tooltip.Root>
         </Tooltip.Provider>
     );

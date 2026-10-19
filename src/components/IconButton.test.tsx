@@ -1,5 +1,6 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState, type JSX } from "react";
 import { afterEach, expect, test, vi } from "vitest";
 import { IconButton } from "./IconButton";
 
@@ -105,4 +106,33 @@ test("blocked auxiliary actions remain keyboard focusable without running callba
     await user.keyboard("{Enter}");
     await user.click(button);
     expect(action).not.toHaveBeenCalled();
+});
+
+test("a click closes the hint even when its action replaces the page", async () => {
+    const user = userEvent.setup();
+
+    function Harness(): JSX.Element {
+        const [open, setOpen] = useState(true);
+        return open ? (
+            <IconButton
+                icon="info"
+                label="Open details"
+                onClick={() => {
+                    setOpen(false);
+                }}
+            />
+        ) : (
+            <p>Detail page</p>
+        );
+    }
+
+    render(<Harness />);
+    const button = screen.getByRole("button", { name: "Open details" });
+    await user.hover(button);
+    await screen.findByText("Open details");
+    await user.click(button);
+    expect(await screen.findByText("Detail page")).toBeTruthy();
+    await waitFor(() => {
+        expect(screen.queryByText("Open details")).toBeNull();
+    });
 });

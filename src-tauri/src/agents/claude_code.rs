@@ -121,6 +121,21 @@ pub fn gateway_status(kind: ProviderKind) -> GatewayStatus {
         .unwrap_or(GatewayStatus::Unverified)
 }
 
+/// Provider kind whose verified Claude Code gateway uses this exact base URL.
+///
+/// The history surface uses it to decide whether a live `ANTHROPIC_BASE_URL`
+/// still points at a vibemate-managed gateway. Only the adapter's own written
+/// addresses can match; an arbitrary endpoint never does.
+pub(crate) fn gateway_kind_for_base_url(base_url: &str) -> Option<ProviderKind> {
+    [
+        ProviderKind::DeepSeek,
+        ProviderKind::OpenRouter,
+        ProviderKind::CommandCode,
+    ]
+    .into_iter()
+    .find(|kind| gateway(*kind).is_some_and(|facts| facts.base_url == base_url))
+}
+
 /// Facts the preview needs about the selected Provider instance.
 pub struct ProviderFacts {
     /// Stored Provider instance ID; already validated when it was stored.

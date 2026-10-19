@@ -13,7 +13,4 @@ src-tauri/gen/
 .idea/
 .vscode/
 
-# Application lockfiles belong in Git; generated build output does not.
-
-# Personal documentation and local drafts.
 /docs/local/

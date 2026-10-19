@@ -593,3 +593,34 @@ fn a_read_only_target_or_symlink_snapshot_blocks_the_entry() {
         Some(WriteError::BackupUnavailable.code())
     );
 }
+
+#[test]
+fn current_text_reads_only_scope_files_and_masks_credentials() {
+    let fixture = Fixture::new();
+    let path = fixture.root.join("config.toml");
+    fs::write(
+        &path,
+        "[model.owned]\napi_key = \"synthetic-secret\"\nname = \"keep\"\n",
+    )
+    .unwrap();
+    let scope = scope(&fixture, OperationKind::GrokSettings, &["config.toml"]);
+    let text = read_current_text(&scope, path.to_str().unwrap()).expect("current text");
+    assert_eq!(text.target_path, path.to_str().unwrap());
+    let VersionTextSide::Present { text: body, bytes } = text.current else {
+        panic!("expected present text");
+    };
+    assert!(body.contains("name = \"keep\""));
+    assert!(!body.contains("synthetic-secret"));
+    assert!(bytes > 0);
+
+    // A path outside the adapter's fixed scope is refused, not read.
+    assert_eq!(
+        read_current_text(&scope, "/etc/passwd"),
+        Err(WriteError::InvalidRequest)
+    );
+
+    // A missing file is an absent side, not a stale-plan or raw read error.
+    fs::remove_file(&path).unwrap();
+    let text = read_current_text(&scope, path.to_str().unwrap()).expect("absent text");
+    assert_eq!(text.current, VersionTextSide::Absent);
+}

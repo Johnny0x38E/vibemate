@@ -33,15 +33,12 @@ import { IconButton } from "../../components/IconButton";
 import listActions from "../../components/listActions.module.css";
 import { AgentPage } from "./AgentPage";
 import { AgentVersionPanel } from "./AgentVersionPanel";
-import {
-    CurrentConfigPin,
-    RestoreView,
-    type CurrentConfigTextSource,
-} from "./RestoreView";
+import { CurrentConfigPin, RestoreView } from "./RestoreView";
 import { WriteConfigDialog } from "./WriteConfigDialog";
 import underlineTabs from "../../components/underlineTabs.module.css";
 import {
     readConfigurationHistory,
+    type ActiveAgentModel,
     type HistoryCurrentConfig,
 } from "../../lib/desktop/history";
 import {
@@ -97,21 +94,18 @@ export function AgentList({
     const [segment, setSegment] = useState<AgentSegment>("history");
     const [currentConfig, setCurrentConfig] =
         useState<HistoryCurrentConfig | null>(null);
-    const [pinTextSource, setPinTextSource] =
-        useState<CurrentConfigTextSource | null>(null);
     /** List-row Write dialog target; null when closed. */
     const [writeTarget, setWriteTarget] = useState<ConfigurableAgent | null>(
         null,
     );
     const writeReturnFocus = useRef<HTMLElement | null>(null);
-    /** List-card provider|model labels from history current / matched entry. */
+    /**
+     * List-card summary: the model each Agent currently names. `ours` shows
+     * the saved Provider/model, `own` says the configuration belongs to the
+     * user, and `unknown` stays out of the row until a read succeeds.
+     */
     const [listSummaries, setListSummaries] = useState<
-        Partial<
-            Record<
-                ConfigurableAgent,
-                { providerLabel: string | null; modelLabel: string | null }
-            >
-        >
+        Partial<Record<ConfigurableAgent, ActiveAgentModel>>
     >({});
     const [versions, setVersions] = useState<
         Partial<Record<AgentId, AgentVersionResult>>
@@ -207,58 +201,43 @@ export function AgentList({
             return;
         const id = focusCard.current;
         focusCard.current = null;
+        // Return focus to the row, not the Detail icon. Focusing the icon would
+        // reopen its tooltip on focus and leave the hint floating over the list.
         const marker = document.querySelector(`[data-agent-card="${id}"]`);
-        const item = marker?.closest("li");
-        // Detail is always the last IconButton on the row (Write, then Detail).
-        const buttons = item?.querySelectorAll<HTMLElement>("button");
-        const detail = buttons?.[buttons.length - 1];
-        detail?.focus();
+        if (marker instanceof HTMLElement) marker.focus();
     }, [hidden, page]);
 
-    // List rows: `{providerLabel} | {modelLabel}` from HistoryCurrentConfig when
-    // status is matched. Both null otherwise — omit the line, never dual「未写入」.
+    // List rows: the model each Agent's live configuration currently names.
+    // Rust classifies it as vibemate's saved pair, the user's own, or
+    // unreadable; a failed/pending read stays out of the row.
     useEffect(() => {
         if (hidden || page.kind !== "list") return;
-        let active = true;
+        let current = true;
         const agents: ConfigurableAgent[] = ["claudeCode", "pi", "grokBuild"];
         void Promise.all(
             agents.map(async (agentId) => {
-                const empty = {
-                    providerLabel: null as string | null,
-                    modelLabel: null as string | null,
-                };
+                const empty: ActiveAgentModel = { kind: "unknown" };
                 try {
                     const result = await readConfigurationHistory(agentId);
-                    if (result.kind !== "desktop") {
-                        return [agentId, empty] as const;
-                    }
-                    const { current } = result.page;
                     return [
                         agentId,
-                        {
-                            providerLabel: current.providerLabel,
-                            modelLabel: current.modelLabel,
-                        },
+                        result.kind === "desktop" ? result.page.active : empty,
                     ] as const;
                 } catch {
                     return [agentId, empty] as const;
                 }
             }),
         ).then((rows) => {
-            if (!active) return;
-            const next: Partial<
-                Record<
-                    ConfigurableAgent,
-                    { providerLabel: string | null; modelLabel: string | null }
-                >
-            > = {};
+            if (!current) return;
+            const next: Partial<Record<ConfigurableAgent, ActiveAgentModel>> =
+                {};
             for (const row of rows) {
                 next[row[0]] = row[1];
             }
             setListSummaries(next);
         });
         return () => {
-            active = false;
+            current = false;
         };
     }, [hidden, page.kind, configEpoch, state.kind]);
 
@@ -639,6 +618,17 @@ export function AgentList({
     }
 
     function listView(): JSX.Element {
+        // Discovered Agents first; each group reads alphabetically by the name
+        // shown in the row. The sort is stable, so equal names keep AGENT_IDS
+        // order and discovery updates never reshuffle rows on their own.
+        const orderedAgentIds = [...AGENT_IDS].sort((left, right) => {
+            const leftFound = observation(left)?.state === "found";
+            const rightFound = observation(right)?.state === "found";
+            if (leftFound !== rightFound) return leftFound ? -1 : 1;
+            return t(`agents.names.${left}`).localeCompare(
+                t(`agents.names.${right}`),
+            );
+        });
         return (
             <>
                 <PageModuleHeader
@@ -656,7 +646,7 @@ export function AgentList({
                     className={[surfaceList["list"], styles["list"]].join(" ")}
                     aria-label={t("agents.list.label")}
                 >
-                    {AGENT_IDS.map((id) => {
+                    {orderedAgentIds.map((id) => {
                         const row = observation(id);
                         const reported =
                             row === undefined ? undefined : cliVersion(row);
@@ -664,8 +654,7 @@ export function AgentList({
                             ? listSummaries[id]
                             : undefined;
                         const providerModel =
-                            summary?.providerLabel != null &&
-                            summary.modelLabel != null
+                            summary?.kind === "ours"
                                 ? {
                                       provider: summary.providerLabel,
                                       model: summary.modelLabel,
@@ -680,6 +669,18 @@ export function AgentList({
                                       "agents.summary.providerModel",
                                       providerModel,
                                   );
+                        // Not vibemate's current pair: the config is the
+                        // user's own, but only when the Agent itself was found.
+                        // Configurable Agents need a readable active model;
+                        // other Agents have no write adapter to consult.
+                        const found =
+                            state.kind === "desktop" && row?.state === "found";
+                        const ownConfiguration =
+                            providerModel === null &&
+                            found &&
+                            (hasConfigAdapter(id)
+                                ? summary?.kind === "own"
+                                : true);
                         const statusText =
                             state.kind === "desktop" && row?.state === "found"
                                 ? (reported?.version ??
@@ -707,27 +708,34 @@ export function AgentList({
                                     <div
                                         className={styles["row"]}
                                         data-agent-card={id}
+                                        tabIndex={-1}
                                     >
                                         <AgentIcon id={id} size="row" />
                                         <span className={styles["textColumn"]}>
                                             <span className={styles["rowName"]}>
                                                 {name}
                                             </span>
-                                            {hasConfigAdapter(id) ? (
-                                                providerModel !== null ? (
-                                                    <span
-                                                        className={
-                                                            styles["rowSummary"]
-                                                        }
-                                                        title={
-                                                            providerModelText ??
-                                                            undefined
-                                                        }
-                                                    >
-                                                        {providerModelText}
-                                                    </span>
-                                                ) : null
-                                            ) : (
+                                            {providerModel !== null ? (
+                                                <span
+                                                    className={
+                                                        styles["rowSummary"]
+                                                    }
+                                                    title={
+                                                        providerModelText ??
+                                                        undefined
+                                                    }
+                                                >
+                                                    {providerModelText}
+                                                </span>
+                                            ) : ownConfiguration ? (
+                                                <span
+                                                    className={
+                                                        styles["rowSummary"]
+                                                    }
+                                                >
+                                                    {t("agents.summary.own")}
+                                                </span>
+                                            ) : !found ? (
                                                 <span
                                                     className={
                                                         styles["rowSummary"]
@@ -735,7 +743,16 @@ export function AgentList({
                                                 >
                                                     {t("agents.summary.none")}
                                                 </span>
-                                            )}
+                                            ) : hasConfigAdapter(id) &&
+                                              summary !== undefined ? (
+                                                <span
+                                                    className={
+                                                        styles["rowSummary"]
+                                                    }
+                                                >
+                                                    {t("agents.summary.none")}
+                                                </span>
+                                            ) : null}
                                         </span>
                                         <span
                                             className={styles["rowStatus"]}
@@ -857,11 +874,7 @@ export function AgentList({
                 ) : null}
                 <section className={styles["detailGroup"]} data-layout="page">
                     {configurable && currentConfig !== null && (
-                        <CurrentConfigPin
-                            current={currentConfig}
-                            agent={id}
-                            textSource={pinTextSource}
-                        />
+                        <CurrentConfigPin current={currentConfig} agent={id} />
                     )}
                     <div
                         className={[
@@ -901,15 +914,9 @@ export function AgentList({
                                 blocked={blocked}
                                 agent={id}
                                 hidePin
-                                onCurrentChange={(current, summary) => {
+                                onCurrentChange={(current) => {
                                     if (!mounted.current) return;
                                     setCurrentConfig(current);
-                                    const next = summary ?? {
-                                        providerLabel: null,
-                                        modelLabel: null,
-                                        textSource: null,
-                                    };
-                                    setPinTextSource(next.textSource ?? null);
                                 }}
                                 onBusyChange={(busy) => {
                                     pending.current = busy;
@@ -1026,11 +1033,16 @@ export function AgentList({
     const writeRow =
         writeTarget === null
             ? null
-            : {
-                  agent: writeTarget,
-                  entryPath: observation(writeTarget)?.entryPath ?? null,
-                  summary: listSummaries[writeTarget],
-              };
+            : (() => {
+                  const summary = listSummaries[writeTarget];
+                  const ours = summary?.kind === "ours" ? summary : null;
+                  return {
+                      agent: writeTarget,
+                      entryPath: observation(writeTarget)?.entryPath ?? null,
+                      providerLabel: ours?.providerLabel ?? null,
+                      modelLabel: ours?.modelLabel ?? null,
+                  };
+              })();
 
     return (
         <section
@@ -1044,8 +1056,8 @@ export function AgentList({
                     agent={writeRow.agent}
                     agentName={t(`agents.names.${writeRow.agent}`)}
                     entryPath={writeRow.entryPath}
-                    providerLabel={writeRow.summary?.providerLabel ?? null}
-                    modelLabel={writeRow.summary?.modelLabel ?? null}
+                    providerLabel={writeRow.providerLabel}
+                    modelLabel={writeRow.modelLabel}
                     blocked={blocked}
                     onBusyChange={(busy) => {
                         pending.current = busy;

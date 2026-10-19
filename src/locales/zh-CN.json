@@ -588,19 +588,15 @@
             "textTitle": "详细配置",
             "textClose": "关闭",
             "textFiles": "此版本涉及的文件",
-            "textCurrent": "当前配置",
             "textAbsent": "此时该文件不存在。",
             "textUnavailable": "无法安全显示文本：{{reason}}",
-            "textBytes": "原始大小：{{bytes}} 字节",
             "textLoading": "正在读取并脱敏配置…",
             "textRetry": "重试",
             "textDiff": "差异",
             "textNoDiff": "没有行级差异。",
             "textPreviewMode": "浏览器预览无法读取配置文件，请在 vibemate 桌面应用中查看。",
 
-            "fieldOwnerRef": "记录的所有者引用",
-            "fieldTextBytes": "原始大小",
-            "textBytesUnit": "{{bytes}} 字节"
+            "fieldOwnerRef": "记录的所有者引用"
         },
         "directory": "用户配置路径：{{path}}",
         "states": {
@@ -960,6 +956,7 @@
             "skill": "Skill {{value}}",
             "mcp": "MCP {{value}}",
             "none": "暂无配置摘要",
+            "own": "自有配置",
             "separator": " · ",
             "notWritten": "未写入",
             "providerModel": "{{provider}} · {{model}}"

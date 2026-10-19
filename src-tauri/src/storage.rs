@@ -477,6 +477,18 @@ const MIGRATIONS: &[Migration] = &[
             PRIMARY KEY (delete_id, backup_id)
         ) STRICT, WITHOUT ROWID;",
     },
+    Migration {
+        version: 24,
+        // Grok Build owns `[model.<alias>]` entries, while `[models].default`
+        // belongs to the user and Grok's own picker. Remember when vibemate
+        // last wrote each alias as write bookkeeping; the active-model summary
+        // reads the live default alias instead. Rows migrated from older builds
+        // keep 0 because no write time was recorded.
+        sql: "ALTER TABLE grok_model_binding ADD COLUMN last_written_at INTEGER NOT NULL
+            DEFAULT 0 CHECK(last_written_at >= 0);
+        CREATE INDEX grok_model_binding_last_written
+            ON grok_model_binding(config_root, last_written_at DESC);",
+    },
 ];
 
 /// Errors from opening or migrating the private database.

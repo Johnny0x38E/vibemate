@@ -167,9 +167,24 @@ setting and is appended only once an adapter writes one. The model ID remains
 the identity — only the display text is combined. Grok Build's TOML `name` and
 Pi's model `name` use the shared `shared::agent_model_display_name` helper.
 
-In vibemate's own Agent list, the saved Provider and model appear as plain
-secondary text reading `Provider · Model`. That summary is unrelated to the
-Agent file format above.
+In vibemate's own Agent list, the model each Agent currently names in its live
+configuration appears as plain secondary text. The adapters read
+`env.ANTHROPIC_MODEL` (then `model`) for Claude Code, the latest Pi session's
+`model_change`/assistant `provider`/`model` (falling back to
+`defaultModel`/`defaultProvider`) for Pi, and `[models].default` for Grok Build.
+For Pi this reads only the tail of the newest `sessions/**/*.jsonl` file and
+extracts those two fields; message content is discarded. A model is shown
+as `Provider · Model` only when the adapter's own ownership evidence still
+resolves it to a saved Provider/model pair (gateway address and model for Claude
+Code, `pi_provider_binding` for Pi, `grok_model_binding` for Grok Build). Any
+other readable configuration reads **Own configuration** (`自有配置`); an
+undiscovered Agent or one whose files cannot be read safely keeps **No
+configuration summary**. This summary is independent of history matching: an
+external edit must not turn a current vibemate model into a false "own" claim.
+Any future write adapter, including Codex, must define both the live
+active-model field and its ownership record with the adapter; never infer
+ownership from a retained history version or from the central model library
+alone.
 
 Writing never implies that a
 running session uses the value; each card states whether a new session is needed.

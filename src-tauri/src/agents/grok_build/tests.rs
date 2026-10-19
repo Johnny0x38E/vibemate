@@ -225,10 +225,9 @@ fn full_model_preview_is_bound_to_native_plan_and_preserves_unowned_toml() {
     };
     assert!(after.contains("# retained layout"));
     let document = after.parse::<DocumentMut>().unwrap();
-    assert_eq!(
-        document["models"]["default"].as_str(),
-        Some(plan.model_alias.as_str())
-    );
+    // The default model belongs to the user and Grok's picker; the plan does
+    // not create a [models] table merely to select the written alias.
+    assert!(document.get("models").is_none());
     assert_eq!(document["other"]["label"].as_str(), Some("keep"));
     let mut changed_provider = f.provider.clone();
     changed_provider.revision += 1;
@@ -263,13 +262,11 @@ fn preview_describes_only_its_own_fields_and_leaves_the_file_untouched() {
         .collect();
     let owned = format!("model.{}.", plan.model_alias);
     assert!(
-        paths
-            .iter()
-            .all(|path| path.starts_with(&owned) || path == "models.default"),
+        paths.iter().all(|path| path.starts_with(&owned)),
         "unexpected keys: {paths:?}"
     );
-    // The default selection is the only setting outside the alias table.
-    assert!(paths.iter().any(|path| path == "models.default"));
+    // `[models].default` is user-owned and must never appear in this plan.
+    assert!(!paths.iter().any(|path| path == "models.default"));
     for field in ["model", "base_url", "name", "api_backend", "api_key"] {
         assert!(
             paths.contains(&format!("{owned}{field}")),
@@ -779,6 +776,7 @@ fn apply_writes_the_key_and_keeps_every_field_the_plan_does_not_own() {
     // reasoning-effort rows, an MCP server and the UI table.
     for keep in [
         "# my Grok settings",
+        "default = \"my-model\"",
         "[model.my-model]",
         "api_key = \"user-private-key\"",
         "[[model.my-model.reasoning_efforts]]",
@@ -794,14 +792,31 @@ fn apply_writes_the_key_and_keeps_every_field_the_plan_does_not_own() {
     assert!(written.contains("name = \"(vibemate-Grok-test) deepseek-flash\""));
     assert!(written.contains("api_backend = \"chat_completions\""));
     assert!(written.contains("context_window = 128000"));
-    assert!(written.contains(&format!("default = \"{alias}\"")));
+    // The user's default model is preserved, not repointed at the new alias.
+    assert!(!written.contains(&format!("default = \"{alias}\"")));
     // The answer carries paths and digests, never the file it wrote or the key.
     let rendered = serde_json::to_string(&applied).unwrap();
     assert!(!rendered.contains(KEY));
     assert!(!rendered.contains(PRIVATE));
     // Ownership is recorded so the next preview reuses this alias instead of
     // leaving an orphan entry behind.
-    assert_eq!(f.bindings(), vec![(alias, ID.to_owned(), MODEL.to_owned())]);
+    assert_eq!(
+        f.bindings(),
+        vec![(alias.clone(), ID.to_owned(), MODEL.to_owned())]
+    );
+    // The record also says when this alias was written; the history view uses
+    // that timestamp to show vibemate's last write instead of Grok's default.
+    let written_at: i64 = f
+        .storage
+        .lock()
+        .unwrap()
+        .query_row(
+            "SELECT last_written_at FROM grok_model_binding WHERE model_alias=?1",
+            [&alias],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert!(written_at > 0);
 }
 
 #[cfg(unix)]

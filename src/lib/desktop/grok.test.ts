@@ -73,12 +73,6 @@ const plan: GrokPlan = {
                 after: "••••••••",
                 secret: true,
             },
-            {
-                keyPath: "models.default",
-                before: "someone-elses",
-                after: alias,
-                secret: false,
-            },
         ],
     },
     restartRequired: true,
@@ -187,6 +181,10 @@ test("rejects changes outside the fields this adapter owns", async () => {
     expect(
         await rejectWith(withChange(`model.other-model.api_key`, "x", true)),
     ).toBe("invalid_response");
+    // The default model belongs to the user and Grok's own picker.
+    expect(await rejectWith(withChange("models.default", alias))).toBe(
+        "invalid_response",
+    );
     expect(
         await rejectWith({ ...plan, file: { ...plan.file, changes: [] } }),
     ).toBe("invalid_response");
@@ -249,9 +247,6 @@ test("rejects a plan whose values do not describe the chosen pair", async () => 
             ),
         },
     });
-    expect(await rejectWith(replace("models.default", "someone-elses"))).toBe(
-        "invalid_response",
-    );
     expect(
         await rejectWith(replace(`model.${alias}.model`, "another-model")),
     ).toBe("invalid_response");

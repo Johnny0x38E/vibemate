@@ -101,6 +101,7 @@ function page(
                         modelLabel: null,
                     }
                   : current(status),
+        active: { kind: "unknown" },
         entries: [row],
         nextCursor: null,
     };
@@ -157,6 +158,7 @@ test("passes a validated seek cursor unchanged and accepts the empty final page"
         .mockResolvedValueOnce(first)
         .mockResolvedValueOnce({
             current: current("unrecorded"),
+            active: { kind: "unknown" },
             entries: [],
             nextCursor: null,
         });
@@ -167,7 +169,12 @@ test("passes a validated seek cursor unchanged and accepts the empty final page"
         await readConfigurationHistory("pi", result.page.nextCursor, 1),
     ).toEqual({
         kind: "desktop",
-        page: { current: current("unrecorded"), entries: [], nextCursor: null },
+        page: {
+            current: current("unrecorded"),
+            active: { kind: "unknown" },
+            entries: [],
+            nextCursor: null,
+        },
     });
     expect(invoke).toHaveBeenLastCalledWith("configuration_history_page", {
         input: { agent: "pi", after: first.nextCursor, limit: 1 },
@@ -422,6 +429,7 @@ test("rejects oversized, misordered and repeated pages without hiding bad rows",
     );
     vi.mocked(invoke).mockResolvedValue({
         current: current("unrecorded"),
+        active: { kind: "unknown" },
         entries: [base, older],
         nextCursor: null,
     });
@@ -429,6 +437,7 @@ test("rejects oversized, misordered and repeated pages without hiding bad rows",
         kind: "desktop",
         page: {
             current: current("unrecorded"),
+            active: { kind: "unknown" },
             entries: [base, older],
             nextCursor: null,
         },
@@ -527,6 +536,7 @@ test("retains legacy attempts and separate partial multi-file restore/compensati
         };
         const response = {
             current: current("unrecorded"),
+            active: { kind: "unknown" },
             entries: [row, legacy],
             nextCursor: null,
         };
@@ -646,6 +656,35 @@ test("accepts a matched current pin with null provider/model fields", async () =
     vi.mocked(invoke).mockResolvedValue(bare);
     const result = await readConfigurationHistory("pi");
     expect(result).toEqual({ kind: "desktop", page: bare });
+});
+
+test("classifies the active model independently of the current match", async () => {
+    const ours = {
+        kind: "ours",
+        providerLabel: "Command Code GOAT",
+        modelId: "deepseek/deepseek-v4.1-flash",
+        modelLabel: "Flash Alias",
+    };
+    const response = { ...page(), active: ours };
+    vi.mocked(invoke).mockResolvedValue(response);
+    const result = await readConfigurationHistory("grokBuild");
+    expect(result).toEqual({ kind: "desktop", page: response });
+    for (const active of [{ kind: "own" }, { kind: "unknown" }]) {
+        const state = { ...page(), active };
+        vi.mocked(invoke).mockResolvedValue(state);
+        expect(await readConfigurationHistory("grokBuild")).toEqual({
+            kind: "desktop",
+            page: state,
+        });
+    }
+    // A partial "ours" cannot be rendered as a provider/model pair.
+    vi.mocked(invoke).mockResolvedValue({
+        ...page(),
+        active: { ...ours, modelLabel: null },
+    });
+    await expect(readConfigurationHistory("grokBuild")).rejects.toMatchObject({
+        code: "invalid_response",
+    });
 });
 
 test.each([

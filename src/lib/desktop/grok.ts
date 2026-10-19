@@ -104,7 +104,7 @@ function parsePlan(
         !hasExactKeys(file, ["target", "changes"]) ||
         !Array.isArray(file["changes"]) ||
         file["changes"].length === 0 ||
-        file["changes"].length > ALIAS_FIELDS.length + 1
+        file["changes"].length > ALIAS_FIELDS.length
     )
         return invalid();
     const changes = file["changes"].map(change);
@@ -115,10 +115,9 @@ function parsePlan(
     // separator because the path comes from the desktop platform, not from here.
     if (!/[\\/]config\.toml$/u.test(target.path)) return invalid();
     const prefix = `model.${modelAlias}.`;
-    const allowed = new Set<string>([
-        ...ALIAS_FIELDS.map((field) => `${prefix}${field}`),
-        "models.default",
-    ]);
+    const allowed = new Set<string>(
+        ALIAS_FIELDS.map((field) => `${prefix}${field}`),
+    );
     if (changes.some((entry) => !allowed.has(entry.keyPath))) return invalid();
     const planned = (keyPath: string): ConfigChange | undefined =>
         changes.find((entry) => entry.keyPath === keyPath);
@@ -131,7 +130,6 @@ function parsePlan(
         (key.before !== null && key.before !== "••••••••") ||
         changes.filter((entry) => entry.secret).length !== 1 ||
         planned(`${prefix}model`)?.after !== modelId ||
-        planned("models.default")?.after !== modelAlias ||
         changes.some(
             (entry) => entry.secret !== (entry.keyPath === `${prefix}api_key`),
         )

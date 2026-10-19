@@ -2,10 +2,13 @@
 //! application of `config.toml`.
 //!
 //! Grok keeps every user setting in one TOML document, so this adapter parses it
-//! with `toml_edit` and changes only what it owns: one `[model.<alias>]` table
-//! and `[models].default`. Comments, key order and unrelated tables — the
-//! maintainer's own models, MCP servers, UI settings — must survive untouched,
-//! which is what the preview promises. Alias ownership lives in the private
+//! with `toml_edit` and changes only what it owns: one `[model.<alias>]` table.
+//! It deliberately leaves `[models].default` alone. That field selects the model
+//! for new sessions and Grok's own picker writes it, so treating it as vibemate
+//! data would make the two programs overwrite each other's choice. Comments, key
+//! order and unrelated tables — the maintainer's own models, MCP servers, UI
+//! settings — must survive untouched, which is what the preview promises. Alias
+//! ownership lives in the private
 //! `grok_model_binding` table, so an entry the user wrote by hand is never taken
 //! over. Owned entries always set TOML `name` to
 //! `(vibemate-<Provider>) <model ID>`, and a plan whose API `model` id
@@ -48,7 +51,7 @@ const PRECEDENCE_FILES: [&str; 2] = ["managed_config.toml", "requirements.toml"]
 /// root at launch, so these rows tie the plan to the version actually installed
 /// rather than to an online page. Each row is written exactly as the 1.0.60
 /// reference spells it, together with the type and scope the plan depends on.
-const CONTRACT_ROWS: [&str; 9] = [
+const CONTRACT_ROWS: [&str; 8] = [
     "| `model.<id>.api_backend` | `chat_completions / responses / messages` |",
     "| `model.<id>.api_key` | `string` |",
     "| `model.<id>.base_url` | `string` |",
@@ -56,7 +59,6 @@ const CONTRACT_ROWS: [&str; 9] = [
     "| `model.<id>.env_key` | `string / string[]` |",
     "| `model.<id>.model` | `string` |",
     "| `model.<id>.name` | `string` |",
-    "| `models.default` | `string` | `pin` |",
     "| `models.disabled_models` | `string[]` |",
 ];
 
@@ -396,8 +398,9 @@ pub(crate) fn build(
         set_number(entry, "context_window", tokens, &prefix, &mut changes)?;
     }
 
-    let settings = root_table(&mut target.document, "models")?;
-    set_text(settings, "default", &alias, "models", false, &mut changes)?;
+    // `[models].default` is intentionally untouched: it is the user's choice,
+    // and Grok's own model picker writes it. The written alias becomes
+    // selectable in Grok without silently changing which model new sessions use.
 
     notices.insert(0, PlanNotice::code(NoticeCode::CredentialFromStore));
     notices.push(PlanNotice::code(NoticeCode::OverridesNotChecked));
@@ -473,7 +476,8 @@ fn choose_alias(
         .map(|(alias, _, _)| alias.clone())
         .collect();
     if owned.len() > 1 {
-        // Two aliases for one saved model would make the default ambiguous.
+        // Two owned aliases for one saved model make "the entry vibemate wrote"
+        // ambiguous, so the plan stops instead of choosing one silently.
         return Err(PlanError::TargetConflict);
     }
     if let Some(alias) = owned.first() {
@@ -794,14 +798,21 @@ fn record_alias(
     alias: &str,
 ) -> Result<(), ConfigApplyError> {
     let root = root.to_str().ok_or(ConfigApplyError::InvalidRequest)?;
+    let written_at =
+        crate::shared::current_unix_millis().map_err(|_| ConfigApplyError::OperationFailed)?;
     let changed = storage
         .lock()
         .map_err(|_| ConfigApplyError::StorageUnavailable)?
         .execute(
-            "INSERT INTO grok_model_binding(config_root,model_alias,provider_id,model_id) VALUES(?1,?2,?3,?4)
-             ON CONFLICT(config_root,model_alias) DO UPDATE SET provider_id=excluded.provider_id, model_id=excluded.model_id
+            "INSERT INTO grok_model_binding
+                 (config_root,model_alias,provider_id,model_id,last_written_at)
+             VALUES(?1,?2,?3,?4,?5)
+             ON CONFLICT(config_root,model_alias) DO UPDATE SET
+                 provider_id=excluded.provider_id,
+                 model_id=excluded.model_id,
+                 last_written_at=excluded.last_written_at
              WHERE grok_model_binding.provider_id=excluded.provider_id",
-            params![root, alias, provider.id.as_str(), model_id],
+            params![root, alias, provider.id.as_str(), model_id, written_at],
         )
         .map_err(|_| ConfigApplyError::OperationFailed)?;
     // Zero changed rows means the alias already belongs to another Provider, which

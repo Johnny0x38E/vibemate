@@ -7,9 +7,10 @@
 ## 当前位置
 
 1. Claude Code、Pi、Grok Build 三个写入适配器的预览、应用、完整分页历史、任意版本恢复、中断核对、历史删除均已交付；H2 已完成，H3 后端与界面已合入本机。
-2. 六 Agent 固定目录、只读发现、显式与自动版本读取已交付并通过验收（2026-10-13）。
-3. 当前阻塞项：H3 历史删除界面待维护者桌面目视验收；H1 的桌面与平台验收项仍在「后续任务」中单独跟踪。
-4. 下一条业务主线按 P24 → Skill 安装/更新/部署 → MCP 部署 → P35 引用约束的顺序推进；见 [phase-1](phase-1.md)。
+2. Agent 列表当前模型展示已合入本机（维护者 2026-10-19 检查通过）：Claude Code 读取 `env.ANTHROPIC_MODEL`/`model`，Pi 读取最新 session 的模型元数据，Grok Build 读取 `[models].default`；只有仍归属 vibemate 的 Provider/model 才显示服务商与模型，否则显示「自有配置」，未发现或不可读显示「暂无配置摘要」。Grok 写入不再修改 `[models].default`。
+3. 六 Agent 固定目录、只读发现、显式与自动版本读取已交付并通过验收（2026-10-13）。
+4. 当前阻塞项：H3 历史删除界面待维护者桌面目视验收；H1 的桌面与平台验收项仍在「后续任务」中单独跟踪。
+5. 下一条业务主线按 P24 → Skill 安装/更新/部署 → MCP 部署 → P35 引用约束的顺序推进；见 [phase-1](phase-1.md)。
 
 ## 文档整理（2026-10-19）
 
@@ -29,26 +30,27 @@
 
 ## 已交付摘要
 
-| 任务            | 已交付内容                                                            | 现行说明                                                              |
-| --------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| P00             | pnpm 与锁文件迁移                                                     | 根目录 `AGENTS.md`                                                    |
-| P01–P03 / C03   | Provider 与 Pi/Grok 官方接入证据                                      | [integrations](../integrations)，实施前重新核实版本                   |
-| P04–P06 / C06   | UI 行为测试、私有 SQLite、OS 凭据接口                                 | [frontend](../frontend.md)、[architecture](../architecture.md)        |
-| P07–P09 / C09   | 中英文资源、偏好、启动与界面接线                                      | [frontend](../frontend.md)                                            |
-| I02–I15         | 桌面壳、基础外观、共享表单、Base UI 下拉与概览五卡片                  | [frontend](../frontend.md)                                            |
-| P10–P12 / C12   | 服务商与密钥统一保存，模型获取/选择/搜索和手动模型                    | [models](../models.md)                                                |
-| P13 / P14       | 并入 P12                                                              | 最小推理检查仍在 P38，不因合并而标为通过                              |
-| P15 / C15       | 按模型协议路由与三家多协议模板                                        | [integrations/providers](../integrations/providers.md)                |
-| P16 / C16 / P40 | 能力解析与来源、用户声明、别名编辑、上下文/输出/档位                  | [models](../models.md)、[provider 证据](../integrations/providers.md) |
-| P17.a–P17.t     | 六 Agent 只读发现、手动路径、显式/自动版本读取与官方标志              | [agents](../agents.md)                                                |
-| P18–P21 / C21   | Claude Code 预览、写入、回滚与历史                                    | [configuration](../configuration.md)                                  |
-| PI1             | Pi 预览、双文件备份、应用与历史                                       | [Pi 契约](../integrations/pi.md)                                      |
-| P22–P23         | Grok Build 预览、应用与历史恢复                                       | [Grok 契约](../integrations/grok-build.md)                            |
-| H1 分页与界面   | 快照、核对/解决、未引用副本管理、根限定分页、备份可用性、当前配置置顶 | [configuration](../configuration.md)                                  |
-| H2              | 任意保留版本恢复、严格 IPC、两层预览、并发保护                        | [configuration](../configuration.md)                                  |
-| H3 后端与界面   | 持久删除状态、独占副本删除、严格 IPC、确认对话框                      | [configuration](../configuration.md)                                  |
-| BR0–BR5         | 命令、Provider/MCP、Models/Fetch 与共享校验拆分                       | [backend-modularity](backend-modularity.md)                           |
-| P25 / P31       | 中央 Skill 库与本地导入/删除；中央 MCP 定义与删除                     | [skills](../skills.md)、[mcp](../mcp.md)                              |
+| 任务            | 已交付内容                                                                           | 现行说明                                                                                   |
+| --------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| P00             | pnpm 与锁文件迁移                                                                    | 根目录 `AGENTS.md`                                                                         |
+| P01–P03 / C03   | Provider 与 Pi/Grok 官方接入证据                                                     | [integrations](../integrations)，实施前重新核实版本                                        |
+| P04–P06 / C06   | UI 行为测试、私有 SQLite、OS 凭据接口                                                | [frontend](../frontend.md)、[architecture](../architecture.md)                             |
+| P07–P09 / C09   | 中英文资源、偏好、启动与界面接线                                                     | [frontend](../frontend.md)                                                                 |
+| I02–I15         | 桌面壳、基础外观、共享表单、Base UI 下拉与概览五卡片                                 | [frontend](../frontend.md)                                                                 |
+| P10–P12 / C12   | 服务商与密钥统一保存，模型获取/选择/搜索和手动模型                                   | [models](../models.md)                                                                     |
+| P13 / P14       | 并入 P12                                                                             | 最小推理检查仍在 P38，不因合并而标为通过                                                   |
+| P15 / C15       | 按模型协议路由与三家多协议模板                                                       | [integrations/providers](../integrations/providers.md)                                     |
+| P16 / C16 / P40 | 能力解析与来源、用户声明、别名编辑、上下文/输出/档位                                 | [models](../models.md)、[provider 证据](../integrations/providers.md)                      |
+| P17.a–P17.t     | 六 Agent 只读发现、手动路径、显式/自动版本读取与官方标志                             | [agents](../agents.md)                                                                     |
+| P18–P21 / C21   | Claude Code 预览、写入、回滚与历史                                                   | [configuration](../configuration.md)                                                       |
+| PI1             | Pi 预览、双文件备份、应用与历史                                                      | [Pi 契约](../integrations/pi.md)                                                           |
+| P22–P23         | Grok Build 预览、应用与历史恢复                                                      | [Grok 契约](../integrations/grok-build.md)                                                 |
+| 当前模型展示    | Claude Code/Pi/Grok Build 列表当前模型读取与归属判定；Grok 不改写 `[models].default` | [agents](../agents.md)、[Pi](../integrations/pi.md)、[Grok](../integrations/grok-build.md) |
+| H1 分页与界面   | 快照、核对/解决、未引用副本管理、根限定分页、备份可用性、当前配置置顶                | [configuration](../configuration.md)                                                       |
+| H2              | 任意保留版本恢复、严格 IPC、两层预览、并发保护                                       | [configuration](../configuration.md)                                                       |
+| H3 后端与界面   | 持久删除状态、独占副本删除、严格 IPC、确认对话框                                     | [configuration](../configuration.md)                                                       |
+| BR0–BR5         | 命令、Provider/MCP、Models/Fetch 与共享校验拆分                                      | [backend-modularity](backend-modularity.md)                                                |
+| P25 / P31       | 中央 Skill 库与本地导入/删除；中央 MCP 定义与删除                                    | [skills](../skills.md)、[mcp](../mcp.md)                                                   |
 
 P15 的真实连接记录来自维护者确认，不代表代理重新执行，也不补写未提供的模型、协议或套餐细节。
 

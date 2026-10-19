@@ -785,9 +785,9 @@ pub use restore::{
 pub(crate) use service::apply_private_files;
 pub use service::{AppliedOperation, PlannedFile, StepOutcome, apply_files, compensate_operation};
 pub use version_restore::{
-    ReviewedVersionFile, VersionRestoreAction, VersionRestoreFile, VersionRestoreFileOutcome,
-    VersionRestoreOutcome, VersionRestorePlan, apply_version_restore, plan_version_restore,
-    read_version_text,
+    CurrentConfigText, ReviewedVersionFile, VersionRestoreAction, VersionRestoreFile,
+    VersionRestoreFileOutcome, VersionRestoreOutcome, VersionRestorePlan, apply_version_restore,
+    plan_version_restore, read_current_text, read_version_text,
 };
 pub use version_text::{
     ConfigFormat, FieldChange, FieldChangeKind, VersionFileSummary, VersionText, VersionTextSide,

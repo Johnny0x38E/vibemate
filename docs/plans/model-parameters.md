@@ -98,7 +98,12 @@ central model. An unset value does not override native behavior.
   another of the user's entries. Distinguish the effort table, its default and
   `[models].default_reasoning_effort`.
 - **Codex, OpenCode, Hermes:** read-only discovery only. A future write adapter
-  must complete the same field matrix before the interface claims support.
+  must complete the same field matrix before the interface claims support. It
+  must also define the Agent-list active-model read (the live model field) and
+  the ownership evidence that distinguishes a vibemate-written Provider/model
+  from **Own configuration**; copied from [agents.md](../agents.md), this is
+  required for Claude Code and Pi and must not be retrofitted from history
+  matching later.
 
 Before implementing, build an Agent/version × Provider/protocol × model field
 mapping matrix from official documentation and the installed version. Handle

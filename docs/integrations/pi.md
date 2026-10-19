@@ -49,6 +49,22 @@ agent 目录解析，项目资源相对 `.pi` 目录解析，支持绝对路径�
 CLI 选择与恢复的会话可能改变当前模型，不能仅凭 `defaultProvider/defaultModel`
 认定正在运行的会话已经使用新模型。运行时确认留给后续 Agent 验收。
 
+### Agent 列表中的当前模型（2026-10-19）
+
+Pi 的 `/model` 切换是**会话级**的：它写入 session JSONL（`model_change` 事件和 assistant
+消息的 `provider`/`model` 字段），通常不更新 `settings.json` 的
+`defaultProvider`/`defaultModel`。因此 Agent 列表按以下顺序判断当前模型：
+
+1. 在 `<agent-dir>/sessions/` 下找最近修改的 `*.jsonl` 会话文件，只读取其尾部（最多
+   512 KiB）；从后往前取最后一条 `model_change` 或 assistant 消息，只保留
+   `provider`/`model` 两个字段，其余会话内容立即丢弃，不跨 IPC、不写日志。
+2. 该 provider key 只有在 `pi_provider_binding` 中仍有归属、且对应 Provider/model
+   仍保存在中央库时，才显示为「服务商 · 模型」；否则显示「自有配置」。
+3. 没有可用的 session 元数据时，回退到 `settings.json` 的启动默认值。
+
+多个 Pi 会话并存时，“最近修改的文件”只代表最近一次使用，不证明某个正在运行的进程当前
+使用哪个模型；运行中切换后的最终确认仍由维护者完成。
+
 ## Provider、模型与独立启动认证
 
 [模型文档](https://pi.dev/docs/latest/models)支持兼容端点的 `baseUrl`、`api`、

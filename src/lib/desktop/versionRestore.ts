@@ -237,6 +237,12 @@ export const textSchema = z.strictObject({
     current: textSideSchema,
     target: textSideSchema,
 });
+/** Live sanitized text for one trusted Agent scope file, with no history anchor. */
+export const currentTextSchema = z.strictObject({
+    targetPath: z.string().refine(isSafePath),
+    format: configFormat,
+    current: textSideSchema,
+});
 
 /** One field-level current-to-retained change. */
 export type VersionFieldChange = z.infer<typeof fieldChangeSchema>;
@@ -248,6 +254,8 @@ export type VersionRestoreFile = z.infer<typeof fileSchema>;
 export type VersionTextSide = z.infer<typeof textSideSchema>;
 /** Complete sanitized current and retained text for one file. */
 export type VersionText = z.infer<typeof textSchema>;
+/** Live sanitized text for one file in an Agent's trusted scope. */
+export type CurrentConfigText = z.infer<typeof currentTextSchema>;
 /** What restoring one history entry would do. */
 export type VersionRestorePlan = z.infer<typeof planSchema>;
 /** One file as the confirmation sends it back. */
@@ -397,6 +405,41 @@ export async function readVersionText(
     }
     const parsed = textSchema.safeParse(value);
     if (!parsed.success || parsed.data.revisionId !== revisionId)
+        invalidResponse();
+    return { kind: "desktop", text: parsed.data };
+}
+
+/**
+ * Read the live, sanitized text of one trusted Agent scope file.
+ *
+ * No history entry or digest is involved: the call still works after an
+ * external edit stopped the file matching a retained version. The target path
+ * is one the history response already reported; Rust revalidates it against
+ * the adapter's fixed scope. Browser preview returns no invented text.
+ */
+export async function readCurrentConfigurationText(
+    agent: ConfigurableAgent,
+    targetPath: string,
+): Promise<{ kind: "preview" } | { kind: "desktop"; text: CurrentConfigText }> {
+    if (!isTauri()) return { kind: "preview" };
+    const request = z
+        .strictObject({
+            agent: z.enum(["claudeCode", "pi", "grokBuild"]),
+            targetPath: z.string().refine(isSafePath),
+        })
+        .safeParse({ agent, targetPath });
+    if (!request.success)
+        throw new VersionRestoreRequestError("invalid_request");
+    let value: unknown;
+    try {
+        value = await invoke<unknown>("read_current_configuration_text", {
+            input: request.data,
+        });
+    } catch (error: unknown) {
+        throw requestError(error);
+    }
+    const parsed = currentTextSchema.safeParse(value);
+    if (!parsed.success || parsed.data.targetPath !== targetPath)
         invalidResponse();
     return { kind: "desktop", text: parsed.data };
 }

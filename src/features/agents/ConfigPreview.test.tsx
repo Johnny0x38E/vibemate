@@ -675,12 +675,6 @@ test("Grok previews its TOML file and applies it once", async () => {
                     after: "••••••••",
                     secret: true,
                 },
-                {
-                    keyPath: "models.default",
-                    before: "someone-elses",
-                    after: alias,
-                    secret: false,
-                },
             ],
         },
     };
@@ -720,10 +714,8 @@ test("Grok previews its TOML file and applies it once", async () => {
         .closest("li")?.textContent;
     expect(key).toContain("credential value hidden");
     expect(key).toContain("••••••••");
-    // The default it replaces and the alias it now points at are both visible.
-    const fallback = screen.getByText("models.default").closest("li");
-    expect(fallback?.textContent).toContain("someone-elses");
-    expect(fallback?.textContent).toContain(alias);
+    // The user's default model is not part of this plan.
+    expect(screen.queryByText("models.default")).toBeNull();
     expect(
         screen.getByText(/already names an environment variable/u),
     ).toBeTruthy();

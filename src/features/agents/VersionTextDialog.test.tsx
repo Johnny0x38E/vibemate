@@ -5,52 +5,38 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { createAppI18n } from "../../i18n";
 import {
     VersionRestoreRequestError,
-    readVersionText,
-    type VersionText,
+    readCurrentConfigurationText,
+    type CurrentConfigText,
 } from "../../lib/desktop/versionRestore";
 import { CurrentConfigurationDialog } from "./VersionTextDialog";
 
 vi.mock(import("../../lib/desktop/versionRestore"), async (original) => ({
     ...(await original()),
-    readVersionText: vi.fn(),
+    readCurrentConfigurationText: vi.fn(),
 }));
 
-const ID = "a".repeat(32);
-const REVISION = "100-1-0";
-const OTHER_REVISION = "101-1-0";
 const PATH = "/Users/test/.claude/settings.json";
 const OTHER_PATH = "/Users/test/.claude/other.json";
-const ENTRY = `operation:${ID}`;
+const files = [PATH, OTHER_PATH];
 
-const files = [
-    {
-        revisionId: REVISION,
-        targetPath: PATH,
-        currentDigest: "c".repeat(64),
-    },
-    {
-        revisionId: OTHER_REVISION,
-        targetPath: OTHER_PATH,
-        currentDigest: "c".repeat(64),
-    },
-];
-
-function text(revisionId: string, current: string): VersionText {
+function text(targetPath: string, current: string): CurrentConfigText {
     return {
-        revisionId,
-        targetPath: PATH,
+        targetPath,
         format: "json",
         current: { state: "present", text: current, bytes: current.length },
-        target: { state: "present", text: "{}", bytes: 2 },
     };
 }
 
-const loadText = vi.mocked(readVersionText);
+const loadText = vi.mocked(readCurrentConfigurationText);
+
+function renderedText(): string {
+    return document.querySelector("pre")?.textContent ?? "";
+}
 
 beforeEach(() => {
     loadText.mockReset().mockResolvedValue({
         kind: "desktop",
-        text: text(REVISION, '{\n  "model": "current-model"\n}'),
+        text: text(PATH, '{\n  "model": "current-model"\n}'),
     });
 });
 afterEach(cleanup);
@@ -61,9 +47,7 @@ async function mount(onClose = vi.fn()): Promise<void> {
         <I18nextProvider i18n={i18n}>
             <CurrentConfigurationDialog
                 agent="claudeCode"
-                entryKey={ENTRY}
                 files={files}
-                initialRevisionId={REVISION}
                 onClose={onClose}
                 returnFocus={() => null}
             />
@@ -78,13 +62,12 @@ test("shows sanitized current configuration text only", async () => {
     expect(
         screen.queryByText(/Values under credential-like keys are masked/u),
     ).toBeNull();
-    const current = await screen.findByRole("region", {
-        name: "Current configuration",
-    });
     await waitFor(() => {
-        expect(current.textContent).toContain("current-model");
+        expect(renderedText()).toContain("current-model");
     });
-    expect(current.textContent).toContain("Original size:");
+    // The current-config heading and original size are not part of this view.
+    expect(screen.queryByText("Current configuration")).toBeNull();
+    expect(screen.queryByText(/Original size/u)).toBeNull();
     // No retained/planned dual column and no full-text expand.
     expect(screen.queryByText("Show full configuration text")).toBeNull();
     expect(screen.queryByText("Retained version")).toBeNull();
@@ -92,38 +75,26 @@ test("shows sanitized current configuration text only", async () => {
     expect(screen.queryByRole("region", { name: "Differences" })).toBeNull();
 });
 
-test("switches files and loads each text with its own digest", async () => {
-    loadText.mockImplementation((_agent, _entry, revisionId) =>
+test("switches files and loads each text by its target path", async () => {
+    loadText.mockImplementation((_agent, targetPath) =>
         Promise.resolve({
             kind: "desktop",
             text: text(
-                revisionId,
-                revisionId === REVISION ? "current one" : "current two",
+                targetPath,
+                targetPath === PATH ? "current one" : "current two",
             ),
         }),
     );
     await mount();
-    const current = await screen.findByRole("region", {
-        name: "Current configuration",
-    });
     await waitFor(() => {
-        expect(current.textContent).toContain("current one");
+        expect(renderedText()).toContain("current one");
     });
     await userEvent.click(screen.getByRole("button", { name: OTHER_PATH }));
     await waitFor(() => {
-        expect(loadText).toHaveBeenCalledWith(
-            "claudeCode",
-            ENTRY,
-            OTHER_REVISION,
-            "c".repeat(64),
-        );
+        expect(loadText).toHaveBeenCalledWith("claudeCode", OTHER_PATH);
     });
     await waitFor(() => {
-        expect(
-            screen.getByRole("region", {
-                name: "Current configuration",
-            }).textContent,
-        ).toContain("current two");
+        expect(renderedText()).toContain("current two");
     });
 });
 
@@ -131,14 +102,9 @@ test("reports absence and unavailable current text without raw content", async (
     loadText.mockResolvedValue({
         kind: "desktop",
         text: {
-            revisionId: REVISION,
             targetPath: PATH,
             format: "json",
             current: { state: "absent" },
-            target: {
-                state: "unavailable",
-                reason: "backup_unavailable",
-            },
         },
     });
     await mount();
@@ -147,25 +113,22 @@ test("reports absence and unavailable current text without raw content", async (
     ).toBeTruthy();
 });
 
-test("a stale preview is reported and can be retried", async () => {
+test("a failed read is reported and can be retried", async () => {
     loadText
-        .mockRejectedValueOnce(new VersionRestoreRequestError("plan_stale"))
+        .mockRejectedValueOnce(
+            new VersionRestoreRequestError("operation_failed"),
+        )
         .mockResolvedValueOnce({
             kind: "desktop",
-            text: text(REVISION, "current"),
+            text: text(PATH, "current"),
         });
     await mount();
     expect(
-        await screen.findByText(
-            /A file changed since the preview, so nothing was written/u,
-        ),
+        await screen.findByText(/The restore could not be completed/u),
     ).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
-    const current = await screen.findByRole("region", {
-        name: "Current configuration",
-    });
     await waitFor(() => {
-        expect(current.textContent).toContain("current");
+        expect(renderedText()).toContain("current");
     });
     expect(loadText).toHaveBeenCalledTimes(2);
 });

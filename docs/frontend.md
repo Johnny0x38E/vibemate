@@ -1072,17 +1072,24 @@ plain secondary text reading `Provider · Model` (for example
 because the row gives it one line. There is no chip or badge around it. This is
 vibemate's own presentation: the `name` field written into an Agent file reads
 `(vibemate-<Provider>) <model ID>`, so the two formats are deliberately
-independent. The summary appears only when the history pin is `matched` and both
-labels are present; otherwise the row states that no configuration summary
-exists. The same text is used at the top of the Write segment. Rows have no hover
-state: only the Write and Detail buttons are interactive.
+independent. The row reads the model each Agent currently names in its live
+configuration, independent of history matching: Claude Code's
+`env.ANTHROPIC_MODEL` (then `model`), Pi's `defaultModel`/`defaultProvider`, and
+Grok Build's `[models].default` alias. When that model resolves to a still-saved
+vibemate Provider/model pair the row shows `Provider · Model`; any other readable
+configuration reads **Own configuration** (`自有配置`); an Agent that was not
+discovered, or whose files could not be read safely, keeps **No configuration
+summary**. Rows have no hover state: only the Write and Detail buttons are
+interactive.
 
 `ConfigPreview` serves Claude Code, Pi and Grok Build through their typed desktop
 adapters and opens from the list's **Write** icon button in a compact dialog. Pi
 previews both `models.json` and `settings.json` and binds the read-only
 `auth.json` precedence token. Grok Build changes one TOML document, so its card
-lists the planned `[model.<alias>]` fields, `[models].default`, and the
-higher-precedence files that were located but never read. Each adapter keeps its own
+lists only the planned `[model.<alias>]` fields and the higher-precedence files
+that were located but never read. It deliberately leaves `[models].default`
+alone: Grok's own picker writes that user preference, and vibemate shows its last
+recorded alias write instead of reading the default. Each adapter keeps its own
 restart and outcome sentences, because "written" means a different set of files in
 each one. Applying consumes the reviewed preview, reports per-file backups and keeps
 navigation and other configuration actions blocked while the native operation is
@@ -1097,7 +1104,11 @@ root-scoped paginated history, choosing its commands from one per-Agent table; t
 backend independently checks operation ownership before previewing or restoring any
 target. It pins the backend-reported current configuration above the list, marks the
 matching history row, shows per-file backup availability, loads older entries by
-cursor and offers version restore, resolution review and confirmed deletion.
+cursor and offers version restore, resolution review and confirmed deletion. The
+pin's **Detailed configuration** dialog reads and sanitizes the live file directly,
+so it stays enabled after an external edit no longer matches a retained version;
+the taller dialog shows only the current text, without a current-configuration
+heading or original-size row.
 Interrupted mutations set `requiresResolution` on a history row, withholding the
 legacy restore button. `src/lib/desktop/recovery.ts` validates metadata-only reviews
 and sends only the fixed Agent identity, operation ID and complete backend plan's

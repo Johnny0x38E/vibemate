@@ -9,6 +9,8 @@ pnpm-lock.yaml
 src-tauri/tests/fixtures/
 .codegraph/
 .pnpm-store/
+# Locally excluded browser captures from agent sessions.
+.playwright-mcp/
 
 # Personal learning documents are not part of shared checks.
 docs/local/

@@ -47,10 +47,7 @@ import {
     VersionRestorePlanInline,
     VersionRestoreResultCard,
 } from "./VersionRestoreCard";
-import {
-    CurrentConfigurationDialog,
-    type CurrentConfigTextFile,
-} from "./VersionTextDialog";
+import { CurrentConfigurationDialog } from "./VersionTextDialog";
 import {
     HistoryDeleteAction,
     historyDeleteBlockReason,
@@ -140,17 +137,7 @@ export function RestoreView({
     /** When true, the page-level top owns the current-config pin. */
     hidePin?: boolean;
     /** Notifies the parent whenever the live pin from a page changes. */
-    onCurrentChange?: (
-        current: HistoryCurrentConfig | null,
-        summary?: {
-            providerLabel: string | null;
-            modelLabel: string | null;
-            textSource: {
-                entryKey: string;
-                files: CurrentConfigTextFile[];
-            } | null;
-        },
-    ) => void;
+    onCurrentChange?: (current: HistoryCurrentConfig | null) => void;
 }): JSX.Element {
     const { t, i18n } = useTranslation();
     const [list, setList] = useState<ListState>({ kind: "loading" });
@@ -234,42 +221,7 @@ export function RestoreView({
             currentCallback.current?.(null);
             return;
         }
-        const matchedKey = list.current.matchedEntryKey;
-        const matched =
-            list.current.status === "matched" && matchedKey !== null
-                ? list.entries.find((entry) => entry.entryKey === matchedKey)
-                : undefined;
-        // Write top uses the same HistoryCurrentConfig fields as list rows.
-        const providerLabel = list.current.providerLabel;
-        const modelLabel = list.current.modelLabel;
-        const textSource =
-            matched === undefined || matchedKey === null
-                ? null
-                : {
-                      entryKey: matchedKey,
-                      files: matched.revisions.flatMap((revision) => {
-                          const step = matched.sourceSteps[revision.ordinal];
-                          if (step === undefined) return [];
-                          const live = list.current.files.find(
-                              (file) => file.targetPath === step.targetPath,
-                          );
-                          return [
-                              {
-                                  revisionId: revision.revisionId,
-                                  targetPath: step.targetPath,
-                                  currentDigest: live?.currentDigest ?? null,
-                              },
-                          ];
-                      }),
-                  };
-        currentCallback.current?.(list.current, {
-            providerLabel,
-            modelLabel,
-            textSource:
-                textSource !== null && textSource.files.length > 0
-                    ? textSource
-                    : null,
-        });
+        currentCallback.current?.(list.current);
     }, [list]);
 
     // A page read and a restore action share one list; do not let them interleave
@@ -653,60 +605,6 @@ export function RestoreView({
                             <CurrentConfigPin
                                 current={list.current}
                                 agent={agent}
-                                textSource={
-                                    list.current.status === "matched" &&
-                                    list.current.matchedEntryKey !== null
-                                        ? (() => {
-                                              const matched = list.entries.find(
-                                                  (entry) =>
-                                                      entry.entryKey ===
-                                                      list.current
-                                                          .matchedEntryKey,
-                                              );
-                                              if (matched === undefined)
-                                                  return null;
-                                              const files =
-                                                  matched.revisions.flatMap(
-                                                      (revision) => {
-                                                          const step =
-                                                              matched
-                                                                  .sourceSteps[
-                                                                  revision
-                                                                      .ordinal
-                                                              ];
-                                                          if (
-                                                              step === undefined
-                                                          )
-                                                              return [];
-                                                          const live =
-                                                              list.current.files.find(
-                                                                  (file) =>
-                                                                      file.targetPath ===
-                                                                      step.targetPath,
-                                                              );
-                                                          return [
-                                                              {
-                                                                  revisionId:
-                                                                      revision.revisionId,
-                                                                  targetPath:
-                                                                      step.targetPath,
-                                                                  currentDigest:
-                                                                      live?.currentDigest ??
-                                                                      null,
-                                                              },
-                                                          ];
-                                                      },
-                                                  );
-                                              return files.length === 0
-                                                  ? null
-                                                  : {
-                                                        entryKey:
-                                                            matched.entryKey,
-                                                        files,
-                                                    };
-                                          })()
-                                        : null
-                                }
                             />
                         )}
                         {list.entries.length === 0 ? (
@@ -909,34 +807,30 @@ export function RestoreView({
     );
 }
 
-export type CurrentConfigTextSource = {
-    entryKey: string;
-    files: CurrentConfigTextFile[];
-};
-
 /**
  * Page-level pin for the live configuration: label plus managed file paths.
  *
  * Match status and per-file readable labels stay out of this strip; history rows
  * still carry their own current-version mark when a retained entry matches.
- * Provider/model live on the Write segment instead. 「详细配置」 is the single
- * entry for actual current config text (right-aligned on this row).
+ * Provider/model live on the Write segment instead. 「详细配置」 reads the live
+ * files directly, so it stays available after an external edit no longer
+ * matches a retained version; only an unreadable file disables it.
  */
 export function CurrentConfigPin({
     current,
     agent = null,
-    textSource = null,
 }: {
     current: HistoryCurrentConfig;
     agent?: ConfigurableAgent | null;
-    textSource?: CurrentConfigTextSource | null;
 }): JSX.Element {
     const { t } = useTranslation();
     const label = t("agents.restore.current.title");
     const [open, setOpen] = useState(false);
     const trigger = useRef<HTMLButtonElement | null>(null);
-    const canOpen =
-        agent !== null && textSource !== null && textSource.files.length > 0;
+    const readablePaths = current.files
+        .filter((file) => file.readable)
+        .map((file) => file.targetPath);
+    const canOpen = agent !== null && readablePaths.length > 0;
     return (
         <div className={restore["currentPin"]} role="region" aria-label={label}>
             <div className={restore["currentPinRow"]}>
@@ -974,28 +868,18 @@ export function CurrentConfigPin({
                     {t("agents.version.textTitle")}
                 </button>
             </div>
-            {/* Inline null checks (not `canOpen`) so TypeScript narrows the props. */}
-            {open &&
-                agent !== null &&
-                textSource !== null &&
-                textSource.files.length > 0 && (
-                    <CurrentConfigurationDialog
-                        agent={agent}
-                        entryKey={textSource.entryKey}
-                        files={textSource.files}
-                        initialRevisionId={
-                            textSource.files[0]?.revisionId ?? ""
-                        }
-                        onClose={() => {
-                            setOpen(false);
-                        }}
-                        returnFocus={() =>
-                            trigger.current?.isConnected
-                                ? trigger.current
-                                : null
-                        }
-                    />
-                )}
+            {open && agent !== null && readablePaths.length > 0 && (
+                <CurrentConfigurationDialog
+                    agent={agent}
+                    files={readablePaths}
+                    onClose={() => {
+                        setOpen(false);
+                    }}
+                    returnFocus={() =>
+                        trigger.current?.isConnected ? trigger.current : null
+                    }
+                />
+            )}
         </div>
     );
 }
@@ -1122,6 +1006,7 @@ function OperationRow({
                     <div className={restore["rowToggle"]}>
                         <IconButton
                             icon="chevron"
+                            borderless
                             label={
                                 showExpand
                                     ? t("agents.restore.collapseRow")

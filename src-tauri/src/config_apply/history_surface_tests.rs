@@ -3,7 +3,7 @@
 use super::*;
 use crate::agents::{
     ClaudeCodeRestoreError, DiscoveryEnvironment,
-    history::{ConfigurationHistoryRequest, configuration_history_page},
+    history::{ActiveAgentModel, ConfigurationHistoryRequest, configuration_history_page},
     recovery::ConfigurationAgent,
 };
 use crate::config_apply::{HistoryCurrentStatus, HistoryScope, configuration_history};
@@ -538,7 +538,7 @@ fn history_surface_current_pin_resolves_provider_and_model_alias_or_id() {
     let content = serde_json::to_vec(&json!({
         "env": {
             "ANTHROPIC_MODEL": "deepseek/deepseek-v4.1-flash",
-            "ANTHROPIC_BASE_URL": "https://api.deepseek.com"
+            "ANTHROPIC_BASE_URL": "https://api.deepseek.com/anthropic"
         }
     }))
     .unwrap();
@@ -572,6 +572,15 @@ fn history_surface_current_pin_resolves_provider_and_model_alias_or_id() {
     );
     // Alias wins over id for the list-card model slot.
     assert_eq!(page.current.model_label.as_deref(), Some("Flash Alias"));
+    // The live model is ours: its gateway address and saved pair both resolve.
+    assert_eq!(
+        page.active,
+        ActiveAgentModel::Ours {
+            provider_label: "Command Code GOAT".into(),
+            model_id: "deepseek/deepseek-v4.1-flash".into(),
+            model_label: "Flash Alias".into(),
+        }
+    );
     let serialized = serde_json::to_value(&page).unwrap();
     assert_eq!(
         serialized["current"]["providerLabel"].as_str(),
@@ -632,6 +641,12 @@ fn history_surface_current_pin_resolves_provider_and_model_alias_or_id() {
         &fixture.backups(),
     )
     .unwrap();
+    fixture.sql(&format!(
+        "INSERT INTO pi_provider_binding(config_root, provider_key, provider_id)
+         VALUES('{}','x','{}')",
+        pi_root.to_str().unwrap(),
+        provider.id.as_str()
+    ));
     let pi = configuration_history_page(
         &fixture.storage,
         &environment,
@@ -652,8 +667,55 @@ fn history_surface_current_pin_resolves_provider_and_model_alias_or_id() {
         pi.current.model_label.as_deref(),
         Some("deepseek/deepseek-v4.1-flash")
     );
+    assert_eq!(
+        pi.active,
+        ActiveAgentModel::Ours {
+            provider_label: "Command Code GOAT".into(),
+            model_id: "deepseek/deepseek-v4.1-flash".into(),
+            model_label: "deepseek/deepseek-v4.1-flash".into(),
+        }
+    );
 
-    // Grok: models.default alias -> [model.<alias>].model id.
+    // A session-scoped `/model` switch outranks settings.json. The latest
+    // session tail names the model Pi actually used.
+    let sessions = pi_root.join("sessions/project");
+    fs::create_dir_all(&sessions).unwrap();
+    let session = sessions.join("latest.jsonl");
+    fs::write(
+        &session,
+        "{\"type\":\"model_change\",\"provider\":\"x\",\"modelId\":\"deepseek/deepseek-v4.1-flash\"}\n",
+    )
+    .unwrap();
+    let pi = configuration_history_page(
+        &fixture.storage,
+        &environment,
+        &request(ConfigurationAgent::Pi, 50),
+        &fixture.backups(),
+    )
+    .unwrap();
+    assert_eq!(
+        pi.active,
+        ActiveAgentModel::Ours {
+            provider_label: "Command Code GOAT".into(),
+            model_id: "deepseek/deepseek-v4.1-flash".into(),
+            model_label: "deepseek/deepseek-v4.1-flash".into(),
+        }
+    );
+    fs::write(
+        &session,
+        "{\"type\":\"model_change\",\"provider\":\"x\",\"modelId\":\"user/other-model\"}\n",
+    )
+    .unwrap();
+    let pi = configuration_history_page(
+        &fixture.storage,
+        &environment,
+        &request(ConfigurationAgent::Pi, 50),
+        &fixture.backups(),
+    )
+    .unwrap();
+    assert_eq!(pi.active, ActiveAgentModel::Own);
+
+    // Grok: current models.default alias resolved through its binding.
     let grok_root = environment.home.join(".grok");
     fs::create_dir_all(&grok_root).unwrap();
     let grok_path = grok_root.join("config.toml");
@@ -679,6 +741,14 @@ api_key = "secret"
         &fixture.backups(),
     )
     .unwrap();
+    // The alias write records which model vibemate last produced for this root.
+    fixture.sql(&format!(
+        "INSERT INTO grok_model_binding
+             (config_root,model_alias,provider_id,model_id,last_written_at)
+         VALUES('{}','owned','{}','deepseek/deepseek-v4.1-flash',123)",
+        grok_root.to_str().unwrap(),
+        provider.id.as_str()
+    ));
     let grok = configuration_history_page(
         &fixture.storage,
         &environment,
@@ -688,15 +758,66 @@ api_key = "secret"
     .unwrap();
     assert_eq!(grok.current.status, HistoryCurrentStatus::Matched);
     assert_eq!(
-        grok.current.provider_label.as_deref(),
-        Some("Command Code GOAT")
+        grok.active,
+        ActiveAgentModel::Ours {
+            provider_label: "Command Code GOAT".into(),
+            model_id: "deepseek/deepseek-v4.1-flash".into(),
+            model_label: "deepseek/deepseek-v4.1-flash".into(),
+        }
+    );
+
+    // Grok changing its default to a built-in model makes the current model
+    // the user's own, even though the live file no longer matches a version.
+    fs::write(
+        &grok_path,
+        grok_body.replace("default = \"owned\"", "default = \"grok-4.6\""),
+    )
+    .unwrap();
+    let grok = configuration_history_page(
+        &fixture.storage,
+        &environment,
+        &request(ConfigurationAgent::GrokBuild, 50),
+        &fixture.backups(),
+    )
+    .unwrap();
+    assert_eq!(grok.current.status, HistoryCurrentStatus::Unrecorded);
+    assert_eq!(grok.active, ActiveAgentModel::Own);
+
+    // Removing the alias entry keeps the same classification.
+    fs::write(&grok_path, "[models]\ndefault = \"grok-4.6\"\n").unwrap();
+    let grok = configuration_history_page(
+        &fixture.storage,
+        &environment,
+        &request(ConfigurationAgent::GrokBuild, 50),
+        &fixture.backups(),
+    )
+    .unwrap();
+    assert_eq!(grok.active, ActiveAgentModel::Own);
+}
+
+#[test]
+fn active_model_ipc_uses_camel_case_fields_and_kind_tags() {
+    let ours = serde_json::to_value(ActiveAgentModel::Ours {
+        provider_label: "Provider".into(),
+        model_id: "vendor/model".into(),
+        model_label: "Alias".into(),
+    })
+    .unwrap();
+    assert_eq!(
+        ours,
+        json!({
+            "kind": "ours",
+            "providerLabel": "Provider",
+            "modelId": "vendor/model",
+            "modelLabel": "Alias"
+        })
     );
     assert_eq!(
-        grok.current.model_id.as_deref(),
-        Some("deepseek/deepseek-v4.1-flash")
+        serde_json::to_value(ActiveAgentModel::Own).unwrap(),
+        json!({ "kind": "own" })
     );
     assert_eq!(
-        grok.current.model_label.as_deref(),
-        Some("deepseek/deepseek-v4.1-flash")
+        serde_json::to_value(ActiveAgentModel::Unknown).unwrap(),
+        json!({ "kind": "unknown" })
     );
 }

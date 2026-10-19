@@ -588,19 +588,15 @@
             "textTitle": "Detailed configuration",
             "textClose": "Close",
             "textFiles": "Files in this version",
-            "textCurrent": "Current configuration",
             "textAbsent": "The file did not exist at this point.",
             "textUnavailable": "This text cannot be shown safely: {{reason}}",
-            "textBytes": "Original size: {{bytes}} bytes",
             "textLoading": "Reading and sanitizing configuration…",
             "textRetry": "Try again",
             "textDiff": "Differences",
             "textNoDiff": "No line differences.",
             "textPreviewMode": "The browser preview cannot read configuration files. Open the vibemate desktop app.",
 
-            "fieldOwnerRef": "Recorded owner reference",
-            "fieldTextBytes": "Original size",
-            "textBytesUnit": "{{bytes}} bytes"
+            "fieldOwnerRef": "Recorded owner reference"
         },
         "directory": "User configuration directory: {{path}}",
         "states": {
@@ -960,6 +956,7 @@
             "skill": "Skill {{value}}",
             "mcp": "MCP {{value}}",
             "none": "No configuration summary",
+            "own": "Own configuration",
             "separator": " · ",
             "notWritten": "not written",
             "providerModel": "{{provider}} · {{model}}"

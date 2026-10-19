@@ -2,13 +2,11 @@ import { Dialog } from "@base-ui/react/dialog";
 import { useCallback, useEffect, useRef, useState, type JSX } from "react";
 import { useTranslation } from "react-i18next";
 import buttons from "../../components/actionButtons.module.css";
-import hierarchy from "../../components/textHierarchy.module.css";
 import type { ConfigurableAgent } from "../../lib/desktop/agents";
 import {
     VersionRestoreRequestError,
-    readVersionText,
-    type VersionText,
-    type VersionTextSide,
+    readCurrentConfigurationText,
+    type CurrentConfigText,
 } from "../../lib/desktop/versionRestore";
 import styles from "./AgentList.module.css";
 import { ConfigText } from "./ConfigText";
@@ -18,64 +16,43 @@ type TextState =
     | { kind: "loading" }
     | { kind: "preview" }
     | { kind: "error"; code: VersionRestoreRequestError["code"] }
-    | { kind: "ready"; text: VersionText };
-
-export type CurrentConfigTextFile = {
-    revisionId: string;
-    targetPath: string;
-    currentDigest: string | null;
-};
+    | { kind: "ready"; text: CurrentConfigText };
 
 /**
- * Page-level 「详细配置」 dialog (shared narrow popupCompact): sanitized *current* configuration text only.
+ * Page-level 「详细配置」 dialog: sanitized live configuration text only.
  *
- * Bound to a matched history entry so Rust can re-check the live digest. Never
- * shows retained/planned text or a dual-column layout — those belong nowhere
- * on the view-version path, and write previews use field diffs instead.
+ * Reads the current file directly and does not need a matched history entry, so
+ * an external edit (Grok Build rewrites its own `config.toml` frequently) does
+ * not disable the dialog. The caller passes target paths reported by the
+ * backend; Rust revalidates each one against the Agent's fixed scope. No
+ * retained version, planned text or dual-column layout is shown here.
  */
 export function CurrentConfigurationDialog({
     agent,
-    entryKey,
     files,
-    initialRevisionId,
     onClose,
     returnFocus,
 }: {
     agent: ConfigurableAgent;
-    entryKey: string;
-    files: CurrentConfigTextFile[];
-    initialRevisionId: string;
+    files: string[];
     onClose: () => void;
     returnFocus: () => HTMLElement | null;
 }): JSX.Element {
     const { t } = useTranslation();
-    const [selectedId, setSelectedId] = useState(initialRevisionId);
+    const [selectedPath, setSelectedPath] = useState(files[0] ?? "");
     const [reload, setReload] = useState(0);
     const [state, setState] = useState<TextState>({ kind: "loading" });
     const generation = useRef(0);
     const title = useRef<HTMLHeadingElement>(null);
 
     const loadText = useCallback(
-        (id: string) => {
-            const file = files.find((candidate) => candidate.revisionId === id);
-            if (file === undefined) {
-                return Promise.reject(
-                    new VersionRestoreRequestError("invalid_request"),
-                );
-            }
-            return readVersionText(
-                agent,
-                entryKey,
-                file.revisionId,
-                file.currentDigest,
-            );
-        },
-        [agent, entryKey, files],
+        (path: string) => readCurrentConfigurationText(agent, path),
+        [agent],
     );
 
     useEffect(() => {
         const current = ++generation.current;
-        loadText(selectedId).then(
+        loadText(selectedPath).then(
             (result) => {
                 if (current !== generation.current) return;
                 setState(
@@ -98,10 +75,11 @@ export function CurrentConfigurationDialog({
         return () => {
             generation.current += 1;
         };
-    }, [loadText, selectedId, reload]);
+    }, [loadText, selectedPath, reload]);
 
-    const selected =
-        files.find((file) => file.revisionId === selectedId) ?? files[0];
+    const selected = files.includes(selectedPath)
+        ? selectedPath
+        : (files[0] ?? "");
 
     return (
         <Dialog.Root
@@ -113,7 +91,10 @@ export function CurrentConfigurationDialog({
             <Dialog.Portal>
                 <Dialog.Backdrop className={dialog["backdrop"]} />
                 <Dialog.Popup
-                    className={dialog["popupCompact"]}
+                    className={[
+                        dialog["popupCompact"],
+                        dialog["popupText"],
+                    ].join(" ")}
                     initialFocus={title}
                     finalFocus={returnFocus}
                 >
@@ -125,7 +106,7 @@ export function CurrentConfigurationDialog({
                         {t("agents.version.textTitle")}
                     </Dialog.Title>
                     <Dialog.Description className={dialog["meta"]}>
-                        {selected?.targetPath ?? ""}
+                        {selected}
                     </Dialog.Description>
                     {files.length > 1 && (
                         <div
@@ -133,31 +114,29 @@ export function CurrentConfigurationDialog({
                             role="group"
                             aria-label={t("agents.version.textFiles")}
                         >
-                            {files.map((file) => (
+                            {files.map((path) => (
                                 <button
-                                    key={file.revisionId}
+                                    key={path}
                                     type="button"
                                     className={dialog["fileTab"]}
-                                    aria-pressed={
-                                        file.revisionId === selectedId
-                                    }
-                                    aria-label={file.targetPath}
+                                    aria-pressed={path === selected}
+                                    aria-label={path}
                                     onClick={() => {
                                         setState({ kind: "loading" });
-                                        setSelectedId(file.revisionId);
+                                        setSelectedPath(path);
                                     }}
                                 >
-                                    {baseName(file.targetPath)}
+                                    {baseName(path)}
                                 </button>
                             ))}
                         </div>
                     )}
-                    {selected === undefined && (
+                    {selected === "" && (
                         <p className={styles["error"]} role="alert">
                             {t("agents.restore.errors.invalid_request")}
                         </p>
                     )}
-                    {selected !== undefined && state.kind === "loading" && (
+                    {selected !== "" && state.kind === "loading" && (
                         <p className={styles["hint"]} role="status">
                             {t("agents.version.textLoading")}
                         </p>
@@ -187,13 +166,10 @@ export function CurrentConfigurationDialog({
                         </>
                     )}
                     {state.kind === "ready" && (
-                        <>
-                            <CurrentTextSide
-                                side={state.text.current}
-                                format={state.text.format}
-                                label={t("agents.version.textCurrent")}
-                            />
-                        </>
+                        <CurrentTextSide
+                            side={state.text.current}
+                            format={state.text.format}
+                        />
                     )}
                     <div className={dialog["actions"]}>
                         <button
@@ -214,16 +190,13 @@ export function CurrentConfigurationDialog({
 function CurrentTextSide({
     side,
     format,
-    label,
 }: {
-    side: VersionTextSide;
-    format: "json" | "toml";
-    label: string;
+    side: CurrentConfigText["current"];
+    format: CurrentConfigText["format"];
 }): JSX.Element {
     const { t } = useTranslation();
     return (
-        <section className={dialog["side"]} aria-label={label}>
-            <h3 className={dialog["sideHeading"]}>{label}</h3>
+        <section className={dialog["side"]}>
             {side.state === "absent" && (
                 <p className={styles["hint"]}>
                     {t("agents.version.textAbsent")}
@@ -237,20 +210,7 @@ function CurrentTextSide({
                 </p>
             )}
             {side.state === "present" && (
-                <>
-                    <p className={dialog["meta"]}>
-                        <span className={hierarchy["label"]}>
-                            {t("agents.version.fieldTextBytes")}
-                        </span>
-                        {": "}
-                        <span className={hierarchy["value"]}>
-                            {t("agents.version.textBytesUnit", {
-                                bytes: side.bytes,
-                            })}
-                        </span>
-                    </p>
-                    <ConfigText text={side.text} format={format} />
-                </>
+                <ConfigText text={side.text} format={format} />
             )}
         </section>
     );

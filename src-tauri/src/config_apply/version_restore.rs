@@ -681,6 +681,63 @@ fn read_target_with_bytes(path: &Path) -> Result<(super::TargetFile, Vec<u8>), W
     })
 }
 
+/// Sanitized current text for one file of a trusted Agent scope.
+///
+/// Unlike [`VersionText`], this has no history entry or revision identity. The
+/// dialog can therefore show the live configuration even after Grok Build or
+/// another editor changed the file, while still refusing path input outside the
+/// adapter's fixed scope.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CurrentConfigText {
+    /// Absolute target path from the trusted scope.
+    pub target_path: String,
+    /// Document format for the dialog.
+    pub format: version_text::ConfigFormat,
+    /// Sanitized current side only.
+    pub current: VersionTextSide,
+}
+
+/// Read and sanitize the current text of one exact scope file.
+///
+/// `target_path` must be one of the scope's owned files; anything else is
+/// refused rather than treated as a path. The file is read fresh, so this does
+/// not depend on the live digest matching a retained version. A symlink,
+/// unreadable document or unsupported format is reported in `current` as an
+/// `unavailable` side, never as raw content.
+///
+/// # Errors
+/// Returns `InvalidRequest` when the target is not owned by this scope. A
+/// per-file read or sanitize failure is reported in `current`, not as an error.
+pub fn read_current_text(
+    scope: &HistoryScope,
+    target_path: &str,
+) -> Result<CurrentConfigText, WriteError> {
+    if !scope.owns_target(target_path) {
+        return Err(WriteError::InvalidRequest);
+    }
+    let format = version_text::format_for(scope.operation_kind());
+    let current = match read_target_with_bytes(Path::new(target_path)) {
+        Ok((current, _)) if current.symlink => VersionTextSide::Unavailable {
+            reason: WriteError::SymlinkRefused.code().to_owned(),
+        },
+        Ok((current, _)) if !current.exists => VersionTextSide::Absent,
+        Ok((_, bytes)) => version_text::render_text(format, &bytes).unwrap_or_else(|reason| {
+            VersionTextSide::Unavailable {
+                reason: reason.to_owned(),
+            }
+        }),
+        Err(error) => VersionTextSide::Unavailable {
+            reason: error.code().to_owned(),
+        },
+    };
+    Ok(CurrentConfigText {
+        target_path: target_path.to_owned(),
+        format,
+        current,
+    })
+}
+
 /// Read the complete sanitized current and retained text for one revision.
 ///
 /// This is only available for a revision-backed file of the entry. The request

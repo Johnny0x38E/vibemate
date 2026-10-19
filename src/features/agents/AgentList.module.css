@@ -130,7 +130,8 @@
     gap: 8px;
     margin-inline-start: auto;
     box-sizing: border-box;
-    /* Equal-width right rail so version / 未发现 line up across rows. */
+    /* Fixed right rail: tight dot+text group is flex-end aligned inside
+       so rows share one right edge without splitting the pair apart. */
     width: 12rem;
     min-width: 12rem;
     color: var(--color-summary);
@@ -159,12 +160,14 @@
 }
 
 .statusText {
+    /* Content-sized: do not flex-grow inside the 12rem rail (that split
+       dot and text to opposite ends). Tight group stays right-aligned via
+       .rowStatus justify-content: flex-end, matching Provider .tagGroup. */
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     min-width: 0;
-    flex: 1 1 auto;
-    text-align: end;
+    max-width: calc(12rem - 8px - 8px);
 }
 
 .detailGroup {

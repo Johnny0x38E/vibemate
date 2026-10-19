@@ -216,6 +216,9 @@ function currentConfig(
                 readable: status !== "unreadable",
             },
         ],
+        providerLabel: null,
+        modelId: null,
+        modelLabel: null,
     };
 }
 

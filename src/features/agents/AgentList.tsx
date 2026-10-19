@@ -48,6 +48,7 @@ import {
     type AgentVersionResult,
 } from "../../lib/desktop/agentVersions";
 import { getAutoVersionProbe } from "../../lib/desktop/settings";
+import surfaceList from "../../components/surfaceList.module.css";
 import styles from "./AgentList.module.css";
 
 type State =
@@ -101,7 +102,7 @@ export function AgentList({
     }>({ providerLabel: null, modelLabel: null });
     const [pinTextSource, setPinTextSource] =
         useState<CurrentConfigTextSource | null>(null);
-    /** List-card Provider labels from history current match (FE-only contract). */
+    /** List-card provider|model labels from history current / matched entry. */
     const [listSummaries, setListSummaries] = useState<
         Partial<
             Record<
@@ -210,8 +211,8 @@ export function AgentList({
         target?.focus();
     }, [hidden, page]);
 
-    // List cards: bind real Provider from history current match when available.
-    // Model is not on the history IPC page yet — show 「未写入」, never a fake dash.
+    // List rows: `{providerLabel} | {modelLabel}` from HistoryCurrentConfig when
+    // status is matched. Both null otherwise — omit the line, never dual「未写入」.
     useEffect(() => {
         if (hidden || page.kind !== "list") return;
         let active = true;
@@ -227,19 +228,13 @@ export function AgentList({
                     if (result.kind !== "desktop") {
                         return [agentId, empty] as const;
                     }
-                    const matchedKey = result.page.current.matchedEntryKey;
-                    const matched =
-                        result.page.current.status === "matched" &&
-                        matchedKey !== null
-                            ? result.page.entries.find(
-                                  (entry) => entry.entryKey === matchedKey,
-                              )
-                            : undefined;
-                    const providerLabel =
-                        matched?.ownerLabel ?? matched?.ownerRef ?? null;
+                    const { current } = result.page;
                     return [
                         agentId,
-                        { providerLabel, modelLabel: null },
+                        {
+                            providerLabel: current.providerLabel,
+                            modelLabel: current.modelLabel,
+                        },
                     ] as const;
                 } catch {
                     return [agentId, empty] as const;
@@ -636,188 +631,114 @@ export function AgentList({
                         {t(`agents.errors.${state.code}`)}
                     </p>
                 )}
-                {
-                    <ul
-                        className={styles["cards"]}
-                        aria-label={t("agents.list.label")}
-                    >
-                        {AGENT_IDS.map((id) => {
-                            const row = observation(id);
-                            const reported =
-                                row === undefined ? undefined : cliVersion(row);
-                            return (
-                                <li key={id}>
-                                    <button
-                                        type="button"
-                                        className={styles["card"]}
-                                        data-agent-card={id}
-                                        aria-disabled={
-                                            state.kind === "loading" ||
-                                            versionBusy
-                                        }
-                                        aria-describedby={`agent-card-status-${id}`}
-                                        aria-label={t(
-                                            "agents.list.openDetail",
-                                            {
-                                                name: t(`agents.names.${id}`),
-                                            },
-                                        )}
-                                        onClick={() => {
-                                            openDetail(id);
-                                        }}
-                                    >
-                                        <AgentIcon id={id} size="row" />
-                                        <span className={styles["cardText"]}>
-                                            <span
-                                                className={styles["cardName"]}
-                                            >
-                                                {t(`agents.names.${id}`)}
-                                            </span>
-                                            <span
-                                                className={
-                                                    styles["cardStatusRow"]
-                                                }
-                                                id={`agent-card-status-${id}`}
-                                            >
-                                                <span
-                                                    className={
-                                                        styles["cardStatus"]
-                                                    }
-                                                >
-                                                    <span
-                                                        className={
-                                                            styles["statusDot"]
-                                                        }
-                                                        aria-hidden="true"
-                                                        data-state={
-                                                            state.kind ===
-                                                            "desktop"
-                                                                ? (row?.state ??
-                                                                  "unavailable")
-                                                                : state.kind
-                                                        }
-                                                    />
-                                                    {/* Discovered cards show the
-                                                        version beside the dot;
-                                                        undiscovered keep the
-                                                        status label only. */}
-                                                    <span
-                                                        className={
-                                                            styles["statusText"]
-                                                        }
-                                                        title={
-                                                            state.kind ===
-                                                                "desktop" &&
-                                                            row?.state ===
-                                                                "found"
-                                                                ? reported ===
-                                                                  undefined
-                                                                    ? t(
-                                                                          `agents.evidence.${row.versionEvidence}`,
-                                                                      )
-                                                                    : t(
-                                                                          "agents.versionProbe.evidence",
-                                                                      )
-                                                                : undefined
-                                                        }
-                                                    >
-                                                        {state.kind ===
-                                                            "desktop" &&
-                                                        row?.state === "found"
-                                                            ? (reported?.version ??
-                                                              row.version ??
-                                                              t(
-                                                                  "agents.unknown",
-                                                              ))
-                                                            : discoveryLabel(
-                                                                  row,
-                                                              )}
-                                                    </span>
-                                                </span>
-                                            </span>
-                                            {hasConfigAdapter(id) ? (
-                                                <>
-                                                    <span
-                                                        className={
-                                                            styles[
-                                                                "cardSummary"
-                                                            ]
-                                                        }
-                                                    >
-                                                        {t(
-                                                            "agents.summary.provider",
-                                                            {
-                                                                value:
-                                                                    listSummaries[
-                                                                        id
-                                                                    ]
-                                                                        ?.providerLabel ??
-                                                                    t(
-                                                                        "agents.summary.notWritten",
-                                                                    ),
-                                                            },
-                                                        )}
-                                                        {t(
-                                                            "agents.summary.separator",
-                                                        )}
-                                                        {t(
-                                                            "agents.summary.model",
-                                                            {
-                                                                value:
-                                                                    listSummaries[
-                                                                        id
-                                                                    ]
-                                                                        ?.modelLabel ??
-                                                                    t(
-                                                                        "agents.summary.notWritten",
-                                                                    ),
-                                                            },
-                                                        )}
-                                                    </span>
-                                                    <span
-                                                        className={
-                                                            styles[
-                                                                "cardSummary"
-                                                            ]
-                                                        }
-                                                    >
-                                                        {t(
-                                                            "agents.summary.skill",
-                                                            {
-                                                                value: t(
-                                                                    "agents.summary.dash",
-                                                                ),
-                                                            },
-                                                        )}
-                                                        {t(
-                                                            "agents.summary.separator",
-                                                        )}
-                                                        {t(
-                                                            "agents.summary.mcp",
-                                                            {
-                                                                value: t(
-                                                                    "agents.summary.dash",
-                                                                ),
-                                                            },
-                                                        )}
-                                                    </span>
-                                                </>
-                                            ) : (
-                                                <span
-                                                    className={
-                                                        styles["cardSummary"]
-                                                    }
-                                                >
-                                                    {t("agents.summary.none")}
-                                                </span>
-                                            )}
+                <ul
+                    className={[surfaceList["list"], styles["list"]].join(" ")}
+                    aria-label={t("agents.list.label")}
+                >
+                    {AGENT_IDS.map((id) => {
+                        const row = observation(id);
+                        const reported =
+                            row === undefined ? undefined : cliVersion(row);
+                        const summary = hasConfigAdapter(id)
+                            ? listSummaries[id]
+                            : undefined;
+                        const providerModel =
+                            summary?.providerLabel != null &&
+                            summary.modelLabel != null
+                                ? {
+                                      provider: summary.providerLabel,
+                                      model: summary.modelLabel,
+                                  }
+                                : null;
+                        const statusText =
+                            state.kind === "desktop" && row?.state === "found"
+                                ? (reported?.version ??
+                                  row.version ??
+                                  t("agents.unknown"))
+                                : discoveryLabel(row);
+                        const statusTitle =
+                            state.kind === "desktop" && row?.state === "found"
+                                ? reported === undefined
+                                    ? t(
+                                          `agents.evidence.${row.versionEvidence}`,
+                                      )
+                                    : t("agents.versionProbe.evidence")
+                                : undefined;
+                        return (
+                            <li
+                                key={id}
+                                className={[
+                                    surfaceList["item"],
+                                    styles["item"],
+                                ].join(" ")}
+                            >
+                                <button
+                                    type="button"
+                                    className={styles["row"]}
+                                    data-agent-card={id}
+                                    aria-disabled={
+                                        state.kind === "loading" || versionBusy
+                                    }
+                                    aria-describedby={`agent-card-status-${id}`}
+                                    aria-label={t("agents.list.openDetail", {
+                                        name: t(`agents.names.${id}`),
+                                    })}
+                                    onClick={() => {
+                                        openDetail(id);
+                                    }}
+                                >
+                                    <AgentIcon id={id} size="row" />
+                                    <span className={styles["textColumn"]}>
+                                        <span className={styles["rowName"]}>
+                                            {t(`agents.names.${id}`)}
                                         </span>
-                                    </button>
-                                </li>
-                            );
-                        })}
-                    </ul>
-                }
+                                        {hasConfigAdapter(id) ? (
+                                            providerModel !== null ? (
+                                                <span
+                                                    className={
+                                                        styles["rowSummary"]
+                                                    }
+                                                >
+                                                    {t(
+                                                        "agents.summary.providerModel",
+                                                        providerModel,
+                                                    )}
+                                                </span>
+                                            ) : null
+                                        ) : (
+                                            <span
+                                                className={styles["rowSummary"]}
+                                            >
+                                                {t("agents.summary.none")}
+                                            </span>
+                                        )}
+                                    </span>
+                                    <span
+                                        className={styles["rowStatus"]}
+                                        id={`agent-card-status-${id}`}
+                                    >
+                                        <span
+                                            className={styles["statusDot"]}
+                                            aria-hidden="true"
+                                            data-state={
+                                                state.kind === "desktop"
+                                                    ? (row?.state ??
+                                                      "unavailable")
+                                                    : state.kind
+                                            }
+                                        />
+                                        <span
+                                            className={styles["statusText"]}
+                                            title={statusTitle}
+                                        >
+                                            {statusText}
+                                        </span>
+                                    </span>
+                                </button>
+                            </li>
+                        );
+                    })}
+                </ul>
             </>
         );
     }

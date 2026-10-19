@@ -116,6 +116,9 @@ beforeEach(() => {
                         readable: true,
                     },
                 ],
+                providerLabel: null,
+                modelId: null,
+                modelLabel: null,
             },
             entries: [operation],
             nextCursor: null,
@@ -211,6 +214,9 @@ test("confirmation is single-flight, refreshes history and never chains a restor
                         readable: true,
                     },
                 ],
+                providerLabel: null,
+                modelId: null,
+                modelLabel: null,
             },
             entries: [
                 {

@@ -236,8 +236,9 @@ export function RestoreView({
             list.current.status === "matched" && matchedKey !== null
                 ? list.entries.find((entry) => entry.entryKey === matchedKey)
                 : undefined;
-        const providerLabel = matched?.ownerLabel ?? matched?.ownerRef ?? null;
-        // History pages do not yet carry a resolved model label (Rust gap).
+        // Write top uses the same HistoryCurrentConfig fields as list rows.
+        const providerLabel = list.current.providerLabel;
+        const modelLabel = list.current.modelLabel;
         const textSource =
             matched === undefined || matchedKey === null
                 ? null
@@ -260,7 +261,7 @@ export function RestoreView({
                   };
         currentCallback.current?.(list.current, {
             providerLabel,
-            modelLabel: null,
+            modelLabel,
             textSource:
                 textSource !== null && textSource.files.length > 0
                     ? textSource
@@ -984,10 +985,10 @@ export function CurrentConfigPin({
 }
 
 /**
- * Concise Provider/Model line at the top of the Write segment.
+ * Concise `{providerLabel} | {modelLabel}` line at the top of the Write segment.
  *
- * Shows a slot only when a real value resolved. Never paints an empty-shell 「—」
- * that pretends to be the current Provider or Model.
+ * Both sides must resolve from HistoryCurrentConfig; otherwise hide the row.
+ * Never paints dual「未写入」or empty-shell dashes.
  */
 export function WriteCurrentSummary({
     providerLabel,
@@ -997,23 +998,13 @@ export function WriteCurrentSummary({
     modelLabel: string | null;
 }): JSX.Element | null {
     const { t } = useTranslation();
-    if (providerLabel === null && modelLabel === null) return null;
+    if (providerLabel === null || modelLabel === null) return null;
     return (
         <div className={restore["writeSummary"]} role="status">
-            {providerLabel !== null && (
-                <span>
-                    {t("agents.summary.provider", {
-                        value: providerLabel,
-                    })}
-                </span>
-            )}
-            {modelLabel !== null && (
-                <span>
-                    {t("agents.summary.model", {
-                        value: modelLabel,
-                    })}
-                </span>
-            )}
+            {t("agents.summary.providerModel", {
+                provider: providerLabel,
+                model: modelLabel,
+            })}
         </div>
     );
 }

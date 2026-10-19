@@ -30,79 +30,86 @@
     margin: 0;
 }
 
-.cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: var(--space-md);
-    padding: 0;
+/*
+ * Provider-style bordered list (surfaceList) with full-width clickable rows.
+ * Skills/MCP use the same --space-sm gap under the status/count line.
+ */
+.list {
     margin: var(--page-content-gap) 0 var(--space-lg);
-    list-style: none;
 }
 
-/*
- * Skills and MCP keep only --space-sm between their summary line and the list.
- * The Agent status line (or its error notice) is that same summary line, so the
- * cards start at the same vertical offset as those module lists. The preview
- * path hides the status line and keeps the full page gap.
- */
-.view > .hint:not([hidden]) + .cards,
-.view > .error + .cards {
+.view > .hint:not([hidden]) + .list,
+.view > .error + .list {
     margin-top: var(--space-sm);
 }
 
-.card {
+.item {
+    padding: 0;
+}
+
+.row {
     display: flex;
     align-items: center;
     gap: var(--space-md);
     width: 100%;
     min-width: 0;
-    padding: var(--space-md);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-card);
-    background: var(--color-surface);
+    margin: 0;
+    padding: 12px var(--space-md);
+    border: 0;
+    background: transparent;
     color: var(--color-text);
     font: inherit;
     text-align: start;
     cursor: pointer;
 }
 
-.card:hover {
+.row:hover {
     background: var(--color-hover);
 }
 
-.card:focus-visible {
+.row:focus-visible {
     outline: 2px solid var(--color-focus);
-    outline-offset: 2px;
+    outline-offset: -2px;
 }
 
-.cardText {
+.textColumn {
     display: grid;
+    align-content: center;
     gap: 4px;
-    flex: 1 1 auto;
     min-width: 0;
+    flex: 1;
 }
 
-.cardName {
+.rowName {
+    margin: 0;
+    color: var(--color-text);
     font-size: 0.875rem;
     font-weight: 600;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
 }
 
-.cardStatusRow {
-    display: flex;
-    justify-content: space-between;
+.rowSummary {
+    margin: 0;
+    color: var(--color-summary);
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.rowStatus {
+    display: inline-flex;
+    flex-shrink: 0;
     align-items: center;
-    gap: var(--space-sm);
+    align-self: center;
+    gap: 6px;
+    margin-inline-start: auto;
     min-width: 0;
     color: var(--color-summary);
     font-size: 0.75rem;
     line-height: 1.35;
-}
-
-.cardStatus {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
 }
 
 .statusDot {
@@ -124,17 +131,11 @@
     color: var(--color-danger-fg);
 }
 
-.statusText,
-.cardVersion {
+.statusText {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-}
-
-.cardVersion {
-    flex-shrink: 0;
-    max-width: 50%;
-    text-align: end;
+    max-width: 12rem;
 }
 
 .detailGroup {
@@ -228,13 +229,16 @@
     overflow-wrap: anywhere;
 }
 
-.cardSummary {
-    color: var(--color-summary);
-    font-size: 0.75rem;
-    line-height: 1.35;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+@media (max-width: 520px) {
+    .row {
+        flex-wrap: wrap;
+    }
+
+    .rowStatus {
+        flex-basis: 100%;
+        justify-content: flex-start;
+        margin-inline-start: calc(2.5rem + var(--space-md));
+    }
 }
 
 .segments {

@@ -955,7 +955,8 @@
             "mcp": "MCP {{value}}",
             "none": "No configuration summary",
             "separator": " · ",
-            "notWritten": "not written"
+            "notWritten": "not written",
+            "providerModel": "{{provider}} | {{model}}"
         },
         "skillPanel": {
             "empty": "Managed in the Skills module soon; a read-only status will appear here later."

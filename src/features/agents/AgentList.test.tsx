@@ -658,7 +658,7 @@ test("filename version remains unverified and unavailable config roots do not sh
     expect(screen.queryByText("Not found")).toBeNull();
 });
 
-test("list cards show real-or-notWritten Provider/Model without dash shells", async () => {
+test("list cards omit provider|model when history has no writable summary", async () => {
     loadHistory.mockResolvedValue({
         kind: "desktop",
         page: {
@@ -666,6 +666,9 @@ test("list cards show real-or-notWritten Provider/Model without dash shells", as
                 status: "unrecorded",
                 matchedEntryKey: null,
                 files: [],
+                providerLabel: null,
+                modelId: null,
+                modelLabel: null,
             },
             entries: [],
             nextCursor: null,
@@ -673,24 +676,102 @@ test("list cards show real-or-notWritten Provider/Model without dash shells", as
     });
     await mount();
     await screen.findByRole("button", { name: "Open Pi details" });
-    // Unmatched history → 「not written」, never empty-shell dashes for Provider/Model.
     await waitFor(() => {
-        expect(
-            screen.getAllByText(/Provider not written/u).length,
-        ).toBeGreaterThan(0);
+        expect(loadHistory.mock.calls.length).toBeGreaterThan(0);
     });
-    expect(screen.getAllByText(/Model not written/u).length).toBeGreaterThan(0);
+    // Unmatched / unresolved → omit the line; ban dual「未写入」and dash shells.
+    expect(screen.queryByText(/Provider not written/u)).toBeNull();
+    expect(screen.queryByText(/Model not written/u)).toBeNull();
+    expect(screen.queryByText(/Provider 未写入/u)).toBeNull();
+    expect(screen.queryByText(/模型 未写入/u)).toBeNull();
     expect(screen.queryByText(/Provider —/u)).toBeNull();
     expect(screen.queryByText(/Model —/u)).toBeNull();
-    // Skill/MCP stay empty-state dashes for now.
-    expect(screen.getAllByText(/Skill —/u).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/MCP —/u).length).toBeGreaterThan(0);
-    expect(screen.queryByText(/Skill 0/u)).toBeNull();
-    expect(screen.queryByText(/MCP 0/u)).toBeNull();
+    expect(screen.queryByText(/Skill —/u)).toBeNull();
+    expect(screen.queryByText(/MCP —/u)).toBeNull();
     const hermes = screen.getByRole("button", {
         name: "Open Hermes details",
     });
     expect(within(hermes).getByText("No configuration summary")).toBeTruthy();
+});
+
+test("list cards show a single provider | model line from history current", async () => {
+    const operationId = "a".repeat(32);
+    const entryKey = `operation:${operationId}`;
+    const digest = "c".repeat(64);
+    loadHistory.mockResolvedValue({
+        kind: "desktop",
+        page: {
+            current: {
+                status: "matched",
+                matchedEntryKey: entryKey,
+                files: [
+                    {
+                        targetPath: "/Users/test/.pi/agent/settings.json",
+                        currentDigest: digest,
+                        readable: true,
+                    },
+                ],
+                providerLabel: "Command Code GOAT",
+                modelId: "deepseek/deepseek-v4.1-flash",
+                modelLabel: "deepseek/deepseek-v4.1-flash",
+            },
+            entries: [
+                {
+                    entryKey,
+                    operationId,
+                    intent: "apply",
+                    ownerRef: "b".repeat(32),
+                    ownerLabel: "Command Code GOAT",
+                    requiresResolution: false,
+                    sourceState: "applied",
+                    createdAt: 100,
+                    updatedAt: 101,
+                    sourceSteps: [
+                        {
+                            ordinal: 0,
+                            targetPath: "/Users/test/.pi/agent/settings.json",
+                            expectedDigest: digest,
+                            appliedDigest: digest,
+                            previousExisted: true,
+                            backupRecorded: true,
+                            backupState: "available",
+                            state: "applied",
+                            errorCode: null,
+                            restoreState: null,
+                        },
+                    ],
+                    revisions: [
+                        {
+                            revisionId: "100-1-0",
+                            ordinal: 0,
+                            previousDigest: digest,
+                            intendedDigest: digest,
+                            backupRecorded: true,
+                            backupState: "available",
+                            state: "completed",
+                            resolution: null,
+                            errorCode: null,
+                            createdAt: 100,
+                            updatedAt: 101,
+                        },
+                    ],
+                },
+            ],
+            nextCursor: null,
+        },
+    });
+    await mount();
+    const pi = await screen.findByRole("button", { name: "Open Pi details" });
+    await waitFor(() => {
+        expect(
+            within(pi).getByText(
+                "Command Code GOAT | deepseek/deepseek-v4.1-flash",
+            ),
+        ).toBeTruthy();
+    });
+    expect(within(pi).queryByText(/Provider /u)).toBeNull();
+    expect(within(pi).queryByText(/Model /u)).toBeNull();
+    expect(within(pi).queryByText(/未写入/u)).toBeNull();
 });
 
 test("agent detail defaults to the History segment with a current-config pin", async () => {
@@ -710,10 +791,24 @@ test("Write segment hides unresolved Provider and Model shells", async () => {
     await openPiDetail();
     fireEvent.click(screen.getByRole("tab", { name: "Write" }));
     const writePanel = screen.getByRole("tabpanel", { name: "Write" });
-    // Browser preview history has no matched provider/model — hide the row.
+    // Preview / unmatched history — no provider|model line, no dual empties.
     expect(within(writePanel).queryByText(/Provider —/u)).toBeNull();
     expect(within(writePanel).queryByText(/Model —/u)).toBeNull();
     expect(within(writePanel).queryByText(/Provider not written/u)).toBeNull();
+    expect(within(writePanel).queryByText(/ \| /u)).toBeNull();
+    expect(within(writePanel).queryByText(/未写入/u)).toBeNull();
     expect(within(writePanel).queryByText(/Skill —/u)).toBeNull();
     expect(within(writePanel).queryByText(/MCP —/u)).toBeNull();
+});
+
+test("agent list uses a Provider-style list row layout, not a card grid", async () => {
+    await mount();
+    const list = await screen.findByRole("list", { name: "Agents" });
+    expect(list.children).toHaveLength(6);
+    // surfaceList rows are listitems; each opens via a full-width row button.
+    expect(within(list).getAllByRole("listitem")).toHaveLength(6);
+    const pi = within(list).getByRole("button", { name: "Open Pi details" });
+    expect(pi.getAttribute("data-agent-card")).toBe("pi");
+    // Grid card chrome class names are gone from the list markup.
+    expect(list.className).not.toMatch(/cards/u);
 });

@@ -815,15 +815,6 @@
                     "unrecorded": "Does not match any retained history version.",
                     "partial": "Only some managed files match a retained history version.",
                     "unreadable": "At least one managed file could not be read safely."
-                },
-                "fileReadable": "Readable",
-                "fileAbsent": "Absent",
-                "fileUnreadable": "Unreadable",
-                "statusShort": {
-                    "matched": "Matched",
-                    "unrecorded": "Unrecorded",
-                    "partial": "Partial",
-                    "unreadable": "Unreadable"
                 }
             },
             "backups": {

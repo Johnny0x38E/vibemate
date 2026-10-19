@@ -109,9 +109,28 @@
     border-bottom: 1px solid var(--color-border);
 }
 
+/* Label in column 1; every managed path stacks in column 2 so follow-on
+ * paths line up under the first path for any locale label width. */
+.currentPinBody {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 6px;
+    row-gap: 2px;
+    align-items: baseline;
+}
+
 .currentMark {
+    grid-column: 1;
+    grid-row: 1;
     font-weight: 500;
     color: var(--color-text);
+}
+
+.currentPath {
+    grid-column: 2;
+    min-width: 0;
+    font-size: 0.8125rem;
+    line-height: 1.4;
 }
 
 .writeSummary {

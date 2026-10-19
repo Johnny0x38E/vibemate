@@ -830,10 +830,11 @@ export function RestoreView({
 }
 
 /**
- * Page-level or inline pin for the live configuration summary.
+ * Page-level pin for the live configuration: label plus managed file paths.
  *
- * Matching a retained entry only marks that row; it never invents restore rights.
- * Managed files stay visible; Provider/model live on the Write segment instead.
+ * Match status and per-file readable labels stay out of this strip; history rows
+ * still carry their own current-version mark when a retained entry matches.
+ * Provider/model live on the Write segment instead.
  */
 export function CurrentConfigPin({
     current,
@@ -841,38 +842,26 @@ export function CurrentConfigPin({
     current: HistoryCurrentConfig;
 }): JSX.Element {
     const { t } = useTranslation();
+    const label = t("agents.restore.current.title");
     return (
-        <div
-            className={restore["currentPin"]}
-            role="region"
-            aria-label={t("agents.restore.current.title")}
-        >
-            <div className={restore["rowSummary"]}>
-                <span className={restore["state"]}>
-                    {t("agents.restore.current.title")}
-                    {" · "}
-                    {t(`agents.restore.current.statusShort.${current.status}`)}
-                </span>
-            </div>
-            {current.files.length > 0 && (
-                <ul className={restore["files"]}>
+        <div className={restore["currentPin"]} role="region" aria-label={label}>
+            {current.files.length === 0 ? (
+                <span className={restore["currentMark"]}>{label}</span>
+            ) : (
+                <div className={restore["currentPinBody"]}>
+                    <span className={restore["currentMark"]}>{label}</span>
                     {current.files.map((file) => (
-                        <li key={file.targetPath} className={restore["file"]}>
-                            <span className={card["path"]}>
-                                {file.targetPath}
-                            </span>
-                            <span className={restore["stepState"]}>
-                                {!file.readable
-                                    ? t("agents.restore.current.fileUnreadable")
-                                    : file.currentDigest === null
-                                      ? t("agents.restore.current.fileAbsent")
-                                      : t(
-                                            "agents.restore.current.fileReadable",
-                                        )}
-                            </span>
-                        </li>
+                        <span
+                            key={file.targetPath}
+                            className={[
+                                card["path"],
+                                restore["currentPath"],
+                            ].join(" ")}
+                        >
+                            {file.targetPath}
+                        </span>
                     ))}
-                </ul>
+                </div>
             )}
         </div>
     );

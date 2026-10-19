@@ -815,15 +815,6 @@
                     "unrecorded": "与任何保留的历史版本都不匹配。",
                     "partial": "仅有部分受管文件与保留的历史版本匹配。",
                     "unreadable": "至少有一个受管文件无法安全读取。"
-                },
-                "fileReadable": "可读",
-                "fileAbsent": "不存在",
-                "fileUnreadable": "不可读",
-                "statusShort": {
-                    "matched": "完整匹配",
-                    "unrecorded": "未记录",
-                    "partial": "部分匹配",
-                    "unreadable": "不可读"
                 }
             },
             "backups": {

@@ -362,9 +362,9 @@ test("pins the live current configuration above the list and marks a matched ent
     expect(
         await screen.findByRole("region", { name: "Current configuration" }),
     ).toBeTruthy();
-    expect(screen.getByText(/Current configuration · Matched/u)).toBeTruthy();
-    // Managed files stay visible; no expand toggle and no empty Provider slots.
-    expect(screen.getByText("Readable")).toBeTruthy();
+    // Pin is label + managed path only; no match-status or readable chrome.
+    expect(screen.queryByText(/Current configuration · Matched/u)).toBeNull();
+    expect(screen.queryByText("Readable")).toBeNull();
     expect(screen.getByText(SETTINGS)).toBeTruthy();
     expect(
         screen.queryByRole("button", { name: "Show managed files" }),
@@ -397,8 +397,12 @@ test("an unrecorded current pin stays fixed when older history loads", async () 
     );
     await mount();
     expect(
-        await screen.findByText(/Current configuration · Unrecorded/u),
+        await screen.findByRole("region", { name: "Current configuration" }),
     ).toBeTruthy();
+    expect(screen.getByText(SETTINGS)).toBeTruthy();
+    expect(
+        screen.queryByText(/Current configuration · Unrecorded/u),
+    ).toBeNull();
     expect(
         screen.queryByText(
             rowSummary("Apply · Written · Current configuration"),
@@ -413,7 +417,7 @@ test("an unrecorded current pin stays fixed when older history loads", async () 
         ).toHaveLength(2);
     });
     expect(
-        screen.getByText(/Current configuration · Unrecorded/u),
+        screen.getByRole("region", { name: "Current configuration" }),
     ).toBeTruthy();
     // The pin is one status region above the list, not a second history row.
     expect(
@@ -443,7 +447,10 @@ test("backup unavailable text is shown without inventing a restore action", asyn
     });
     await mount();
     expect(await screen.findByText("Unavailable")).toBeTruthy();
-    expect(screen.getByText(/Current configuration · Partial/u)).toBeTruthy();
+    expect(
+        screen.getByRole("region", { name: "Current configuration" }),
+    ).toBeTruthy();
+    expect(screen.queryByText(/Current configuration · Partial/u)).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "1 file" }));
     expect(
         screen.getByText(

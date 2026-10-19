@@ -467,6 +467,33 @@ test("backup unavailable text is shown without inventing a restore action", asyn
     expect(screen.getByRole("button", { name: "Hide details" })).toBeTruthy();
 });
 
+test("closing the inline version plan fully collapses the history row", async () => {
+    previewVersion.mockResolvedValue({
+        kind: "desktop",
+        plan: versionPlan,
+    });
+    await mount();
+    await openVersionPreview();
+    expect(
+        await screen.findByRole("region", {
+            name: "Version restore preview",
+        }),
+    ).toBeTruthy();
+    // Expanded body lists managed paths (also on the pin above the list).
+    expect(screen.getAllByText(SETTINGS).length).toBeGreaterThan(1);
+    expect(screen.getByRole("button", { name: "Hide details" })).toBeTruthy();
+
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(
+        screen.queryByRole("region", { name: "Version restore preview" }),
+    ).toBeNull();
+    // Row is fully collapsed: chevron back to Show details, path only on the pin.
+    expect(screen.getByRole("button", { name: "Show details" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Hide details" })).toBeNull();
+    expect(screen.getAllByText(SETTINGS)).toHaveLength(1);
+});
+
 test("the version preview lists sanitized field changes and confirms the reviewed files", async () => {
     previewVersion.mockResolvedValue({
         kind: "desktop",

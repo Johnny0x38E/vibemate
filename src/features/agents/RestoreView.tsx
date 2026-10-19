@@ -1074,13 +1074,18 @@ function OperationRow({
     const fileCount = files.length;
     const canExpand = fileCount > 0 || entry.revisions.length > 0;
 
+    /** Full collapse: clear local expand and any parent plan / force-expand. */
+    function collapseRow(): void {
+        setExpanded(false);
+        if (versionForceExpanded || versionPlan !== null) {
+            onVersionDismiss();
+        }
+    }
+
     function toggleExpand(): void {
         if (!canExpand) return;
         if (showExpand) {
-            setExpanded(false);
-            if (versionForceExpanded || versionPlan !== null) {
-                onVersionDismiss();
-            }
+            collapseRow();
             return;
         }
         setExpanded(true);
@@ -1275,7 +1280,7 @@ function OperationRow({
                             locale={locale}
                             restoring={versionRestoring}
                             onConfirm={onVersionConfirm}
-                            onDismiss={onVersionDismiss}
+                            onDismiss={collapseRow}
                         />
                     )}
                 </div>

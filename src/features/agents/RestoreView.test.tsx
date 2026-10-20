@@ -10,6 +10,7 @@ import { StrictMode } from "react";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { createAppI18n } from "../../i18n";
+import { NotificationProvider } from "../../components/Notifications";
 import {
     planAgentRestore,
     type ClaudeCodeRestorePlan,
@@ -267,7 +268,9 @@ async function mount(): Promise<void> {
     render(
         <StrictMode>
             <I18nextProvider i18n={i18n}>
-                <RestoreView />
+                <NotificationProvider>
+                    <RestoreView />
+                </NotificationProvider>
             </I18nextProvider>
         </StrictMode>,
     );
@@ -350,7 +353,7 @@ test("Recheck sits outside the history list card", async () => {
     ).toBeTruthy();
 });
 
-test("a saved configuration expands the preview for its own identity", async () => {
+test("a saved configuration opens a dialog for its own identity", async () => {
     await mount();
     await screen.findByText(
         rowSummary("Apply · Written · Current configuration"),
@@ -359,11 +362,10 @@ test("a saved configuration expands the preview for its own identity", async () 
     await userEvent.click(screen.getByRole("button", { name: "Show details" }));
     await screen.findByRole("region", { name: "Version restore preview" });
     expect(previewVersion).toHaveBeenCalledWith("claudeCode", entry.entryKey);
-    expect(
-        screen
-            .getByRole("button", { name: "Hide details" })
-            .getAttribute("aria-expanded"),
-    ).toBe("true");
+    const dialog = screen.getByRole("dialog", {
+        name: "Version restore preview",
+    });
+    expect(dialog.contains(document.activeElement)).toBe(true);
     expect(screen.getByText("model")).toBeTruthy();
 });
 
@@ -495,7 +497,7 @@ test("recovery backup availability does not decide whether a saved version can b
     expect(previewVersion).toHaveBeenCalledWith("claudeCode", entry.entryKey);
 });
 
-test("closing the inline version plan fully collapses the history row", async () => {
+test("closing the version dialog returns focus to its history action", async () => {
     previewVersion.mockResolvedValue({
         kind: "desktop",
         plan: versionPlan,
@@ -507,19 +509,178 @@ test("closing the inline version plan fully collapses the history row", async ()
             name: "Version restore preview",
         }),
     ).toBeTruthy();
-    // Expanded body lists managed paths (also on the pin above the list).
-    expect(screen.getAllByText(SETTINGS).length).toBeGreaterThan(1);
-    expect(screen.getByRole("button", { name: "Hide details" })).toBeTruthy();
+    expect(
+        screen.getByRole("dialog", { name: "Version restore preview" }),
+    ).toBeTruthy();
 
     await userEvent.click(screen.getByRole("button", { name: "Close" }));
 
     expect(
         screen.queryByRole("region", { name: "Version restore preview" }),
     ).toBeNull();
-    // Row is fully collapsed: chevron back to Show details, path only on the pin.
-    expect(screen.getByRole("button", { name: "Show details" })).toBeTruthy();
+    await waitFor(() => {
+        expect(document.activeElement).toBe(
+            screen.getByRole("button", { name: "Show details" }),
+        );
+    });
     expect(screen.queryByRole("button", { name: "Hide details" })).toBeNull();
     expect(screen.getAllByText(SETTINGS)).toHaveLength(1);
+});
+
+test("file switching changes only the preview and confirms the entire version", async () => {
+    const secondFile = {
+        ...versionFile,
+        revisionId: "second-file",
+        ordinal: 1,
+        targetPath: "/test/pi/settings.json",
+        summary: {
+            ...versionFile.summary,
+            changes: [
+                {
+                    path: "defaultModel",
+                    kind: "replaced" as const,
+                    before: "old-default",
+                    after: "new-default",
+                    secret: false,
+                },
+            ],
+        },
+    };
+    previewVersion.mockResolvedValue({
+        kind: "desktop",
+        plan: {
+            ...versionPlan,
+            files: [
+                { ...versionFile, targetPath: "/test/pi/models.json" },
+                secondFile,
+            ],
+        },
+    });
+    await mount();
+    await openVersionPreview();
+    const modal = await screen.findByRole("dialog", {
+        name: "Version restore preview",
+    });
+    const view = within(modal);
+    expect(view.getByText("model")).toBeTruthy();
+    expect(view.queryByText("defaultModel")).toBeNull();
+    await userEvent.click(
+        view.getByRole("button", { name: secondFile.targetPath }),
+    );
+    expect(view.getByText("defaultModel")).toBeTruthy();
+    expect(view.queryByText("model")).toBeNull();
+    expect(
+        view
+            .getByRole("button", { name: secondFile.targetPath })
+            .getAttribute("aria-pressed"),
+    ).toBe("true");
+    await userEvent.click(
+        view.getByRole("button", { name: "Use this configuration" }),
+    );
+    await waitFor(() => {
+        expect(restoreVersion).toHaveBeenCalledWith(
+            "claudeCode",
+            entry.entryKey,
+            [
+                { revisionId: REVISION, currentDigest: CURRENT_DIGEST },
+                { revisionId: "second-file", currentDigest: CURRENT_DIGEST },
+            ],
+        );
+    });
+});
+
+test("an unavailable file blocks the whole version even while another file is selected", async () => {
+    previewVersion.mockResolvedValue({
+        kind: "desktop",
+        plan: {
+            ...versionPlan,
+            restorable: false,
+            files: [
+                versionFile,
+                {
+                    ...versionFile,
+                    revisionId: "missing-file",
+                    ordinal: 1,
+                    targetPath: "/test/pi/settings.json",
+                    action: "blocked",
+                    reason: "snapshot_unavailable",
+                },
+            ],
+        },
+    });
+    await mount();
+    await openVersionPreview();
+    const modal = await screen.findByRole("dialog", {
+        name: "Version restore preview",
+    });
+    expect(within(modal).getByText("model")).toBeTruthy();
+    expect(
+        within(modal).queryByRole("button", { name: "Use this configuration" }),
+    ).toBeNull();
+    await userEvent.click(
+        within(modal).getByRole("button", { name: "/test/pi/settings.json" }),
+    );
+    expect(within(modal).getByText(/no retained copy/u)).toBeTruthy();
+    expect(within(modal).queryByText("model")).toBeNull();
+    expect(restoreVersion).not.toHaveBeenCalled();
+});
+
+test("Escape closes the dialog and a late preview cannot reopen it", async () => {
+    let finish:
+        | ((result: Awaited<ReturnType<typeof planVersionRestore>>) => void)
+        | undefined;
+    previewVersion.mockImplementationOnce(
+        () =>
+            new Promise((resolve) => {
+                finish = resolve;
+            }),
+    );
+    await mount();
+    await userEvent.click(
+        await screen.findByRole("button", { name: "Show details" }),
+    );
+    await screen.findByRole("dialog", { name: "Version restore preview" });
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => {
+        expect(screen.queryByRole("dialog")).toBeNull();
+    });
+    finish?.({ kind: "desktop", plan: versionPlan });
+    await waitFor(() => {
+        expect(
+            screen
+                .getByRole("button", { name: "Recheck" })
+                .getAttribute("aria-disabled"),
+        ).toBe("false");
+    });
+    expect(screen.queryByRole("dialog")).toBeNull();
+});
+
+test("an active restore blocks dismissal and duplicate confirmation", async () => {
+    let finish: ((result: VersionRestoreOutcome) => void) | undefined;
+    restoreVersion.mockImplementationOnce(
+        () =>
+            new Promise((resolve) => {
+                finish = resolve;
+            }),
+    );
+    await mount();
+    await openVersionPreview();
+    await userEvent.click(
+        await screen.findByRole("button", { name: "Use this configuration" }),
+    );
+    await userEvent.keyboard("{Escape}");
+    expect(
+        screen.getByRole("dialog", { name: "Version restore preview" }),
+    ).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    await userEvent.click(
+        screen.getByRole("button", { name: "Restoring this version…" }),
+    );
+    expect(restoreVersion).toHaveBeenCalledTimes(1);
+    finish?.(versionOutcome);
+    await waitFor(() => {
+        expect(screen.queryByRole("dialog")).toBeNull();
+    });
 });
 
 test("the version preview lists sanitized field changes and confirms the reviewed files", async () => {
@@ -539,7 +700,6 @@ test("the version preview lists sanitized field changes and confirms the reviewe
         }),
     ).toBeTruthy();
     expect(screen.getByText("model")).toBeTruthy();
-    expect(screen.getAllByText("Replaced").length).toBeGreaterThan(0);
     const modelChange = screen.getByText("model").closest("li");
     expect(modelChange?.textContent).toContain("current-model");
     expect(modelChange?.textContent).toContain("retained-model");
@@ -561,16 +721,38 @@ test("the version preview lists sanitized field changes and confirms the reviewe
             [{ revisionId: REVISION, currentDigest: CURRENT_DIGEST }],
         );
     });
+    expect((await screen.findByRole("status")).textContent).toContain(
+        "Configuration restored",
+    );
     expect(
-        await screen.findByRole("region", {
-            name: "Version restore result",
-        }),
-    ).toBeTruthy();
-    expect(screen.getByText(`${SETTINGS} — restored`)).toBeTruthy();
+        screen.queryByRole("region", { name: "Version restore result" }),
+    ).toBeNull();
     expect(loadHistory).toHaveBeenCalledTimes(reads + 1);
     expect(
         screen.queryByRole("button", { name: "Use this configuration" }),
     ).toBeNull();
+});
+
+test("an uncertain restore keeps file details and does not announce success", async () => {
+    restoreVersion.mockResolvedValue({
+        ...versionOutcome,
+        files: versionOutcome.files.map((file) => ({
+            ...file,
+            state: "unknown",
+            errorCode: "outcome_unknown",
+        })),
+    });
+    loadHistory.mockResolvedValue({ kind: "desktop", page: pageNotCurrent() });
+    await mount();
+    await openVersionPreview();
+    await userEvent.click(
+        screen.getByRole("button", { name: "Use this configuration" }),
+    );
+    const result = await screen.findByRole("region", {
+        name: "Version restore result",
+    });
+    expect(result.textContent).toContain(SETTINGS);
+    expect(screen.queryByText("Configuration restored")).toBeNull();
 });
 
 test("a blocked version cannot be confirmed and explains each file", async () => {
@@ -662,8 +844,8 @@ test("a version preview read failure is reported and can be retried", async () =
     expect(
         await screen.findByText(/Local configuration storage is unavailable/u),
     ).toBeTruthy();
-    // Collapse (dismisses the failed plan) then expand to retry the preview.
-    await userEvent.click(screen.getByRole("button", { name: "Hide details" }));
+    // Close the failed preview, then request a fresh plan.
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
     await userEvent.click(screen.getByRole("button", { name: "Show details" }));
     expect(
         await screen.findByRole("region", {
@@ -734,7 +916,7 @@ test("a legacy apply entry previews its written version, not its pre-write rollb
     });
     await mount();
     await userEvent.click(
-        await screen.findByRole("button", { name: "Preview restore" }),
+        await screen.findByRole("button", { name: "Show details" }),
     );
     await screen.findByRole("region", { name: "Version restore preview" });
     expect(previewVersion).toHaveBeenCalledWith("claudeCode", entry.entryKey);

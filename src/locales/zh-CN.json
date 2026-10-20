@@ -175,10 +175,10 @@
             "fetch": "获取模型",
             "refreshSaved": "刷新",
             "refreshing": "正在刷新…",
-            "refreshNotice_one": "已从服务商目录刷新 {{count}} 个已保存模型。",
-            "refreshNotice_other": "已从服务商目录刷新 {{count}} 个已保存模型。",
-            "refreshPartial_one": "已刷新 {{count}} 个已保存模型，但服务商返回的目录不完整；未标记任何模型为不可用。",
-            "refreshPartial_other": "已刷新 {{count}} 个已保存模型，但服务商返回的目录不完整；未标记任何模型为不可用。",
+            "refreshNotice_one": "已刷新 {{count}} 个模型。",
+            "refreshNotice_other": "已刷新 {{count}} 个模型。",
+            "refreshPartial_one": "目录不完整：已刷新 {{count}} 个模型，未标记模型为不可用。",
+            "refreshPartial_other": "目录不完整：已刷新 {{count}} 个模型，未标记模型为不可用。",
             "fetching": "正在获取模型…",
             "cancelFetch": "取消",
             "needKey": "请先在 API 页填写 API 密钥，再获取模型。",
@@ -349,10 +349,10 @@
             "storage_unavailable": "本地配置存储不可用，请重启 vibemate。",
             "read_failed": "无法读取服务商配置，请重试。",
             "write_failed": "服务商配置未保存，之前的内容保持不变。请重试。",
-            "operation_failed": "操作未能完成，结果未知。请先刷新列表确认后再重试。",
+            "operation_failed": "操作结果未知，请刷新列表确认。",
             "invalid_stored_provider": "已保存的服务商配置无法识别，可能来自更新版本的 vibemate。数据未被修改。",
             "not_found": "找不到这个服务商配置，它可能已不存在。请刷新列表。",
-            "revision_conflict": "该配置已在其他地方被修改。请重新加载后再编辑。",
+            "revision_conflict": "配置已被修改，请重新加载。",
             "invalid_request": "请求无效，请刷新后重试。",
             "kind_not_supported": "不支持这个服务商。",
             "protocol_not_supported": "这个服务商暂不支持所选协议。",
@@ -361,7 +361,7 @@
             "base_url_not_https": "基础 URL 必须以 https:// 开头。",
             "base_url_has_credentials": "基础 URL 不能包含用户名或密码。",
             "extension_field_not_supported": "包含暂不支持的扩展字段，未保存。",
-            "invalid_response": "收到无法识别的响应，结果未知。请刷新后确认。",
+            "invalid_response": "响应异常，结果未知。请刷新确认。",
             "desktop_required": "浏览器预览无法保存配置，请在 vibemate 桌面应用中操作。",
             "secret_invalid": "请输入 API 密钥。密钥不能包含换行或其他控制字符，长度不能超过系统凭据库的上限。",
             "credential_store_unavailable": "此设备没有可用的系统凭据库（例如 Linux 上没有运行 Secret Service）。什么都没有保存，vibemate 也不会以明文保存密钥。",
@@ -369,7 +369,7 @@
             "credential_store_failed": "系统凭据库报告了错误，什么都没有更改。如果你在系统提示中拒绝了访问，请重试并选择允许。",
             "create_outcome_unknown": "无法确认这项配置是否已保存，系统凭据库中可能留有一个未被使用的密钥条目（vibemate 不会读取它）。请先刷新列表确认，再决定是否重新添加。",
             "secret_outcome_unknown": "无法确认密钥是否已替换，系统凭据库中可能已经是新密钥。请刷新密钥状态；如不确定，请再次替换。",
-            "delete_outcome_unknown": "无法确认服务商是否已删除。请刷新列表后再重试。"
+            "delete_outcome_unknown": "删除结果未知，请刷新列表确认。"
         }
     },
     "mcp": {
@@ -424,7 +424,7 @@
         "enable": "启用",
         "disable": "停用",
         "saved": "MCP 定义已保存。",
-        "cleanupPending": "定义已保存，旧的闲置凭据仍待清理。",
+        "cleanupPending": "已保存，旧凭据待清理。",
         "cleanup": "重试凭据清理",
         "reloadUnknown": "保存结果未知，请先刷新列表，再进行修改。",
         "notDeployed": "尚未部署到任何 Agent",
@@ -462,7 +462,7 @@
             "confirm": "删除",
             "deleting": "正在删除…",
             "done": "已删除“{{name}}”。",
-            "cleanupPending": "定义已删除，但部分存储的凭据仍待清理。请重试以移除这些凭据。",
+            "cleanupPending": "已删除，凭据待清理。请重试清理。",
             "cleanup": "重试已删除定义的凭据清理"
         }
     },
@@ -531,6 +531,8 @@
             "review": "查看版本",
             "reviewing": "正在生成版本预览…",
             "previewHeading": "版本恢复预览",
+            "previewDescription": "查看此版本与当前配置的差异。",
+            "restoreAllFiles": "将恢复此版本的全部配置文件。",
             "previewFor": "使用 {{time}} 写入的配置",
             "ownerRef": "记录的归属引用：{{id}}",
             "actions": {
@@ -576,6 +578,7 @@
             "planReasons": {
                 "history_unresolved": "该条目存在中断写入。请先核对并记录，再恢复版本。"
             },
+            "restoredNotice": "已恢复此配置",
             "outcomeHeading": "版本恢复结果",
             "outcomeFile": "{{path}}：{{state}}",
             "states": {
@@ -732,7 +735,14 @@
             "piRestartRequired": "新建 Pi 会话以使用这些默认设置；项目设置、命令行参数和恢复的会话可能覆盖默认选择。",
             "piNotice": "仅在应用时从系统凭据库读取密钥，并以明文写入 models.json。替换前会备份原文件。未知模型信息沿用 Pi 默认值，推理档位保持原设置。",
             "grokRestartRequired": "新建 Grok Build 会话后这个条目才会生效。命令行参数、shell 环境变量和策略文件都可能覆盖配置文件。",
-            "grokOutcomeApplied": "已写入。Grok Build 的 config.toml 现在包含计划的模型条目与默认选择。",
+            "notifications": {
+                "applied": "配置已写入。",
+                "failed": "写入失败，原配置未变。",
+                "compensated": "写入已回滚，原配置已恢复。",
+                "partial": "部分变更未回滚，请检查配置与备份。",
+                "unknown": "写入结果未知，请检查配置与备份。"
+            },
+            "grokOutcomeApplied": "已写入，Grok Build 配置已包含计划中的模型条目。",
             "piOutcome": {
                 "applied": "已写入，两个 Pi 配置文件均已保存计划中的设置。",
                 "failed": "未写入，Pi 原配置保持完整。",
@@ -1038,9 +1048,9 @@
             "confirm": "删除",
             "deleting": "正在删除…",
             "done": "已删除“{{name}}”。",
-            "cleanupPending": "技能已删除，但副本文件未能移除。请重试以清理这些文件。",
+            "cleanupPending": "技能已删除，副本未清理。请重试清理。",
             "cleanup": "重试清理副本文件",
-            "cleanupDone": "副本文件已移除。"
+            "cleanupDone": "副本已清理。"
         },
         "errors": {
             "storage_unavailable": "vibemate 暂时无法访问自己的私有库。",

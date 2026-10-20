@@ -525,7 +525,7 @@ test("a revision conflict blocks saving until the latest record is reloaded", as
     await submit();
 
     expect(screen.getByRole("alert").textContent).toBe(
-        "This configuration was changed elsewhere. Reload it before editing.",
+        "Configuration changed elsewhere. Reload it.",
     );
     expect(
         screen
@@ -600,7 +600,7 @@ test.each(["operation_failed", "invalid_response"] as const)(
             await refresh.promise;
         });
         expect(screen.getByRole("alert").textContent).toMatch(
-            /result is unknown/,
+            /Result unknown/u,
         );
         expect(
             screen.getByText(/The list was refreshed\. Check whether/),

@@ -40,9 +40,13 @@ Model configuration previews expose two layers:
    result. The history panel uses the same field-summary data, comparing current
    bytes with the selected configuration's written result.
 
-History rows keep the inline field differences, necessary failure messages,
-one key/session warning and **Use this configuration**. They do not repeat
-backup details, internal Provider references or the row's timestamp. The live
+History rows open a detail dialog with field differences, necessary failure
+messages, one key/session warning and **Use this configuration**. For a
+multi-file version, compact file buttons select one file's differences at a
+time; confirmation still restores the entire version, not only the selected
+file. The dialog supports Escape and returns focus to its trigger; an active
+restore blocks dismissal. It does not repeat backup details, internal Provider
+references or the row's timestamp. The live
 configuration's separate detail action still reads sanitized current text.
 
 Rust builds previews from the same native plan that apply will use, so the

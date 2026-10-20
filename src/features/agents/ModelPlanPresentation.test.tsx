@@ -90,7 +90,8 @@ test("shows an inline preview with summary on top and field diffs below", async 
     await screen.findByText("/qa/models.json");
     expect(read).toHaveBeenLastCalledWith(plan, "/qa/pi");
     expect(screen.getAllByText("defaultModel").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Replaced").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("old")).toHaveLength(2);
+    expect(screen.getAllByText("new")).toHaveLength(2);
     expect(screen.queryByText("Show full configuration text")).toBeNull();
     expect(screen.queryByText("Planned configuration")).toBeNull();
     await userEvent.click(

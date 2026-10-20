@@ -175,10 +175,10 @@
             "fetch": "Fetch models",
             "refreshSaved": "Refresh",
             "refreshing": "Refreshing…",
-            "refreshNotice_one": "Refreshed {{count}} saved model from the provider catalog.",
-            "refreshNotice_other": "Refreshed {{count}} saved models from the provider catalog.",
-            "refreshPartial_one": "Refreshed {{count}} saved model, but the provider returned a partial catalog; nothing was marked unavailable.",
-            "refreshPartial_other": "Refreshed {{count}} saved models, but the provider returned a partial catalog; nothing was marked unavailable.",
+            "refreshNotice_one": "Refreshed {{count}} model.",
+            "refreshNotice_other": "Refreshed {{count}} models.",
+            "refreshPartial_one": "Partial catalog: refreshed {{count}} model; none marked unavailable.",
+            "refreshPartial_other": "Partial catalog: refreshed {{count}} models; none marked unavailable.",
             "fetching": "Fetching models…",
             "cancelFetch": "Cancel",
             "needKey": "Add an API key in the API configuration before fetching models.",
@@ -349,10 +349,10 @@
             "storage_unavailable": "Local configuration storage is unavailable. Restart vibemate.",
             "read_failed": "Provider settings could not be read. Try again.",
             "write_failed": "The provider settings were not saved. The previous settings are unchanged. Try again.",
-            "operation_failed": "The operation could not finish and its result is unknown. Refresh the list before trying again.",
+            "operation_failed": "Result unknown. Refresh the list to check.",
             "invalid_stored_provider": "A saved provider configuration is not recognized, possibly from a newer vibemate version. It was left unchanged.",
             "not_found": "This provider configuration was not found. Refresh the list.",
-            "revision_conflict": "This configuration was changed elsewhere. Reload it before editing.",
+            "revision_conflict": "Configuration changed elsewhere. Reload it.",
             "invalid_request": "The request is invalid. Refresh and try again.",
             "kind_not_supported": "This provider is not supported.",
             "protocol_not_supported": "The selected protocol is not supported for this provider yet.",
@@ -361,7 +361,7 @@
             "base_url_not_https": "The base URL must start with https://.",
             "base_url_has_credentials": "The base URL must not contain a user name or password.",
             "extension_field_not_supported": "The settings include an extension field that is not supported yet. Nothing was saved.",
-            "invalid_response": "The app received an unrecognized response, so the result is unknown. Refresh to check.",
+            "invalid_response": "Invalid response. Result unknown; refresh to check.",
             "desktop_required": "Settings cannot be saved in the browser preview. Use the vibemate desktop app.",
             "secret_invalid": "Enter the API key. It must not contain line breaks or other control characters, and must fit the system credential store's size limit.",
             "credential_store_unavailable": "No system credential store is available on this device (for example, no Secret Service on Linux). Nothing was saved, and vibemate never stores keys as plain text.",
@@ -369,7 +369,7 @@
             "credential_store_failed": "The system credential store reported an error and nothing was changed. If you denied access in a system prompt, try again and allow it.",
             "create_outcome_unknown": "vibemate could not confirm whether this configuration was saved, and an unused key entry may remain in the system credential store (vibemate never reads it). Refresh the list to check before adding it again.",
             "secret_outcome_unknown": "vibemate could not confirm whether the key was replaced; the system credential store may already hold the new key. Refresh the key status and replace it again if unsure.",
-            "delete_outcome_unknown": "vibemate could not confirm whether the provider was deleted. Refresh the list before trying again."
+            "delete_outcome_unknown": "Deletion unconfirmed. Refresh the list to check."
         }
     },
     "mcp": {
@@ -424,7 +424,7 @@
         "enable": "Enable",
         "disable": "Disable",
         "saved": "MCP definition saved.",
-        "cleanupPending": "Definition saved; unused old credentials still need cleanup.",
+        "cleanupPending": "Saved; old credentials await cleanup.",
         "cleanup": "Retry credential cleanup",
         "reloadUnknown": "The saved result is unknown. Refresh the list before making another change.",
         "notDeployed": "Not deployed to any agent",
@@ -462,7 +462,7 @@
             "confirm": "Delete",
             "deleting": "Deleting…",
             "done": "Deleted “{{name}}”.",
-            "cleanupPending": "The definition was deleted, but some stored credentials still need cleanup. Retry to remove them.",
+            "cleanupPending": "Deleted; credentials remain. Retry cleanup.",
             "cleanup": "Retry deleted credential cleanup"
         }
     },
@@ -531,6 +531,8 @@
             "review": "Review version",
             "reviewing": "Building the version preview…",
             "previewHeading": "Version restore preview",
+            "previewDescription": "Compare this version with the current configuration.",
+            "restoreAllFiles": "This restores all configuration files in this version.",
             "previewFor": "Use the configuration written {{time}}",
             "ownerRef": "Recorded owner reference: {{id}}",
             "actions": {
@@ -576,6 +578,7 @@
             "planReasons": {
                 "history_unresolved": "This entry has interrupted writes. Inspect and record them before restoring a version."
             },
+            "restoredNotice": "Configuration restored",
             "outcomeHeading": "Version restore result",
             "outcomeFile": "{{path}} — {{state}}",
             "states": {
@@ -732,7 +735,14 @@
             "piRestartRequired": "Start a new Pi session to use these defaults. Project settings, CLI options and resumed sessions can override them.",
             "piNotice": "The API key is read from OS credential storage only when you apply, then written as plain text in models.json. Existing files are backed up before replacement. Unknown model metadata uses Pi defaults; reasoning levels are unchanged.",
             "grokRestartRequired": "Start a new Grok Build session for this entry to take effect. CLI options, shell environment variables and policy files can override the settings file.",
-            "grokOutcomeApplied": "Written. Grok Build's config.toml now holds the planned entry and default.",
+            "notifications": {
+                "applied": "Configuration written.",
+                "failed": "Write failed; configuration unchanged.",
+                "compensated": "Write rolled back; configuration restored.",
+                "partial": "Some changes remain. Check files and backups.",
+                "unknown": "Write result unknown. Check files and backups."
+            },
+            "grokOutcomeApplied": "Written. Grok Build's configuration now holds the planned model entry.",
             "piOutcome": {
                 "applied": "Written. Both Pi configuration files now hold the planned settings.",
                 "failed": "Nothing was written; the previous Pi configuration is intact.",
@@ -1038,9 +1048,9 @@
             "confirm": "Delete",
             "deleting": "Deleting…",
             "done": "Deleted “{{name}}”.",
-            "cleanupPending": "The skill was deleted, but its copied files could not be removed. Retry to remove them.",
+            "cleanupPending": "Skill deleted; copied files remain. Retry cleanup.",
             "cleanup": "Retry file cleanup",
-            "cleanupDone": "The copied files were removed."
+            "cleanupDone": "Copied files removed."
         },
         "errors": {
             "storage_unavailable": "vibemate cannot reach its private library right now.",

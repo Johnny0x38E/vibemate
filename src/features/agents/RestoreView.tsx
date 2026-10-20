@@ -1,7 +1,9 @@
-import { useEffect, useId, useRef, useState, type JSX } from "react";
+import { Dialog } from "@base-ui/react/dialog";
+import { useEffect, useRef, useState, type JSX } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { DetailPanel } from "../../components/DetailForm";
+import { useNotify } from "../../components/Notifications";
 import buttons from "../../components/actionButtons.module.css";
 import { IconButton } from "../../components/IconButton";
 import listActions from "../../components/listActions.module.css";
@@ -30,9 +32,10 @@ import {
 import styles from "./AgentList.module.css";
 import card from "./ConfigPreview.module.css";
 import restore from "./RestoreView.module.css";
+import dialog from "./VersionTextDialog.module.css";
 import { ResolutionReviewCard } from "./ResolutionReviewCard";
 import {
-    VersionRestorePlanInline,
+    VersionRestorePlanContent,
     VersionRestoreResultCard,
 } from "./VersionRestoreCard";
 import { CurrentConfigurationDialog } from "./VersionTextDialog";
@@ -122,6 +125,8 @@ export function RestoreView({
     onCurrentChange?: (current: HistoryCurrentConfig | null) => void;
 }): JSX.Element {
     const { t, i18n } = useTranslation();
+    const notify = useNotify();
+    const versionPreviewGeneration = useRef(0);
     const [list, setList] = useState<ListState>({ kind: "loading" });
     const [preview, setPreview] = useState<PreviewState>({ kind: "idle" });
     const [apply, setApply] = useState<ApplyState>({ kind: "idle" });
@@ -278,7 +283,7 @@ export function RestoreView({
      *
      * Reads journal metadata and the current files; snapshots are verified but
      * no file is written and no credential is read. Starting this preview
-     * discards interrupted-operation inspection so only one card is on screen.
+     * discards interrupted-operation inspection so only one review is active.
      */
     async function runVersionPreview(entryKey: string): Promise<void> {
         if (blocked || pending.current || readingMore) return;
@@ -289,16 +294,26 @@ export function RestoreView({
         setVersionApply({ kind: "idle" });
         setVersionExpandedKey(entryKey);
         setVersionPlan({ kind: "loading", entryKey });
+        const generation = ++versionPreviewGeneration.current;
         try {
             const result = await planVersionRestore(agent, entryKey);
-            if (!mounted.current) return;
+            // Closing a loading dialog invalidates its eventual preview.
+            if (
+                !mounted.current ||
+                generation !== versionPreviewGeneration.current
+            )
+                return;
             setVersionPlan(
                 result.kind === "preview"
                     ? { kind: "preview" }
                     : { kind: "ready", plan: result.plan },
             );
         } catch (error: unknown) {
-            if (!mounted.current) return;
+            if (
+                !mounted.current ||
+                generation !== versionPreviewGeneration.current
+            )
+                return;
             setVersionPlan({
                 kind: "error",
                 code:
@@ -316,7 +331,7 @@ export function RestoreView({
      * Confirm a reviewed version restore.
      *
      * Only the files the preview said would change travel back, each with the
-     * current digest it showed. Any answer clears the card and re-reads the
+     * current digest it showed. A settled result closes the dialog and re-reads the
      * history; a stale approval cannot be applied twice.
      */
     async function runVersionApply(plan: VersionRestorePlan): Promise<void> {
@@ -334,7 +349,13 @@ export function RestoreView({
             if (!mounted.current) return;
             setVersionPlan({ kind: "idle" });
             setVersionExpandedKey(null);
-            setVersionApply({ kind: "done", result });
+            // Partial or uncertain outcomes stay on the page for inspection.
+            if (result.files.every((file) => file.state === "restored")) {
+                setVersionApply({ kind: "idle" });
+                notify(t("agents.version.restoredNotice"));
+            } else {
+                setVersionApply({ kind: "done", result });
+            }
             setAttempt((current) => current + 1);
         } catch (error: unknown) {
             if (!mounted.current) return;
@@ -535,11 +556,6 @@ export function RestoreView({
                                             versionPlan.entryKey ===
                                                 entry.entryKey
                                         }
-                                        onPreview={() => {
-                                            void runVersionPreview(
-                                                entry.entryKey,
-                                            );
-                                        }}
                                         inspecting={
                                             preview.kind === "inspecting" &&
                                             preview.operationId ===
@@ -563,6 +579,18 @@ export function RestoreView({
                                             versionPlan.plan.entryKey ===
                                                 entry.entryKey
                                         }
+                                        versionError={
+                                            versionExpandedKey ===
+                                                entry.entryKey &&
+                                            versionPlan.kind === "error"
+                                                ? versionPlan.code
+                                                : versionExpandedKey ===
+                                                        entry.entryKey &&
+                                                    versionApply.kind ===
+                                                        "error"
+                                                  ? versionApply.code
+                                                  : null
+                                        }
                                         versionForceExpanded={
                                             versionExpandedKey ===
                                             entry.entryKey
@@ -583,6 +611,7 @@ export function RestoreView({
                                                 versionApply.kind === "applying"
                                             )
                                                 return;
+                                            versionPreviewGeneration.current += 1;
                                             setVersionPlan({ kind: "idle" });
                                             setVersionExpandedKey(null);
                                         }}
@@ -664,20 +693,17 @@ export function RestoreView({
                     {t(`agents.resolution.errors.${apply.code}`)}
                 </p>
             )}
-            {versionPlan.kind === "error" && (
-                <p className={styles["error"]} role="alert">
-                    {t(`agents.restore.errors.${versionPlan.code}`)}
-                </p>
-            )}
             {versionPlan.kind === "preview" && (
                 <p className={styles["hint"]}>
                     {t("agents.restore.previewMode")}
                 </p>
             )}
             {versionApply.kind === "done" && (
-                <VersionRestoreResultCard result={versionApply.result} />
+                <div className={card["followOn"]}>
+                    <VersionRestoreResultCard result={versionApply.result} />
+                </div>
             )}
-            {versionApply.kind === "error" && (
+            {versionApply.kind === "error" && versionExpandedKey === null && (
                 <p className={styles["error"]} role="alert">
                     {t(`agents.restore.errors.${versionApply.code}`)}
                 </p>
@@ -714,10 +740,10 @@ export function CurrentConfigPin({
         <div className={restore["currentPin"]} role="region" aria-label={label}>
             <div className={restore["currentPinRow"]}>
                 {current.files.length === 0 ? (
-                    <span className={restore["currentMark"]}>{label}</span>
+                    <span className={restore["currentLabel"]}>{label}</span>
                 ) : (
                     <div className={restore["currentPinBody"]}>
-                        <span className={restore["currentMark"]}>{label}</span>
+                        <span className={restore["currentLabel"]}>{label}</span>
                         {current.files.map((file) => (
                             <span
                                 key={file.targetPath}
@@ -788,7 +814,7 @@ export function WriteCurrentSummary({
     );
 }
 
-/** One journal entry: compact summary by default; version plan expands inline. */
+/** One compact journal entry with a modal, file-switchable version preview. */
 function OperationRow({
     agent,
     entry,
@@ -796,11 +822,11 @@ function OperationRow({
     locale,
     busy,
     previewing,
-    onPreview,
     inspecting,
     onInspect,
     versionPlan,
     versionRestoring,
+    versionError,
     versionForceExpanded,
     onVersionPreview,
     onVersionConfirm,
@@ -818,13 +844,13 @@ function OperationRow({
     busy: boolean;
     /** This row's written-version preview is being built. */
     previewing: boolean;
-    onPreview: () => void;
     inspecting: boolean;
     onInspect: () => void;
-    /** Inline version plan for this row, when reviewed. */
+    /** Reviewed version plan for this row's dialog. */
     versionPlan: VersionRestorePlan | null;
     versionRestoring: boolean;
-    /** Parent forces expand while a version plan is open on this row. */
+    versionError: VersionRestoreErrorCode | null;
+    /** Keep the dialog open while this row's plan loads or reports an error. */
     versionForceExpanded: boolean;
     onVersionPreview: () => void;
     onVersionConfirm: () => void;
@@ -833,7 +859,8 @@ function OperationRow({
     onDeleteBusy: (busy: boolean) => void;
 }): JSX.Element {
     const { t } = useTranslation();
-    const expandedBodyId = useId();
+    const title = useRef<HTMLHeadingElement | null>(null);
+    const trigger = useRef<HTMLElement | null>(null);
     const [expanded, setExpanded] = useState(false);
     const showExpand =
         (entry.requiresResolution && expanded) ||
@@ -843,8 +870,9 @@ function OperationRow({
     const fileCount = entry.sourceSteps.length;
     const canExpand = fileCount > 0 || entry.revisions.length > 0;
 
-    /** Full collapse: clear local expand and any parent plan / force-expand. */
+    /** Dismiss local and parent preview state without interrupting a write. */
     function collapseRow(): void {
+        if (versionRestoring) return;
         setExpanded(false);
         if (versionForceExpanded || versionPlan !== null) {
             onVersionDismiss();
@@ -857,6 +885,10 @@ function OperationRow({
             collapseRow();
             return;
         }
+        trigger.current =
+            document.activeElement instanceof HTMLElement
+                ? document.activeElement
+                : null;
         if (entry.requiresResolution) {
             setExpanded(true);
         } else {
@@ -874,80 +906,44 @@ function OperationRow({
     return (
         <li className={restore["row"]}>
             <div className={restore["rowSummary"]}>
-                {canExpand ? (
-                    <div className={restore["rowToggle"]}>
+                <div className={restore["rowMain"]}>
+                    <span className={restore["state"]}>
+                        {t(`agents.restore.intents.${entry.intent}`)}
+                        {" · "}
+                        {entryStateText(state, t)}
+                        {isCurrent && (
+                            <>
+                                {" · "}
+                                <span className={restore["currentMark"]}>
+                                    {t("agents.restore.current.mark")}
+                                </span>
+                            </>
+                        )}
+                    </span>
+                    {providerText !== null && (
+                        <span className={restore["meta"]}>{providerText}</span>
+                    )}
+                    <span className={restore["time"]}>
+                        {formatTime(entry.createdAt, locale)}
+                    </span>
+                    {fileCount > 0 && (
+                        <span className={restore["meta"]}>
+                            {t("agents.restore.fileCount", {
+                                count: fileCount,
+                            })}
+                        </span>
+                    )}
+                </div>
+                <div className={listActions["group"]}>
+                    {canExpand && (
                         <IconButton
-                            icon="chevron"
-                            borderless
-                            label={
-                                showExpand
-                                    ? t("agents.restore.collapseRow")
-                                    : t("agents.restore.expandRow")
-                            }
-                            expanded={showExpand}
-                            controls={expandedBodyId}
+                            icon="logFile"
+                            label={t("agents.restore.expandRow")}
+                            blocked={busy}
                             onClick={toggleExpand}
                         />
-                        <span className={restore["rowMain"]}>
-                            <span className={restore["state"]}>
-                                {t(`agents.restore.intents.${entry.intent}`)}
-                                {" · "}
-                                {entryStateText(state, t)}
-                                {isCurrent && (
-                                    <>
-                                        {" · "}
-                                        <span
-                                            className={restore["currentMark"]}
-                                        >
-                                            {t("agents.restore.current.mark")}
-                                        </span>
-                                    </>
-                                )}
-                            </span>
-                            {providerText !== null && (
-                                <span className={restore["meta"]}>
-                                    {providerText}
-                                </span>
-                            )}
-                            <span className={restore["time"]}>
-                                {formatTime(entry.createdAt, locale)}
-                            </span>
-                            {fileCount > 0 && (
-                                <span className={restore["meta"]}>
-                                    {t("agents.restore.fileCount", {
-                                        count: fileCount,
-                                    })}
-                                </span>
-                            )}
-                        </span>
-                    </div>
-                ) : (
-                    <div className={restore["rowMain"]}>
-                        <span className={restore["state"]}>
-                            {t(`agents.restore.intents.${entry.intent}`)}
-                            {" · "}
-                            {entryStateText(state, t)}
-                            {isCurrent && (
-                                <>
-                                    {" · "}
-                                    <span className={restore["currentMark"]}>
-                                        {t("agents.restore.current.mark")}
-                                    </span>
-                                </>
-                            )}
-                        </span>
-                        {providerText !== null && (
-                            <span className={restore["meta"]}>
-                                {providerText}
-                            </span>
-                        )}
-                        <span className={restore["time"]}>
-                            {formatTime(entry.createdAt, locale)}
-                        </span>
-                    </div>
-                )}
-                <div className={listActions["group"]}>
-                    {entry.requiresResolution ? (
+                    )}
+                    {entry.requiresResolution && (
                         <IconButton
                             icon="check"
                             label={
@@ -958,19 +954,7 @@ function OperationRow({
                             blocked={busy}
                             onClick={onInspect}
                         />
-                    ) : entry.revisions.length > 0 ? null : entry.intent ===
-                      "apply" ? (
-                        <IconButton
-                            icon="logFile"
-                            label={
-                                previewing
-                                    ? t("agents.restore.previewing")
-                                    : t("agents.restore.preview")
-                            }
-                            blocked={busy}
-                            onClick={onPreview}
-                        />
-                    ) : null}
+                    )}
                     <HistoryDeleteAction
                         agent={agent}
                         entryKey={entry.entryKey}
@@ -983,23 +967,69 @@ function OperationRow({
                     />
                 </div>
             </div>
-            {showExpand && (
-                <div id={expandedBodyId} className={restore["expandedBody"]}>
-                    {entry.requiresResolution && (
-                        <p className={styles["hint"]}>
-                            {t("agents.resolution.required")}
-                        </p>
-                    )}
-                    {versionPlan !== null && (
-                        <VersionRestorePlanInline
-                            plan={versionPlan}
-                            restoring={versionRestoring}
-                            onConfirm={onVersionConfirm}
-                            onDismiss={collapseRow}
-                        />
-                    )}
-                </div>
-            )}
+            <Dialog.Root
+                open={showExpand}
+                onOpenChange={(open) => {
+                    if (!open) collapseRow();
+                }}
+            >
+                <Dialog.Portal>
+                    <Dialog.Backdrop className={dialog["backdrop"]} />
+                    <Dialog.Popup
+                        className={dialog["popupCompact"]}
+                        initialFocus={title}
+                        finalFocus={() =>
+                            trigger.current?.isConnected
+                                ? trigger.current
+                                : null
+                        }
+                    >
+                        <Dialog.Title
+                            ref={title}
+                            tabIndex={-1}
+                            className={dialog["title"]}
+                        >
+                            {t("agents.version.previewHeading")}
+                        </Dialog.Title>
+                        <Dialog.Description className={dialog["meta"]}>
+                            {t("agents.version.previewDescription")}
+                        </Dialog.Description>
+                        {previewing && (
+                            <p className={styles["hint"]} role="status">
+                                {t("agents.version.reviewing")}
+                            </p>
+                        )}
+                        {versionError !== null && (
+                            <p className={styles["error"]} role="alert">
+                                {t(`agents.restore.errors.${versionError}`)}
+                            </p>
+                        )}
+                        {entry.requiresResolution && (
+                            <p className={styles["hint"]}>
+                                {t("agents.resolution.required")}
+                            </p>
+                        )}
+                        {versionPlan !== null ? (
+                            <VersionRestorePlanContent
+                                plan={versionPlan}
+                                restoring={versionRestoring}
+                                onConfirm={onVersionConfirm}
+                                onDismiss={collapseRow}
+                            />
+                        ) : (
+                            <div className={card["actions"]}>
+                                <button
+                                    type="button"
+                                    className={buttons["secondary"]}
+                                    onClick={collapseRow}
+                                >
+                                    {t("agents.version.textClose")}
+                                </button>
+                            </div>
+                        )}
+                    </Dialog.Popup>
+                </Dialog.Portal>
+            </Dialog.Root>
         </li>
     );
 }

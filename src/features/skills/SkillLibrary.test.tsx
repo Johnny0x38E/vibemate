@@ -458,16 +458,14 @@ test("leftover files after a delete can be cleaned up", async () => {
     ).toBeDefined();
     expect(
         screen.getAllByText(
-            "The skill was deleted, but its copied files could not be removed. Retry to remove them.",
+            "Skill deleted; copied files remain. Retry cleanup.",
         ).length,
     ).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Retry file cleanup" }));
     await waitFor(() => {
         expect(removeCopies).toHaveBeenCalledTimes(1);
     });
-    expect(
-        await screen.findByText("The copied files were removed."),
-    ).toBeDefined();
+    expect(await screen.findByText("Copied files removed.")).toBeDefined();
     expect(
         screen.queryByRole("button", { name: "Retry file cleanup" }),
     ).toBeNull();

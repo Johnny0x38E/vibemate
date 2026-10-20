@@ -3,8 +3,7 @@
  *
  * The card surface, the action row and the notice list come from the shared
  * DetailPanel and neighbouring plan cards. This module owns compact history
- * rows: one summary line by default, leading chevron expand, indented details,
- * and a row-end icon group. Borders separate rows; no extra painted surface layers.
+ * rows: one summary line and a row-end icon group that opens detail dialogs. Borders separate rows; no extra painted surface layers.
  */
 
 .rows {
@@ -134,11 +133,10 @@
     margin-left: auto;
 }
 
-.versionInline {
+.versionPreview {
     display: grid;
-    gap: var(--space-sm, 8px);
-    margin-top: 6px;
-    padding-top: 6px;
+    gap: var(--space-sm);
+    min-width: 0;
 }
 
 /* Label in column 1; every managed path stacks in column 2 so follow-on
@@ -149,6 +147,57 @@
     column-gap: 6px;
     row-gap: 2px;
     align-items: baseline;
+}
+
+/* Keep each file's differences and notices beneath its own path, including
+ * files with no changes. Dividers separate files rather than their headings. */
+.versionFiles {
+    display: grid;
+    gap: var(--space-md);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    min-width: 0;
+}
+
+.versionFile {
+    display: grid;
+    gap: var(--space-sm);
+    min-width: 0;
+}
+
+.versionFilePath {
+    color: var(--color-text);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+/* Plan-wide notices align with file-level hints, not with file headings. */
+.versionHint {
+    margin: 0;
+    padding-inline-start: var(--space-md);
+    color: var(--color-summary);
+    font-size: 0.75rem;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+
+.versionFileBody {
+    display: grid;
+    gap: var(--space-sm);
+    min-width: 0;
+    padding-inline-start: var(--space-md);
+}
+
+.currentLabel {
+    grid-column: 1;
+    grid-row: 1;
+    color: var(--color-summary);
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    white-space: nowrap;
 }
 
 .currentMark {
@@ -181,23 +230,6 @@
     color: var(--color-text);
     font-size: 0.75rem;
     line-height: 1.4;
-}
-
-/* Leading IconButton disclosure + summary; IconButton owns the click target. */
-.rowToggle {
-    display: flex;
-    flex: 1 1 auto;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-}
-
-/* Indent under the summary text beside the 36px disclosure IconButton. */
-.expandedBody {
-    display: grid;
-    gap: 2px;
-    margin: 2px 0 0;
-    padding-inline-start: calc(36px + 8px);
 }
 
 .rowActions {

@@ -329,12 +329,9 @@ export function ConfigPreview({
                 result.state === "applied" || result.state === "compensated"
                     ? "success"
                     : "error";
-            const message =
-                agent === "grokBuild" && result.state === "applied"
-                    ? t("agents.modelConfig.grokOutcomeApplied")
-                    : agent === "pi"
-                      ? t(`agents.modelConfig.piOutcome.${result.state}`)
-                      : t(`agents.modelConfig.outcome.${result.state}`);
+            const message = t(
+                `agents.modelConfig.notifications.${result.state}`,
+            );
             notify({ tone, message });
             onApplied?.();
         } catch (error: unknown) {

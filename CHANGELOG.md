@@ -36,13 +36,23 @@ GitHub release notes are extracted from the matching version section only.
 
 ### Changed
 
-- Expanded configuration-history rows now focus on field differences and **Use this configuration**, with one concise API-key/session warning. Repeated backup descriptions, timestamps, internal Provider IDs and restoration explanations are removed. Interrupted-write errors and inspection remain available.
+- Agent history details now open in a dialog instead of expanding the list. Multi-file versions use the same compact file switcher as detailed configuration; selecting a file changes only the preview, while restoration still applies the whole version.
+
+- Shortened English and Simplified Chinese global notifications for Agent writes, model refreshes, provider conflicts and pending MCP/Skill cleanup. Notifications retain uncertain outcomes and recovery actions; detailed Agent write results remain on the page.
+
+- Successful configuration-version restores show a concise app notification instead of a result card. Partial or uncertain results retain per-file details with the shared follow-on card spacing.
+
+- Agent history previews use consistent plain-text hints and nest the selected file's differences and notices beneath its path. Field comparisons show old → new values without redundant added/replaced/removed labels in history and model previews.
+
+- The Agent detail current-configuration path label now uses plain secondary text instead of an outlined badge; history rows retain their current-version badges.
+
+- Configuration-history detail dialogs focus on field differences and **Use this configuration**, with one concise API-key/session warning. Repeated backup descriptions, timestamps, internal Provider IDs and restoration explanations are removed. Interrupted-write errors and inspection remain available.
 
 - Grok Build's `[models].default` is now user- and Grok-owned. A model write adds or updates only its `[model.<alias>]` entry, so the applied model becomes selectable without silently changing which model new sessions use. The Agent list reads the model each Agent currently names from its live configuration: one that resolves to a still-saved vibemate Provider/model shows `Provider · Model`, any other readable configuration shows **Own configuration**, and an undiscovered or unreadable Agent keeps **No configuration summary**. Pi's `/model` switch is session-scoped, so its row reads the newest session JSONL tail and extracts only the provider/model metadata (message content is discarded), falling back to `settings.json` when no session exists. Grok's current `[models].default` is used only for this read, never written.
 
 - Agent list rows now label a discovered Agent with no vibemate-written Provider/model pair as **Own configuration**; an undiscovered Agent keeps **No configuration summary**. The **Detailed configuration** dialog reads the live file through a new Agent-scoped, sanitized read command, so an external edit no longer disables it; the taller dialog shows only the current text, without the current-configuration heading or original-size row, and its file switcher uses compact buttons.
 
-- Agent history disclosure controls are now borderless, with slightly more space between each chevron and its row content.
+- Agent history details use the shared bordered icon button in the right-hand action group, before Delete; the left-hand disclosure and duplicate legacy preview action are removed.
 
 - Documentation is now split into current reference pages and remaining plans. `docs/README.md` indexes `agents.md`, `architecture.md`, `configuration.md`, `frontend.md`, `logging.md`, `mcp.md`, `models.md`, `releases.md` and `skills.md` as behavior references, while `docs/plans/` keeps only `phase-1.md`, `todo.md`, `model-parameters.md` and `backend-modularity.md`. Delivered design notes and their process records were removed; `docs/plans/todo.md` remains the only task-status source and Git history holds the earlier records.
 

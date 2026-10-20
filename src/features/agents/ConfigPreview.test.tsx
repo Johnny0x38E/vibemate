@@ -4,6 +4,7 @@ import { StrictMode } from "react";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { createAppI18n } from "../../i18n";
+import { NotificationProvider } from "../../components/Notifications";
 import {
     ApplyRequestError,
     PlanRequestError,
@@ -595,7 +596,9 @@ test("Pi reviews both files and applies them once with the auth dependency", asy
     const i18n = await createAppI18n("en");
     render(
         <I18nextProvider i18n={i18n}>
-            <ConfigPreview agent="pi" entryPath="/test/pi" />
+            <NotificationProvider>
+                <ConfigPreview agent="pi" entryPath="/test/pi" />
+            </NotificationProvider>
         </I18nextProvider>,
     );
     await setFieldSelectValue(
@@ -632,6 +635,9 @@ test("Pi reviews both files and applies them once with the auth dependency", asy
     });
     await screen.findByText(
         "Written. Both Pi configuration files now hold the planned settings.",
+    );
+    expect((await screen.findByRole("status")).textContent).toBe(
+        "Configuration written.",
     );
     expect(
         screen.getByText(/Previous content kept at \/private\/settings.json/u),
@@ -746,7 +752,7 @@ test("Grok previews its TOML file and applies it once", async () => {
         ],
     });
     await screen.findByText(
-        "Written. Grok Build's config.toml now holds the planned entry and default.",
+        "Written. Grok Build's configuration now holds the planned model entry.",
     );
     expect(
         screen.getByText(

@@ -13,7 +13,7 @@ use super::SkillLibrary;
 use super::manifest::{self, SourcePlan};
 use super::repository::{self, NewSkill};
 use super::types::{
-    DeleteSkillRequest, DeletedSkill, ImportFolderReport, ImportFolderRequest,
+    DeleteSkillRequest, DeletedSkill, FetchMethod, ImportFolderReport, ImportFolderRequest,
     SetSkillSourceRequest, SkillError, SkillRecord, SkippedSkill,
 };
 use super::validation;
@@ -30,6 +30,34 @@ const TEMPORARY_PREFIX: &str = ".import-";
 /// Directory name prefix of a managed copy parked for removal. No record ever
 /// points at such a name, so a cleanup sweep can never delete live content.
 const PARKED_PREFIX: &str = ".delete-";
+
+/// Provenance stored with one managed copy.
+///
+/// A local import records its source directory. A remote install records the
+/// canonical address, the resolved revision and the reviewed command instead,
+/// because its temporary workspace is removed after the import.
+pub(super) struct Provenance<'a> {
+    pub(super) origin_path: Option<&'a str>,
+    pub(super) source_url: Option<&'a str>,
+    pub(super) source_revision: Option<&'a str>,
+    pub(super) fetch_method: Option<FetchMethod>,
+    pub(super) installer_version: Option<&'a str>,
+    pub(super) installer_command: Option<&'a str>,
+}
+
+impl Provenance<'_> {
+    /// Provenance for a folder the user imported; no upstream method is known.
+    fn local(origin_path: &str) -> Provenance<'_> {
+        Provenance {
+            origin_path: Some(origin_path),
+            source_url: None,
+            source_revision: None,
+            fetch_method: None,
+            installer_version: None,
+            installer_command: None,
+        }
+    }
+}
 
 /// Import every skill inside one chosen folder.
 ///
@@ -82,9 +110,59 @@ pub(super) fn import_one(
     requested: &Path,
     now_ms: i64,
 ) -> Result<SkillRecord, SkillError> {
-    if now_ms < 0 {
+    let source = resolved_source_directory(library, requested)?;
+    let origin_path = source
+        .to_str()
+        .ok_or(SkillError::SourcePathInvalid)?
+        .to_string();
+    import_prepared(
+        library,
+        storage,
+        &source,
+        now_ms,
+        &Provenance::local(&origin_path),
+    )
+}
+
+/// Import one skill acquired from a remote source.
+///
+/// The temporary workspace is not part of the record: the caller supplies the
+/// canonical source address, resolved revision and reviewed command instead.
+pub(super) fn import_installed(
+    library: &SkillLibrary,
+    storage: &Storage,
+    requested: &Path,
+    provenance: &Provenance<'_>,
+    now_ms: i64,
+) -> Result<SkillRecord, SkillError> {
+    if provenance.source_url.is_none() {
         return Err(SkillError::InvalidRequest);
     }
+    let fields_consistent = match provenance.fetch_method {
+        None => provenance.installer_version.is_none() && provenance.installer_command.is_none(),
+        Some(FetchMethod::Git) => {
+            provenance.source_revision.is_some()
+                && provenance.installer_version.is_none()
+                && provenance.installer_command.is_some()
+        }
+        Some(FetchMethod::Npx) => {
+            provenance.source_revision.is_none()
+                && provenance.installer_version.is_some()
+                && provenance.installer_command.is_some()
+        }
+    };
+    if !fields_consistent {
+        return Err(SkillError::InvalidRequest);
+    }
+    let source = resolved_source_directory(library, requested)?;
+    import_prepared(library, storage, &source, now_ms, provenance)
+}
+
+/// Validate a canonical source directory and keep it outside the library.
+fn resolved_source_directory(
+    library: &SkillLibrary,
+    requested: &Path,
+) -> Result<PathBuf, SkillError> {
     // Canonicalizing resolves a linked source directory into the real one, so the
     // managed copy and the recorded origin path describe the same files.
     let source = fs::canonicalize(requested).map_err(|_| SkillError::SourceNotFound)?;
@@ -101,23 +179,33 @@ pub(super) fn import_one(
     if source.starts_with(library_root) {
         return Err(SkillError::SourcePathInvalid);
     }
-    let plan = manifest::inspect(&source)?;
+    Ok(source)
+}
+
+/// Copy one inspected skill and store its provenance in one transaction.
+fn import_prepared(
+    library: &SkillLibrary,
+    storage: &Storage,
+    source: &Path,
+    now_ms: i64,
+    provenance: &Provenance<'_>,
+) -> Result<SkillRecord, SkillError> {
+    if now_ms < 0 {
+        return Err(SkillError::InvalidRequest);
+    }
+    let plan = manifest::inspect(source)?;
     // Checked before copying so a duplicate name fails without writing files; the
     // insert repeats the check inside its transaction for the concurrent case.
     if repository::name_exists(storage, &plan.name)? {
         return Err(SkillError::NameTaken);
     }
-    let origin_path = source
-        .to_str()
-        .ok_or(SkillError::SourcePathInvalid)?
-        .to_string();
     let id = repository::random_id(storage)?;
     let root = library.root();
     fs::create_dir_all(root).map_err(|_| SkillError::WriteFailed)?;
     let temporary = root.join(format!("{TEMPORARY_PREFIX}{id}"));
     let target = root.join(&id);
     fs::create_dir(&temporary).map_err(|_| SkillError::WriteFailed)?;
-    let digest = match copy(&source, &plan, &temporary) {
+    let digest = match copy(source, &plan, &temporary) {
         Ok(digest) => digest,
         Err(error) => {
             let _ = fs::remove_dir_all(&temporary);
@@ -132,7 +220,12 @@ pub(super) fn import_one(
         id: &id,
         name: &plan.name,
         description: &plan.description,
-        origin_path: &origin_path,
+        origin_path: provenance.origin_path,
+        source_url: provenance.source_url,
+        source_revision: provenance.source_revision,
+        fetch_method: provenance.fetch_method,
+        installer_version: provenance.installer_version,
+        installer_command: provenance.installer_command,
         content_digest: &digest,
         file_count: plan.files.len() as i64,
         byte_size: plan.total_bytes as i64,
@@ -198,8 +291,16 @@ pub fn set_skill_source(
         .as_deref()
         .map(validation::source_revision)
         .transpose()?;
+    let installer_version = request
+        .installer_version
+        .as_deref()
+        .map(validation::installer_version)
+        .transpose()?;
     // A revision alone cannot be interpreted later, so it needs an address.
     if url.is_none() && revision.is_some() {
+        return Err(SkillError::InvalidRequest);
+    }
+    if url.is_none() && (request.fetch_method.is_some() || installer_version.is_some()) {
         return Err(SkillError::InvalidRequest);
     }
     let current = repository::get_skill(storage, &request.id)?;
@@ -207,12 +308,45 @@ pub fn set_skill_source(
     if url.is_none() && current.origin_path.is_none() {
         return Err(SkillError::InvalidRequest);
     }
+    let (url, revision, installer_version, installer_command) = match (url, request.fetch_method) {
+        (Some(url), None) => {
+            // A hand-entered address stays metadata only; a version belongs to
+            // an installer, not to an address with no fetch method.
+            if installer_version.is_some() {
+                return Err(SkillError::InvalidRequest);
+            }
+            (
+                Some(url.to_string()),
+                revision.map(str::to_string),
+                None,
+                None,
+            )
+        }
+        (Some(url), Some(method)) => {
+            let url = validation::github_repository(url)?;
+            let (revision, installer_version, command) = super::install::reviewed_source_fields(
+                method,
+                &url,
+                revision,
+                installer_version,
+                &current.name,
+            )?;
+            (Some(url), revision, installer_version, Some(command))
+        }
+        (None, None) => (None, None, None, None),
+        (None, Some(_)) => return Err(SkillError::InvalidRequest),
+    };
     repository::update_source(
         storage,
         &request.id,
         request.expected_revision,
-        url,
-        revision,
+        &repository::SourceUpdate {
+            url: url.as_deref(),
+            revision: revision.as_deref(),
+            fetch_method: request.fetch_method,
+            installer_version: installer_version.as_deref(),
+            installer_command: installer_command.as_deref(),
+        },
         now_ms,
     )?;
     repository::get_skill(storage, &request.id)

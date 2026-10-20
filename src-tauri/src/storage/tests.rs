@@ -462,7 +462,10 @@ fn raising_skill_limits_keeps_rows_and_accepts_larger_skills() {
     old.lock()
         .expect("lock")
         .execute_batch(
-            "INSERT INTO skill VALUES ('0123456789abcdef0123456789abcdef', 'demo', 'Demo skill.', \
+            "INSERT INTO skill
+             (id, name, description, origin_path, source_url, source_revision,
+              content_digest, file_count, byte_size, revision, imported_at, updated_at)
+             VALUES ('0123456789abcdef0123456789abcdef', 'demo', 'Demo skill.', \
              '/tmp/demo', NULL, NULL, 'abababababababababababababababababababababababababababababababab', \
              2, 128, 1, 1000, 1000);",
         )
@@ -488,7 +491,10 @@ fn raising_skill_limits_keeps_rows_and_accepts_larger_skills() {
     // old bound still rejects what remains outside the new limits.
     connection
         .execute(
-            "INSERT INTO skill VALUES ('fedcba9876543210fedcba9876543210', 'large', 'Large skill.', \
+            "INSERT INTO skill
+             (id, name, description, origin_path, source_url, source_revision,
+              content_digest, file_count, byte_size, revision, imported_at, updated_at)
+             VALUES ('fedcba9876543210fedcba9876543210', 'large', 'Large skill.', \
              '/tmp/large', NULL, NULL, 'cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd', \
              315, 11534336, 1, 1000, 1000);",
             [],
@@ -497,7 +503,10 @@ fn raising_skill_limits_keeps_rows_and_accepts_larger_skills() {
     assert!(
         connection
             .execute(
-                "INSERT INTO skill VALUES ('00112233445566778899001122334455', 'huge', 'Too large.', \
+                "INSERT INTO skill
+                 (id, name, description, origin_path, source_url, source_revision,
+                  content_digest, file_count, byte_size, revision, imported_at, updated_at)
+                 VALUES ('00112233445566778899001122334455', 'huge', 'Too large.', \
                  '/tmp/huge', NULL, NULL, 'efefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef', \
                  1, 67108865, 1, 1000, 1000);",
                 [],

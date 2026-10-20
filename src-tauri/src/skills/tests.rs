@@ -81,6 +81,8 @@ impl Fixture {
                 expected_revision,
                 url: url.map(str::to_string),
                 revision: revision.map(str::to_string),
+                fetch_method: None,
+                installer_version: None,
             },
             NOW,
         )
@@ -781,6 +783,9 @@ fn ipc_payloads_match_the_frontend_contract() {
         origin_path: Some("/tmp/sources/demo".to_string()),
         source_url: None,
         source_revision: None,
+        fetch_method: None,
+        installer_version: None,
+        installer_command: None,
         content_digest: "ab".repeat(32),
         file_count: 2,
         byte_size: 128,
@@ -798,9 +803,12 @@ fn ipc_payloads_match_the_frontend_contract() {
             "byteSize",
             "contentDigest",
             "description",
+            "fetchMethod",
             "fileCount",
             "id",
             "importedAtMs",
+            "installerCommand",
+            "installerVersion",
             "name",
             "originPath",
             "revision",
@@ -858,6 +866,36 @@ fn ipc_payloads_match_the_frontend_contract() {
     )
     .expect("source request");
     assert_eq!(source.expected_revision, 2);
+    let git_install: SkillInstallSource = serde_json::from_str(
+        r#"{"method":"git","source":{"repository":"example/skills","revision":"v1","skill":null}}"#,
+    )
+    .expect("git install request");
+    assert_eq!(
+        git_install,
+        SkillInstallSource::Git(GitInstallSource {
+            repository: "example/skills".to_string(),
+            revision: "v1".to_string(),
+            skill: None,
+        })
+    );
+    let npx_install: SkillInstallSource = serde_json::from_str(
+        r#"{"method":"npx","source":{"source":"example/skills","installerVersion":null,"skill":"demo"}}"#,
+    )
+    .expect("npx install request");
+    assert_eq!(
+        npx_install,
+        SkillInstallSource::Npx(NpxInstallSource {
+            source: "example/skills".to_string(),
+            installer_version: None,
+            skill: Some("demo".to_string()),
+        })
+    );
+    assert!(
+        serde_json::from_str::<SkillInstallSource>(
+            r#"{"method":"git","source":{"repository":"a/b","revision":"v1","skill":null,"extra":true}}"#
+        )
+        .is_err()
+    );
     let delete: DeleteSkillRequest =
         serde_json::from_str(r#"{"id":"0123456789abcdef0123456789abcdef","expectedRevision":3}"#)
             .expect("delete request");
@@ -897,7 +935,35 @@ fn ipc_payloads_match_the_frontend_contract() {
         (SkillError::NoSkillsFound, "no_skills_found"),
         (SkillError::NameTaken, "name_taken"),
         (SkillError::SourceUrlInvalid, "source_url_invalid"),
+        (
+            SkillError::SourceRepositoryInvalid,
+            "source_repository_invalid",
+        ),
         (SkillError::SourceRevisionInvalid, "source_revision_invalid"),
+        (SkillError::GitRevisionInvalid, "git_revision_invalid"),
+        (
+            SkillError::SourceRevisionRequired,
+            "source_revision_required",
+        ),
+        (
+            SkillError::InstallerVersionInvalid,
+            "installer_version_invalid",
+        ),
+        (SkillError::InstallerUnavailable, "installer_unavailable"),
+        (SkillError::InstallerFailed, "installer_failed"),
+        (
+            SkillError::InstallerOutputInvalid,
+            "installer_output_invalid",
+        ),
+        (SkillError::InstallTimedOut, "install_timed_out"),
+        (
+            SkillError::InstallWorkspaceFailed,
+            "install_workspace_failed",
+        ),
+        (
+            SkillError::SkillNotFoundInSource,
+            "skill_not_found_in_source",
+        ),
         (SkillError::NotFound, "not_found"),
         (SkillError::RevisionConflict, "revision_conflict"),
         (SkillError::InvalidStoredSkill, "invalid_stored_skill"),
@@ -1075,4 +1141,119 @@ fn cleanup_takes_only_parked_copies_without_a_record() {
     let deleted = fixture.delete(&kept.id, kept.revision).expect("delete");
     assert!(!deleted.cleanup_pending);
     assert!(!root.join(format!(".delete-{}", kept.id)).exists());
+}
+
+#[test]
+fn source_fetch_methods_are_recorded_and_checked() {
+    let fixture = Fixture::new();
+    let record = fixture.import_named("demo", "demo-skill");
+    let set = |revision: i64,
+               url: Option<&str>,
+               revision_text: Option<&str>,
+               method: Option<FetchMethod>,
+               version: Option<&str>| {
+        set_skill_source(
+            &fixture.storage,
+            SetSkillSourceRequest {
+                id: record.id.clone(),
+                expected_revision: revision,
+                url: url.map(str::to_string),
+                revision: revision_text.map(str::to_string),
+                fetch_method: method,
+                installer_version: version.map(str::to_string),
+            },
+            NOW,
+        )
+    };
+
+    let git = set(
+        1,
+        Some("https://github.com/example/skills"),
+        Some("v2"),
+        Some(FetchMethod::Git),
+        None,
+    )
+    .expect("git source");
+    assert_eq!(git.fetch_method, Some(FetchMethod::Git));
+    assert_eq!(git.source_revision.as_deref(), Some("v2"));
+    assert_eq!(git.installer_version, None);
+    assert_eq!(
+        git.installer_command.as_deref(),
+        Some(
+            "git fetch --depth 1 https://github.com/example/skills v2 && git checkout --detach FETCH_HEAD"
+        )
+    );
+
+    let npx = set(
+        2,
+        Some("https://github.com/example/skills"),
+        None,
+        Some(FetchMethod::Npx),
+        None,
+    )
+    .expect("npx source");
+    assert_eq!(npx.fetch_method, Some(FetchMethod::Npx));
+    assert_eq!(npx.source_revision, None);
+    assert_eq!(npx.installer_version.as_deref(), Some("1.7.4"));
+    assert_eq!(
+        npx.installer_command.as_deref(),
+        Some(
+            "npx --yes skills@1.7.4 add https://github.com/example/skills --skill demo-skill --copy -g -a claude-code -y"
+        )
+    );
+
+    // Each method enforces the fields it needs and refuses fields that do not
+    // describe it.
+    assert_eq!(
+        set(
+            3,
+            Some("https://github.com/example/skills"),
+            None,
+            Some(FetchMethod::Git),
+            None,
+        )
+        .unwrap_err(),
+        SkillError::SourceRevisionRequired
+    );
+    assert_eq!(
+        set(
+            3,
+            Some("https://github.com/example/skills"),
+            Some("v2"),
+            Some(FetchMethod::Npx),
+            None,
+        )
+        .unwrap_err(),
+        SkillError::InvalidRequest
+    );
+    assert_eq!(
+        set(
+            3,
+            Some("https://github.com/example/skills"),
+            None,
+            Some(FetchMethod::Npx),
+            Some("^1.7.4"),
+        )
+        .unwrap_err(),
+        SkillError::InstallerVersionInvalid
+    );
+    assert_eq!(
+        set(
+            3,
+            Some("https://example.com/skills"),
+            None,
+            None,
+            Some("1.7.4"),
+        )
+        .unwrap_err(),
+        SkillError::InvalidRequest
+    );
+
+    let cleared = set(3, None, None, None, None).expect("clear");
+    assert_eq!(cleared.source_url, None);
+    assert_eq!(cleared.source_revision, None);
+    assert_eq!(cleared.fetch_method, None);
+    assert_eq!(cleared.installer_version, None);
+    assert_eq!(cleared.installer_command, None);
+    assert!(cleared.origin_path.is_some());
 }

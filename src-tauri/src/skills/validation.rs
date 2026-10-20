@@ -137,6 +137,150 @@ pub(super) fn stored_revision(value: &str) -> Result<&str, SkillError> {
     source_revision(value).map_err(|_| SkillError::InvalidStoredSkill)
 }
 
+/// Validate and canonicalize a GitHub repository address.
+///
+/// P26 supports public GitHub sources only. The installer needs one stable
+/// host so it can use HTTPS without forwarding credentials or reading a user's
+/// Git configuration. `owner/repo` shorthand is accepted because the reviewed
+/// `skills` installer documents that form.
+pub(super) fn github_repository(value: &str) -> Result<String, SkillError> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() || trimmed.len() > MAX_URL_LENGTH {
+        return Err(SkillError::SourceRepositoryInvalid);
+    }
+    let (owner, repository) = if trimmed.contains("://") {
+        let parsed = url::Url::parse(trimmed).map_err(|_| SkillError::SourceRepositoryInvalid)?;
+        let host_ok = matches!(parsed.host_str(), Some("github.com" | "www.github.com"));
+        if parsed.scheme() != "https"
+            || !host_ok
+            || parsed.port().is_some()
+            || !parsed.username().is_empty()
+            || parsed.password().is_some()
+            || parsed.query().is_some()
+            || parsed.fragment().is_some()
+        {
+            return Err(SkillError::SourceRepositoryInvalid);
+        }
+        split_repository_path(parsed.path())?
+    } else {
+        let mut parts = trimmed.split('/');
+        let owner = parts.next().unwrap_or_default();
+        let repository = parts.next().unwrap_or_default();
+        if parts.next().is_some() {
+            return Err(SkillError::SourceRepositoryInvalid);
+        }
+        validate_repository_part(owner)?;
+        let repository = repository.strip_suffix(".git").unwrap_or(repository);
+        validate_repository_part(repository)?;
+        (owner.to_string(), repository.to_string())
+    };
+    let canonical = format!("https://github.com/{owner}/{repository}");
+    if canonical.len() > MAX_URL_LENGTH {
+        return Err(SkillError::SourceRepositoryInvalid);
+    }
+    Ok(canonical)
+}
+
+/// Split `/owner/repo` and reject extra segments or encoded path tricks.
+fn split_repository_path(path: &str) -> Result<(String, String), SkillError> {
+    let trimmed = path.trim_matches('/');
+    let mut parts = trimmed.split('/');
+    let owner = parts.next().unwrap_or_default();
+    let repository = parts.next().unwrap_or_default();
+    if parts.next().is_some() {
+        return Err(SkillError::SourceRepositoryInvalid);
+    }
+    validate_repository_part(owner)?;
+    let repository = repository.strip_suffix(".git").unwrap_or(repository);
+    validate_repository_part(repository)?;
+    Ok((owner.to_string(), repository.to_string()))
+}
+
+/// GitHub owners and repositories use a small ASCII set; dots are accepted.
+fn validate_repository_part(value: &str) -> Result<(), SkillError> {
+    let first_ok = value
+        .chars()
+        .next()
+        .is_some_and(|character| character.is_ascii_alphanumeric());
+    let allowed = value
+        .chars()
+        .all(|character| character.is_ascii_alphanumeric() || "._-".contains(character));
+    if (1..=100).contains(&value.chars().count()) && first_ok && allowed && value != ".." {
+        Ok(())
+    } else {
+        Err(SkillError::SourceRepositoryInvalid)
+    }
+}
+
+/// Validate a Git ref used by the installer's fetch command.
+///
+/// Git interprets some characters as revision syntax. P26 accepts one named ref
+/// or commit and rejects range, reflog and option-like forms.
+pub(super) fn git_revision(value: &str) -> Result<&str, SkillError> {
+    let revision = source_revision(value)?;
+    // Keep the displayed command copyable as well as the Git argument safe.
+    let allowed = revision
+        .chars()
+        .all(|character| character.is_ascii_alphanumeric() || "._/-".contains(character));
+    let rejected =
+        revision.starts_with('-') || revision == "." || revision == ".." || revision.contains("..");
+    if !allowed || rejected {
+        return Err(SkillError::GitRevisionInvalid);
+    }
+    Ok(revision)
+}
+
+/// Validate an exact stable npx installer version such as `1.7.4`.
+pub(super) fn installer_version(value: &str) -> Result<&str, SkillError> {
+    let trimmed = value.trim();
+    let parts: Vec<&str> = trimmed.split('.').collect();
+    let valid = (1..=32).contains(&trimmed.len())
+        && parts.len() == 3
+        && parts.iter().all(|part| {
+            (1..=3).contains(&part.len())
+                && part.chars().all(|character| character.is_ascii_digit())
+        });
+    if valid {
+        Ok(trimmed)
+    } else {
+        Err(SkillError::InstallerVersionInvalid)
+    }
+}
+
+/// Validate a stored installer version with the stored-data error.
+pub(super) fn stored_installer_version(value: &str) -> Result<&str, SkillError> {
+    installer_version(value).map_err(|_| SkillError::InvalidStoredSkill)
+}
+
+/// Validate an optional one-skill selector. `*` means every discovered skill.
+pub(super) fn skill_selector(value: Option<&str>) -> Result<Option<&str>, SkillError> {
+    let Some(value) = value.map(str::trim) else {
+        return Ok(None);
+    };
+    if value.is_empty() {
+        return Ok(None);
+    }
+    if value == "*" {
+        return Ok(Some("*"));
+    }
+    skill_name(value).map(Some)
+}
+
+/// Validate display text for the reviewed install command.
+pub(super) fn installer_command(value: &str) -> Result<&str, SkillError> {
+    let valid = (1..=1024).contains(&value.len()) && !value.chars().any(char::is_control);
+    if valid {
+        Ok(value)
+    } else {
+        Err(SkillError::InvalidRequest)
+    }
+}
+
+/// Validate a stored install command with the stored-data error.
+pub(super) fn stored_installer_command(value: &str) -> Result<&str, SkillError> {
+    installer_command(value).map_err(|_| SkillError::InvalidStoredSkill)
+}
+
 /// Validate and split a list cursor: `name` line feed `id`.
 ///
 /// The list is ordered by name and the cursor carries both parts so pagination

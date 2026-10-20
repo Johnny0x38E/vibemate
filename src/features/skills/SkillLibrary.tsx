@@ -24,9 +24,11 @@ import {
     SkillRequestError,
     type ImportReport,
     type SkillErrorCode,
+    type SkillInstallReport,
     type SkillRecord,
 } from "../../lib/desktop/skills";
 import { SkillDetail } from "./SkillDetail";
+import { SkillInstallDialog } from "./SkillInstallDialog";
 import { skillSource } from "./skillSource";
 import buttons from "../../components/actionButtons.module.css";
 import dialog from "./SkillDeleteDialog.module.css";
@@ -66,9 +68,19 @@ function rowSourceText(
         );
     }
     const address = t("skills.sourceAddress", { url: source.url });
-    return source.revision === null
-        ? address
-        : `${address} · ${t("skills.sourceRevision", { revision: source.revision })}`;
+    const revision =
+        source.revision === null
+            ? ""
+            : ` · ${t("skills.sourceRevision", { revision: source.revision })}`;
+    const method =
+        source.fetchMethod === "git"
+            ? t("skills.sourceGit")
+            : source.fetchMethod === "npx"
+              ? t("skills.sourceNpx", {
+                    version: source.installerVersion ?? "",
+                })
+              : t("skills.sourceManual");
+    return `${address}${revision} · ${method}`;
 }
 
 /** The sidebar page stays mounted while hidden, so drafts and pages survive. */
@@ -110,6 +122,7 @@ export function SkillLibrary({
     const [action, setAction] = useState<ActionState>({ kind: "idle" });
     const [report, setReport] = useState<ImportReport | null>(null);
     const [formBlocked, setFormBlocked] = useState(false);
+    const [installOpen, setInstallOpen] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState<SkillRecord | null>(null);
     // A deletion whose files could not be removed keeps offering the retry.
     const [cleanupPending, setCleanupPending] = useState(false);
@@ -121,11 +134,13 @@ export function SkillLibrary({
     const focusRequested = useRef(false);
     const cancelDelete = useRef<HTMLButtonElement>(null);
     const deleteTrigger = useRef<HTMLElement | null>(null);
+    const installTrigger = useRef<HTMLButtonElement>(null);
     const busy = action.kind === "picking" || action.kind === "importing";
     // A running deletion shows its progress on the dialog button, so it blocks
     // the list without joining the import progress area.
     const blocked =
         busy ||
+        installOpen ||
         action.kind === "deleting" ||
         (action.kind === "error" && action.uncertain) ||
         (list.kind === "ready" && list.more === "loading");
@@ -296,6 +311,19 @@ export function SkillLibrary({
             }
         }
     }
+    /** A remote install may add rows on a later page, so re-read the first page. */
+    function installed(report: SkillInstallReport): void {
+        if (report.imported.length > 0) {
+            notify({
+                tone: "success",
+                message: t("skills.reportImported", {
+                    count: report.imported.length,
+                }),
+            });
+        }
+        void reload();
+    }
+
     function sourceSaved(record: SkillRecord): void {
         // The saved record is authoritative, so the detail page and the list row
         // both show it without another read.
@@ -412,23 +440,39 @@ export function SkillLibrary({
                         tabIndex={-1}
                         dataFocus="heading"
                         trailing={
-                            // Importing adds an existing skill folder, so the
-                            // folder icon and its place in the header match the
-                            // other module pages.
-                            <button
-                                className={[
-                                    buttons["primary"],
-                                    buttons["withIcon"],
-                                ].join(" ")}
-                                type="button"
-                                aria-disabled={blocked}
-                                onClick={() => {
-                                    void chooseFolder();
-                                }}
-                            >
-                                <Icon name="folder" />
-                                {t("skills.localImport")}
-                            </button>
+                            <div className={styles["headerActions"]}>
+                                {/* Importing adds an existing folder; installing
+                                fetches a reviewed remote source. */}
+                                <button
+                                    ref={installTrigger}
+                                    className={[
+                                        buttons["secondary"],
+                                        buttons["withIcon"],
+                                    ].join(" ")}
+                                    type="button"
+                                    aria-disabled={blocked}
+                                    onClick={() => {
+                                        setInstallOpen(true);
+                                    }}
+                                >
+                                    <Icon name="plus" />
+                                    {t("skills.install.open")}
+                                </button>
+                                <button
+                                    className={[
+                                        buttons["primary"],
+                                        buttons["withIcon"],
+                                    ].join(" ")}
+                                    type="button"
+                                    aria-disabled={blocked}
+                                    onClick={() => {
+                                        void chooseFolder();
+                                    }}
+                                >
+                                    <Icon name="folder" />
+                                    {t("skills.localImport")}
+                                </button>
+                            </div>
                         }
                     />
                     {/* Import and cleanup feedback sits under the header, next
@@ -705,6 +749,12 @@ export function SkillLibrary({
                     </Dialog.Popup>
                 </Dialog.Portal>
             </Dialog.Root>
+            <SkillInstallDialog
+                open={installOpen}
+                onOpenChange={setInstallOpen}
+                onInstalled={installed}
+                returnFocus={installTrigger}
+            />
         </section>
     );
 }

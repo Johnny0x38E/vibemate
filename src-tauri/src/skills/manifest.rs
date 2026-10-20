@@ -109,7 +109,7 @@ pub(super) fn discover(source: &Path) -> Result<Vec<PathBuf>, SkillError> {
 ///
 /// A linked `SKILL.md` is not accepted, so the imported content always comes
 /// from the chosen tree.
-fn is_skill(directory: &Path) -> bool {
+pub(super) fn is_skill(directory: &Path) -> bool {
     fs::symlink_metadata(directory.join(MANIFEST_FILE_NAME))
         .map(|metadata| metadata.is_file())
         .unwrap_or(false)

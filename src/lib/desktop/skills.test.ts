@@ -4,8 +4,10 @@ import {
     cleanupDeletedSkillCopies,
     deleteSkill,
     importSkillFolder,
+    installSkill,
     listSkills,
     pickSkillFolder,
+    previewSkillInstall,
     setSkillSource,
     SkillRequestError,
     type SkillRecord,
@@ -22,6 +24,9 @@ const row: SkillRecord = {
     originPath: "/tmp/sources/demo",
     sourceUrl: null,
     sourceRevision: null,
+    fetchMethod: null,
+    installerVersion: null,
+    installerCommand: null,
     contentDigest: DIGEST,
     fileCount: 2,
     byteSize: 128,
@@ -50,6 +55,8 @@ test("preview reads nothing and rejects every write", async () => {
             expectedRevision: 1,
             url: "https://example.com/skills",
             revision: null,
+            fetchMethod: null,
+            installerVersion: null,
         }),
     ).rejects.toMatchObject({ code: "desktop_required" });
     await expect(
@@ -276,6 +283,8 @@ test("source records must advance the revision they were edited from", async () 
             expectedRevision: 1,
             url: "https://example.com/skills",
             revision: "v1.2.0",
+            fetchMethod: null,
+            installerVersion: null,
         }),
     ).resolves.toEqual(updated);
 
@@ -286,6 +295,8 @@ test("source records must advance the revision they were edited from", async () 
             expectedRevision: 1,
             url: "https://example.com/skills",
             revision: null,
+            fetchMethod: null,
+            installerVersion: null,
         }),
     ).rejects.toMatchObject({ code: "invalid_response" });
 
@@ -296,6 +307,8 @@ test("source records must advance the revision they were edited from", async () 
             expectedRevision: 1,
             url: "https://example.com/skills",
             revision: null,
+            fetchMethod: null,
+            installerVersion: null,
         }),
     ).rejects.toMatchObject({ code: "invalid_response" });
 });
@@ -364,4 +377,208 @@ test("domain codes are kept and unknown failures are generic", async () => {
     await expect(importSkillFolder("/tmp/sources/demo")).rejects.toBeInstanceOf(
         SkillRequestError,
     );
+});
+
+const COMMIT = "a".repeat(40);
+const GIT_COMMAND = `git fetch --depth 1 https://github.com/example/skills v1.2.0 && git checkout --detach FETCH_HEAD`;
+const NPX_COMMAND =
+    "npx --yes skills@1.7.4 add https://github.com/example/skills --skill '*' --copy -g -a claude-code -y";
+
+test("an install preview is validated before it can be shown", async () => {
+    const preview = {
+        method: "git",
+        sourceUrl: "https://github.com/example/skills",
+        revision: "v1.2.0",
+        installer: "git",
+        installerVersion: null,
+        command: GIT_COMMAND,
+    };
+    vi.mocked(invoke).mockResolvedValue(preview);
+    const source = {
+        method: "git" as const,
+        source: {
+            repository: "example/skills",
+            revision: "v1.2.0",
+            skill: null,
+        },
+    };
+    await expect(previewSkillInstall(source)).resolves.toEqual({
+        kind: "desktop",
+        preview,
+    });
+    expect(vi.mocked(invoke)).toHaveBeenCalledWith("preview_skill_install", {
+        source,
+    });
+
+    const malformed: unknown[] = [
+        { ...preview, installer: "npx" },
+        { ...preview, revision: null },
+        { ...preview, command: "git clone something" },
+        { ...preview, command: "bad\u0000command" },
+        {
+            ...preview,
+            method: "npx",
+            installer: "skills",
+            installerVersion: null,
+            revision: null,
+            command: NPX_COMMAND,
+        },
+        {
+            ...preview,
+            method: "npx",
+            installer: "skills",
+            installerVersion: "1.7.4",
+            revision: null,
+            command: NPX_COMMAND,
+            extra: true,
+        },
+    ];
+    for (const value of malformed) {
+        vi.mocked(invoke).mockResolvedValue(value);
+        await expect(previewSkillInstall(source)).rejects.toMatchObject({
+            code: "invalid_response",
+        });
+    }
+
+    vi.mocked(invoke).mockResolvedValue({
+        method: "npx",
+        sourceUrl: "https://github.com/example/skills",
+        revision: null,
+        installer: "skills",
+        installerVersion: "1.7.4",
+        command: NPX_COMMAND,
+    });
+    await expect(
+        previewSkillInstall({
+            method: "npx",
+            source: {
+                source: "example/skills",
+                installerVersion: null,
+                skill: null,
+            },
+        }),
+    ).resolves.toMatchObject({
+        kind: "desktop",
+        preview: { method: "npx", command: NPX_COMMAND },
+    });
+});
+
+test("browser preview never invents an install command", async () => {
+    vi.mocked(isTauri).mockReturnValue(false);
+    await expect(
+        previewSkillInstall({
+            method: "git",
+            source: {
+                repository: "example/skills",
+                revision: "v1",
+                skill: null,
+            },
+        }),
+    ).resolves.toEqual({ kind: "preview" });
+    await expect(
+        installSkill({
+            method: "git",
+            source: {
+                repository: "example/skills",
+                revision: "v1",
+                skill: null,
+            },
+        }),
+    ).rejects.toMatchObject({ code: "desktop_required" });
+    expect(vi.mocked(invoke)).not.toHaveBeenCalled();
+});
+
+test("an install report must describe the reviewed command and rows", async () => {
+    const imported: SkillRecord = {
+        ...row,
+        originPath: null,
+        sourceUrl: "https://github.com/example/skills",
+        sourceRevision: COMMIT,
+        fetchMethod: "git",
+        installerVersion: null,
+        installerCommand: GIT_COMMAND,
+        revision: 2,
+    };
+    const report = {
+        method: "git",
+        sourceUrl: "https://github.com/example/skills",
+        revision: COMMIT,
+        installer: "git",
+        installerVersion: null,
+        command: GIT_COMMAND,
+        exitStatus: 0,
+        imported: [imported],
+        skipped: [],
+    };
+    const source = {
+        method: "git" as const,
+        source: {
+            repository: "example/skills",
+            revision: "v1.2.0",
+            skill: null,
+        },
+    };
+    vi.mocked(invoke).mockResolvedValue(report);
+    await expect(installSkill(source)).resolves.toEqual(report);
+    expect(vi.mocked(invoke)).toHaveBeenCalledWith("install_skill", { source });
+
+    const npxImported: SkillRecord = {
+        ...imported,
+        sourceRevision: null,
+        fetchMethod: "npx",
+        installerVersion: "1.7.4",
+        installerCommand: NPX_COMMAND,
+    };
+    const npxReport = {
+        ...report,
+        method: "npx",
+        revision: null,
+        installer: "skills",
+        installerVersion: "1.7.4",
+        command: NPX_COMMAND,
+        imported: [npxImported],
+    };
+    vi.mocked(invoke).mockResolvedValue(npxReport);
+    await expect(
+        installSkill({
+            method: "npx",
+            source: {
+                source: "example/skills",
+                installerVersion: null,
+                skill: null,
+            },
+        }),
+    ).resolves.toEqual(npxReport);
+
+    const malformed: unknown[] = [
+        { ...report, imported: [{ ...imported, originPath: "/tmp/source" }] },
+        {
+            ...report,
+            imported: [{ ...imported, sourceUrl: "https://example.com" }],
+        },
+        { ...report, imported: [{ ...imported, fetchMethod: "npx" }] },
+        {
+            ...report,
+            imported: [{ ...imported, installerCommand: NPX_COMMAND }],
+        },
+        { ...report, exitStatus: 1 },
+        { ...report, installer: "npx" },
+        { ...report, installerVersion: "9.9.9" },
+        { ...npxReport, installerVersion: "9.9.9" },
+        { ...report, imported: [], skipped: [] },
+        { ...report, imported: [imported, imported] },
+        { ...report, revision: "b".repeat(40) },
+        { ...report, extra: true },
+    ];
+    for (const value of malformed) {
+        vi.mocked(invoke).mockResolvedValue(value);
+        await expect(installSkill(source)).rejects.toMatchObject({
+            code: "invalid_response",
+        });
+    }
+
+    vi.mocked(invoke).mockRejectedValue("installer_failed");
+    await expect(installSkill(source)).rejects.toMatchObject({
+        code: "installer_failed",
+    });
 });

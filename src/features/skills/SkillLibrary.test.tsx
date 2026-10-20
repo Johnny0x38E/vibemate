@@ -17,19 +17,26 @@ import {
     deleteSkill,
     getSkill,
     importSkillFolder,
+    installSkill,
     listSkills,
     pickSkillFolder,
+    previewSkillInstall,
     setSkillSource,
     SkillRequestError,
+    type SkillInstallPreview,
+    type SkillInstallReport,
     type SkillRecord,
 } from "../../lib/desktop/skills";
 import { SkillLibrary } from "./SkillLibrary";
+import { setFieldSelectValue } from "../../test/fieldSelect";
 vi.mock(import("../../lib/desktop/skills"), async (importOriginal) => ({
     ...(await importOriginal()),
     listSkills: vi.fn(),
     getSkill: vi.fn(),
     pickSkillFolder: vi.fn(),
     importSkillFolder: vi.fn(),
+    previewSkillInstall: vi.fn(),
+    installSkill: vi.fn(),
     setSkillSource: vi.fn(),
     deleteSkill: vi.fn(),
     cleanupDeletedSkillCopies: vi.fn(),
@@ -38,6 +45,8 @@ const list = vi.mocked(listSkills);
 const get = vi.mocked(getSkill);
 const pick = vi.mocked(pickSkillFolder);
 const create = vi.mocked(importSkillFolder);
+const preview = vi.mocked(previewSkillInstall);
+const install = vi.mocked(installSkill);
 const save = vi.mocked(setSkillSource);
 const remove = vi.mocked(deleteSkill);
 const removeCopies = vi.mocked(cleanupDeletedSkillCopies);
@@ -50,6 +59,9 @@ const row: SkillRecord = {
     originPath: "/tmp/sources/demo",
     sourceUrl: null,
     sourceRevision: null,
+    fetchMethod: null,
+    installerVersion: null,
+    installerCommand: null,
     contentDigest: "ab".repeat(32),
     fileCount: 2,
     byteSize: 2048,
@@ -65,6 +77,50 @@ function page(
 ) {
     return { kind: "desktop" as const, page: { items, nextCursor, total } };
 }
+
+const COMMIT = "a".repeat(40);
+const GIT_COMMAND = `git fetch --depth 1 https://github.com/example/skills v1.2.0 && git checkout --detach FETCH_HEAD`;
+const NPX_COMMAND =
+    "npx --yes skills@1.7.4 add https://github.com/example/skills --skill '*' --copy -g -a claude-code -y";
+const gitPreview: SkillInstallPreview = {
+    method: "git",
+    sourceUrl: "https://github.com/example/skills",
+    revision: "v1.2.0",
+    installer: "git",
+    installerVersion: null,
+    command: GIT_COMMAND,
+};
+const npxPreview: SkillInstallPreview = {
+    method: "npx",
+    sourceUrl: "https://github.com/example/skills",
+    revision: null,
+    installer: "skills",
+    installerVersion: "1.7.4",
+    command: NPX_COMMAND,
+};
+const installedRow: SkillRecord = {
+    ...row,
+    id: "f".repeat(32),
+    name: "installed-skill",
+    originPath: null,
+    sourceUrl: "https://github.com/example/skills",
+    sourceRevision: COMMIT,
+    fetchMethod: "git",
+    installerVersion: null,
+    installerCommand: GIT_COMMAND,
+    revision: 2,
+};
+const gitReport: SkillInstallReport = {
+    method: "git",
+    sourceUrl: "https://github.com/example/skills",
+    revision: COMMIT,
+    installer: "git",
+    installerVersion: null,
+    command: GIT_COMMAND,
+    exitStatus: 0,
+    imported: [installedRow],
+    skipped: [],
+};
 
 async function setup(
     locale: "en" | "zh-CN" = "en",
@@ -93,6 +149,11 @@ beforeEach(() => {
         path: "/tmp/sources/demo",
     });
     create.mockReset().mockResolvedValue({ imported: [row], skipped: [] });
+    preview.mockReset().mockResolvedValue({
+        kind: "desktop",
+        preview: gitPreview,
+    });
+    install.mockReset().mockResolvedValue(gitReport);
     save.mockReset().mockResolvedValue({
         ...row,
         sourceUrl: "https://example.com/skills",
@@ -145,7 +206,7 @@ test("the detail page shows the imported facts", async () => {
     expect(screen.getByText("Last change")).toBeDefined();
     expect(
         screen.getByText(
-            "Automatic updates and deployment to an agent are not implemented yet.",
+            "Remote installation is available. Automatic updates and deployment to an agent are not implemented yet.",
         ),
     ).toBeDefined();
 });
@@ -325,12 +386,16 @@ test("the detail page records an address without leaving the skill", async () =>
             expectedRevision: 1,
             url: "https://example.com/skills",
             revision: "v9",
+            fetchMethod: null,
+            installerVersion: null,
         });
     });
     // The page keeps showing the skill, now with the stored source (the mock
     // returns v1.2.0) instead of the unknown-source line.
     expect(
-        await screen.findByText("https://example.com/skills · revision v1.2.0"),
+        await screen.findByText(
+            "https://example.com/skills · revision v1.2.0 · Manual source",
+        ),
     ).toBeDefined();
     expect(screen.getByText("Source saved.")).toBeDefined();
     expect(screen.getByLabelText("Source address")).toBeDefined();
@@ -339,7 +404,7 @@ test("the detail page records an address without leaving the skill", async () =>
     fireEvent.click(screen.getByRole("button", { name: "Back to skills" }));
     expect(
         await screen.findByText(
-            "Source: https://example.com/skills · revision v1.2.0",
+            "Source: https://example.com/skills · revision v1.2.0 · Manual source",
         ),
     ).toBeDefined();
     expect(list).toHaveBeenCalledTimes(1);
@@ -381,6 +446,8 @@ test("a stale source revision asks for a reload instead of overwriting", async (
             expectedRevision: 3,
             url: "https://example.com/skills",
             revision: null,
+            fetchMethod: null,
+            installerVersion: null,
         });
     });
 });
@@ -469,6 +536,274 @@ test("leftover files after a delete can be cleaned up", async () => {
     expect(
         screen.queryByRole("button", { name: "Retry file cleanup" }),
     ).toBeNull();
+});
+
+test("install shows the exact command before it runs", async () => {
+    list.mockResolvedValueOnce(page([row])).mockResolvedValue(
+        page([row, installedRow], null, 2),
+    );
+    await setup();
+    fireEvent.click(
+        await screen.findByRole("button", { name: "Install from source" }),
+    );
+    expect(
+        await screen.findByRole("heading", {
+            name: "Install a skill from source",
+        }),
+    ).toBeDefined();
+    await waitFor(() => {
+        expect(document.activeElement).toBe(
+            screen.getByLabelText("Repository"),
+        );
+    });
+    fireEvent.change(screen.getByLabelText("Repository"), {
+        target: { value: "example/skills" },
+    });
+    fireEvent.change(screen.getByLabelText("Revision"), {
+        target: { value: "v1.2.0" },
+    });
+    // Reviewing is the first step; no installer may run before confirmation.
+    fireEvent.click(screen.getByRole("button", { name: "Review command" }));
+    expect(
+        await screen.findByText(
+            "git fetch --depth 1 https://github.com/example/skills v1.2.0 && git checkout --detach FETCH_HEAD",
+        ),
+    ).toBeDefined();
+    expect(preview).toHaveBeenCalledWith({
+        method: "git",
+        source: {
+            repository: "example/skills",
+            revision: "v1.2.0",
+            skill: null,
+        },
+    });
+    expect(install).not.toHaveBeenCalled();
+    // The reviewed command replaces the review action with the confirmation.
+    expect(document.activeElement).toBe(
+        screen.getByRole("button", { name: "Install" }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Install" }));
+    await waitFor(() => {
+        expect(install).toHaveBeenCalledWith({
+            method: "git",
+            source: {
+                repository: "example/skills",
+                revision: "v1.2.0",
+                skill: null,
+            },
+        });
+    });
+    // The dialog result and the global notification both state the count.
+    expect(
+        (await screen.findAllByText("Imported 1 skill.")).length,
+    ).toBeGreaterThan(0);
+    // The result replaces the confirmation; Done receives focus.
+    expect(document.activeElement).toBe(
+        screen.getByRole("button", { name: "Done" }),
+    );
+    // The row is re-read after the report, and the dialog stays for review.
+    await waitFor(() => {
+        expect(list).toHaveBeenCalledTimes(2);
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    await waitFor(() => {
+        expect(
+            screen.queryByRole("heading", {
+                name: "Install a skill from source",
+            }),
+        ).toBeNull();
+    });
+    expect(
+        await screen.findByRole("heading", { name: "installed-skill" }),
+    ).toBeDefined();
+});
+
+test("the npx install path reviews the reviewed installer version", async () => {
+    preview.mockResolvedValue({ kind: "desktop", preview: npxPreview });
+    install.mockResolvedValue({
+        ...gitReport,
+        method: "npx",
+        revision: null,
+        installer: "skills",
+        installerVersion: "1.7.4",
+        command: NPX_COMMAND,
+        imported: [
+            {
+                ...installedRow,
+                sourceRevision: null,
+                fetchMethod: "npx",
+                installerVersion: "1.7.4",
+                installerCommand: NPX_COMMAND,
+            },
+        ],
+    });
+    await setup();
+    fireEvent.click(
+        await screen.findByRole("button", { name: "Install from source" }),
+    );
+    await setFieldSelectValue(
+        screen.getByRole("combobox", { name: "Source type" }),
+        "npx",
+    );
+    fireEvent.change(screen.getByLabelText("Source"), {
+        target: { value: "example/skills" },
+    });
+    // The Git revision field belongs to the other method and is gone.
+    expect(screen.queryByLabelText("Revision")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Review command" }));
+    expect(
+        await screen.findByText(
+            "npx --yes skills@1.7.4 add https://github.com/example/skills --skill '*' --copy -g -a claude-code -y",
+        ),
+    ).toBeDefined();
+    expect(preview).toHaveBeenCalledWith({
+        method: "npx",
+        source: {
+            source: "example/skills",
+            installerVersion: null,
+            skill: null,
+        },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Install" }));
+    await waitFor(() => {
+        expect(install).toHaveBeenCalledTimes(1);
+    });
+    expect(await screen.findByText("skills@1.7.4")).toBeDefined();
+});
+
+test("a failed install stays in the dialog with a translated reason", async () => {
+    install.mockRejectedValue(new SkillRequestError("installer_failed"));
+    await setup();
+    fireEvent.click(
+        await screen.findByRole("button", { name: "Install from source" }),
+    );
+    fireEvent.change(screen.getByLabelText("Repository"), {
+        target: { value: "example/skills" },
+    });
+    fireEvent.change(screen.getByLabelText("Revision"), {
+        target: { value: "v1" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Review command" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Install" }));
+    expect(
+        await screen.findByText(
+            "The reviewed installer did not finish successfully. Nothing was imported.",
+        ),
+    ).toBeDefined();
+    expect(
+        screen.getByRole("heading", { name: "Install a skill from source" }),
+    ).toBeDefined();
+});
+
+test("the install dialog reports a browser preview instead of running", async () => {
+    preview.mockResolvedValue({ kind: "preview" });
+    await setup();
+    fireEvent.click(
+        await screen.findByRole("button", { name: "Install from source" }),
+    );
+    fireEvent.change(screen.getByLabelText("Repository"), {
+        target: { value: "example/skills" },
+    });
+    fireEvent.change(screen.getByLabelText("Revision"), {
+        target: { value: "v1" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Review command" }));
+    expect(
+        await screen.findByText("This action needs the desktop app."),
+    ).toBeDefined();
+    expect(install).not.toHaveBeenCalled();
+});
+
+test("the source page can record a Git update method", async () => {
+    const gitRecord: SkillRecord = {
+        ...row,
+        sourceUrl: "https://github.com/example/skills",
+        sourceRevision: "v2",
+        fetchMethod: "git",
+        installerVersion: null,
+        installerCommand:
+            "git fetch --depth 1 https://github.com/example/skills v2 && git checkout --detach FETCH_HEAD",
+        revision: 2,
+    };
+    save.mockResolvedValue(gitRecord);
+    await setup();
+    fireEvent.click(
+        await screen.findByRole("button", {
+            name: "Open details for demo-skill",
+        }),
+    );
+    await setFieldSelectValue(
+        await screen.findByRole("combobox", { name: "Update method" }),
+        "git",
+    );
+    fireEvent.change(screen.getByLabelText("Source address"), {
+        target: { value: "https://github.com/example/skills" },
+    });
+    fireEvent.change(screen.getByLabelText("Revision"), {
+        target: { value: "v2" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+        expect(save).toHaveBeenCalledWith({
+            id: ID,
+            expectedRevision: 1,
+            url: "https://github.com/example/skills",
+            revision: "v2",
+            fetchMethod: "git",
+            installerVersion: null,
+        });
+    });
+    expect(
+        await screen.findByText(
+            "https://github.com/example/skills · revision v2 · Git",
+        ),
+    ).toBeDefined();
+});
+
+test("the source page records an npx method and installer version", async () => {
+    const npxRecord: SkillRecord = {
+        ...row,
+        sourceUrl: "https://github.com/example/skills",
+        sourceRevision: null,
+        fetchMethod: "npx",
+        installerVersion: "1.7.4",
+        installerCommand:
+            "npx --yes skills@1.7.4 add https://github.com/example/skills --skill demo-skill --copy -g -a claude-code -y",
+        revision: 2,
+    };
+    save.mockResolvedValue(npxRecord);
+    await setup();
+    fireEvent.click(
+        await screen.findByRole("button", {
+            name: "Open details for demo-skill",
+        }),
+    );
+    await setFieldSelectValue(
+        await screen.findByRole("combobox", { name: "Update method" }),
+        "npx",
+    );
+    fireEvent.change(screen.getByLabelText("Source address"), {
+        target: { value: "https://github.com/example/skills" },
+    });
+    // The Git revision no longer applies; the installer version takes its place.
+    expect(screen.queryByLabelText("Revision")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+        expect(save).toHaveBeenCalledWith({
+            id: ID,
+            expectedRevision: 1,
+            url: "https://github.com/example/skills",
+            revision: null,
+            fetchMethod: "npx",
+            installerVersion: null,
+        });
+    });
+    expect(
+        await screen.findByText(
+            "https://github.com/example/skills · skills@1.7.4",
+        ),
+    ).toBeDefined();
 });
 
 test("the browser preview reads nothing", async () => {

@@ -9,6 +9,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { DetailFact, DetailPanel } from "../../components/DetailForm";
 import { EditFormRow } from "../../components/EditFormRow";
+import { FieldSelect } from "../../components/FieldSelect";
 import { skillSource } from "./skillSource";
 import { ProviderPage } from "../providers/ProviderPage";
 import { SecondaryPageActions } from "../../components/SecondaryPageActions";
@@ -16,6 +17,7 @@ import {
     setSkillSource,
     SkillRequestError,
     type SkillErrorCode,
+    type SkillFetchMethod,
     type SkillRecord,
 } from "../../lib/desktop/skills";
 import buttons from "../../components/actionButtons.module.css";
@@ -94,6 +96,9 @@ export function SkillDetail({
     const formId = `${prefix}-form`;
     const [url, setUrl] = useState(record.sourceUrl ?? "");
     const [revision, setRevision] = useState(record.sourceRevision ?? "");
+    const [fetchMethod, setFetchMethod] = useState<SkillFetchMethod | null>(
+        record.fetchMethod,
+    );
     const [state, setState] = useState<FormState>({ kind: "idle" });
     const active = useRef(true);
     const mutationPending = useRef(false);
@@ -106,6 +111,14 @@ export function SkillDetail({
                   source.revision === null
                       ? ""
                       : ` · ${t("skills.sourceRevision", { revision: source.revision })}`
+              } · ${
+                  source.fetchMethod === "git"
+                      ? t("skills.sourceGit")
+                      : source.fetchMethod === "npx"
+                        ? t("skills.sourceNpx", {
+                              version: source.installerVersion ?? "",
+                          })
+                        : t("skills.sourceManual")
               }`
             : t(
                   source.kind === "local"
@@ -115,6 +128,9 @@ export function SkillDetail({
     // A revision is only meaningful together with an address; the backend rejects
     // the pair, and the field explains it before a request is sent.
     const revisionWithoutUrl = url.trim() === "" && revision.trim() !== "";
+    const gitRevisionMissing =
+        url.trim() !== "" && fetchMethod === "git" && revision.trim() === "";
+    const formBlocked = revisionWithoutUrl || gitRevisionMissing;
 
     useEffect(() => {
         active.current = true;
@@ -133,8 +149,11 @@ export function SkillDetail({
     }, [onNavigationBlockedChange, state]);
     async function submit(event: SubmitEvent<HTMLFormElement>): Promise<void> {
         event.preventDefault();
-        if (busy || mutationPending.current || revisionWithoutUrl) return;
+        if (busy || mutationPending.current || formBlocked) return;
         const trimmedUrl = url.trim();
+        // Clearing the address clears the method too: an update method cannot
+        // exist without a source to update from.
+        const selectedMethod = trimmedUrl === "" ? null : fetchMethod;
         mutationPending.current = true;
         setState({ kind: "saving" });
         try {
@@ -142,7 +161,13 @@ export function SkillDetail({
                 id: record.id,
                 expectedRevision: record.revision,
                 url: trimmedUrl === "" ? null : trimmedUrl,
-                revision: trimmedUrl === "" ? null : revision.trim() || null,
+                revision:
+                    trimmedUrl === "" || selectedMethod === "npx"
+                        ? null
+                        : revision.trim() || null,
+                fetchMethod: selectedMethod,
+                // Rust records the installer version it reviewed.
+                installerVersion: null,
             });
             if (active.current) onSaved(saved);
         } catch (error: unknown) {
@@ -199,6 +224,16 @@ export function SkillDetail({
                         label={t("skills.factSource")}
                         value={sourceText}
                     />
+                    {record.installerCommand !== null && (
+                        <div className={detailForm["row"]}>
+                            <span className={detailForm["label"]}>
+                                {t("skills.factCommand")}
+                            </span>
+                            <p className={styles["longValue"]}>
+                                {record.installerCommand}
+                            </p>
+                        </div>
+                    )}
                     <DetailFact
                         label={t("skills.factImportedAt")}
                         value={date(record.importedAtMs)}
@@ -223,6 +258,44 @@ export function SkillDetail({
                         ].join(" ")}
                     >
                         <EditFormRow
+                            label={t("skills.fetchMethodLabel")}
+                            htmlFor={`${prefix}-method`}
+                        >
+                            <FieldSelect
+                                id={`${prefix}-method`}
+                                value={fetchMethod ?? "manual"}
+                                options={[
+                                    {
+                                        value: "manual",
+                                        label: t("skills.sourceManual"),
+                                    },
+                                    {
+                                        value: "git",
+                                        label: t("skills.fetchMethodGit"),
+                                    },
+                                    {
+                                        value: "npx",
+                                        label: t("skills.fetchMethodNpx"),
+                                    },
+                                ]}
+                                blocked={busy}
+                                size="fill"
+                                onChange={(value) => {
+                                    const next =
+                                        value === "git"
+                                            ? "git"
+                                            : value === "npx"
+                                              ? "npx"
+                                              : null;
+                                    setFetchMethod(next);
+                                    // The npx installer has no Git revision.
+                                    if (next === "npx") {
+                                        setRevision("");
+                                    }
+                                }}
+                            />
+                        </EditFormRow>
+                        <EditFormRow
                             label={t("skills.urlLabel")}
                             htmlFor={`${prefix}-url`}
                         >
@@ -239,39 +312,64 @@ export function SkillDetail({
                                 }}
                             />
                         </EditFormRow>
-                        <EditFormRow
-                            label={t("skills.revisionLabel")}
-                            htmlFor={`${prefix}-revision`}
-                        >
-                            <input
-                                id={`${prefix}-revision`}
-                                className={editForm["input"]}
-                                value={revision}
-                                readOnly={busy}
-                                autoComplete="off"
-                                spellCheck={false}
-                                placeholder={t("skills.revisionPlaceholder")}
-                                aria-invalid={revisionWithoutUrl}
-                                // Only the validation message describes this field.
-                                aria-describedby={
-                                    revisionWithoutUrl
-                                        ? `${prefix}-revision-hint`
-                                        : undefined
-                                }
-                                onChange={(event) => {
-                                    setRevision(event.currentTarget.value);
-                                }}
-                            />
-                        </EditFormRow>
+                        {fetchMethod !== "npx" && (
+                            <EditFormRow
+                                label={t("skills.revisionLabel")}
+                                htmlFor={`${prefix}-revision`}
+                            >
+                                <input
+                                    id={`${prefix}-revision`}
+                                    className={editForm["input"]}
+                                    value={revision}
+                                    readOnly={busy}
+                                    autoComplete="off"
+                                    spellCheck={false}
+                                    placeholder={t(
+                                        "skills.revisionPlaceholder",
+                                    )}
+                                    aria-invalid={
+                                        revisionWithoutUrl || gitRevisionMissing
+                                    }
+                                    // Only the validation message describes this
+                                    // field.
+                                    aria-describedby={
+                                        revisionWithoutUrl
+                                            ? `${prefix}-revision-hint`
+                                            : gitRevisionMissing
+                                              ? `${prefix}-git-revision-hint`
+                                              : undefined
+                                    }
+                                    onChange={(event) => {
+                                        setRevision(event.currentTarget.value);
+                                    }}
+                                />
+                            </EditFormRow>
+                        )}
                     </div>
-                    {/* A revision without an address cannot be saved, and this
-                    is the only hint the source fields need. */}
                     {revisionWithoutUrl && (
                         <p
                             id={`${prefix}-revision-hint`}
                             className={styles["hint"]}
                         >
                             {t("skills.revisionNeedsUrl")}
+                        </p>
+                    )}
+                    {gitRevisionMissing && (
+                        <p
+                            id={`${prefix}-git-revision-hint`}
+                            className={styles["hint"]}
+                        >
+                            {t("skills.gitRevisionRequired")}
+                        </p>
+                    )}
+                    {url.trim() !== "" && fetchMethod === null && (
+                        <p className={styles["hint"]}>
+                            {t("skills.sourceManualHint")}
+                        </p>
+                    )}
+                    {url.trim() !== "" && fetchMethod === "npx" && (
+                        <p className={styles["hint"]}>
+                            {t("skills.fetchMethodNpxHint")}
                         </p>
                     )}
                     {state.kind === "error" && (
@@ -302,7 +400,7 @@ export function SkillDetail({
                                 className={buttons["primary"]}
                                 type="submit"
                                 form={formId}
-                                aria-disabled={busy || revisionWithoutUrl}
+                                aria-disabled={busy || formBlocked}
                             >
                                 {busy ? t("skills.saving") : t("skills.save")}
                             </button>

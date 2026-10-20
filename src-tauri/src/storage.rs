@@ -528,6 +528,19 @@ const MIGRATIONS: &[Migration] = &[
                 REFERENCES provider_model(provider_id, model_id) ON DELETE CASCADE
         ) STRICT, WITHOUT ROWID;",
     },
+    Migration {
+        version: 27,
+        // P26 records how a source is fetched so P29 can decide whether an
+        // update is possible. Existing rows keep NULL: a hand-entered address
+        // is not an update method. The command is safe display text generated
+        // by Rust, never an arbitrary script supplied by the interface.
+        sql: "ALTER TABLE skill ADD COLUMN fetch_method TEXT
+                CHECK(fetch_method IS NULL OR fetch_method IN ('git','npx'));
+            ALTER TABLE skill ADD COLUMN installer_version TEXT
+                CHECK(installer_version IS NULL OR length(installer_version) BETWEEN 1 AND 32);
+            ALTER TABLE skill ADD COLUMN installer_command TEXT
+                CHECK(installer_command IS NULL OR length(installer_command) BETWEEN 1 AND 1024);",
+    },
 ];
 
 /// Errors from opening or migrating the private database.

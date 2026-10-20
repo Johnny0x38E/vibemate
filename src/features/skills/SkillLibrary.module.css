@@ -10,6 +10,14 @@
     min-width: 0;
 }
 
+/* Remote install and local import sit together in the module header. */
+.headerActions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: var(--space-sm);
+}
+
 .view > p:first-of-type {
     margin-top: var(--page-content-gap);
 }

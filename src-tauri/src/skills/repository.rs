@@ -4,9 +4,10 @@
 //! import service, and a failed insert is compensated there.
 
 use super::manifest;
-use super::types::{DeleteSkillRequest, SkillError, SkillPage, SkillRecord};
+use super::types::{DeleteSkillRequest, FetchMethod, SkillError, SkillPage, SkillRecord};
 use super::validation::{
-    cursor, cursor_for, description, identity, skill_name, stored_path, stored_revision, stored_url,
+    cursor, cursor_for, description, identity, skill_name, stored_installer_command,
+    stored_installer_version, stored_path, stored_revision, stored_url,
 };
 use crate::storage::Storage;
 use rusqlite::{Connection, OptionalExtension, params};
@@ -24,14 +25,41 @@ pub(super) struct NewSkill<'a> {
     pub(super) name: &'a str,
     /// Validated description from the frontmatter.
     pub(super) description: &'a str,
-    /// Canonical directory the content was imported from.
-    pub(super) origin_path: &'a str,
+    /// Canonical directory a local import copied from; null for a remote install.
+    pub(super) origin_path: Option<&'a str>,
+    /// Canonical upstream address recorded by an install.
+    pub(super) source_url: Option<&'a str>,
+    /// Pinned Git commit, or null for a hand-entered source or npx install.
+    pub(super) source_revision: Option<&'a str>,
+    /// How the source was fetched, or null for a local import/hand-entered source.
+    pub(super) fetch_method: Option<FetchMethod>,
+    /// Exact npx installer version, or null for Git/local sources.
+    pub(super) installer_version: Option<&'a str>,
+    /// Reviewed command that acquired the source.
+    pub(super) installer_command: Option<&'a str>,
     /// Digest of the copied content.
     pub(super) content_digest: &'a str,
     /// Number of copied files.
     pub(super) file_count: i64,
     /// Total copied bytes.
     pub(super) byte_size: i64,
+}
+
+/// Text stored in `skill.fetch_method`.
+fn fetch_method_value(method: FetchMethod) -> &'static str {
+    match method {
+        FetchMethod::Git => "git",
+        FetchMethod::Npx => "npx",
+    }
+}
+
+/// Parse a stored fetch method; an unknown value is malformed metadata.
+fn fetch_method_from_stored(value: &str) -> Option<FetchMethod> {
+    match value {
+        "git" => Some(FetchMethod::Git),
+        "npx" => Some(FetchMethod::Npx),
+        _ => None,
+    }
 }
 
 /// One stored row before validation.
@@ -41,6 +69,9 @@ struct StoredRow {
     origin_path: Option<String>,
     source_url: Option<String>,
     source_revision: Option<String>,
+    fetch_method: Option<String>,
+    installer_version: Option<String>,
+    installer_command: Option<String>,
     content_digest: String,
     file_count: i64,
     byte_size: i64,
@@ -96,13 +127,19 @@ pub(super) fn insert_skill(
     tx.execute(
         "INSERT INTO skill
          (id, name, description, origin_path, source_url, source_revision,
+          fetch_method, installer_version, installer_command,
           content_digest, file_count, byte_size, revision, imported_at, updated_at)
-         VALUES(?1,?2,?3,?4,NULL,NULL,?5,?6,?7,1,?8,?8)",
+         VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,1,?13,?13)",
         params![
             new.id,
             new.name,
             new.description,
             new.origin_path,
+            new.source_url,
+            new.source_revision,
+            new.fetch_method.map(fetch_method_value),
+            new.installer_version,
+            new.installer_command,
             new.content_digest,
             new.file_count,
             new.byte_size,
@@ -111,6 +148,15 @@ pub(super) fn insert_skill(
     )
     .map_err(|_| (SkillError::WriteFailed, false))?;
     tx.commit().map_err(|_| (SkillError::OutcomeUnknown, true))
+}
+
+/// Source fields one reviewed edit replaces together.
+pub(super) struct SourceUpdate<'a> {
+    pub(super) url: Option<&'a str>,
+    pub(super) revision: Option<&'a str>,
+    pub(super) fetch_method: Option<FetchMethod>,
+    pub(super) installer_version: Option<&'a str>,
+    pub(super) installer_command: Option<&'a str>,
 }
 
 /// Replace the recorded upstream source at the expected revision.
@@ -122,18 +168,27 @@ pub(super) fn update_source(
     storage: &Storage,
     id: &str,
     expected_revision: i64,
-    url: Option<&str>,
-    revision: Option<&str>,
+    update: &SourceUpdate<'_>,
     now: i64,
 ) -> Result<(), SkillError> {
     let connection = lock(storage)?;
     let changed = connection
         .execute(
             "UPDATE skill
-             SET source_url=?1, source_revision=?2, revision=revision+1,
-                 updated_at=max(updated_at,?3)
-             WHERE id=?4 AND revision=?5",
-            params![url, revision, now, id, expected_revision],
+             SET source_url=?1, source_revision=?2, fetch_method=?3,
+                 installer_version=?4, installer_command=?5,
+                 revision=revision+1, updated_at=max(updated_at,?6)
+             WHERE id=?7 AND revision=?8",
+            params![
+                update.url,
+                update.revision,
+                update.fetch_method.map(fetch_method_value),
+                update.installer_version,
+                update.installer_command,
+                now,
+                id,
+                expected_revision
+            ],
         )
         .map_err(|_| SkillError::WriteFailed)?;
     if changed == 1 {
@@ -269,6 +324,7 @@ fn read_row(connection: &Connection, id: &str) -> Result<Option<StoredRow>, Skil
     connection
         .query_row(
             "SELECT name, description, origin_path, source_url, source_revision,
+                    fetch_method, installer_version, installer_command,
                     content_digest, file_count, byte_size, revision, imported_at, updated_at
              FROM skill WHERE id=?1",
             [id],
@@ -279,12 +335,15 @@ fn read_row(connection: &Connection, id: &str) -> Result<Option<StoredRow>, Skil
                     origin_path: row.get(2)?,
                     source_url: row.get(3)?,
                     source_revision: row.get(4)?,
-                    content_digest: row.get(5)?,
-                    file_count: row.get(6)?,
-                    byte_size: row.get(7)?,
-                    revision: row.get(8)?,
-                    imported_at: row.get(9)?,
-                    updated_at: row.get(10)?,
+                    fetch_method: row.get(5)?,
+                    installer_version: row.get(6)?,
+                    installer_command: row.get(7)?,
+                    content_digest: row.get(8)?,
+                    file_count: row.get(9)?,
+                    byte_size: row.get(10)?,
+                    revision: row.get(11)?,
+                    imported_at: row.get(12)?,
+                    updated_at: row.get(13)?,
                 })
             },
         )
@@ -317,11 +376,40 @@ fn validate_row(row: StoredRow, id: &str) -> Result<SkillRecord, SkillError> {
     // The table enforces both invariants; a manually edited file may not.
     let source_exists = row.origin_path.is_some() || row.source_url.is_some();
     let revision_belongs_to_url = row.source_url.is_some() || row.source_revision.is_none();
+    let fetch_method = row
+        .fetch_method
+        .as_deref()
+        .map(|value| fetch_method_from_stored(value).ok_or(SkillError::InvalidStoredSkill))
+        .transpose()?;
+    // A method and its command only make sense with an upstream address. A
+    // hand-entered address has no method until the user records one explicitly.
+    let fetch_fields_consistent = match fetch_method {
+        None => row.installer_version.is_none() && row.installer_command.is_none(),
+        Some(FetchMethod::Git) => {
+            row.source_url.is_some()
+                && row.source_revision.is_some()
+                && row.installer_version.is_none()
+                && row.installer_command.is_some()
+        }
+        Some(FetchMethod::Npx) => {
+            row.source_url.is_some()
+                && row.source_revision.is_none()
+                && row.installer_version.is_some()
+                && row.installer_command.is_some()
+        }
+    };
+    if let Some(version) = &row.installer_version {
+        stored_installer_version(version)?;
+    }
+    if let Some(command) = &row.installer_command {
+        stored_installer_command(command)?;
+    }
     if !digest_is_sha256
         || !bounds_hold
         || !timestamps_hold
         || !source_exists
         || !revision_belongs_to_url
+        || !fetch_fields_consistent
     {
         return Err(SkillError::InvalidStoredSkill);
     }
@@ -332,6 +420,9 @@ fn validate_row(row: StoredRow, id: &str) -> Result<SkillRecord, SkillError> {
         origin_path: row.origin_path,
         source_url: row.source_url,
         source_revision: row.source_revision,
+        fetch_method,
+        installer_version: row.installer_version,
+        installer_command: row.installer_command,
         content_digest: row.content_digest,
         file_count: row.file_count,
         byte_size: row.byte_size,

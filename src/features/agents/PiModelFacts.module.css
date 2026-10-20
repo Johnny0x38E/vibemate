@@ -1,0 +1,65 @@
+/*
+ * Pi model facts in the plan card, above the planned file changes. One row per
+ * setting: its value, then where the value came from, then what this plan does
+ * with it. The rows share the planned-change divider, so the card reads as one list.
+ */
+
+.facts {
+    display: grid;
+    gap: 6px;
+    padding-bottom: var(--space-sm);
+}
+
+.heading {
+    margin: 0;
+    color: var(--color-text);
+    font-size: 0.8125rem;
+    font-weight: 500;
+}
+
+.list {
+    display: grid;
+    margin: 0;
+    padding: 0;
+}
+
+.fact {
+    display: grid;
+    gap: 2px;
+    padding: 8px 0;
+    border-top: 1px solid var(--color-border);
+}
+
+.term {
+    margin: 0;
+    color: var(--color-text);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    line-height: 1.5;
+}
+
+.definition {
+    display: grid;
+    gap: 2px;
+    margin: 0;
+    color: var(--color-summary);
+    font-size: 0.75rem;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.value {
+    color: var(--color-text);
+    font-size: 0.8125rem;
+}
+
+.notes {
+    display: grid;
+    gap: 4px;
+    margin: 0;
+    padding-inline-start: 1.1em;
+    color: var(--color-summary);
+    font-size: 0.75rem;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}

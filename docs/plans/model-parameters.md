@@ -121,6 +121,29 @@ races, save-and-clear, metadata changes, delete cascades, strict IPC and async U
 races. Run the normal frontend/Rust/desktop checks and isolated desktop IPC;
 no real credentials or inference are needed. Task status stays only in `todo.md`.
 
+### Pi slice: per-model thinking level
+
+Pi keeps a saved level in its own settings as `modelThinkingLevels["<provider>/<modelId>"]`,
+so this slice writes that native per-model key instead of a vibemate preference table. A
+level is offered only when the central model declares reasoning support and lists the
+effort, and Pi accepts it without a `thinkingLevelMap` entry: `off`, `minimal`, `low`,
+`medium` or `high`. The catalog's `none` is shown as `off`. `xhigh` and `max` are not
+offered, and the field explains that Pi needs a mapping vibemate does not write yet.
+
+Rust rechecks the choice against the merged `models.json` definition, after the
+reasoning flag and any map the user wrote. An unavailable level is refused with
+`thinking_level_unavailable`; a malformed map keeps the existing `target_conflict`. Both
+happen before a plan exists. Preview, detailed text and apply carry the same choice as a
+reviewed token. **Do not overwrite** leaves the saved key alone. Changing provider or
+model discards the draft. The Pi behavior and its verified acceptance rule are in
+[integrations/pi.md](../integrations/pi.md).
+
+The plan card lists each Pi model setting with its source and write state; a value the
+plan does not write is shown as kept or as not stated. Still open for Pi: writing
+`thinkingLevelMap` only for verified models; sampling and per-request output limits in a
+separate batch; provider-side value checks; and cleanup of the key when its model or
+Provider is deleted (P35).
+
 ## Evidence and gaps
 
 The initial Provider evidence below came from public documentation. The

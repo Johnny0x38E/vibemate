@@ -7,7 +7,53 @@
 本机仍为 1.3.0。已核对模型/settings schema、启动档位选择与 OpenAI 协议请求构建：
 现有适配器已写入声明的 `contextWindow/maxTokens/reasoning/input`，尚未交付局部使用设置编辑。
 OpenAI sampling 对象在请求尾部合并，不能据此绕过容量校验；Messages 不支持这些 sampling 对象。
-档位可选集、partial map/null 与具体 Provider 值域仍需补验，见 [P24.a 逐字段矩阵](model-parameter-mapping.md)。
+档位可选集与 partial map/null 规则已由本机 1.3.0 源码核实（见下文 P24.c 首批）；具体 Provider 的档位值域仍需补验，见 [P24.a 逐字段矩阵](model-parameter-mapping.md)。
+
+## P24.c 首批：每模型思考档位（2026-10-20）
+
+可选集以本机 1.3.0 安装包为准。`dist/bundle/chunks/bedrock-converse-stream.js` 中的
+`getSupportedThinkingLevels` 与 `clampThinkingLevel` 原文抽出后在 Node 中运行，结果如下：
+
+- `reasoning` 不为 `true` 时只接受 `off`。
+- `reasoning: true` 时接受 `off/minimal/low/medium/high`；`thinkingLevelMap` 中某档为 `null` 则排除该档。
+- `xhigh` 与 `max` 必须在 `thinkingLevelMap` 中有字符串映射才会被接受。
+- 请求不被接受的档位会被 `clampThinkingLevel` 静默降到邻近档（例如 `max` 降为 `high`），所以 vibemate 拒绝保存，而不是依赖这一降级。
+
+保存与启动顺序：`settings.json` 的 `modelThinkingLevels["<provider>/<modelId>"]`，值为
+`off…max` 枚举（`settings.schema.json`）。`dist/core/sdk.js` 中新会话在 `defaultThinkingLevel`
+之前读取该模型键；`agent-session.js` 切换模型时同样优先读取它。已恢复且带档位记录的会话
+沿用会话自己的档位，因此不能保证运行中的会话立即使用新值。
+
+vibemate 的写入规则：
+
+- 中央模型必须有效声明推理支持（覆盖声明优先，否则用目录结果），并列出该档位。目录的 `none`
+  对应 Pi 的 `off`，其余名称相同；`any`、未声明与空列表不展开。
+- 界面只提供已声明、且 `off/minimal/low/medium/high` 中无需映射即可接受的档位。`xhigh` 与
+  `max` 不提供，界面说明需要 Pi 映射。
+- Rust 在合并后的 `models.json` 定义上再次核对：`reasoning` 必须是布尔；`thinkingLevelMap`
+  可以缺失、为 `null` 或为对象，对象条目只能是字符串或 `null`。其它形状直接拒绝并返回既有的
+  `target_conflict`。档位不被声明或 Pi 不接受时返回 `thinking_level_unavailable`。两种情况都不生成计划，
+  用户自己写的映射也保持不变。
+- 选择「不覆盖」时不改动 `modelThinkingLevels`。选定档位时只改该模型键，其它模型键与全局
+  `defaultThinkingLevel` 保持不变；改名迁移沿用既有的 `modelThinkingLevels` 处理。
+- 预览、详情与应用使用同一选择。选择随计划作为审批 token 返回；应用时用该 token 重新构建计划，
+  并继续比较文件、Provider 与模型 token。
+- 计划卡片的「Pi 模型设置」逐项列出中央值、来源与本次计划的处理。上下文窗口与最大输出来自
+  模型库，库中不记录它是目录还是人工填写，分别写入 `contextWindow` 与 `maxTokens`；`maxTokens`
+  在界面中说明为模型上限，不是每次请求的输出限制。推理与图片输入来自用户声明（覆盖目录）或目录证据，
+  分别写入 `reasoning` 与 `input`。思考档位来自本次选择，写入 `modelThinkingLevels`。
+- 未声明的项不写入。文件已有值时保持不变并显示该值，否则说明沿用 Pi 默认值。每一行都由写入同一分支的
+  Rust 代码生成，界面只翻译，不重算。
+
+边界：
+
+- 证明的是 Pi 的配置语义与启动读取顺序，不证明某个 Provider 对该档位的实际请求值。
+  `minimal/medium/low/high` 映射到 DeepSeek、OpenRouter、Command Code 的厂商值仍属 P24.a 缺口。
+- 没有「清除」动作，只能选择「不覆盖」保留原值或选择一个档位。删除模型或服务商不会自动删除该键，
+  这属于尚未完成的 P35 引用约束。
+- 请求输出限制、temperature 与 top_p 不由 vibemate 编辑，已有值保持原样。Pi 模型定义没有工具调用字段，
+  因此工具调用支持不写入。`thinkingLevelMap` 仍不写入：它需要已验证的厂商映射，见上文缺口。
+- 真实会话是否使用该档位仍需维护者在 Pi 中确认。
 
 ## Pi 1.x 模型配置
 
@@ -20,7 +66,7 @@ OpenAI sampling 对象在请求尾部合并，不能据此绕过容量校验；M
 - `auth.json` 高于 `models.json.apiKey`。预览只读其结构和摘要；有同名凭据则拒绝应用，不执行其中的凭据命令，不修改凭据文件。应用重新检查其摘要。
 - 应用时从 OS 凭据存储读取密钥，写入模型定义。Pi 会解释 `!command` 与 `$VAR`，因此按 1.2.0 的 `$$`/`$!` 规则转义，保证按原文使用密钥；预览的旧密钥和新密钥均为掩码。
 - 两个文件通过共享写入日志、私有备份、摘要检查、同目录临时文件和原子替换写入；多文件不是单次原子事务，后续文件失败时补偿已写文件。Unix 替换后为 0600，避免在原本 0644 的模型文件中暴露新密钥。历史恢复按 Agent 类型隔离，并检查应用后的手工改动。
-- 新建会话读取默认选择。项目设置、CLI 参数和恢复会话可能覆盖它；未知元数据沿用 Pi 默认值，不新增推理档位与请求参数。当前解析接受 JSON 对象；含 JSON 注释等不可解析内容会拒绝写入。
+- 新建会话读取默认选择。项目设置、CLI 参数和恢复会话可能覆盖它；未知元数据沿用 Pi 默认值。每模型思考档位见下文 P24.c 首批，请求参数仍未写入。当前解析接受 JSON 对象；含 JSON 注释等不可解析内容会拒绝写入。
 
 验证与验收状态以 [todo.md](../plans/todo.md) 为准；写入成功不代表真实推理或其他平台已经通过。
 

@@ -35,6 +35,7 @@ pub(crate) async fn plan_pi_settings(
     provider_id: String,
     model_id: String,
     entry_path: Option<String>,
+    thinking_level: Option<pi::PiThinkingLevel>,
 ) -> Result<pi::PiPlan, PlanError> {
     let environment = environment(&app).map_err(|()| PlanError::LocationUnavailable)?;
     crate::models::parse_provider_id(&provider_id).map_err(|_| PlanError::InvalidRequest)?;
@@ -42,7 +43,7 @@ pub(crate) async fn plan_pi_settings(
         let root = pi::configuration_root(&environment, entry_path)?;
         with_plan_storage(&app, |storage| {
             let (provider, model) = selection(storage, &provider_id, model_id)?;
-            pi::plan_pi_settings(storage, &root, &provider, &model)
+            pi::plan_pi_settings(storage, &root, &provider, &model, thinking_level)
         })
     })
     .await

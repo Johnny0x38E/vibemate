@@ -145,6 +145,9 @@ pub enum PlanError {
     TargetTooLarge,
     /// A key the plan must change holds a value of the wrong shape.
     TargetConflict,
+    /// The requested thinking level is not declared for this model, or the
+    /// Agent's merged model definition does not accept it.
+    ThinkingLevelUnavailable,
     /// The configuration database is not open, or reading it failed.
     StorageUnavailable,
     /// No provider instance has the requested ID.

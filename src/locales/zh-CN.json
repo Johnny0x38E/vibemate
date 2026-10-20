@@ -670,6 +670,47 @@
             "effortDefault": "模型声明的默认档位：{{value}}。不会自动选用。",
             "effortUnmappedValue": "{{value}}（未映射）",
             "effortObsolete": "记住的档位 {{value}} 已无法映射。请选择“不覆盖”或受支持的档位；不会自动降档或回退。",
+            "thinkingLabel": "思考档位",
+            "thinkingInherit": "不覆盖",
+            "thinkingScope": "Pi 会把此档位保存为该服务商与模型在其设置中的默认值。新会话和切换到该模型时使用；已恢复的会话可能保留自己的档位。其他模型与全局默认值不会改变。",
+            "thinkingUnsupported": "此模型未声明推理支持，因此无法选择 Pi 思考档位。",
+            "thinkingNoLevels": "此模型没有 Pi 无需映射即可接受的已声明思考档位，因此无法选择。",
+            "thinkingMappingNeeded": "以下档位需要先配置 Pi 的思考档位映射才会被接受，而 vibemate 目前不写入映射，因此不提供：{{levels}}。",
+            "thinkingUnmappedValue": "{{value}}（不可选）",
+            "thinkingObsolete": "已保存的选择 {{value}} 对此模型不再可选。请选择列出的档位或“不覆盖”；不会自动回退。",
+            "piFacts": {
+                "heading": "Pi 模型设置",
+                "items": {
+                    "contextWindow": "上下文窗口",
+                    "maxOutputTokens": "最大输出",
+                    "reasoning": "推理支持",
+                    "imageInput": "图片输入",
+                    "thinkingLevel": "思考档位"
+                },
+                "sources": {
+                    "library": "保存在模型库中，未记录来源。",
+                    "catalog": "由服务商目录声明。",
+                    "userDeclaration": "由你在模型设置中声明。",
+                    "choice": "在此表单中选择。",
+                    "notStated": "此模型未声明。"
+                },
+                "states": {
+                    "written": "将写入 {{target}}。",
+                    "unchanged": "不写入：文件中已有的值保持不变。",
+                    "notStated": "不写入：沿用 Pi 自己的默认值。"
+                },
+                "notStatedValue": "未声明",
+                "tokens": "{{value}} tokens",
+                "reasoningSupported": "支持",
+                "reasoningNotSupported": "不支持",
+                "textAndImage": "文本和图片",
+                "textOnly": "仅文本",
+                "notes": {
+                    "requestSettings": "这里不编辑请求输出限制、temperature 与 top_p，这些文件中已有的值保持不变。Pi 模型定义没有工具调用字段，因此不写入工具调用支持。",
+                    "maxOutput": "Pi 把最大输出当作模型上限，而不是每次请求的输出限制。",
+                    "precedence": "项目设置、命令行参数和恢复的会话可能覆盖已保存的思考档位；vibemate 只读取用户设置文件。"
+                }
+            },
             "preferenceLoading": "正在读取记住的档位…",
             "preferencePreview": "记住档位需要桌面应用，此预览不会虚构已保存的选择。",
             "preferenceScope": "记住选择只会在 vibemate 中保存此服务商与模型的起始偏好，不会写入 Agent 配置；预览和应用是独立操作。",
@@ -745,6 +786,7 @@
                 "target_unreadable": "配置文件无法读取，或不是 JSON 对象。未做任何改动。",
                 "target_too_large": "配置文件超过预览读取上限，未读取。",
                 "target_conflict": "配置文件里需要改动的位置已有冲突值（类型不符、已有模型别名或条目，或无法安全覆盖），未做任何改动。",
+                "thinking_level_unavailable": "此模型未声明该思考档位，或 Pi 的模型定义不接受它。请选择其他档位；未写入任何内容。",
                 "storage_unavailable": "本地配置库不可用，请重启 vibemate。",
                 "provider_not_found": "该服务商配置已不存在。",
                 "model_not_found": "该服务商已没有这个保存的模型。",

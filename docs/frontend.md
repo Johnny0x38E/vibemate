@@ -1113,6 +1113,19 @@ window's displayed plan and changes no Agent file. Native apply/restore does not
 silently save a starting preference. The original global env scope warning stays
 visible: remembering separately in vibemate does not isolate native sessions.
 
+Pi's thinking field (`PiThinkingLevelField`) has no remembered copy. Its choice is
+the native `modelThinkingLevels` entry: a draft that any provider or model change clears,
+and that is written only through preview and apply. `availablePiThinkingLevels` offers
+only declared levels that Pi accepts by default; a draft left over from before a metadata
+refresh that no longer offers it is shown as unavailable and blocks the preview.
+
+Pi plans render `PiModelFacts` in the plan card, above the file changes. Rust sends one
+`modelFacts` row per setting (`contextWindow`, `maxTokens`, `reasoning`, `input` and the
+chosen thinking level), each with its source and what the plan does with it. The
+component translates the known tokens, formats token counts for the active locale and
+adds three fixed notes. It never recomputes a value, and `pi.ts` rejects a list that
+differs from Rust's fixed order or disagrees with its own state.
+
 The hook keeps the draft on save failure. Read errors require reload rather than
 pretending inheritance; conflicts and uncertain acknowledgments also offer
 explicit reload. An obsolete remembered effort stays visible as unmapped and

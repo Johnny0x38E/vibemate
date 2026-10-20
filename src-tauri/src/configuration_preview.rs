@@ -125,7 +125,9 @@ pub(crate) fn read_preview(
         AgentId::Pi => {
             let root =
                 pi::configuration_root(environment, input.entry_path.clone()).map_err(stale)?;
-            let (plan, documents) = pi::build(storage, &root, provider, model).map_err(stale)?;
+            let selected = pi::reviewed_level(&input.reviewed).map_err(stale)?;
+            let (plan, documents) =
+                pi::build(storage, &root, provider, model, selected).map_err(stale)?;
             check_plan(&plan, input, plan.files.len())?;
             plan.files
                 .iter()

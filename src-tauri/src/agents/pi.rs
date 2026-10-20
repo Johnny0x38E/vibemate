@@ -25,6 +25,14 @@ use std::{
     path::{Path, PathBuf},
 };
 
+mod facts;
+mod thinking;
+
+use facts::capability_source;
+pub use facts::{PiFactItem, PiFactSource, PiFactState, PiModelFact};
+pub use thinking::PiThinkingLevel;
+pub(crate) use thinking::reviewed_level;
+
 /// The two files the user reviews, in application order.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -53,6 +61,10 @@ pub struct PiPlan {
     pub source: PlanSource,
     /// A fresh session reads the new defaults; resumed sessions can override them.
     pub restart_required: bool,
+    /// Saved thinking level written for this model, or `None` when the saved value stays.
+    pub selected_thinking_level: Option<PiThinkingLevel>,
+    /// Where each model fact came from and what this plan does with it, in display order.
+    pub model_facts: Vec<PiModelFact>,
 }
 
 /// A reviewed file token; arbitrary paths are compared, never used as targets.
@@ -81,6 +93,8 @@ pub struct ReviewedPiPlan {
     pub provider_revision: i64,
     /// Stored model content digest.
     pub model_content_digest: String,
+    /// The thinking level the reviewed preview writes, or `None` for "do not overwrite".
+    pub selected_thinking_level: Option<PiThinkingLevel>,
 }
 
 /// Strict IPC request. The entry path selects an installed Pi, never an output path.
@@ -248,13 +262,17 @@ fn verify_schema_contract(entry: &Path) -> Result<(), PlanError> {
 ///
 /// Returns safe plan errors for malformed/conflicting files or an unresolved
 /// model route. Does not read OS credentials or execute existing config values.
+///
+/// `selected_thinking_level` is the explicit choice, or `None` to leave the saved
+/// level untouched. The choice must be declared for the model and accepted by Pi.
 pub fn plan_pi_settings(
     storage: &Storage,
     root: &std::path::Path,
     provider: &ProviderRecord,
     snapshot: &ModelSnapshot,
+    selected_thinking_level: Option<PiThinkingLevel>,
 ) -> Result<PiPlan, PlanError> {
-    build(storage, root, provider, snapshot).map(|(plan, _)| plan)
+    build(storage, root, provider, snapshot, selected_thinking_level).map(|(plan, _)| plan)
 }
 
 /// Keep merged documents private: unrelated content can contain credentials.
@@ -263,6 +281,7 @@ pub(crate) fn build(
     root: &std::path::Path,
     provider: &ProviderRecord,
     snapshot: &ModelSnapshot,
+    selected_thinking_level: Option<PiThinkingLevel>,
 ) -> Result<(PiPlan, Vec<Map<String, Value>>), PlanError> {
     let model = &snapshot.model;
     if !model.selected || model.provider_id != provider.id.as_str() {
@@ -440,7 +459,14 @@ pub(crate) fn build(
         false,
         &mut model_changes,
     )?;
-    map_metadata(selected, model, &prefix, &mut model_changes)?;
+    let mut model_facts = Vec::new();
+    map_metadata(
+        selected,
+        model,
+        &prefix,
+        &mut model_changes,
+        &mut model_facts,
+    )?;
     if protocol == ProviderProtocol::ChatCompletions {
         let format = match provider.kind {
             ProviderKind::DeepSeek if base == "https://api.deepseek.com" => Some("deepseek"),
@@ -472,6 +498,12 @@ pub(crate) fn build(
             }
         }
     }
+    // Check the choice against the merged definition, including any thinking-level
+    // map the user wrote, before this plan produces a settings change.
+    if let Some(level) = selected_thinking_level {
+        let accepted = thinking::accepted_levels(selected)?;
+        thinking::validate_selection(model, level, &accepted)?;
+    }
     let mut setting_changes = Vec::new();
     if let Some(old) = previous.as_ref() {
         migrate_settings_references(
@@ -480,6 +512,41 @@ pub(crate) fn build(
             &namespace,
             &mut setting_changes,
         )?;
+    }
+    // Pi reads this per-model key before its global default, then clamps it to
+    // the model. Other entries and the global default stay exactly as they were.
+    // The fact reports what Pi will read after the migration above and this write.
+    let level_key = format!("{namespace}/{}", model.model_id);
+    if let Some(level) = selected_thinking_level {
+        let levels = object_entry(&mut settings.document, "modelThinkingLevels")?;
+        let value = json!(level.as_str());
+        let fact = PiModelFact::written(
+            PiFactItem::ThinkingLevel,
+            PiFactSource::Choice,
+            "modelThinkingLevels",
+            &value,
+        );
+        set_value(
+            levels,
+            &level_key,
+            value,
+            "modelThinkingLevels",
+            false,
+            &mut setting_changes,
+        )?;
+        model_facts.push(fact);
+    } else {
+        let existing = settings
+            .document
+            .get("modelThinkingLevels")
+            .and_then(Value::as_object)
+            .and_then(|levels| levels.get(&level_key));
+        model_facts.push(PiModelFact::kept_or_unstated(
+            PiFactItem::ThinkingLevel,
+            PiFactSource::Choice,
+            "modelThinkingLevels",
+            existing,
+        ));
     }
     set_value(
         &mut settings.document,
@@ -520,6 +587,8 @@ pub(crate) fn build(
                 model_content_digest: snapshot.content_digest.clone(),
             },
             restart_required: true,
+            selected_thinking_level,
+            model_facts,
         },
         vec![models.document, settings.document],
     ))
@@ -708,24 +777,54 @@ fn migrate_settings_references(
 }
 
 /// Apply only explicitly declared metadata; Pi supplies defaults for unknowns.
+///
+/// Each mapped field appends its [`PiModelFact`] in the same branch that writes it,
+/// so a row cannot describe a value the writer did not produce. A field without a
+/// central value is left alone and reported as kept or not stated.
 fn map_metadata(
     document: &mut Map<String, Value>,
     model: &ProviderModel,
     prefix: &str,
     changes: &mut Vec<ConfigChange>,
+    model_facts: &mut Vec<PiModelFact>,
 ) -> Result<(), PlanError> {
-    if let Some(value) = model.context_window {
-        set_value(
-            document,
+    match model.context_window {
+        Some(count) => {
+            let value = json!(count);
+            let fact = PiModelFact::written(
+                PiFactItem::ContextWindow,
+                PiFactSource::Library,
+                "contextWindow",
+                &value,
+            );
+            set_value(document, "contextWindow", value, prefix, false, changes)?;
+            model_facts.push(fact);
+        }
+        None => model_facts.push(PiModelFact::kept_or_unstated(
+            PiFactItem::ContextWindow,
+            PiFactSource::NotStated,
             "contextWindow",
-            json!(value),
-            prefix,
-            false,
-            changes,
-        )?;
+            document.get("contextWindow"),
+        )),
     }
-    if let Some(value) = model.max_output_tokens {
-        set_value(document, "maxTokens", json!(value), prefix, false, changes)?;
+    match model.max_output_tokens {
+        Some(count) => {
+            let value = json!(count);
+            let fact = PiModelFact::written(
+                PiFactItem::MaxOutputTokens,
+                PiFactSource::Library,
+                "maxTokens",
+                &value,
+            );
+            set_value(document, "maxTokens", value, prefix, false, changes)?;
+            model_facts.push(fact);
+        }
+        None => model_facts.push(PiModelFact::kept_or_unstated(
+            PiFactItem::MaxOutputTokens,
+            PiFactSource::NotStated,
+            "maxTokens",
+            document.get("maxTokens"),
+        )),
     }
     let thinking = model
         .capability_overrides
@@ -733,14 +832,21 @@ fn map_metadata(
         .map(|v| v.as_state())
         .unwrap_or(model.capabilities.thinking.state);
     if thinking != CapabilityState::Unknown {
-        set_value(
-            document,
+        let value = json!(thinking == CapabilityState::Supported);
+        let source = capability_source(
+            model.capability_overrides.thinking.is_some(),
+            model.capabilities.thinking.state,
+        );
+        let fact = PiModelFact::written(PiFactItem::Reasoning, source, "reasoning", &value);
+        set_value(document, "reasoning", value, prefix, false, changes)?;
+        model_facts.push(fact);
+    } else {
+        model_facts.push(PiModelFact::kept_or_unstated(
+            PiFactItem::Reasoning,
+            PiFactSource::NotStated,
             "reasoning",
-            json!(thinking == CapabilityState::Supported),
-            prefix,
-            false,
-            changes,
-        )?;
+            document.get("reasoning"),
+        ));
     }
     let image = model
         .capability_overrides
@@ -753,7 +859,20 @@ fn map_metadata(
         } else {
             json!(["text"])
         };
+        let source = capability_source(
+            model.capability_overrides.image_input.is_some(),
+            model.capabilities.image_input.state,
+        );
+        let fact = PiModelFact::written(PiFactItem::ImageInput, source, "input", &input);
         set_value(document, "input", input, prefix, false, changes)?;
+        model_facts.push(fact);
+    } else {
+        model_facts.push(PiModelFact::kept_or_unstated(
+            PiFactItem::ImageInput,
+            PiFactSource::NotStated,
+            "input",
+            document.get("input"),
+        ));
     }
     Ok(())
 }
@@ -835,8 +954,14 @@ pub fn apply_pi_settings(
     reviewed: &ReviewedPiPlan,
     backups: PathBuf,
 ) -> Result<ConfigApplied, ConfigApplyError> {
-    let (plan, mut documents) =
-        build(storage, root, provider, snapshot).map_err(ConfigApplyError::from_plan)?;
+    let (plan, mut documents) = build(
+        storage,
+        root,
+        provider,
+        snapshot,
+        reviewed.selected_thinking_level,
+    )
+    .map_err(ConfigApplyError::from_plan)?;
     if reviewed.provider_key != plan.provider_key
         || reviewed.previous_provider_key != plan.previous_provider_key
         || reviewed.files.len() != plan.files.len()

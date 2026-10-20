@@ -56,6 +56,9 @@ pub enum ConfigApplyError {
     TargetUnreadable,
     /// A key the plan must change holds a value of another shape.
     TargetConflict,
+    /// The requested thinking level is not declared for this model or not accepted
+    /// by the Agent's model definition; nothing was written.
+    ThinkingLevelUnavailable,
     /// The user configuration directory cannot be resolved.
     LocationUnavailable,
     /// The configuration database is not open, or reading it failed.
@@ -78,6 +81,7 @@ impl ConfigApplyError {
             | PlanError::TargetUnreadable
             | PlanError::TargetTooLarge => Self::TargetUnreadable,
             PlanError::TargetConflict => Self::TargetConflict,
+            PlanError::ThinkingLevelUnavailable => Self::ThinkingLevelUnavailable,
             PlanError::StorageUnavailable => Self::StorageUnavailable,
             PlanError::ProviderNotFound => Self::ProviderNotFound,
             PlanError::ModelNotFound => Self::ModelNotFound,
@@ -119,6 +123,9 @@ impl std::fmt::Display for ConfigApplyError {
             Self::BaseUrlUnverified => "The instance address is not one the vendor documents.",
             Self::TargetUnreadable => "The settings file could not be read.",
             Self::TargetConflict => "A settings key holds a value of another shape.",
+            Self::ThinkingLevelUnavailable => {
+                "The thinking level is not declared for this model or Pi does not accept it."
+            }
             Self::LocationUnavailable => "The user configuration directory is unavailable.",
             Self::StorageUnavailable => "Private storage is unavailable.",
             Self::OperationFailed => "The configuration write could not be recorded.",

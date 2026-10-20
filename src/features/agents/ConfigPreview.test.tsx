@@ -27,11 +27,13 @@ import {
     type ProviderRecord,
 } from "../../lib/desktop/providers";
 import {
+    fieldSelectDisabled,
     fieldSelectOptionValues,
     fieldSelectValue,
     setFieldSelectValue,
 } from "../../test/fieldSelect";
 import { ConfigPreview } from "./ConfigPreview";
+import { piModelFactsFixture } from "../../test/piFacts";
 import { effortPreferenceFixture } from "../../test/claudePreference";
 import {
     getClaudeEffortPreference,
@@ -54,7 +56,9 @@ import {
     planPiSettings,
     applyPiSettings,
     reviewedPiPlan,
+    type PiModelFact,
     type PiPlan,
+    type PiThinkingLevel,
 } from "../../lib/desktop/pi";
 import {
     planGrokSettings,
@@ -1097,6 +1101,8 @@ test("Pi reviews both files and applies them once with the auth dependency", asy
         previousProviderKey: null,
         source: plan.source,
         restartRequired: true,
+        selectedThinkingLevel: null,
+        modelFacts: piModelFactsFixture,
         authTarget: { ...plan.target, path: "/test/pi/auth.json" },
         files: [
             {
@@ -1151,7 +1157,12 @@ test("Pi reviews both files and applies them once with the auth dependency", asy
     );
     await screen.findByText("/test/pi/models.json");
     await screen.findByText("/test/pi/settings.json");
-    expect(planPiSettings).toHaveBeenCalledWith(deepseek.id, FLASH, "/test/pi");
+    expect(planPiSettings).toHaveBeenCalledWith(
+        deepseek.id,
+        FLASH,
+        "/test/pi",
+        null,
+    );
     const apply = screen.getByRole("button", { name: "Apply these settings" });
     await userEvent.click(apply);
     await userEvent.click(screen.getByRole("button", { name: "Applying…" }));
@@ -1355,4 +1366,243 @@ test("agent_version_unverified follows the current agent", async () => {
     expect(grokAlert.textContent).toContain(
         "docs/user-guide/26-config-reference.md",
     );
+});
+
+/** A Pi model whose declared efforts mix levels Pi takes by default with `max`, which needs a mapping. */
+function piReasoningRow(modelId = FLASH): ProviderModel {
+    return {
+        ...row(deepseek.id, modelId),
+        capabilityOverrides: {
+            thinking: "supported",
+            imageInput: null,
+            toolCalls: null,
+        },
+        thinkingEffort: {
+            kind: "listed",
+            levels: ["none", "low", "high", "max"],
+            defaultLevel: "high",
+        },
+    };
+}
+
+/** A Pi preview for the chosen level; the settings file carries exactly that per-model change. */
+/** The shared fact list, with the thinking row describing the chosen level. */
+function piFactsForLevel(level: PiThinkingLevel | null): PiModelFact[] {
+    if (level === null) return piModelFactsFixture;
+    return piModelFactsFixture.map((fact) =>
+        fact.item === "thinkingLevel"
+            ? {
+                  ...fact,
+                  source: "choice",
+                  state: "written",
+                  value: level,
+              }
+            : fact,
+    );
+}
+
+function piPlanWithLevel(level: PiThinkingLevel | null): PiPlan {
+    return {
+        agent: "pi",
+        providerKey: "vibemate-DeepSeek",
+        previousProviderKey: null,
+        source: plan.source,
+        restartRequired: true,
+        selectedThinkingLevel: level,
+        modelFacts: piFactsForLevel(level),
+        authTarget: { ...plan.target, path: "/test/pi/auth.json" },
+        files: [
+            {
+                target: { ...plan.target, path: "/test/pi/models.json" },
+                changes: [
+                    {
+                        keyPath: "providers[vibemate-DeepSeek].apiKey",
+                        before: "••••••••",
+                        after: "••••••••",
+                        secret: true,
+                    },
+                ],
+            },
+            {
+                target: { ...plan.target, path: "/test/pi/settings.json" },
+                changes: [
+                    {
+                        keyPath: "defaultProvider",
+                        before: "previous",
+                        after: "vibemate-DeepSeek",
+                        secret: false,
+                    },
+                    {
+                        keyPath: "defaultModel",
+                        before: "previous",
+                        after: FLASH,
+                        secret: false,
+                    },
+                    ...(level === null
+                        ? []
+                        : [
+                              {
+                                  keyPath: `modelThinkingLevels.vibemate-DeepSeek/${FLASH}`,
+                                  before: null,
+                                  after: level,
+                                  secret: false,
+                              },
+                          ]),
+                ],
+            },
+        ],
+    };
+}
+
+/** Mount the Pi configuration form with a desktop-like notification host. */
+async function mountPi(): Promise<void> {
+    const i18n = await createAppI18n("en");
+    render(
+        <I18nextProvider i18n={i18n}>
+            <NotificationProvider>
+                <ConfigPreview agent="pi" entryPath="/test/pi" />
+            </NotificationProvider>
+        </I18nextProvider>,
+    );
+}
+
+test("Pi offers only declared levels it accepts by default and previews the one chosen", async () => {
+    loadModels.mockResolvedValue(modelsPage([piReasoningRow()]));
+    vi.mocked(planPiSettings).mockResolvedValue({
+        kind: "desktop",
+        plan: piPlanWithLevel("high"),
+    });
+    vi.mocked(applyPiSettings).mockResolvedValue({
+        ...writtenResult,
+        steps: [
+            { ...writtenStep, targetPath: "/test/pi/models.json" },
+            {
+                ...writtenStep,
+                ordinal: 1,
+                targetPath: "/test/pi/settings.json",
+            },
+        ],
+    });
+    await mountPi();
+    await setFieldSelectValue(
+        await screen.findByRole("combobox", { name: "Model" }),
+        FLASH,
+    );
+    const thinking = await screen.findByRole("combobox", {
+        name: "Thinking level",
+    });
+    // `none` is the catalog spelling of Pi's `off`; `max` needs a Pi mapping.
+    expect(fieldSelectValue(thinking)).toBe("");
+    expect(await fieldSelectOptionValues(thinking)).toEqual([
+        "",
+        "off",
+        "low",
+        "high",
+    ]);
+    expect(
+        screen.getByText(/vibemate does not write mappings yet: max/u),
+    ).toBeTruthy();
+    await setFieldSelectValue(thinking, "high");
+    await userEvent.click(
+        screen.getByRole("button", { name: "Preview changes" }),
+    );
+    await screen.findByText(`modelThinkingLevels.vibemate-DeepSeek/${FLASH}`);
+    expect(planPiSettings).toHaveBeenLastCalledWith(
+        deepseek.id,
+        FLASH,
+        "/test/pi",
+        "high",
+    );
+    expect(screen.getByText("Written to modelThinkingLevels.")).toBeTruthy();
+    await userEvent.click(
+        screen.getByRole("button", { name: "Apply these settings" }),
+    );
+    await waitFor(() => {
+        expect(applyPiSettings).toHaveBeenCalledWith(
+            deepseek.id,
+            FLASH,
+            "/test/pi",
+            expect.objectContaining({ selectedThinkingLevel: "high" }),
+        );
+    });
+});
+
+test("changing the Pi model discards the chosen level and its preview", async () => {
+    loadModels.mockResolvedValue(
+        modelsPage([piReasoningRow(FLASH), piReasoningRow("deepseek-pro")]),
+    );
+    vi.mocked(planPiSettings).mockResolvedValue({
+        kind: "desktop",
+        plan: piPlanWithLevel("low"),
+    });
+    await mountPi();
+    const model = await screen.findByRole("combobox", { name: "Model" });
+    await setFieldSelectValue(model, FLASH);
+    await setFieldSelectValue(
+        await screen.findByRole("combobox", { name: "Thinking level" }),
+        "low",
+    );
+    await userEvent.click(
+        screen.getByRole("button", { name: "Preview changes" }),
+    );
+    await screen.findByText(`modelThinkingLevels.vibemate-DeepSeek/${FLASH}`);
+
+    await setFieldSelectValue(model, "deepseek-pro");
+    expect(
+        screen.queryByRole("button", { name: "Apply these settings" }),
+    ).toBeNull();
+    expect(
+        fieldSelectValue(
+            await screen.findByRole("combobox", { name: "Thinking level" }),
+        ),
+    ).toBe("");
+    vi.mocked(planPiSettings).mockResolvedValue({
+        kind: "desktop",
+        plan: piPlanWithLevel(null),
+    });
+    await userEvent.click(
+        screen.getByRole("button", { name: "Preview changes" }),
+    );
+    await waitFor(() => {
+        expect(planPiSettings).toHaveBeenLastCalledWith(
+            deepseek.id,
+            "deepseek-pro",
+            "/test/pi",
+            null,
+        );
+    });
+});
+
+test("a Pi model without declared reasoning explains why no level can be chosen", async () => {
+    loadModels.mockResolvedValue(modelsPage([row(deepseek.id, FLASH)]));
+    vi.mocked(planPiSettings).mockResolvedValue({
+        kind: "desktop",
+        plan: piPlanWithLevel(null),
+    });
+    await mountPi();
+    await setFieldSelectValue(
+        await screen.findByRole("combobox", { name: "Model" }),
+        FLASH,
+    );
+    const thinking = await screen.findByRole("combobox", {
+        name: "Thinking level",
+    });
+    expect(fieldSelectDisabled(thinking)).toBe(true);
+    expect(
+        screen.getByText(
+            "Reasoning support is not declared for this model, so no Pi thinking level can be chosen.",
+        ),
+    ).toBeTruthy();
+    // Leaving the level at "Do not overwrite" still previews the unchanged setting.
+    await userEvent.click(
+        screen.getByRole("button", { name: "Preview changes" }),
+    );
+    await waitFor(() => {
+        expect(planPiSettings).toHaveBeenLastCalledWith(
+            deepseek.id,
+            FLASH,
+            "/test/pi",
+            null,
+        );
+    });
 });

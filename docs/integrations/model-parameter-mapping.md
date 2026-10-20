@@ -77,22 +77,22 @@ env-vars 与 errors 的 thinking/output 结论来自 Context7 官方来源摘录
 
 模型定义在 `models.json.providers.<owned-provider>.models[]`，按 `id` 定位；保存的选用档位在 `settings.json`。
 
-| 信息               | 原生目标与语义                                                                                            | 状态、限制与实施决定                                                                                                                                                   |
-| ------------------ | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 上下文容量         | 模型 `contextWindow`                                                                                      | **supported，已写入**；schema 要求大于 0，vibemate 使用正整数 token 数                                                                                                 |
-| 最大输出能力       | 模型 `maxTokens`                                                                                          | **supported，已写入**；schema 要求大于 0。运行时可用它作为缺省输出上限，但它不是用户另选的每次请求限制                                                                 |
-| 推理支持           | 模型 `reasoning` 布尔                                                                                     | **supported，已写入已声明值**；用户声明不升级为 Provider 验证                                                                                                          |
-| 档位映射           | 模型 `thinkingLevelMap`，Pi level → 厂商字符串或 `null`                                                   | **supported**。键为 `off/minimal/low/medium/high/xhigh/max`；map 是转换，不是自由字符串列表。缺失映射不一定禁用该档，不能凭部分 map 宣称其余均不可选                   |
-| 模型默认/选用档位  | `settings.modelThinkingLevels["<provider>/<modelId>"]`                                                    | **supported**，每模型保存的启动选择；不写全局 `defaultThinkingLevel` 来表达某一个模型的默认档。Provider 的默认档只有能无歧义映射时才能作为建议值，不能自动当作用户选择 |
-| temperature、top_p | 模型 `samplingParams`；档位覆盖用 `samplingParamsByThinkingLevel`                                         | **supported，仅 OpenAI 系协议**；先模型默认、再有效 Pi 档位覆盖、最后请求级覆盖，后者优先。其它 API 忽略这两个对象，必须拒绝而非静默丢失                               |
-| 请求输出限制       | OpenAI Chat 的 `samplingParams.max_tokens` 或 `.max_completion_tokens`；Responses 的 `.max_output_tokens` | **supported，请求构造通道**；请求尾部合并覆盖命名字段，可能绕过先前的自动容量限制。首批不提供任意原始对象，须按协议校验键和上下界；Messages 的此通道 **unsupported**   |
-| 推理 token 数      | SDK request `thinkingBudgets` 与兼容字段不等于已核实的持久 UI 配置                                        | **unverified，暂不写**。不复用 Pi 内部默认 token 数作为 Provider effort 换算                                                                                           |
+| 信息               | 原生目标与语义                                                                                            | 状态、限制与实施决定                                                                                                                                                                                                                                |
+| ------------------ | --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 上下文容量         | 模型 `contextWindow`                                                                                      | **supported，已写入**；schema 要求大于 0，vibemate 使用正整数 token 数                                                                                                                                                                              |
+| 最大输出能力       | 模型 `maxTokens`                                                                                          | **supported，已写入**；schema 要求大于 0。运行时可用它作为缺省输出上限，但它不是用户另选的每次请求限制                                                                                                                                              |
+| 推理支持           | 模型 `reasoning` 布尔                                                                                     | **supported，已写入已声明值**；用户声明不升级为 Provider 验证                                                                                                                                                                                       |
+| 档位映射           | 模型 `thinkingLevelMap`，Pi level → 厂商字符串或 `null`                                                   | **supported**。键为 `off/minimal/low/medium/high/xhigh/max`；map 是转换，不是自由字符串列表。缺失映射不一定禁用该档，不能凭部分 map 宣称其余均不可选                                                                                                |
+| 模型默认/选用档位  | `settings.modelThinkingLevels["<provider>/<modelId>"]`                                                    | **supported**，每模型保存的启动选择；不写全局 `defaultThinkingLevel` 来表达某一个模型的默认档。Provider 的默认档只有能无歧义映射时才能作为建议值，不能自动当作用户选择。P24.c 首批已写入中央声明且 Pi 无需映射即可接受的档位（见 [Pi 契约](pi.md)） |
+| temperature、top_p | 模型 `samplingParams`；档位覆盖用 `samplingParamsByThinkingLevel`                                         | **supported，仅 OpenAI 系协议**；先模型默认、再有效 Pi 档位覆盖、最后请求级覆盖，后者优先。其它 API 忽略这两个对象，必须拒绝而非静默丢失                                                                                                            |
+| 请求输出限制       | OpenAI Chat 的 `samplingParams.max_tokens` 或 `.max_completion_tokens`；Responses 的 `.max_output_tokens` | **supported，请求构造通道**；请求尾部合并覆盖命名字段，可能绕过先前的自动容量限制。首批不提供任意原始对象，须按协议校验键和上下界；Messages 的此通道 **unsupported**                                                                                |
+| 推理 token 数      | SDK request `thinkingBudgets` 与兼容字段不等于已核实的持久 UI 配置                                        | **unverified，暂不写**。不复用 Pi 内部默认 token 数作为 Provider effort 换算                                                                                                                                                                        |
 
 Pi 启动选择源码中：scoped model 显式档位 → 该 provider/model 保存值 → `defaultThinkingLevel` → Pi 默认；
 普通保存默认模型路径也优先 per-model。CLI、恢复会话和运行中 `/thinking` 能选择另一值，磁盘写入不证明运行中生效。
 项目设置可覆盖用户设置；既有全局、项目与会话设置必须在预览中区分。
 
-**最小可交付切片：** 保持现有容量/能力映射，增加字段来源与状态展示；随后按已验证模型映射交付
+**最小可交付切片：** 保持现有容量/能力映射，增加字段来源与状态展示（P24.c 首批已在计划卡片中交付，见 [Pi 契约](pi.md)）；随后按已验证模型映射交付
 `thinkingLevelMap` 与 provider/model 局部的保存档位。采样/输出设置另拆一批，验证不得覆盖容量安全限制。
 不接管别的 Provider 的同名 ID，不更改全局默认档位；已有 map、采样对象和未知字段按所有权保留。
 
@@ -151,7 +151,7 @@ Responses 与 Messages 即使有同名模型 ID，也不能照搬 Chat 的参数
 ## P24.a 尚需补齐的证据
 
 1. Claude Code：完整 env-vars output 条目的范围/默认/截断规则；第三方 ID 的 canonical 匹配和 per-model effort 隔离。
-2. Pi：不同协议下选用档位的可选集与禁用规则（包括 partial map、`null`、unknown/any）；请求输出覆盖不得绕过容量检查的验证样本。
+2. Pi：可选集与 partial map、`null` 规则已由 1.3.0 源码核实（见 [Pi 契约](pi.md)）；仍需各 Provider 协议下档位到厂商值的实际映射，以及请求输出覆盖不得绕过容量检查的验证样本。
 3. Grok：1.0.62 新数组项 `value/default` 的 schema、冲突/默认解析、推荐的持久选用通道、各 backend 的出站参数与数值范围。没有证据前不改为 deprecated 通道。
 4. Provider：重新读取三家现行 schema，逐模型确认合法档位、默认值、mandatory 与采样组合；至少使用 DeepSeek `deepseek-flash` 和一个明确 Command Code API ID 作隔离样本。不猜测不同 Provider 的 ID 或 effort 等价。
 

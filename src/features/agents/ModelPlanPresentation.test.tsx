@@ -8,6 +8,7 @@ import {
     type ModelPreviewFile,
 } from "../../lib/desktop/configurationPreview";
 import { VersionRestoreRequestError } from "../../lib/desktop/versionRestore";
+import { piModelFactsFixture } from "../../test/piFacts";
 import type { PiPlan } from "../../lib/desktop/pi";
 import { ModelPlanPresentation } from "./ModelPlanPresentation";
 vi.mock(import("../../lib/desktop/configurationPreview"), () => ({
@@ -34,6 +35,8 @@ const plan: PiPlan = {
         providerRevision: 1,
         modelContentDigest: "b".repeat(64),
     },
+    selectedThinkingLevel: null,
+    modelFacts: piModelFactsFixture,
     restartRequired: true,
 };
 const files: ModelPreviewFile[] = plan.files.map((file) => ({

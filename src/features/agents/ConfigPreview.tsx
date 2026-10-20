@@ -41,6 +41,7 @@ import {
     applyPiSettings,
     reviewedPiPlan,
     type PiPlan,
+    type PiThinkingLevel,
 } from "../../lib/desktop/pi";
 import {
     planGrokSettings,
@@ -54,6 +55,11 @@ import { ModelPlanPresentation } from "./ModelPlanPresentation";
 import { availableClaudeEfforts } from "./ClaudeEffortField";
 import { ClaudeEffortPreferencePanel } from "./ClaudeEffortPreferencePanel";
 import { useClaudeEffortPreference } from "./useClaudeEffortPreference";
+import {
+    PiThinkingLevelField,
+    availablePiThinkingLevels,
+} from "./PiThinkingLevelField";
+import { PiModelFacts } from "./PiModelFacts";
 
 /** Saved instances are a small, hand-managed set; one page covers them. */
 const PROVIDER_PAGE_LIMIT = 100;
@@ -118,6 +124,10 @@ export function ConfigPreview({
     const [apply, setApply] = useState<ApplyState>({ kind: "idle" });
     const [providerId, setProviderId] = useState("");
     const [modelId, setModelId] = useState("");
+    // Pi's chosen per-model level. It is a draft for this binding only: nothing is
+    // saved until the explicit preview and apply, and a change discards the old plan.
+    const [piThinkingLevel, setPiThinkingLevel] =
+        useState<PiThinkingLevel | null>(null);
     const [providersAttempt, setProvidersAttempt] = useState(0);
     const [modelsAttempt, setModelsAttempt] = useState(0);
     const pending = useRef(false);
@@ -250,6 +260,13 @@ export function ConfigPreview({
                     selectedProvider,
                     effortState.preference.snapshot.model,
                 ).includes(selectedEffort)));
+    // A Pi draft may outlive a metadata refresh that removed its level; block the
+    // preview until the user picks a level the model still offers.
+    const piThinkingReady =
+        agent !== "pi" ||
+        piThinkingLevel === null ||
+        (selectedModel !== null &&
+            availablePiThinkingLevels(selectedModel).includes(piThinkingLevel));
     const configurationBusy =
         preview.kind === "loading" ||
         apply.kind === "applying" ||
@@ -258,6 +275,7 @@ export function ConfigPreview({
         !blocked &&
         !configurationBusy &&
         effortReady &&
+        piThinkingReady &&
         selectedProvider !== null &&
         selectedModel !== null;
 
@@ -293,6 +311,7 @@ export function ConfigPreview({
                           selectedProvider.id,
                           selectedModel.modelId,
                           entryPath,
+                          piThinkingLevel,
                       )
                     : agent === "grokBuild"
                       ? await planGrokSettings(
@@ -481,6 +500,7 @@ export function ConfigPreview({
                                     onChange={(value) => {
                                         setProviderId(value);
                                         setModelId("");
+                                        setPiThinkingLevel(null);
                                         setPreview({ kind: "idle" });
                                         setApply({ kind: "idle" });
                                     }}
@@ -547,6 +567,7 @@ export function ConfigPreview({
                                                 }
                                                 onChange={(value) => {
                                                     setModelId(value);
+                                                    setPiThinkingLevel(null);
                                                     setPreview({
                                                         kind: "idle",
                                                     });
@@ -580,6 +601,23 @@ export function ConfigPreview({
                                                 }}
                                                 onReload={() => {
                                                     effortPreference.reload();
+                                                    setPreview({
+                                                        kind: "idle",
+                                                    });
+                                                    setApply({ kind: "idle" });
+                                                }}
+                                            />
+                                        )}
+                                    {agent === "pi" &&
+                                        selectedModel !== null && (
+                                            <PiThinkingLevelField
+                                                model={selectedModel}
+                                                value={piThinkingLevel}
+                                                blocked={
+                                                    blocked || configurationBusy
+                                                }
+                                                onChange={(value) => {
+                                                    setPiThinkingLevel(value);
                                                     setPreview({
                                                         kind: "idle",
                                                     });
@@ -674,6 +712,7 @@ function PlanCard({
                     {t("agents.modelConfig.piNotice")}
                 </p>
             )}
+            {plan.agent === "pi" && <PiModelFacts facts={plan.modelFacts} />}
             {notices.length > 0 && (
                 <ul className={card["notices"]}>
                     {notices.map((entry) => (

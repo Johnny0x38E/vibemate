@@ -67,6 +67,37 @@ pub(crate) async fn import_skill_folder(
     .map_err(|_| crate::skills::SkillError::OperationFailed)?
 }
 
+/// Validate an install source and return the exact command for review.
+///
+/// This reads no directory, starts no process and changes no record. The
+/// interface must show this result before it may call `install_skill`.
+#[tauri::command]
+pub(crate) fn preview_skill_install(
+    source: crate::skills::SkillInstallSource,
+) -> Result<crate::skills::SkillInstallPreview, crate::skills::SkillError> {
+    crate::skills::preview_skill_install(source)
+}
+
+/// Acquire a reviewed source in a private workspace and import its skills.
+///
+/// The installer only runs after the interface's explicit confirmation. A
+/// failed acquisition leaves the central library unchanged.
+#[tauri::command]
+pub(crate) async fn install_skill(
+    app: tauri::AppHandle,
+    source: crate::skills::SkillInstallSource,
+) -> Result<crate::skills::SkillInstallReport, crate::skills::SkillError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let now = crate::shared::current_unix_millis()
+            .map_err(|_| crate::skills::SkillError::OperationFailed)?;
+        with_skill_library(&app, |library, storage| {
+            crate::skills::install_skill(library, storage, source, now)
+        })
+    })
+    .await
+    .map_err(|_| crate::skills::SkillError::OperationFailed)?
+}
+
 /// Read central skill metadata without copying or inspecting any directory.
 #[tauri::command]
 pub(crate) async fn list_skills(

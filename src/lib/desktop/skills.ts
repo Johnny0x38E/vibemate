@@ -18,7 +18,17 @@ const SKILL_CODES = [
     "no_skills_found",
     "name_taken",
     "source_url_invalid",
+    "source_repository_invalid",
     "source_revision_invalid",
+    "git_revision_invalid",
+    "source_revision_required",
+    "installer_version_invalid",
+    "installer_unavailable",
+    "installer_failed",
+    "installer_output_invalid",
+    "install_timed_out",
+    "install_workspace_failed",
+    "skill_not_found_in_source",
     "not_found",
     "revision_conflict",
     "invalid_stored_skill",
@@ -37,6 +47,36 @@ export class SkillRequestError extends Error {
         this.code = code;
     }
 }
+/** How a recorded source is fetched for an update check. */
+export type SkillFetchMethod = "git" | "npx";
+/** One reviewed remote acquisition path. */
+export type SkillInstallSource =
+    | {
+          method: "git";
+          source: {
+              repository: string;
+              revision: string;
+              skill: string | null;
+          };
+      }
+    | {
+          method: "npx";
+          source: {
+              source: string;
+              /** Null asks Rust for the installer version it reviewed. */
+              installerVersion: string | null;
+              skill: string | null;
+          };
+      };
+/** What the install dialog shows before the user confirms. */
+export interface SkillInstallPreview {
+    method: SkillFetchMethod;
+    sourceUrl: string;
+    revision: string | null;
+    installer: string;
+    installerVersion: string | null;
+    command: string;
+}
 /** Safe metadata for one imported skill; no file content crosses IPC. */
 export interface SkillRecord {
     id: string;
@@ -45,6 +85,9 @@ export interface SkillRecord {
     originPath: string | null;
     sourceUrl: string | null;
     sourceRevision: string | null;
+    fetchMethod: SkillFetchMethod | null;
+    installerVersion: string | null;
+    installerCommand: string | null;
     contentDigest: string;
     fileCount: number;
     byteSize: number;
@@ -76,11 +119,26 @@ export interface ImportReport {
     imported: SkillRecord[];
     skipped: SkippedSkill[];
 }
+/** What one reviewed remote install produced. */
+export interface SkillInstallReport {
+    method: SkillFetchMethod;
+    sourceUrl: string;
+    revision: string | null;
+    installer: string;
+    installerVersion: string | null;
+    command: string;
+    exitStatus: number;
+    imported: SkillRecord[];
+    skipped: SkippedSkill[];
+}
 
 /** Skill names follow the library rules: letters, digits, dot, dash, underscore. */
 const NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const DIGEST_PATTERN = /^[0-9a-f]{64}$/;
 const ID_PATTERN = /^[0-9a-f]{32}$/;
+const INSTALLER_VERSION_PATTERN = /^\d{1,3}\.\d{1,3}\.\d{1,3}$/;
+/** The only npx installer version this build displays or accepts. */
+const SKILLS_INSTALLER_VERSION = "1.7.4";
 /**
  * Import bounds, mirroring the Rust constants and the `skill` table constraints.
  * A response outside them is rejected: the backend would not have produced it.
@@ -122,6 +180,17 @@ function string(value: unknown): string {
 function optionalString(value: unknown): string | null {
     return value === null ? null : string(value);
 }
+function fetchMethod(value: unknown): SkillFetchMethod | null {
+    if (value === null) return null;
+    if (value === "git" || value === "npx") return value;
+    invalid();
+}
+/** A reviewed command is bounded display text, never a shell script. */
+function command(value: string): string {
+    if (value === "" || value.length > 1024 || hasControlCharacter(value))
+        invalid();
+    return value;
+}
 function integer(value: unknown, minimum: number): number {
     if (
         typeof value !== "number" ||
@@ -143,6 +212,9 @@ function record(value: unknown): SkillRecord {
         "originPath",
         "sourceUrl",
         "sourceRevision",
+        "fetchMethod",
+        "installerVersion",
+        "installerCommand",
         "contentDigest",
         "fileCount",
         "byteSize",
@@ -157,6 +229,9 @@ function record(value: unknown): SkillRecord {
         originPath: optionalString(data["originPath"]),
         sourceUrl: optionalString(data["sourceUrl"]),
         sourceRevision: optionalString(data["sourceRevision"]),
+        fetchMethod: fetchMethod(data["fetchMethod"]),
+        installerVersion: optionalString(data["installerVersion"]),
+        installerCommand: optionalString(data["installerCommand"]),
         contentDigest: string(data["contentDigest"]),
         fileCount: integer(data["fileCount"], 1),
         byteSize: integer(data["byteSize"], 1),
@@ -179,6 +254,32 @@ function record(value: unknown): SkillRecord {
         invalid();
     // A revision belongs to an address, and every row explains its origin.
     if (row.sourceRevision !== null && row.sourceUrl === null) invalid();
+    // A fetch method and its metadata exist together and only with an address.
+    if (row.fetchMethod === null) {
+        if (row.installerVersion !== null || row.installerCommand !== null)
+            invalid();
+    } else if (row.fetchMethod === "git") {
+        if (
+            row.sourceUrl === null ||
+            row.sourceRevision === null ||
+            row.installerVersion !== null ||
+            row.installerCommand === null
+        )
+            invalid();
+    } else if (
+        row.sourceUrl === null ||
+        row.sourceRevision !== null ||
+        row.installerVersion === null ||
+        row.installerCommand === null
+    ) {
+        invalid();
+    }
+    if (
+        row.installerVersion !== null &&
+        !INSTALLER_VERSION_PATTERN.test(row.installerVersion)
+    )
+        invalid();
+    if (row.installerCommand !== null) command(row.installerCommand);
     return row;
 }
 /** The cursor carries both ordering parts: skill name, then identity. */
@@ -308,10 +409,13 @@ export async function importSkillFolder(path: string): Promise<ImportReport> {
         new Set(imported.map((row) => row.id)).size !== imported.length
     )
         invalid();
-    // An import never records an upstream source for the user.
+    // An import never records an upstream source or fetch method for the user.
     if (
         imported.some(
-            (row) => row.sourceUrl !== null || row.sourceRevision !== null,
+            (row) =>
+                row.sourceUrl !== null ||
+                row.sourceRevision !== null ||
+                row.fetchMethod !== null,
         )
     )
         invalid();
@@ -345,12 +449,159 @@ export async function setSkillSource(input: {
     expectedRevision: number;
     url: string | null;
     revision: string | null;
+    fetchMethod: SkillFetchMethod | null;
+    installerVersion: string | null;
 }): Promise<SkillRecord> {
     desktop();
     const row = record(await call("set_skill_source", { request: input }));
     if (row.id !== input.id || row.revision !== input.expectedRevision + 1)
         invalid();
     return row;
+}
+/** Validate the command shown before any installer runs. */
+function installPreview(value: unknown): SkillInstallPreview {
+    const data = object(value, [
+        "method",
+        "sourceUrl",
+        "revision",
+        "installer",
+        "installerVersion",
+        "command",
+    ]);
+    const method = fetchMethod(data["method"]);
+    if (method === null) invalid();
+    const sourceUrl = string(data["sourceUrl"]);
+    const revision = optionalString(data["revision"]);
+    const installer = string(data["installer"]);
+    const installerVersion = optionalString(data["installerVersion"]);
+    const reviewed = command(string(data["command"]));
+    if (
+        sourceUrl === "" ||
+        sourceUrl.length > 512 ||
+        hasControlCharacter(sourceUrl) ||
+        installer === "" ||
+        installer.length > 64 ||
+        hasControlCharacter(installer)
+    )
+        invalid();
+    if (method === "git") {
+        if (
+            installer !== "git" ||
+            revision === null ||
+            installerVersion !== null ||
+            !reviewed.startsWith("git fetch --depth 1 ")
+        )
+            invalid();
+    } else if (
+        installer !== "skills" ||
+        revision !== null ||
+        installerVersion !== SKILLS_INSTALLER_VERSION ||
+        !INSTALLER_VERSION_PATTERN.test(installerVersion) ||
+        !reviewed.startsWith("npx --yes skills@")
+    ) {
+        invalid();
+    }
+    return {
+        method,
+        sourceUrl,
+        revision,
+        installer,
+        installerVersion,
+        command: reviewed,
+    };
+}
+/**
+ * Review a source without network access or a process. Browser mode returns an
+ * honest preview marker; the dialog never invents a command.
+ */
+export async function previewSkillInstall(
+    source: SkillInstallSource,
+): Promise<
+    { kind: "preview" } | { kind: "desktop"; preview: SkillInstallPreview }
+> {
+    if (!isTauri()) return { kind: "preview" };
+    const preview = installPreview(
+        await call("preview_skill_install", { source }),
+    );
+    // A different acquisition path is a contract break, not a new choice.
+    if (preview.method !== source.method) invalid();
+    return { kind: "desktop", preview };
+}
+/** Run the reviewed installer and import every skill it acquired. */
+export async function installSkill(
+    source: SkillInstallSource,
+): Promise<SkillInstallReport> {
+    desktop();
+    const data = object(await call("install_skill", { source }), [
+        "method",
+        "sourceUrl",
+        "revision",
+        "installer",
+        "installerVersion",
+        "command",
+        "exitStatus",
+        "imported",
+        "skipped",
+    ]);
+    const method = fetchMethod(data["method"]);
+    if (method === null) invalid();
+    const sourceUrl = string(data["sourceUrl"]);
+    const revision = optionalString(data["revision"]);
+    const installer = string(data["installer"]);
+    const installerVersion = optionalString(data["installerVersion"]);
+    const reviewed = command(string(data["command"]));
+    const exitStatus = integer(data["exitStatus"], 0);
+    if (method === "git") {
+        if (
+            installer !== "git" ||
+            installerVersion !== null ||
+            revision === null
+        )
+            invalid();
+    } else if (
+        installer !== "skills" ||
+        installerVersion !== SKILLS_INSTALLER_VERSION ||
+        revision !== null
+    ) {
+        invalid();
+    }
+    if (!Array.isArray(data["imported"]) || !Array.isArray(data["skipped"]))
+        invalid();
+    const imported = data["imported"].map((value: unknown) => record(value));
+    const skipped = data["skipped"].map((value: unknown) =>
+        skippedSkill(value),
+    );
+    if (
+        method !== source.method ||
+        exitStatus !== 0 ||
+        imported.length > MAX_CANDIDATES ||
+        skipped.length > MAX_CANDIDATES ||
+        imported.length + skipped.length === 0 ||
+        new Set(imported.map((row) => row.id)).size !== imported.length ||
+        imported.some(
+            (row) =>
+                row.originPath !== null ||
+                row.sourceUrl !== sourceUrl ||
+                row.fetchMethod !== method ||
+                row.installerVersion !== installerVersion ||
+                row.installerCommand !== reviewed ||
+                (method === "git"
+                    ? row.sourceRevision !== revision
+                    : row.sourceRevision !== null),
+        )
+    )
+        invalid();
+    return {
+        method,
+        sourceUrl,
+        revision,
+        installer,
+        installerVersion,
+        command: reviewed,
+        exitStatus,
+        imported,
+        skipped,
+    };
 }
 /**
  * Remove one reviewed skill record and vibemate's managed copy of it. The

@@ -1,4 +1,4 @@
-import type { SkillRecord } from "../../lib/desktop/skills";
+import type { SkillFetchMethod, SkillRecord } from "../../lib/desktop/skills";
 
 /**
  * Where a skill's content is tracked from, so both the list row and the detail
@@ -14,7 +14,14 @@ import type { SkillRecord } from "../../lib/desktop/skills";
  * `skills.sh`), so it only changes what the `address` branch carries.
  */
 export type SkillSource =
-    | { kind: "address"; url: string; revision: string | null }
+    | {
+          kind: "address";
+          url: string;
+          revision: string | null;
+          /** Null means the address was entered by hand with no update method. */
+          fetchMethod: SkillFetchMethod | null;
+          installerVersion: string | null;
+      }
     | { kind: "local" }
     | { kind: "unknown" };
 
@@ -25,6 +32,8 @@ export function skillSource(record: SkillRecord): SkillSource {
             kind: "address",
             url: record.sourceUrl,
             revision: record.sourceRevision,
+            fetchMethod: record.fetchMethod,
+            installerVersion: record.installerVersion,
         };
     }
     if (record.originPath !== null) {

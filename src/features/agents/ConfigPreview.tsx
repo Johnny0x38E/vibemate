@@ -51,6 +51,9 @@ import {
 import styles from "./AgentList.module.css";
 import card from "./ConfigPreview.module.css";
 import { ModelPlanPresentation } from "./ModelPlanPresentation";
+import { availableClaudeEfforts } from "./ClaudeEffortField";
+import { ClaudeEffortPreferencePanel } from "./ClaudeEffortPreferencePanel";
+import { useClaudeEffortPreference } from "./useClaudeEffortPreference";
 
 /** Saved instances are a small, hand-managed set; one page covers them. */
 const PROVIDER_PAGE_LIMIT = 100;
@@ -229,12 +232,50 @@ export function ConfigPreview({
         answer?.kind === "ready"
             ? (answer.models.find((model) => model.modelId === modelId) ?? null)
             : null;
+    const effortPreference = useClaudeEffortPreference(
+        agent === "claudeCode" ? (selectedProvider?.id ?? null) : null,
+        agent === "claudeCode" ? (selectedModel?.modelId ?? null) : null,
+    );
+    const effortState = effortPreference.state;
+    const selectedEffort =
+        effortState.kind === "ready" || effortState.kind === "saving"
+            ? effortState.draft
+            : null;
+    const effortReady =
+        agent !== "claudeCode" ||
+        (effortState.kind === "ready" &&
+            selectedProvider !== null &&
+            (selectedEffort === null ||
+                availableClaudeEfforts(
+                    selectedProvider,
+                    effortState.preference.snapshot.model,
+                ).includes(selectedEffort)));
+    const configurationBusy =
+        preview.kind === "loading" ||
+        apply.kind === "applying" ||
+        effortState.kind === "saving";
     const canPreview =
         !blocked &&
+        !configurationBusy &&
+        effortReady &&
         selectedProvider !== null &&
-        selectedModel !== null &&
-        preview.kind !== "loading" &&
-        apply.kind !== "applying";
+        selectedModel !== null;
+
+    async function rememberEffort(): Promise<void> {
+        if (blocked || pending.current || effortState.kind !== "ready") return;
+        pending.current = true;
+        busyCallback.current?.(true);
+        // Remembering edits only the reusable starting draft. Discard this
+        // window's shown plan; explicit preview/apply remains a separate action.
+        setPreview({ kind: "idle" });
+        setApply({ kind: "idle" });
+        try {
+            await effortPreference.save();
+        } finally {
+            pending.current = false;
+            busyCallback.current?.(false);
+        }
+    }
 
     async function runPreview(): Promise<void> {
         // `canPreview` already proves both selections exist for this render.
@@ -262,6 +303,7 @@ export function ConfigPreview({
                       : await planClaudeCodeSettings(
                             selectedProvider.id,
                             selectedModel.modelId,
+                            selectedEffort,
                         );
             if (!mounted.current) return;
             setPreview(
@@ -435,11 +477,7 @@ export function ConfigPreview({
                                     value={providerId}
                                     options={providerOptions}
                                     size="fill"
-                                    blocked={
-                                        blocked ||
-                                        preview.kind === "loading" ||
-                                        apply.kind === "applying"
-                                    }
+                                    blocked={blocked || configurationBusy}
                                     onChange={(value) => {
                                         setProviderId(value);
                                         setModelId("");
@@ -505,9 +543,7 @@ export function ConfigPreview({
                                                 options={modelOptions}
                                                 size="fill"
                                                 blocked={
-                                                    preview.kind ===
-                                                        "loading" ||
-                                                    apply.kind === "applying"
+                                                    blocked || configurationBusy
                                                 }
                                                 onChange={(value) => {
                                                     setModelId(value);
@@ -521,6 +557,36 @@ export function ConfigPreview({
                                             />
                                         </span>
                                     </div>
+                                    {agent === "claudeCode" &&
+                                        selectedProvider !== null &&
+                                        selectedModel !== null && (
+                                            <ClaudeEffortPreferencePanel
+                                                provider={selectedProvider}
+                                                state={effortState}
+                                                blocked={
+                                                    blocked || configurationBusy
+                                                }
+                                                onChange={(value) => {
+                                                    effortPreference.select(
+                                                        value,
+                                                    );
+                                                    setPreview({
+                                                        kind: "idle",
+                                                    });
+                                                    setApply({ kind: "idle" });
+                                                }}
+                                                onSave={() => {
+                                                    void rememberEffort();
+                                                }}
+                                                onReload={() => {
+                                                    effortPreference.reload();
+                                                    setPreview({
+                                                        kind: "idle",
+                                                    });
+                                                    setApply({ kind: "idle" });
+                                                }}
+                                            />
+                                        )}
                                     <div className={card["actions"]}>
                                         <button
                                             type="button"

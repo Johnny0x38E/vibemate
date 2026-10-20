@@ -99,8 +99,23 @@ pub fn get_model_snapshot(
     let transaction = connection
         .transaction()
         .map_err(|_| ModelError::ReadFailed)?;
-    let provider = read_provider(&transaction, &provider_id)?;
-    let model = read_model(&transaction, &provider_id, &request.model_id)?
+    read_model_snapshot(&transaction, &provider_id, &request.model_id)
+}
+
+/// Read a model snapshot inside a caller-owned SQLite transaction.
+/// This lets Agent preferences read metadata and their revision consistently
+/// without taking the storage mutex a second time. No writes are performed.
+/// Returns malformed-identity, missing-row, stored-data or read errors.
+pub(crate) fn read_model_snapshot(
+    connection: &rusqlite::Connection,
+    provider_id: &crate::providers::ProviderId,
+    model_id: &str,
+) -> Result<ModelSnapshot, ModelError> {
+    if !is_valid_model_id(model_id) {
+        return Err(ModelError::InvalidRequest);
+    }
+    let provider = read_provider(connection, provider_id)?;
+    let model = read_model(connection, provider_id, model_id)?
         .ok_or(ModelError::ModelNotFound)?
         .into_model(provider)?;
     snapshot(model)

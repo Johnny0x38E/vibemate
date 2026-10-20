@@ -1104,6 +1104,29 @@ summary and detail entry inline in the same dialog; it follows the shared
 two-layer rules in [configuration.md](configuration.md). A successful apply
 notifies, closes the dialog and refreshes the list's current-configuration pin.
 
+Claude Code's effort field uses `useClaudeEffortPreference` to load a reusable
+starting choice for the selected Provider/model. The model and preference come
+from one native SQLite snapshot; model capability defaults never select a value.
+`ClaudeEffortPreferencePanel` separates **Remember choice** from Preview and Apply.
+Remembering sends both the model digest and preference revision, clears this
+window's displayed plan and changes no Agent file. Native apply/restore does not
+silently save a starting preference. The original global env scope warning stays
+visible: remembering separately in vibemate does not isolate native sessions.
+
+The hook keeps the draft on save failure. Read errors require reload rather than
+pretending inheritance; conflicts and uncertain acknowledgments also offer
+explicit reload. An obsolete remembered effort stays visible as unmapped and
+blocks preview until the user changes it. Render-time identity checks hide a
+previous binding's state. A guarded state reset during render also discards the
+old draft when returning to a binding before an intervening read finishes; a fresh
+read must finish before preview becomes available. Effect generations invalidate
+late reads and saves on switching, retry or unmount. A generation is a counter identifying the current
+request; a completion with an older counter cannot replace current state. Save
+shares the configuration panel's single-flight and navigation guard, while a
+pending read still permits switching bindings. `src/lib/desktop/claudePreference.ts`
+validates the response and reuses the model snapshot validator, without storing
+anything in the browser. Pi and Grok do not call this Claude-only API.
+
 The Agent detail page shows History, Skill, MCP and Install & paths segments. The
 shared `RestoreView` lists only the selected Agent's recorded writes from the
 root-scoped paginated history, choosing its commands from one per-Agent table; the

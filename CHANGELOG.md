@@ -8,6 +8,12 @@ GitHub release notes are extracted from the matching version section only.
 
 ### Added
 
+- Remembered Claude Code effort starting choices per Provider instance and exact model ID in private SQLite. An explicit remember action is separate from preview/apply and never writes Agent files or accesses credentials. Reads include current model metadata; saves compare model and preference tokens, retain a new revision on clear, and cascade only the deleted binding's preference. The bilingual editor handles read/retry, save conflicts, obsolete choices and late responses. Native environment settings still have their existing cross-model scope; applying or restoring configuration does not silently change the remembered choice.
+
+- Explicit Claude Code reasoning-effort selection for saved DeepSeek `deepseek-flash` models with declared reasoning support and an explicit effort list. The menu intersects that list with the native environment channel, including `max`, without selecting the model default or expanding `any`. “Do not overwrite” preserves native values; changing provider/model clears the draft. Plans, full-detail IPC, approval, application and version restore retain the chosen effort. The bilingual interface warns that the environment setting may affect other models and that a planned value does not prove a running session uses it. Independent per-binding preference storage is not included in this slice.
+
+- Claude Code context-capacity mapping for saved DeepSeek `deepseek-flash` models without `[1m]`. Plans, detailed previews and application use the same stored model capacity and change token; other model IDs preserve the existing window and explain the missing mapping in English and Simplified Chinese. Compaction settings and model IDs remain untouched, and configuration versions retain the mapped capacity.
+
 - Desktop foundation: a Tauri 2 shell with a private SQLite database in the app-data folder, OS credential storage for API keys and MCP values, English and Simplified Chinese resources with a startup language gate and a persisted preference, local Rust logging with Settings access to the log file and folder, an About panel with version, MIT license and a fixed repository action, and native CI checks plus a tag-triggered draft release workflow that extracts notes from this file.
 
 - Agent model configuration for Claude Code, Pi and Grok Build. Each Agent detail page selects a saved Provider configuration and one of its added models, then asks Rust for a sanitized plan. Claude Code writes the user `settings.json` `env` block with the gateway base URL, the key placeholder, the session model and the four category keys that Claude Code resolves for its aliases, subagents and background work; only the vendor-documented DeepSeek and OpenRouter gateways are planned. Pi writes `models.json` and `settings.json`, binds the read-only `auth.json` precedence check, keeps readable per-instance Provider names and migrates recorded UUID entries through the reviewed backup path. Grok Build writes one `config.toml` entry, records alias ownership per configuration root, refuses an alias the user wrote by hand, leaves the user's `[models].default` untouched, and reports the higher-precedence files it located without reading them.
@@ -35,6 +41,8 @@ GitHub release notes are extracted from the matching version section only.
 - Provider models, capability evidence and parameters. Models are fetched into an in-memory browse session, saved as an explicit added list, refreshed without inserting or deleting rows, and edited inline with a SHA-256 content digest. Thinking, image input and tool calls each record catalog evidence or a user declaration with its source, an icon is drawn only for explicit support, and the model dialog stores the context window, maximum output and declared thinking efforts. Providers can be deleted with a credential compensation path that restores the key on a known failure.
 
 ### Changed
+
+- Documented the first P24.a model-parameter evidence matrix for installed Claude Code 2.1.304, Pi 1.3.0 and Grok Build 1.0.62, distinguishing existing metadata writes, native request channels, deprecated Grok effort fields and unresolved protocol checks. Parameter editing is not yet delivered.
 
 - Agent history details now open in a dialog instead of expanding the list. Multi-file versions use the same compact file switcher as detailed configuration; selecting a file changes only the preview, while restoration still applies the whole version.
 
@@ -67,6 +75,8 @@ GitHub release notes are extracted from the matching version section only.
 - Settings, themes and navigation. The desktop shell keeps a fixed 200 px expanded and 88 px collapsed sidebar, an overlay title bar on macOS with native traffic lights, in-app window controls on Windows and Linux, and eight light/dark themes with independent brightness. Sidebar activation always returns to the module home while preserving mounted state, and secondary pages share one left-aligned header with an icon-only Back control and trailing Save.
 
 ### Fixed
+
+- Masked existing credential values in Claude Code plan changes before they cross IPC, including the old direct API key that OpenRouter clears. Repeated previews no longer carry the old key alongside the new credential placeholder.
 
 - Configuration selection now moves the current badge to the original saved version without adding a visible restore row. Matching uses complete successful written results rather than pre-write snapshots, and Provider/model attribution no longer depends on the selected page.
 

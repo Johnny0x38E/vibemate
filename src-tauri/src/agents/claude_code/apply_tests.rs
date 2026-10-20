@@ -62,7 +62,11 @@ impl Fixture {
             model: ModelFacts {
                 id: "deepseek-flash".to_owned(),
                 content_digest: MODEL_DIGEST.to_owned(),
+                context_window: None,
+                thinking_supported: false,
+                thinking_effort: None,
             },
+            selected_effort: None,
         }
     }
 
@@ -74,6 +78,7 @@ impl Fixture {
             target_digest: plan.target.content_digest,
             provider_revision: plan.source.provider_revision,
             model_content_digest: plan.source.model_content_digest,
+            selected_effort: None,
         }
     }
 
@@ -83,6 +88,20 @@ impl Fixture {
             reviewed: self.reviewed(),
             backups: self.root.join("backups"),
         }
+    }
+
+    fn input_with_context(&self, tokens: i64) -> ClaudeCodeApplyInput {
+        let mut input = self.input();
+        input.plan.model.context_window = Some(tokens);
+        let plan = plan_claude_code_settings(&input.plan).unwrap();
+        input.reviewed = ReviewedPlan {
+            target_path: plan.target.path,
+            target_digest: plan.target.content_digest,
+            provider_revision: plan.source.provider_revision,
+            model_content_digest: plan.source.model_content_digest,
+            selected_effort: None,
+        };
+        input
     }
 
     fn store(&self) -> FakeStore {
@@ -147,6 +166,128 @@ fn applying_a_plan_writes_the_key_and_keeps_unrelated_settings() {
     assert_eq!(record.kind, OperationKind::ClaudeCodeSettings);
     assert_eq!(record.state, OperationState::Applied);
     assert!(unfinished_operations(&fixture.storage).unwrap().is_empty());
+}
+
+#[test]
+fn context_capacity_is_applied_and_restore_recovers_the_exact_previous_bytes() {
+    let fixture = Fixture::new();
+    let original = "{\"env\":{\"CLAUDE_CODE_MAX_CONTEXT_TOKENS\":\"200000\",\"EDITOR\":\"vim\"},\"theme\":\"dark\"}\n";
+    fixture.write_settings(original);
+    let input = fixture.input_with_context(1_048_576);
+    let applied = apply_claude_code_settings(&fixture.storage, &fixture.store(), &input).unwrap();
+    assert_eq!(applied.state, OperationState::Applied);
+    let written: Value = serde_json::from_str(&fixture.content()).unwrap();
+    assert_eq!(written["env"]["CLAUDE_CODE_MAX_CONTEXT_TOKENS"], "1048576");
+    assert_eq!(written["env"]["EDITOR"], "vim");
+    assert_eq!(
+        fs::read_to_string(applied.backup_path.as_ref().unwrap()).unwrap(),
+        original
+    );
+    let restore = plan_claude_code_restore(&fixture.storage, &applied.operation_id).unwrap();
+    let restored = apply_claude_code_restore(
+        &fixture.storage,
+        &ApplyClaudeCodeRestoreRequest {
+            operation_id: applied.operation_id,
+            reviewed: restore
+                .steps
+                .iter()
+                .map(|step| ReviewedRestoreStepRequest {
+                    ordinal: step.ordinal,
+                    current_digest: step.current_digest.clone(),
+                })
+                .collect(),
+        },
+        &fixture.root.join("backups"),
+    )
+    .unwrap();
+    assert_eq!(restored.state, OperationState::Compensated);
+    assert_eq!(fixture.content(), original);
+}
+
+#[test]
+fn changed_context_metadata_requires_a_new_preview_before_credential_access() {
+    let fixture = Fixture::new();
+    fixture.write_settings("{}\n");
+    let mut input = fixture.input_with_context(1_048_576);
+    input.plan.model.context_window = Some(128_000);
+    // Production snapshots bind the entire stored model, including capacity.
+    input.plan.model.content_digest = "1".repeat(64);
+    let store = FakeStore::default();
+    store.fail_loads(Some(CredentialError::AccessDenied));
+    assert_eq!(
+        apply_claude_code_settings(&fixture.storage, &store, &input).unwrap_err(),
+        ClaudeCodeApplyError::PlanStale
+    );
+    assert_eq!(fixture.content(), "{}\n");
+    assert_eq!(fixture.backups(), 0);
+}
+
+#[test]
+fn a_reviewed_effort_is_written_and_restore_returns_the_previous_choice() {
+    let fixture = Fixture::new();
+    let original = "{\"env\":{\"CLAUDE_CODE_EFFORT_LEVEL\":\"low\",\"EDITOR\":\"vim\"}}\n";
+    fixture.write_settings(original);
+    let mut input = fixture.input();
+    input.plan.model.thinking_supported = true;
+    input.plan.model.thinking_effort = Some(ThinkingEffort::Listed {
+        levels: vec![EffortLevel::Low, EffortLevel::Max],
+        default_level: Some(EffortLevel::Low),
+    });
+    input.plan.selected_effort = Some(EffortLevel::Max);
+    input.reviewed.selected_effort = Some(EffortLevel::Max);
+    let applied = apply_claude_code_settings(&fixture.storage, &fixture.store(), &input).unwrap();
+    assert_eq!(applied.state, OperationState::Applied);
+    let written: Value = serde_json::from_str(&fixture.content()).unwrap();
+    assert_eq!(written["env"]["CLAUDE_CODE_EFFORT_LEVEL"], "max");
+    assert_eq!(written["env"]["EDITOR"], "vim");
+    let restore = plan_claude_code_restore(&fixture.storage, &applied.operation_id).unwrap();
+    let result = apply_claude_code_restore(
+        &fixture.storage,
+        &ApplyClaudeCodeRestoreRequest {
+            operation_id: applied.operation_id,
+            reviewed: restore
+                .steps
+                .iter()
+                .map(|step| ReviewedRestoreStepRequest {
+                    ordinal: step.ordinal,
+                    current_digest: step.current_digest.clone(),
+                })
+                .collect(),
+        },
+        &fixture.root.join("backups"),
+    )
+    .unwrap();
+    assert_eq!(result.state, OperationState::Compensated);
+    assert_eq!(fixture.content(), original);
+}
+
+#[test]
+fn changed_effort_approval_or_model_metadata_stops_before_credentials() {
+    let fixture = Fixture::new();
+    fixture.write_settings("{}\n");
+    let mut input = fixture.input();
+    input.plan.model.thinking_supported = true;
+    input.plan.model.thinking_effort = Some(ThinkingEffort::Listed {
+        levels: vec![EffortLevel::Max],
+        default_level: None,
+    });
+    input.plan.selected_effort = Some(EffortLevel::Max);
+    let denied = FakeStore::default();
+    denied.fail_loads(Some(CredentialError::AccessDenied));
+    // The UI's mutable draft must not replace the effort that was approved.
+    assert_eq!(
+        apply_claude_code_settings(&fixture.storage, &denied, &input).unwrap_err(),
+        ClaudeCodeApplyError::PlanStale
+    );
+    input.reviewed.selected_effort = Some(EffortLevel::Max);
+    input.plan.model.thinking_effort = None;
+    input.plan.model.content_digest = "1".repeat(64);
+    assert_eq!(
+        apply_claude_code_settings(&fixture.storage, &denied, &input).unwrap_err(),
+        ClaudeCodeApplyError::PlanStale
+    );
+    assert_eq!(fixture.content(), "{}\n");
+    assert_eq!(fixture.backups(), 0);
 }
 
 #[test]

@@ -4,8 +4,10 @@
 //! documents, following the vendor instructions recorded in
 //! `docs/integrations/claude-code.md`. Only combinations with official
 //! instructions are planned; anything else is refused with a reason instead of
-//! being guessed. This module never writes a file, never reads a credential
-//! value and never sends a request.
+//! being guessed. Planning never writes files or reads credential values.
+//! Applying revalidates the approval before reading a credential and delegates
+//! backup, atomic writes and journaling to the shared configuration writer.
+//! Neither path sends a Provider request.
 
 pub use super::configuration::{
     ConfigApplied as ClaudeCodeApplied, ConfigApplyError as ClaudeCodeApplyError,
@@ -23,9 +25,15 @@ use crate::config_plan::{
     planned_changes, read_target_document,
 };
 use crate::credentials::CredentialStore;
+use crate::model_catalog::{CapabilityState, EffortLevel, ThinkingEffort};
 use crate::model_identity::is_valid_model_id;
+use crate::models::ModelSnapshot;
 use crate::providers::{ProviderId, ProviderKind};
 use crate::storage::Storage;
+
+mod effort;
+pub(crate) use effort::reviewed_effort;
+pub(crate) mod preference;
 
 /// The settings filename Claude Code reads from the user configuration root.
 const SETTINGS_FILE: &str = "settings.json";
@@ -155,6 +163,33 @@ pub struct ModelFacts {
     pub id: String,
     /// SHA-256 of the stored model record.
     pub content_digest: String,
+    /// Declared total model capacity in tokens, not a request output limit.
+    /// Missing metadata leaves the user's native window declaration unchanged.
+    pub context_window: Option<i64>,
+    /// Effective catalog evidence or user declaration that reasoning is supported.
+    pub thinking_supported: bool,
+    /// Explicit model effort metadata, kept separate from the selected setting.
+    pub thinking_effort: Option<ThinkingEffort>,
+}
+
+impl ModelFacts {
+    /// Copy only the non-secret model facts needed by every preview/apply path.
+    /// The snapshot digest binds capability declarations as well as limits.
+    pub fn from_snapshot(snapshot: &ModelSnapshot) -> Self {
+        let model = &snapshot.model;
+        let thinking = model
+            .capability_overrides
+            .thinking
+            .map(|declaration| declaration.as_state())
+            .unwrap_or(model.capabilities.thinking.state);
+        Self {
+            id: model.model_id.clone(),
+            content_digest: snapshot.content_digest.clone(),
+            context_window: model.context_window,
+            thinking_supported: thinking == CapabilityState::Supported,
+            thinking_effort: model.thinking_effort.clone(),
+        }
+    }
 }
 
 /// One Claude Code preview request.
@@ -168,6 +203,8 @@ pub struct ClaudeCodePlanInput {
     pub provider: ProviderFacts,
     /// Selected model.
     pub model: ModelFacts,
+    /// Optional explicit effort; `None` preserves the native setting unchanged.
+    pub selected_effort: Option<EffortLevel>,
 }
 
 /// Build a read-only plan for pointing Claude Code at the selected model.
@@ -176,7 +213,9 @@ pub struct ClaudeCodePlanInput {
 /// Returns `GatewayUnverified` for a Provider without official Claude Code
 /// instructions, `BaseUrlUnverified` when the instance address is not one the
 /// vendor documents, `InvalidRequest` for a malformed revision, model ID or
-/// digest, and the [`read_target_document`] errors for the settings file.
+/// digest, nonpositive declared context capacity or an effort outside the
+/// model/adapter intersection, and the [`read_target_document`] errors for
+/// the settings file.
 pub fn plan_claude_code_settings(input: &ClaudeCodePlanInput) -> Result<ConfigPlan, PlanError> {
     build(input).map(|(plan, _document)| plan)
 }
@@ -199,10 +238,12 @@ pub(crate) fn build(
     if input.provider.revision < 1
         || !is_valid_model_id(&input.model.id)
         || !is_digest(&input.model.content_digest)
+        || input.model.context_window.is_some_and(|tokens| tokens <= 0)
     {
         return Err(PlanError::InvalidRequest);
     }
 
+    effort::validate_selection(input.provider.kind, &input.model, input.selected_effort)?;
     let read = read_target_document(&input.config_root.join(SETTINGS_FILE))?;
     let target = read.target;
     let mut document = read.document;
@@ -240,12 +281,32 @@ pub(crate) fn build(
                 value: PlannedValue::Literal((*value).to_owned()),
             }),
     );
+    // Window correction depends on Claude's model-ID recognition. This first
+    // slice uses the documented DeepSeek ID only: it is not a Claude alias and
+    // has no [1m] suffix, so the variable does not require disabling compaction.
+    let can_map_context =
+        input.provider.kind == ProviderKind::DeepSeek && input.model.id == "deepseek-flash";
+    if let Some(tokens) = input.model.context_window.filter(|_| can_map_context) {
+        writes.push(PlannedWrite {
+            key_path: "env.CLAUDE_CODE_MAX_CONTEXT_TOKENS",
+            value: PlannedValue::Literal(tokens.to_string()),
+        });
+    }
+    if let Some(level) = input.selected_effort {
+        writes.push(PlannedWrite {
+            key_path: effort::KEY,
+            value: PlannedValue::Literal(level.as_str().to_owned()),
+        });
+    }
     let changes = planned_changes(&mut document, &writes)?;
 
     let mut notices = vec![
         PlanNotice::code(NoticeCode::CredentialFromStore),
         PlanNotice::code(NoticeCode::OverridesNotChecked),
     ];
+    if input.model.context_window.is_some() && !can_map_context {
+        notices.push(PlanNotice::code(NoticeCode::ContextWindowNotMapped));
+    }
     if let Some(previous) = previous_model_key {
         notices.push(PlanNotice::with_detail(
             NoticeCode::ModelKeyOverridden,
@@ -287,6 +348,8 @@ pub struct ReviewedPlan {
     pub provider_revision: i64,
     /// Model content digest the plan bound.
     pub model_content_digest: String,
+    /// Choice from the reviewed plan, not the current dropdown draft.
+    pub selected_effort: Option<EffortLevel>,
 }
 
 /// Everything one apply call needs besides the database and the credential store.
@@ -319,6 +382,15 @@ pub fn apply_claude_code_settings(
     credentials: &impl CredentialStore,
     input: &ClaudeCodeApplyInput,
 ) -> Result<ClaudeCodeApplied, ClaudeCodeApplyError> {
+    // Check model tokens before validating the selected level: metadata may
+    // have removed that level since preview, which is stale approval rather
+    // than a new invalid user request. No credentials have been read yet.
+    if input.plan.provider.revision != input.reviewed.provider_revision
+        || input.plan.model.content_digest != input.reviewed.model_content_digest
+        || input.plan.selected_effort != input.reviewed.selected_effort
+    {
+        return Err(ClaudeCodeApplyError::PlanStale);
+    }
     let (plan, document) = build(&input.plan).map_err(ClaudeCodeApplyError::from_plan)?;
     if plan.target.path != input.reviewed.target_path
         || plan.target.content_digest != input.reviewed.target_digest

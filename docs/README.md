@@ -30,6 +30,8 @@ planned.
   rows, capability evidence and model parameters.
 - [`logging.md`](logging.md): Rust local logging and Settings log access.
 - [`releases.md`](releases.md): changelog rules and the draft release workflow.
+- [`integrations/model-parameter-mapping.md`](integrations/model-parameter-mapping.md):
+  P24.a Agent field evidence, version/protocol restrictions and unresolved checks.
 - [`integrations/`](integrations): verified third-party contracts for the three
   providers and the three configured Agents. Recheck them before changing a
   protocol mapping.

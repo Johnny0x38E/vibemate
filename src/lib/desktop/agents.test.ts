@@ -320,6 +320,93 @@ test("sends only the selected identities and returns the validated plan", async 
     );
 });
 
+test("binds the explicit effort from the returned plan into apply approval", async () => {
+    const chosen: ClaudeCodePlan = {
+        ...plan,
+        changes: [
+            ...plan.changes,
+            {
+                keyPath: "env.CLAUDE_CODE_EFFORT_LEVEL",
+                before: "low",
+                after: "max",
+                secret: false,
+            },
+        ],
+    };
+    vi.mocked(invoke).mockResolvedValue(chosen);
+    const result = await planClaudeCodeSettings(
+        plan.source.providerId,
+        plan.source.modelId,
+        "max",
+    );
+    expect(result).toEqual({ kind: "desktop", plan: chosen });
+    expect(invoke).toHaveBeenCalledWith("plan_claude_code_settings", {
+        providerId: plan.source.providerId,
+        modelId: plan.source.modelId,
+        selectedEffort: "max",
+    });
+    expect(reviewedPlanTokens(chosen)).toMatchObject({ selectedEffort: "max" });
+});
+
+test("rejects a dropped or changed effort rather than silently using another level", async () => {
+    for (const changes of [
+        plan.changes,
+        [
+            ...plan.changes,
+            {
+                keyPath: "env.CLAUDE_CODE_EFFORT_LEVEL",
+                before: null,
+                after: "low",
+                secret: false,
+            },
+        ],
+    ]) {
+        vi.mocked(invoke).mockResolvedValue({ ...plan, changes });
+        await expect(
+            planClaudeCodeSettings(
+                plan.source.providerId,
+                plan.source.modelId,
+                "max",
+            ),
+        ).rejects.toMatchObject({ code: "invalid_response" });
+    }
+});
+
+test.each(["minimal", "none", "ultracode"])(
+    "rejects an unsupported native effort %s in an unsolicited plan",
+    async (after) => {
+        vi.mocked(invoke).mockResolvedValue({
+            ...plan,
+            changes: [
+                ...plan.changes,
+                {
+                    keyPath: "env.CLAUDE_CODE_EFFORT_LEVEL",
+                    before: null,
+                    after,
+                    secret: false,
+                },
+            ],
+        });
+        await expect(
+            planClaudeCodeSettings(plan.source.providerId, plan.source.modelId),
+        ).rejects.toMatchObject({ code: "invalid_response" });
+    },
+);
+
+test("accepts the context mapping refusal without exposing raw model metadata", async () => {
+    const skipped: ClaudeCodePlan = {
+        ...plan,
+        notices: [{ code: "contextWindowNotMapped", detail: null }],
+    };
+    vi.mocked(invoke).mockResolvedValue(skipped);
+    expect(
+        await planClaudeCodeSettings(
+            plan.source.providerId,
+            plan.source.modelId,
+        ),
+    ).toEqual({ kind: "desktop", plan: skipped });
+});
+
 test("accepts a plan for a settings file that does not exist yet", async () => {
     const missing: ClaudeCodePlan = {
         ...plan,

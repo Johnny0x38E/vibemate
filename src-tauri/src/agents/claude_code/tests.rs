@@ -53,7 +53,11 @@ impl Fixture {
             model: ModelFacts {
                 id: "deepseek-flash".to_owned(),
                 content_digest: MODEL_DIGEST.to_owned(),
+                context_window: None,
+                thinking_supported: false,
+                thinking_effort: None,
             },
+            selected_effort: None,
         }
     }
 }
@@ -167,6 +171,275 @@ fn a_stored_model_id_is_written_verbatim_to_the_class_keys() {
             .unwrap();
         assert_eq!(change.after, "anthropic/claude-sonnet-4-5[1m]");
     }
+}
+
+#[test]
+fn declared_context_maps_to_a_string_without_changing_compaction_or_model_ids() {
+    let fixture = Fixture::new();
+    fixture.settings(r#"{"env":{"CLAUDE_CODE_MAX_CONTEXT_TOKENS":"200000","CLAUDE_CODE_AUTO_COMPACT_WINDOW":"150000","EDITOR":"vim"}}"#);
+    let mut input = fixture.input(ProviderKind::DeepSeek, DEEPSEEK_BASE);
+    input.model.context_window = Some(1_048_576);
+    let (plan, document) = build(&input).unwrap();
+    let change = plan
+        .changes
+        .iter()
+        .find(|change| change.key_path == "env.CLAUDE_CODE_MAX_CONTEXT_TOKENS")
+        .unwrap();
+    assert_eq!(change.before.as_deref(), Some("200000"));
+    assert_eq!(change.after, "1048576");
+    assert!(!change.secret);
+    assert_eq!(document["env"]["CLAUDE_CODE_MAX_CONTEXT_TOKENS"], "1048576");
+    assert_eq!(document["env"]["CLAUDE_CODE_AUTO_COMPACT_WINDOW"], "150000");
+    assert_eq!(document["env"]["EDITOR"], "vim");
+    assert_eq!(document["env"]["ANTHROPIC_MODEL"], "deepseek-flash");
+    assert!(document["env"].get("DISABLE_COMPACT").is_none());
+    assert!(
+        document["env"]
+            .get("CLAUDE_CODE_DISABLE_1M_CONTEXT")
+            .is_none()
+    );
+    assert!(
+        !plan
+            .notices
+            .iter()
+            .any(|notice| notice.code == NoticeCode::ContextWindowNotMapped)
+    );
+    // A preview must not replace the file it read.
+    let original: Value =
+        serde_json::from_slice(&fs::read(fixture.root().join("settings.json")).unwrap()).unwrap();
+    assert_eq!(original["env"]["CLAUDE_CODE_MAX_CONTEXT_TOKENS"], "200000");
+}
+
+#[test]
+fn missing_context_inherits_the_existing_window() {
+    let fixture = Fixture::new();
+    fixture.settings(r#"{"env":{"CLAUDE_CODE_MAX_CONTEXT_TOKENS":"300000"}}"#);
+    let (plan, document) = build(&fixture.input(ProviderKind::DeepSeek, DEEPSEEK_BASE)).unwrap();
+    assert_eq!(document["env"]["CLAUDE_CODE_MAX_CONTEXT_TOKENS"], "300000");
+    assert!(
+        !plan
+            .changes
+            .iter()
+            .any(|change| change.key_path == "env.CLAUDE_CODE_MAX_CONTEXT_TOKENS")
+    );
+}
+
+#[test]
+fn equal_context_keeps_the_existing_declared_value() {
+    let fixture = Fixture::new();
+    fixture.settings(r#"{"env":{"CLAUDE_CODE_MAX_CONTEXT_TOKENS":"1048576"}}"#);
+    let mut input = fixture.input(ProviderKind::DeepSeek, DEEPSEEK_BASE);
+    input.model.context_window = Some(1_048_576);
+    let plan = plan_claude_code_settings(&input).unwrap();
+    let window = plan
+        .changes
+        .iter()
+        .find(|change| change.key_path == "env.CLAUDE_CODE_MAX_CONTEXT_TOKENS")
+        .unwrap();
+    assert_eq!(window.before.as_deref(), Some(window.after.as_str()));
+}
+
+#[test]
+fn other_provider_or_model_ids_keep_the_window_and_explain_the_missing_mapping() {
+    let fixture = Fixture::new();
+    fixture
+        .settings(r#"{"env":{"CLAUDE_CODE_MAX_CONTEXT_TOKENS":"300000","DISABLE_COMPACT":"1"}}"#);
+    for (kind, base, id) in [
+        (ProviderKind::OpenRouter, OPENROUTER_BASE, "deepseek-flash"),
+        (
+            ProviderKind::OpenRouter,
+            OPENROUTER_BASE,
+            "anthropic/claude-sonnet-4-5",
+        ),
+        (ProviderKind::DeepSeek, DEEPSEEK_BASE, "deepseek-flash[1m]"),
+        (ProviderKind::DeepSeek, DEEPSEEK_BASE, "deepseek-future"),
+    ] {
+        let mut input = fixture.input(kind, base);
+        input.model.id = id.to_owned();
+        input.model.context_window = Some(1_048_576);
+        let (plan, document) = build(&input).unwrap();
+        assert_eq!(document["env"]["CLAUDE_CODE_MAX_CONTEXT_TOKENS"], "300000");
+        assert_eq!(document["env"]["DISABLE_COMPACT"], "1");
+        assert_eq!(document["env"]["ANTHROPIC_MODEL"], id);
+        assert!(
+            !plan
+                .changes
+                .iter()
+                .any(|change| change.key_path == "env.CLAUDE_CODE_MAX_CONTEXT_TOKENS")
+        );
+        assert!(
+            plan.notices
+                .iter()
+                .any(|notice| notice.code == NoticeCode::ContextWindowNotMapped)
+        );
+    }
+}
+
+#[test]
+fn nonpositive_context_is_refused_before_reading_the_target() {
+    let fixture = Fixture::new();
+    fs::create_dir(fixture.root().join("settings.json")).unwrap();
+    for tokens in [0, -1] {
+        let mut input = fixture.input(ProviderKind::DeepSeek, DEEPSEEK_BASE);
+        input.model.context_window = Some(tokens);
+        assert_eq!(
+            plan_claude_code_settings(&input).unwrap_err(),
+            PlanError::InvalidRequest
+        );
+    }
+}
+
+/// Add an explicit model declaration without choosing its declared default.
+fn declare_efforts(input: &mut ClaudeCodePlanInput) {
+    input.model.thinking_supported = true;
+    input.model.thinking_effort = Some(ThinkingEffort::Listed {
+        levels: vec![
+            EffortLevel::Low,
+            EffortLevel::Medium,
+            EffortLevel::High,
+            EffortLevel::XHigh,
+            EffortLevel::Max,
+        ],
+        default_level: Some(EffortLevel::High),
+    });
+}
+
+#[test]
+fn an_explicit_effort_uses_the_environment_channel_including_max() {
+    let fixture = Fixture::new();
+    fixture.settings(r#"{"env":{"CLAUDE_CODE_EFFORT_LEVEL":"high","MAX_THINKING_TOKENS":"4096"},"modelSettings":{"unowned":{"effortLevel":"low"}}}"#);
+    let mut input = fixture.input(ProviderKind::DeepSeek, DEEPSEEK_BASE);
+    declare_efforts(&mut input);
+    for level in [
+        EffortLevel::Low,
+        EffortLevel::Medium,
+        EffortLevel::High,
+        EffortLevel::XHigh,
+        EffortLevel::Max,
+    ] {
+        input.selected_effort = Some(level);
+        let (plan, document) = build(&input).unwrap();
+        assert_eq!(document["env"]["CLAUDE_CODE_EFFORT_LEVEL"], level.as_str());
+        assert_eq!(document["env"]["MAX_THINKING_TOKENS"], "4096");
+        assert_eq!(document["modelSettings"]["unowned"]["effortLevel"], "low");
+        let write = plan
+            .changes
+            .iter()
+            .find(|change| change.key_path == effort::KEY)
+            .unwrap();
+        assert_eq!(write.before.as_deref(), Some("high"));
+        assert_eq!(write.after, level.as_str());
+        assert_eq!(
+            reviewed_effort(&serde_json::to_value(&plan).unwrap()),
+            Ok(Some(level))
+        );
+    }
+}
+
+#[test]
+fn leaving_effort_unset_preserves_native_settings_not_the_declared_default() {
+    let fixture = Fixture::new();
+    fixture.settings(r#"{"env":{"CLAUDE_CODE_EFFORT_LEVEL":"low"}}"#);
+    let mut input = fixture.input(ProviderKind::DeepSeek, DEEPSEEK_BASE);
+    declare_efforts(&mut input);
+    let (plan, document) = build(&input).unwrap();
+    assert_eq!(document["env"]["CLAUDE_CODE_EFFORT_LEVEL"], "low");
+    assert!(
+        !plan
+            .changes
+            .iter()
+            .any(|change| change.key_path == effort::KEY)
+    );
+    assert_eq!(
+        reviewed_effort(&serde_json::to_value(&plan).unwrap()),
+        Ok(None)
+    );
+}
+
+#[test]
+fn effort_selection_requires_an_explicit_supported_intersection() {
+    let fixture = Fixture::new();
+    let mut input = fixture.input(ProviderKind::DeepSeek, DEEPSEEK_BASE);
+    input.selected_effort = Some(EffortLevel::Max);
+    for declaration in [
+        None,
+        Some(ThinkingEffort::Any {
+            default_level: Some(EffortLevel::Max),
+        }),
+        Some(ThinkingEffort::Listed {
+            levels: vec![],
+            default_level: None,
+        }),
+        Some(ThinkingEffort::Listed {
+            levels: vec![EffortLevel::Low],
+            default_level: None,
+        }),
+    ] {
+        input.model.thinking_supported = true;
+        input.model.thinking_effort = declaration;
+        assert_eq!(
+            plan_claude_code_settings(&input).unwrap_err(),
+            PlanError::InvalidRequest
+        );
+        input.selected_effort = None;
+        assert!(plan_claude_code_settings(&input).is_ok());
+        input.selected_effort = Some(EffortLevel::Max);
+    }
+    declare_efforts(&mut input);
+    input.model.thinking_supported = false;
+    assert_eq!(
+        plan_claude_code_settings(&input).unwrap_err(),
+        PlanError::InvalidRequest
+    );
+    input.model.thinking_supported = true;
+    input.model.thinking_effort = Some(ThinkingEffort::Listed {
+        levels: vec![EffortLevel::Minimal, EffortLevel::Off],
+        default_level: None,
+    });
+    for level in [EffortLevel::Minimal, EffortLevel::Off] {
+        input.selected_effort = Some(level);
+        assert_eq!(
+            plan_claude_code_settings(&input).unwrap_err(),
+            PlanError::InvalidRequest
+        );
+    }
+}
+
+#[test]
+fn effort_selection_cannot_be_reused_for_another_provider_or_model() {
+    let fixture = Fixture::new();
+    for (kind, base, id) in [
+        (ProviderKind::OpenRouter, OPENROUTER_BASE, "deepseek-flash"),
+        (ProviderKind::DeepSeek, DEEPSEEK_BASE, "deepseek-flash[1m]"),
+    ] {
+        let mut input = fixture.input(kind, base);
+        input.model.id = id.into();
+        declare_efforts(&mut input);
+        input.selected_effort = Some(EffortLevel::Max);
+        assert_eq!(
+            plan_claude_code_settings(&input).unwrap_err(),
+            PlanError::InvalidRequest
+        );
+    }
+}
+
+#[test]
+fn reviewed_effort_refuses_unknown_and_duplicate_choices() {
+    assert_eq!(reviewed_effort(&json!({})), Err(PlanError::InvalidRequest));
+    for value in [json!("ultracode"), json!(123), Value::Null] {
+        assert_eq!(
+            reviewed_effort(&json!({"changes":[{"keyPath":effort::KEY,"after":value}]})),
+            Err(PlanError::InvalidRequest)
+        );
+    }
+    assert_eq!(
+        reviewed_effort(
+            &json!({"changes":[{"keyPath":effort::KEY,"after":"low"},{"keyPath":effort::KEY,"after":"high"}]})
+        ),
+        Err(PlanError::InvalidRequest)
+    );
+    let reviewed = json!({"targetPath":"/tmp/example/settings.json","targetDigest":null,"providerRevision":1,"modelContentDigest":MODEL_DIGEST,"selectedEffort":"ultracode"});
+    assert!(serde_json::from_value::<ReviewedPlan>(reviewed).is_err());
 }
 
 #[test]

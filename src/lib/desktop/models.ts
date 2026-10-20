@@ -610,7 +610,13 @@ export async function countProviderModels(): Promise<ProviderModelCountResult> {
     return { kind: "desktop", count: { total } };
 }
 
-function validateSnapshot(value: unknown, input: ModelIdentity): ModelSnapshot {
+/** Validate an untrusted model snapshot for its exact binding.
+ * Shared by model editing and Agent starting-preference IPC; failures retain no payload.
+ */
+export function validateModelSnapshot(
+    value: unknown,
+    input: ModelIdentity,
+): ModelSnapshot {
     const data = object(value, ["model", "contentDigest"]);
     const model = validateModel(data["model"], input.providerId);
     const contentDigest = data["contentDigest"];
@@ -628,7 +634,7 @@ export async function getProviderModelSnapshot(
     input: ModelIdentity,
 ): Promise<ModelSnapshot> {
     requireDesktop();
-    return validateSnapshot(
+    return validateModelSnapshot(
         await call("get_provider_model_snapshot", { request: input }),
         input,
     );
@@ -642,7 +648,7 @@ export async function updateProviderModelEdit(
     input: UpdateModelEditInput,
 ): Promise<ModelSnapshot> {
     requireDesktop();
-    const snapshot = validateSnapshot(
+    const snapshot = validateModelSnapshot(
         await call("update_provider_model_edit", { request: input }),
         input,
     );

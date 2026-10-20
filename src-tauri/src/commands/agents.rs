@@ -75,6 +75,7 @@ pub(crate) async fn plan_claude_code_settings(
     app: tauri::AppHandle,
     provider_id: String,
     model_id: String,
+    selected_effort: Option<crate::model_catalog::EffortLevel>,
 ) -> Result<ConfigPlan, PlanError> {
     let environment = environment(&app).map_err(|()| PlanError::LocationUnavailable)?;
     let (config_root, directory_source) = agents::claude_config_root(&environment);
@@ -109,10 +110,8 @@ pub(crate) async fn plan_claude_code_settings(
                     base_url: record.base_url,
                     revision: record.revision,
                 },
-                model: ModelFacts {
-                    id: snapshot.model.model_id,
-                    content_digest: snapshot.content_digest,
-                },
+                model: ModelFacts::from_snapshot(&snapshot),
+                selected_effort,
             };
             agents::plan_claude_code_settings(&input)
         })
@@ -175,10 +174,8 @@ pub(crate) async fn apply_claude_code_settings(
                             base_url: record.base_url,
                             revision: record.revision,
                         },
-                        model: ModelFacts {
-                            id: snapshot.model.model_id,
-                            content_digest: snapshot.content_digest,
-                        },
+                        model: ModelFacts::from_snapshot(&snapshot),
+                        selected_effort: input.reviewed.selected_effort,
                     },
                     reviewed: input.reviewed,
                     backups,

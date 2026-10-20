@@ -513,6 +513,21 @@ const MIGRATIONS: &[Migration] = &[
         ) STRICT, WITHOUT ROWID;
         INSERT INTO config_version(id, state) SELECT id, 'legacy' FROM config_operation;",
     },
+    Migration {
+        version: 26,
+        // This is a reusable UI starting choice, not a native model namespace.
+        // Retain a row when clearing effort so save-and-clear cannot hide a
+        // concurrent edit from a window that still holds the earlier revision.
+        sql: "CREATE TABLE claude_effort_preference (
+            provider_id TEXT NOT NULL,
+            model_id TEXT NOT NULL,
+            revision TEXT NOT NULL CHECK(length(revision)=32 AND revision NOT GLOB '*[^0-9a-f]*'),
+            effort TEXT CHECK(effort IN ('low','medium','high','xhigh','max')),
+            PRIMARY KEY(provider_id, model_id),
+            FOREIGN KEY(provider_id, model_id)
+                REFERENCES provider_model(provider_id, model_id) ON DELETE CASCADE
+        ) STRICT, WITHOUT ROWID;",
+    },
 ];
 
 /// Errors from opening or migrating the private database.

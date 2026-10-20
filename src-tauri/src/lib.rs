@@ -82,6 +82,8 @@ pub fn run() {
             commands::agents::discover_agents,
             commands::agents::probe_agent_version,
             commands::agents::plan_claude_code_settings,
+            commands::claude_preference::get_claude_effort_preference,
+            commands::claude_preference::save_claude_effort_preference,
             commands::agents::apply_claude_code_settings,
             commands::pi::plan_pi_settings,
             commands::grok::plan_grok_settings,

@@ -26,8 +26,26 @@ import {
     type ProviderPage,
     type ProviderRecord,
 } from "../../lib/desktop/providers";
-import { fieldSelectValue, setFieldSelectValue } from "../../test/fieldSelect";
+import {
+    fieldSelectOptionValues,
+    fieldSelectValue,
+    setFieldSelectValue,
+} from "../../test/fieldSelect";
 import { ConfigPreview } from "./ConfigPreview";
+import { effortPreferenceFixture } from "../../test/claudePreference";
+import {
+    getClaudeEffortPreference,
+    saveClaudeEffortPreference,
+    ClaudePreferenceError,
+    type ClaudeEffortPreference,
+} from "../../lib/desktop/claudePreference";
+vi.mock(import("../../lib/desktop/claudePreference"), async (original) => ({
+    ...(await original()),
+    getClaudeEffortPreference: vi.fn(),
+    saveClaudeEffortPreference: vi.fn(),
+}));
+const readPreference = vi.mocked(getClaudeEffortPreference);
+const rememberPreference = vi.mocked(saveClaudeEffortPreference);
 import { readModelConfigurationPreview } from "../../lib/desktop/configurationPreview";
 vi.mock(import("../../lib/desktop/configurationPreview"), () => ({
     readModelConfigurationPreview: vi.fn(),
@@ -247,6 +265,28 @@ beforeEach(() => {
     loadModels
         .mockReset()
         .mockResolvedValue(modelsPage([row(deepseek.id, FLASH)]));
+    readPreference
+        .mockReset()
+        .mockImplementation(async ({ providerId, modelId }) => {
+            // The rendered model selection comes from this completed list request.
+            const result =
+                loadModels.mock.results[loadModels.mock.results.length - 1];
+            if (result?.type !== "return")
+                throw new ClaudePreferenceError("read_failed");
+            const page = await result.value;
+            if (page.kind === "preview") return { kind: "preview" };
+            const model = page.page.items.find(
+                (item) =>
+                    item.providerId === providerId && item.modelId === modelId,
+            );
+            if (model === undefined)
+                throw new ClaudePreferenceError("not_found");
+            return {
+                kind: "desktop",
+                preference: effortPreferenceFixture(model),
+            };
+        });
+    rememberPreference.mockReset();
     buildPlan.mockReset().mockResolvedValue({ kind: "desktop", plan });
     writePlan.mockReset();
 });
@@ -271,7 +311,7 @@ async function chooseAndPreview(modelId = FLASH): Promise<void> {
         screen.getByRole("button", { name: "Preview changes" }),
     );
     await waitFor(() => {
-        expect(buildPlan).toHaveBeenCalledWith(deepseek.id, modelId);
+        expect(buildPlan).toHaveBeenCalledWith(deepseek.id, modelId, null);
     });
 }
 
@@ -327,6 +367,507 @@ test("previews the chosen pair and shows what would change", async () => {
     expect(
         screen.getByText(/is overridden by the environment variable/u),
     ).toBeTruthy();
+});
+
+test("reviews a declared context change and applies the same model-bound plan", async () => {
+    const contextPlan: ClaudeCodePlan = {
+        ...plan,
+        changes: [
+            ...plan.changes,
+            {
+                keyPath: "env.CLAUDE_CODE_MAX_CONTEXT_TOKENS",
+                before: "200000",
+                after: "1048576",
+                secret: false,
+            },
+        ],
+    };
+    buildPlan.mockResolvedValue({ kind: "desktop", plan: contextPlan });
+    writePlan.mockResolvedValue(writtenResult);
+    await mount();
+    await chooseAndPreview();
+    const field = await screen.findByText("env.CLAUDE_CODE_MAX_CONTEXT_TOKENS");
+    expect(field.closest("li")?.textContent).toContain("200000");
+    expect(field.closest("li")?.textContent).toContain("1048576");
+    await userEvent.click(
+        screen.getByRole("button", { name: "Apply these settings" }),
+    );
+    await waitFor(() => {
+        expect(writePlan).toHaveBeenCalledWith(deepseek.id, FLASH, {
+            targetPath: contextPlan.target.path,
+            targetDigest: contextPlan.target.contentDigest,
+            providerRevision: contextPlan.source.providerRevision,
+            modelContentDigest: contextPlan.source.modelContentDigest,
+        });
+    });
+});
+
+test("keeps an unmapped model selectable and explains that its native window is preserved", async () => {
+    buildPlan.mockResolvedValue({
+        kind: "desktop",
+        plan: {
+            ...plan,
+            notices: [{ code: "contextWindowNotMapped", detail: null }],
+        },
+    });
+    await mount();
+    await chooseAndPreview();
+    expect(
+        await screen.findByText(
+            /existing window declaration and compaction settings are left unchanged/u,
+        ),
+    ).toBeTruthy();
+    expect(screen.queryByText("env.CLAUDE_CODE_MAX_CONTEXT_TOKENS")).toBeNull();
+    expect(
+        screen
+            .getByRole("button", { name: "Apply these settings" })
+            .getAttribute("aria-disabled"),
+    ).toBe("false");
+});
+
+function reasoningRow(providerId = deepseek.id): ProviderModel {
+    return {
+        ...row(providerId, FLASH),
+        capabilityOverrides: {
+            thinking: "supported",
+            imageInput: null,
+            toolCalls: null,
+        },
+        thinkingEffort: {
+            kind: "listed",
+            levels: ["none", "minimal", "low", "high", "max"],
+            defaultLevel: "high",
+        },
+    };
+}
+
+function planWithEffort(level: "low" | "max"): ClaudeCodePlan {
+    return {
+        ...plan,
+        changes: [
+            ...plan.changes,
+            {
+                keyPath: "env.CLAUDE_CODE_EFFORT_LEVEL",
+                before: "high",
+                after: level,
+                secret: false,
+            },
+        ],
+    };
+}
+
+test("chooses only a declared native effort, clears a replaced preview and applies its reviewed choice", async () => {
+    loadModels.mockResolvedValue(modelsPage([reasoningRow()]));
+    buildPlan.mockResolvedValue({
+        kind: "desktop",
+        plan: planWithEffort("max"),
+    });
+    writePlan.mockResolvedValue(writtenResult);
+    await mount();
+    await setFieldSelectValue(
+        await screen.findByRole("combobox", { name: "Model" }),
+        FLASH,
+    );
+    const effort = await screen.findByRole("combobox", {
+        name: "Reasoning effort",
+    });
+    // A model default is metadata, not permission to choose for the user.
+    expect(fieldSelectValue(effort)).toBe("");
+    expect(await fieldSelectOptionValues(effort)).toEqual([
+        "",
+        "low",
+        "high",
+        "max",
+    ]);
+    await setFieldSelectValue(effort, "max");
+    await userEvent.click(
+        screen.getByRole("button", { name: "Preview changes" }),
+    );
+    await screen.findByText("env.CLAUDE_CODE_EFFORT_LEVEL");
+    expect(buildPlan).toHaveBeenLastCalledWith(deepseek.id, FLASH, "max");
+    await setFieldSelectValue(effort, "low");
+    expect(
+        screen.queryByRole("button", { name: "Apply these settings" }),
+    ).toBeNull();
+    buildPlan.mockResolvedValue({
+        kind: "desktop",
+        plan: planWithEffort("low"),
+    });
+    await userEvent.click(
+        screen.getByRole("button", { name: "Preview changes" }),
+    );
+    await screen.findByText("env.CLAUDE_CODE_EFFORT_LEVEL");
+    await userEvent.click(
+        screen.getByRole("button", { name: "Apply these settings" }),
+    );
+    await waitFor(() => {
+        expect(writePlan).toHaveBeenCalledWith(
+            deepseek.id,
+            FLASH,
+            expect.objectContaining({ selectedEffort: "low" }),
+        );
+    });
+});
+
+test("changing provider or model clears effort drafts even for the same upstream ID", async () => {
+    const second = {
+        ...deepseek,
+        id: openrouter.id,
+        displayName: "DeepSeek second account",
+    };
+    loadProviders.mockResolvedValue(providersPage([deepseek, second]));
+    loadModels.mockImplementation(({ providerId }) =>
+        Promise.resolve(
+            modelsPage([
+                reasoningRow(providerId),
+                { ...reasoningRow(providerId), modelId: FLASH + "[1m]" },
+            ]),
+        ),
+    );
+    await mount();
+    await setFieldSelectValue(
+        await screen.findByRole("combobox", { name: "Model" }),
+        FLASH,
+    );
+    await setFieldSelectValue(
+        await screen.findByRole("combobox", { name: "Reasoning effort" }),
+        "max",
+    );
+    await setFieldSelectValue(
+        screen.getByRole("combobox", { name: "Provider" }),
+        second.id,
+    );
+    await waitFor(() => {
+        expect(loadModels).toHaveBeenLastCalledWith(
+            expect.objectContaining({ providerId: second.id }),
+        );
+    });
+    await setFieldSelectValue(
+        await screen.findByRole("combobox", { name: "Model" }),
+        FLASH,
+    );
+    expect(
+        fieldSelectValue(
+            await screen.findByRole("combobox", { name: "Reasoning effort" }),
+        ),
+    ).toBe("");
+    await setFieldSelectValue(
+        screen.getByRole("combobox", { name: "Reasoning effort" }),
+        "max",
+    );
+    await setFieldSelectValue(
+        screen.getByRole("combobox", { name: "Model" }),
+        FLASH + "[1m]",
+    );
+    expect(
+        fieldSelectValue(
+            screen.getByRole("combobox", { name: "Reasoning effort" }),
+        ),
+    ).toBe("");
+    await setFieldSelectValue(
+        screen.getByRole("combobox", { name: "Model" }),
+        FLASH,
+    );
+    expect(
+        fieldSelectValue(
+            screen.getByRole("combobox", { name: "Reasoning effort" }),
+        ),
+    ).toBe("");
+    await userEvent.click(
+        screen.getByRole("button", { name: "Preview changes" }),
+    );
+    await waitFor(() => {
+        expect(buildPlan).toHaveBeenLastCalledWith(second.id, FLASH, null);
+    });
+});
+
+const modelsWithoutEffortChoices: { name: string; model: ProviderModel }[] = [
+    {
+        name: "unknown reasoning with listed efforts",
+        model: {
+            ...row(deepseek.id, FLASH),
+            thinkingEffort: reasoningRow().thinkingEffort,
+        },
+    },
+    { name: "unknown metadata", model: row(deepseek.id, FLASH) },
+    {
+        name: "any declaration",
+        model: {
+            ...reasoningRow(),
+            thinkingEffort: { kind: "any", defaultLevel: "max" },
+        },
+    },
+    {
+        name: "empty declaration",
+        model: {
+            ...reasoningRow(),
+            thinkingEffort: { kind: "listed", levels: [], defaultLevel: null },
+        },
+    },
+    {
+        name: "incompatible levels",
+        model: {
+            ...reasoningRow(),
+            thinkingEffort: {
+                kind: "listed",
+                levels: ["minimal", "none"],
+                defaultLevel: "none",
+            },
+        },
+    },
+    {
+        name: "unsupported reasoning",
+        model: {
+            ...reasoningRow(),
+            capabilityOverrides: {
+                thinking: "unsupported",
+                imageInput: null,
+                toolCalls: null,
+            },
+        },
+    },
+];
+
+test.each(modelsWithoutEffortChoices)(
+    "does not invent choices for $name",
+    async ({ model }) => {
+        loadModels.mockResolvedValue(modelsPage([model]));
+        await mount();
+        await setFieldSelectValue(
+            await screen.findByRole("combobox", { name: "Model" }),
+            FLASH,
+        );
+        const effort = await screen.findByRole("combobox", {
+            name: "Reasoning effort",
+        });
+        expect(await fieldSelectOptionValues(effort)).toEqual([""]);
+    },
+);
+
+test("remembering changes only the starting preference, locks the binding while saving and reloads it after reopening", async () => {
+    const model = reasoningRow();
+    const before = effortPreferenceFixture(model);
+    const saved = {
+        ...before,
+        selectedEffort: "max" as const,
+        revision: "a".repeat(32),
+    };
+    let complete: (preference: ClaudeEffortPreference) => void = () => {
+        throw new Error("save not started");
+    };
+    rememberPreference.mockReturnValue(
+        new Promise((resolve) => {
+            complete = resolve;
+        }),
+    );
+    loadModels.mockResolvedValue(modelsPage([model]));
+    buildPlan.mockResolvedValue({
+        kind: "desktop",
+        plan: planWithEffort("max"),
+    });
+    await mount();
+    await setFieldSelectValue(
+        await screen.findByRole("combobox", { name: "Model" }),
+        FLASH,
+    );
+    await setFieldSelectValue(
+        await screen.findByRole("combobox", { name: "Reasoning effort" }),
+        "max",
+    );
+    await userEvent.click(
+        screen.getByRole("button", { name: "Preview changes" }),
+    );
+    await screen.findByText("env.CLAUDE_CODE_EFFORT_LEVEL");
+    await userEvent.dblClick(
+        screen.getByRole("button", { name: "Remember choice" }),
+    );
+    expect(
+        screen.queryByRole("button", { name: "Apply these settings" }),
+    ).toBeNull();
+    expect(
+        screen
+            .getByRole("combobox", { name: "Provider" })
+            .getAttribute("aria-disabled"),
+    ).toBe("true");
+    expect(
+        screen
+            .getByRole("combobox", { name: "Model" })
+            .getAttribute("aria-disabled"),
+    ).toBe("true");
+    expect(
+        screen
+            .getByRole("button", { name: "Preview changes" })
+            .getAttribute("aria-disabled"),
+    ).toBe("true");
+    expect(rememberPreference).toHaveBeenCalledTimes(1);
+    expect(rememberPreference).toHaveBeenCalledWith({
+        providerId: deepseek.id,
+        modelId: FLASH,
+        expectedModelDigest: before.snapshot.contentDigest,
+        expectedRevision: null,
+        selectedEffort: "max",
+    });
+    complete(saved);
+    await screen.findByText(
+        "Choice remembered. Agent configuration has not changed.",
+    );
+    expect(writePlan).not.toHaveBeenCalled();
+    cleanup();
+    readPreference.mockResolvedValue({ kind: "desktop", preference: saved });
+    await mount();
+    await setFieldSelectValue(
+        await screen.findByRole("combobox", { name: "Model" }),
+        FLASH,
+    );
+    expect(
+        fieldSelectValue(
+            await screen.findByRole("combobox", { name: "Reasoning effort" }),
+        ),
+    ).toBe("max");
+    await userEvent.click(
+        screen.getByRole("button", { name: "Preview changes" }),
+    );
+    await waitFor(() => {
+        expect(buildPlan).toHaveBeenLastCalledWith(deepseek.id, FLASH, "max");
+    });
+    expect(rememberPreference).toHaveBeenCalledTimes(1);
+    expect(writePlan).not.toHaveBeenCalled();
+});
+
+test("failed preference reads block preview and offer reload instead of inventing inheritance", async () => {
+    readPreference.mockRejectedValue(new ClaudePreferenceError("read_failed"));
+    await mount();
+    await setFieldSelectValue(
+        await screen.findByRole("combobox", { name: "Model" }),
+        FLASH,
+    );
+    await screen.findByText(
+        "The remembered effort could not be read. Reload the saved choice.",
+    );
+    await userEvent.click(
+        screen.getByRole("button", { name: "Preview changes" }),
+    );
+    expect(buildPlan).not.toHaveBeenCalled();
+    readPreference.mockResolvedValue({
+        kind: "desktop",
+        preference: effortPreferenceFixture(reasoningRow()),
+    });
+    await userEvent.click(
+        screen.getByRole("button", { name: "Reload saved choice" }),
+    );
+    expect(
+        fieldSelectValue(
+            await screen.findByRole("combobox", { name: "Reasoning effort" }),
+        ),
+    ).toBe("");
+    await userEvent.click(
+        screen.getByRole("button", { name: "Preview changes" }),
+    );
+    await waitFor(() => {
+        expect(buildPlan).toHaveBeenCalledWith(deepseek.id, FLASH, null);
+    });
+});
+
+test("an obsolete remembered effort is visible and cannot preview until explicitly changed", async () => {
+    loadModels.mockResolvedValue(modelsPage([reasoningRow()]));
+    const stale = {
+        ...effortPreferenceFixture({
+            ...reasoningRow(),
+            thinkingEffort: {
+                kind: "listed",
+                levels: ["low"],
+                defaultLevel: "low",
+            },
+        }),
+        selectedEffort: "max" as const,
+        revision: "a".repeat(32),
+    };
+    readPreference.mockResolvedValue({ kind: "desktop", preference: stale });
+    rememberPreference.mockResolvedValue({
+        ...stale,
+        selectedEffort: null,
+        revision: "b".repeat(32),
+    });
+    await mount();
+    await setFieldSelectValue(
+        await screen.findByRole("combobox", { name: "Model" }),
+        FLASH,
+    );
+    const effort = await screen.findByRole("combobox", {
+        name: "Reasoning effort",
+    });
+    expect(effort.textContent).toContain("max (not mapped)");
+    await userEvent.click(
+        screen.getByRole("button", { name: "Preview changes" }),
+    );
+    expect(buildPlan).not.toHaveBeenCalled();
+    await setFieldSelectValue(effort, "");
+    await userEvent.click(
+        screen.getByRole("button", { name: "Remember choice" }),
+    );
+    await waitFor(() => {
+        expect(rememberPreference).toHaveBeenCalledWith(
+            expect.objectContaining({
+                expectedRevision: stale.revision,
+                selectedEffort: null,
+            }),
+        );
+    });
+    await screen.findByText(
+        "Choice remembered. Agent configuration has not changed.",
+    );
+    expect(writePlan).not.toHaveBeenCalled();
+});
+
+test("a preference conflict retains the draft and reload explicitly adopts the newer saved value", async () => {
+    loadModels.mockResolvedValue(modelsPage([reasoningRow()]));
+    rememberPreference.mockRejectedValue(
+        new ClaudePreferenceError("preference_changed"),
+    );
+    await mount();
+    await setFieldSelectValue(
+        await screen.findByRole("combobox", { name: "Model" }),
+        FLASH,
+    );
+    await setFieldSelectValue(
+        await screen.findByRole("combobox", { name: "Reasoning effort" }),
+        "max",
+    );
+    await userEvent.click(
+        screen.getByRole("button", { name: "Remember choice" }),
+    );
+    await screen.findByText(
+        "Another save changed this preference. Reload the saved choice before editing again.",
+    );
+    expect(
+        fieldSelectValue(
+            screen.getByRole("combobox", { name: "Reasoning effort" }),
+        ),
+    ).toBe("max");
+    expect(
+        screen
+            .getByRole("button", { name: "Remember choice" })
+            .getAttribute("aria-disabled"),
+    ).toBe("true");
+    readPreference.mockResolvedValue({
+        kind: "desktop",
+        preference: {
+            ...effortPreferenceFixture(reasoningRow()),
+            selectedEffort: "low",
+            revision: "b".repeat(32),
+        },
+    });
+    await userEvent.click(
+        screen.getByRole("button", { name: "Reload saved choice" }),
+    );
+    await waitFor(() => {
+        expect(
+            fieldSelectValue(
+                screen.getByRole("combobox", { name: "Reasoning effort" }),
+            ),
+        ).toBe("low");
+    });
+    expect(writePlan).not.toHaveBeenCalled();
 });
 
 test("shows why a combination was refused", async () => {

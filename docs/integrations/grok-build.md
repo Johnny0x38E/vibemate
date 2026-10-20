@@ -49,6 +49,15 @@ Grok 还发现 Claude/Cursor 兼容资源；原生 config.toml 优先于兼容 M
 通过来源信息区分自己管理的条目、兼容来源、项目覆盖与策略固定项，不替用户关闭
 整个兼容层。`inspect --json` 是发现报告，不是连接成功证明。
 
+## P24.a 参数核实更新（2026-10-20）
+
+本机现为 `grok 1.0.62 (1474f9cbdd91)`，`.metadata_version` 同为 `1.0.62`。
+随版本 `26-config-reference.md` 已将 `supports_reasoning_effort` 和单值
+`reasoning_effort` 标为弃用，推荐 `reasoning_efforts`。在线简表仍列旧字段，不能据此
+新增弃用字段写入。下文 1.0.60 的努力档位说明保留为旧证据；新数组项、默认与持久选用
+规则仍需补验，见 [P24.a 逐字段矩阵](model-parameter-mapping.md)。现有适配器继续保留
+用户 effort 字段，不把此文档更新当作参数功能交付。
+
 ## 模型与认证
 
 [配置参考](https://docs.x.ai/build/settings/reference)声明自定义 `[model.<alias>]`：

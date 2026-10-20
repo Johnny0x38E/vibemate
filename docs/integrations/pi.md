@@ -2,6 +2,13 @@
 
 最新核实：2026-10-16，当前托管安装为 Pi 1.3.0；本机平台为 macOS Apple Silicon。P02 的 1.1.0 历史证据保留在下文，配置写入适配以本节的现行规则为准。
 
+## P24.a 参数核实更新（2026-10-20）
+
+本机仍为 1.3.0。已核对模型/settings schema、启动档位选择与 OpenAI 协议请求构建：
+现有适配器已写入声明的 `contextWindow/maxTokens/reasoning/input`，尚未交付局部使用设置编辑。
+OpenAI sampling 对象在请求尾部合并，不能据此绕过容量校验；Messages 不支持这些 sampling 对象。
+档位可选集、partial map/null 与具体 Provider 值域仍需补验，见 [P24.a 逐字段矩阵](model-parameter-mapping.md)。
+
 ## Pi 1.x 模型配置
 
 重新核对 [官方模型文档](https://pi.dev/docs/latest/models)、[配置文档](https://pi.dev/docs/latest/configuration) 与已安装 1.2.0、1.3.0 包中的 `model-config.js`、`provider-composer.js`、`resolve-config-value.js`、`settings-manager.js` 和 `model-resolver.js`。

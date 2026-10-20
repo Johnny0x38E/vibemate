@@ -34,6 +34,39 @@ impl Drop for TestDirectory {
 }
 
 #[test]
+fn effort_preference_migration_preserves_models_and_starts_without_an_inferred_choice() {
+    let directory = TestDirectory::new("effort-preference-upgrade");
+    let path = directory.path.join(DATABASE_FILE_NAME);
+    {
+        let old = Storage::open_file(&path, &MIGRATIONS[..25]).unwrap();
+        old.lock().unwrap().execute_batch("INSERT INTO provider_instance VALUES('0123456789abcdef0123456789abcdef','deepseek','Work','https://api.deepseek.com','chat_completions',1,1,1);
+            INSERT INTO provider_model(provider_id,model_id,source,selected,thinking_effort,created_at,updated_at)
+            VALUES('0123456789abcdef0123456789abcdef','deepseek-flash','manual',1,'{\"kind\":\"listed\",\"levels\":[\"high\"],\"defaultLevel\":\"high\"}',1,1);").unwrap();
+    }
+    let storage = Storage::open_in_directory(&directory.path).unwrap();
+    assert_eq!(storage.schema_version().unwrap(), latest_schema_version());
+    let connection = storage.lock().unwrap();
+    assert_eq!(
+        connection
+            .query_row("SELECT count(*) FROM claude_effort_preference", [], |row| {
+                row.get::<_, u32>(0)
+            })
+            .unwrap(),
+        0
+    );
+    assert_eq!(
+        connection
+            .query_row("SELECT thinking_effort FROM provider_model", [], |row| {
+                row.get::<_, String>(0)
+            })
+            .unwrap(),
+        r#"{"kind":"listed","levels":["high"],"defaultLevel":"high"}"#
+    );
+    assert!(connection.execute("INSERT INTO claude_effort_preference VALUES('0123456789abcdef0123456789abcdef','missing-model','0123456789abcdef0123456789abcdef','high')", []).is_err());
+    assert!(connection.execute("INSERT INTO claude_effort_preference VALUES('0123456789abcdef0123456789abcdef','deepseek-flash','0123456789abcdef0123456789abcdef','none')", []).is_err());
+}
+
+#[test]
 fn version_migration_keeps_old_journals_and_does_not_invent_snapshot_bytes() {
     let directory = TestDirectory::new("independent-versions-upgrade");
     let path = directory.path.join(DATABASE_FILE_NAME);

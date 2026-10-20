@@ -109,10 +109,8 @@ pub(crate) fn read_preview(
                     base_url: provider.base_url.clone(),
                     revision: provider.revision,
                 },
-                model: claude_code::ModelFacts {
-                    id: model.model.model_id.clone(),
-                    content_digest: model.content_digest.clone(),
-                },
+                model: claude_code::ModelFacts::from_snapshot(model),
+                selected_effort: claude_code::reviewed_effort(&input.reviewed).map_err(stale)?,
             })
             .map_err(stale)?;
             check_plan(&plan, input, 1)?;

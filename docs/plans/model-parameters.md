@@ -1,7 +1,9 @@
 # Model metadata and per-Agent request settings
 
-This plan covers model information that vibemate does not write into Agent
-configuration yet, and the rules that decide where each value belongs. Implemented
+This plan covers the remaining model information and request settings, and the
+rules that decide where each value belongs. Pi already writes declared context,
+maximum output, reasoning and input capability; Grok Build already writes declared
+context. Per-Agent request-setting editing is not delivered yet. Implemented
 model behavior is in [`../models.md`](../models.md); task status is in
 [`todo.md`](todo.md).
 
@@ -33,10 +35,101 @@ stored; unknown or unsupported settings are refused with a reason.
 per-request generation count. An Agent that cannot express a setting refuses it
 rather than assuming a passthrough.
 
+## Implementation order
+
+The maintainer decided on 2026-10-20 to reuse the existing integration research
+across minor Agent upgrades. A version change alone does not block implementation
+or require a full documentation survey. Recheck a specific contract when there is
+an observed conflict, a known deprecation or a failing behavior test. Unverified
+settings are not silently presented as supported.
+
+The first P24.b slice maps the saved context capacity for DeepSeek's documented
+`deepseek-flash` ID without `[1m]` to
+`env.CLAUDE_CODE_MAX_CONTEXT_TOKENS`. Missing capacity inherits the existing
+configuration. Other IDs keep their existing window and report that this slice
+cannot map them; compaction switches, model IDs and unrelated settings remain
+untouched. Plan, detailed preview and apply must use the same stored model facts,
+bind their digest, and preserve the normal snapshot/restore path. This slice does
+not add local overrides, effort selection or request output settings.
+
+This first slice passed mapping, skipped/invalid values, field preservation,
+stale model metadata, apply/restore, strict IPC and translated-notice tests,
+standard checks and an isolated macOS desktop preview/apply/restore. Current
+acceptance and remaining slices are recorded in `todo.md`; the third slice below
+adds an independently remembered starting choice. Additional effort/output
+options, real inference and other platforms remain outstanding.
+
+### Second slice: explicit Claude Code effort selection
+
+For the documented DeepSeek `deepseek-flash` binding, offer only an explicitly
+listed model effort that Claude Code can express (`low/medium/high/xhigh/max`),
+and require declared reasoning support. Unknown, `any`, empty and unsupported
+metadata do not invent choices. The model's declared default is displayed, not
+selected automatically. Other bindings retain their existing behavior.
+
+An optional selected effort belongs to the configuration request and is written
+to `env.CLAUDE_CODE_EFFORT_LEVEL`, including `max`. The apply approval carries the
+selection from the reviewed plan, and detailed previews rebuild that same choice.
+Changing the selection clears the visible preview; switching Provider/model clears
+the draft to prevent accidental reuse. Unset means **do not overwrite**: preserve
+existing Agent settings, not reset them to the model default. The UI explains
+that this native environment setting may affect other Claude Code models too.
+
+The second slice persists the choice in the applied native configuration and
+history, not as a separate remembered preference for every Provider/model pair.
+The third slice below adds independent starting preferences in vibemate, without
+claiming that a global native variable provides per-binding isolation.
+
+Cover unsupported/unknown/any efforts, metadata changes after preview, selection
+changes and switching, strict IPC, preservation, application and version restore.
+Use the usual frontend/Rust/build checks and an isolated synthetic-credential
+Tauri run; no model request is needed.
+
+### Third slice: remember a Claude Code effort preference
+
+Keep a non-secret starting choice in a Claude Code-specific SQLite table keyed
+by Provider instance ID and exact upstream model ID. It is not model capability
+metadata or a native per-model namespace. An explicit **Remember choice** action
+saves it; selecting, previewing, applying or restoring native configuration does
+not silently change it. Returning to a binding loads its saved draft. Config
+approval still binds the explicit draft, not a live preference lookup.
+
+A nullable effort means do not overwrite the native setting. Keep a fresh random
+revision even when clearing an existing preference, so a stale window cannot
+miss an intervening save-and-clear. Save compares both the preference revision
+and the current model content digest in one immediate transaction. Validate
+nonempty choices with the same adapter intersection as configuration planning.
+Read returns current model metadata with the preference in one SQLite snapshot.
+Missing rows do not write defaults; invalid data is an error, not inheritance.
+
+Use a composite foreign key to the stored model, with delete cascade. Removing
+a model or Provider removes its starting preference, without changing native
+configuration or retained history. Merely unselecting a retained model row does
+not change its preference. Do not extend these deletes into the broader P35
+native-configuration reference policy in this slice.
+
+The UI handles read/retry, save/failure/conflict and late replies after switching
+bindings. An obsolete saved effort is shown explicitly as unmapped; it is not
+silently downgraded or applied. The user can choose a supported effort or do not
+overwrite. Saving discards the visible plan and requires preview again; it never
+writes the Agent file or credentials. Preference changes in another window do
+not rewrite an already-approved explicit configuration request. Model changes
+still invalidate configuration approval through its existing digest.
+
+Cover migration, restart persistence, account/model separation, compare-and-swap
+races, save-and-clear, metadata changes, delete cascades, strict IPC and async UI
+races. Run the normal frontend/Rust/desktop checks and isolated desktop IPC;
+no real credentials or inference are needed. Task status stays only in `todo.md`.
+
 ## Evidence and gaps
 
-Only public documentation has been read; no credentials were used and no model
-endpoint was queried.
+The initial Provider evidence below came from public documentation. The
+[2026-10-20 Agent field matrix](../integrations/model-parameter-mapping.md) also
+checks installed Pi 1.3.0 schemas/implementation and Grok Build 1.0.62 bundled
+manuals, with Claude Code 2.1.304 official documentation. It records native fields,
+precedence, protocol restrictions and unresolved evidence. Existing evidence is
+used for implementation; remaining checks are handled per field rather than
+blocking every Agent on a fresh survey. No credentials were used and no model endpoint was queried.
 
 - [Command Code Provider API](https://commandcode.ai/docs/provider): three routes
   follow the OpenAI Chat, OpenAI Responses and Anthropic Messages schemas.
@@ -92,9 +185,11 @@ central model. An unset value does not override native behavior.
   context, maximum output, thinking levels and default/selected values. Recheck the
   installed model and settings schemas, keep the configuration isolated per
   Provider/model, and preserve user fields.
-- **Grok Build:** verify and implement `context_window`, `supports_reasoning_effort`,
-  `[[model.<alias>.reasoning_efforts]]` `value`/`default`, and the actual selected
-  effort and output-limit fields. Target the alias vibemate currently owns, not
+- **Grok Build:** preserve the existing `context_window` mapping and verify
+  `[[model.<alias>.reasoning_efforts]]` `value`/`default`, the actual selected
+  effort and output-limit fields. The installed 1.0.62 reference deprecates
+  `supports_reasoning_effort` and the single `reasoning_effort`; do not introduce
+  new writes to those deprecated fields. Target the alias vibemate currently owns, not
   another of the user's entries. Distinguish the effort table, its default and
   `[models].default_reasoning_effort`.
 - **Codex, OpenCode, Hermes:** read-only discovery only. A future write adapter

@@ -589,11 +589,15 @@ test("keyboard Enter submits both paths and locale switching preserves them with
         ]),
     });
     const { i18n } = await mount();
-    fireEvent.click(
-        await screen.findByRole("button", {
-            name: "Open Grok Build details",
-        }),
-    );
+    const openDetails = await screen.findByRole("button", {
+        name: "Open Grok Build details",
+    });
+    // The static row exists before the asynchronous discovery finishes. Wait
+    // for interaction readiness rather than clicking its intentionally blocked button.
+    await waitFor(() => {
+        expect(openDetails.getAttribute("aria-disabled")).toBe("false");
+    });
+    fireEvent.click(openDetails);
     await expandInstallPaths();
     await screen.findByRole("heading", { name: /Grok Build/u });
     const user = userEvent.setup();

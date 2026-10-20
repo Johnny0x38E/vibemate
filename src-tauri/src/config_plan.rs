@@ -81,6 +81,9 @@ pub enum NoticeCode {
     OverridesNotChecked,
     /// An existing `model` key is overridden by the planned `env` variable.
     ModelKeyOverridden,
+    /// Declared capacity has no verified window mapping in this adapter slice;
+    /// the existing native window and compaction settings are left untouched.
+    ContextWindowNotMapped,
     /// The planned inline key outranks an environment reference the entry already
     /// has, so the effective credential source changes. Grok Build documents
     /// `api_key` ahead of `env_key`; the preview keeps the other field untouched.
@@ -302,7 +305,18 @@ pub fn planned_changes(
         }
         let (key, parents) = segments.split_last().ok_or(PlanError::InvalidRequest)?;
         let parent = parent_object(document, parents)?;
-        let before = parent.get(*key).map(value_text);
+        // A plan crosses IPC even when the UI displays only its detailed diff.
+        // Mask the old key as well as the new one, including OpenRouter's
+        // literal empty API key (which clears a possibly nonempty old secret).
+        let redact_before = matches!(&write.value, PlannedValue::Credential)
+            || write.key_path == "env.ANTHROPIC_API_KEY";
+        let before = parent.get(*key).map(|value| {
+            if redact_before && value.as_str() != Some("") {
+                SECRET_PLACEHOLDER.to_owned()
+            } else {
+                value_text(value)
+            }
+        });
         let (stored, after, secret) = match &write.value {
             PlannedValue::Literal(text) => (Value::String(text.clone()), text.clone(), false),
             PlannedValue::Credential => (

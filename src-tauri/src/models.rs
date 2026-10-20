@@ -10,6 +10,7 @@ mod validation;
 
 pub use crate::model_error::ModelError;
 pub(crate) use crate::model_error::parse_provider_id;
+pub(crate) use edit::read_model_snapshot;
 pub use edit::{
     GetModelSnapshotRequest, ModelSnapshot, UpdateModelEditRequest, get_model_snapshot,
     update_model_edit,

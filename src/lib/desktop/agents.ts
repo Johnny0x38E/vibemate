@@ -257,6 +257,7 @@ export const PLAN_NOTICE_CODES = [
     "credentialFromStore",
     "overridesNotChecked",
     "modelKeyOverridden",
+    "contextWindowNotMapped",
     "envKeyOverridden",
     "providerLimited",
 ] as const;
@@ -266,7 +267,20 @@ export interface PlanNotice {
     code: PlanNoticeCode;
     detail: string | null;
 }
-/** Read-only Claude Code configuration plan; applying it is a later task. */
+/** Claude Code effort values accepted through its environment channel. */
+export const CLAUDE_EFFORT_LEVELS = [
+    "low",
+    "medium",
+    "high",
+    "xhigh",
+    "max",
+] as const;
+/** An explicit native effort choice, distinct from model capability metadata. */
+export type ClaudeEffortLevel = (typeof CLAUDE_EFFORT_LEVELS)[number];
+/** Native setting whose planned value binds the chosen effort to approval. */
+export const CLAUDE_EFFORT_KEY = "env.CLAUDE_CODE_EFFORT_LEVEL";
+
+/** Read-only Claude Code configuration plan. */
 export interface ClaudeCodePlan {
     agent: "claudeCode";
     target: PlanTargetFile;
@@ -467,6 +481,7 @@ function claudeCodePlan(value: unknown): ClaudeCodePlan {
 export async function planClaudeCodeSettings(
     providerId: string,
     modelId: string,
+    selectedEffort: ClaudeEffortLevel | null = null,
 ): Promise<ClaudeCodePlanResult> {
     if (!isTauri()) return { kind: "preview" };
     let value: unknown;
@@ -474,6 +489,7 @@ export async function planClaudeCodeSettings(
         value = await invoke<unknown>("plan_claude_code_settings", {
             providerId,
             modelId,
+            ...(selectedEffort === null ? {} : { selectedEffort }),
         });
     } catch (error: unknown) {
         throw new PlanRequestError(
@@ -481,7 +497,9 @@ export async function planClaudeCodeSettings(
                 "operation_failed",
         );
     }
-    return { kind: "desktop", plan: claudeCodePlan(value) };
+    const plan = claudeCodePlan(value);
+    if (selectedClaudeEffort(plan) !== selectedEffort) return planInvalid();
+    return { kind: "desktop", plan };
 }
 
 /** What one file of an apply step ended up as. */
@@ -561,6 +579,7 @@ export interface ReviewedPlanTokens {
     targetDigest: string | null;
     providerRevision: number;
     modelContentDigest: string;
+    selectedEffort?: ClaudeEffortLevel;
 }
 /** What one file of a settled apply step ended up as. */
 export interface ApplyStep {
@@ -662,13 +681,34 @@ export function appliedResult(value: unknown): ClaudeCodeApplied {
     };
 }
 
+/** Read only a known, typed setting from the reviewed plan, never a mutable UI draft.
+ * Reject duplicate, unknown or credential-shaped values instead of dropping them.
+ */
+export function selectedClaudeEffort(
+    plan: ClaudeCodePlan,
+): ClaudeEffortLevel | null {
+    const writes = plan.changes.filter(
+        (change) => change.keyPath === CLAUDE_EFFORT_KEY,
+    );
+    if (writes.length === 0) return null;
+    const write = writes[0];
+    const level = CLAUDE_EFFORT_LEVELS.find(
+        (candidate) => candidate === write?.after,
+    );
+    if (writes.length !== 1 || write?.secret !== false || level === undefined)
+        return planInvalid();
+    return level;
+}
+
 /** Build the tokens an apply call must send back from a validated plan. */
 export function reviewedPlanTokens(plan: ClaudeCodePlan): ReviewedPlanTokens {
+    const selectedEffort = selectedClaudeEffort(plan);
     return {
         targetPath: plan.target.path,
         targetDigest: plan.target.contentDigest,
         providerRevision: plan.source.providerRevision,
         modelContentDigest: plan.source.modelContentDigest,
+        ...(selectedEffort === null ? {} : { selectedEffort }),
     };
 }
 

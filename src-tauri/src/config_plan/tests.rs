@@ -204,6 +204,35 @@ fn a_credential_write_shows_a_placeholder_and_marks_the_change() {
 }
 
 #[test]
+fn existing_credentials_are_masked_before_the_plan_crosses_ipc() {
+    let mut document = serde_json::json!({"env":{
+        "ANTHROPIC_AUTH_TOKEN":"synthetic-old-token",
+        "ANTHROPIC_API_KEY":"synthetic-old-direct-key"
+    }})
+    .as_object()
+    .unwrap()
+    .clone();
+    let changes = planned_changes(
+        &mut document,
+        &[
+            PlannedWrite {
+                key_path: "env.ANTHROPIC_AUTH_TOKEN",
+                value: PlannedValue::Credential,
+            },
+            literal("env.ANTHROPIC_API_KEY", ""),
+        ],
+    )
+    .unwrap();
+    assert_eq!(changes[0].before.as_deref(), Some(SECRET_PLACEHOLDER));
+    assert_eq!(changes[1].before.as_deref(), Some(SECRET_PLACEHOLDER));
+    assert_eq!(changes[1].after, "");
+    let payload = serde_json::to_string(&changes).unwrap();
+    assert!(!payload.contains("synthetic-old-token"));
+    assert!(!payload.contains("synthetic-old-direct-key"));
+    assert_eq!(document["env"]["ANTHROPIC_API_KEY"], "");
+}
+
+#[test]
 fn before_values_describe_existing_values() {
     let mut document = serde_json::json!({
         "env": { "ANTHROPIC_MODEL": "opus", "ANTHROPIC_API_KEY": "" },

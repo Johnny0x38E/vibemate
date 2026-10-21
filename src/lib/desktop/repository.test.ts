@@ -47,7 +47,7 @@ test("preview opens the fixed HTTPS repository with no opener access or desktop 
     const open = vi.spyOn(window, "open").mockReturnValue(null);
     await openProjectRepository();
     expect(open).toHaveBeenCalledExactlyOnceWith(
-        "https://github.com/Johnny0x38E/vibemate",
+        "https://github.com/johnny0x38e/vibemate",
         "_blank",
         "noopener,noreferrer",
     );

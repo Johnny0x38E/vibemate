@@ -613,7 +613,7 @@ and focus native buttons.
 
 `openProjectRepository()` calls a Rust command with no URL or executable input.
 Rust uses the [opener crate's API](https://docs.rs/tauri-plugin-opener/2.7.0/tauri_plugin_opener/fn.open_url.html)
-for the fixed `https://github.com/Johnny0x38E/vibemate` address. The opener plugin
+for the fixed `https://github.com/johnny0x38e/vibemate` address. The opener plugin
 is not registered and no generic opener IPC permissions are granted. Browser
 preview opens the same URL with `noopener,noreferrer`; private OS errors become
 bundled feedback. The icon is from [GitHub Octicons](https://github.com/primer/octicons/blob/main/icons/mark-github-16.svg).

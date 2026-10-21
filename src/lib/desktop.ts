@@ -70,7 +70,7 @@ export async function getAppInfo(): Promise<AppInfo | null> {
 export async function openProjectRepository(): Promise<void> {
     if (!isTauri()) {
         window.open(
-            "https://github.com/Johnny0x38E/vibemate",
+            "https://github.com/johnny0x38e/vibemate",
             "_blank",
             "noopener,noreferrer",
         );

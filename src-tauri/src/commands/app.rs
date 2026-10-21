@@ -74,7 +74,7 @@ pub(crate) async fn open_log_directory(app: tauri::AppHandle) -> Result<(), LogA
 #[tauri::command]
 pub(crate) async fn open_project_repository() -> Result<(), &'static str> {
     tauri::async_runtime::spawn_blocking(|| {
-        tauri_plugin_opener::open_url("https://github.com/Johnny0x38E/vibemate", None::<&str>)
+        tauri_plugin_opener::open_url("https://github.com/johnny0x38e/vibemate", None::<&str>)
             .map_err(|_| "open_failed")
     })
     .await

@@ -4,12 +4,13 @@ import { FieldSelect } from "../../components/FieldSelect";
 import detailForm from "../../components/detailForm.module.css";
 import type { EffortLevel, ProviderModel } from "../../lib/desktop/models";
 import type { PiThinkingLevel } from "../../lib/desktop/pi";
+import type { ProviderRecord } from "../../lib/desktop/providers";
 import card from "./ConfigPreview.module.css";
 import styles from "./AgentList.module.css";
 
 /**
  * Pi levels a reasoning model accepts without a thinking-level mapping.
- * `xhigh` and `max` need a mapping that vibemate does not write, so they are not offered.
+ * Extended levels require a verified binding-specific mapping or a user map.
  */
 const UNMAPPED_PI_LEVELS: readonly PiThinkingLevel[] = [
     "off",
@@ -38,19 +39,28 @@ function thinkingSupported(model: ProviderModel): boolean {
 }
 
 /**
- * Pi levels this model's declared efforts can select without a Pi mapping.
- * Declared levels that need a mapping are reported separately, not offered.
+ * Declared efforts expressible by the verified binding's Pi mapping.
+ * Other extended levels are reported separately, not guessed or downgraded.
  * Rust rechecks the choice against the stored definition before anything is written.
  */
 export function availablePiThinkingLevels(
     model: ProviderModel,
+    provider?: ProviderRecord,
 ): PiThinkingLevel[] {
     if (!thinkingSupported(model) || model.thinkingEffort?.kind !== "listed")
         return [];
     const declared = new Set(
         model.thinkingEffort.levels.map((token) => PI_LEVEL_BY_TOKEN[token]),
     );
-    return UNMAPPED_PI_LEVELS.filter((level) => declared.has(level));
+    const verifiedMap =
+        provider?.kind === "deepseek" &&
+        model.modelId === "deepseek-flash" &&
+        model.resolvedProtocol === "chat_completions" &&
+        provider.baseUrl === "https://api.deepseek.com";
+    const levels: readonly PiThinkingLevel[] = verifiedMap
+        ? [...UNMAPPED_PI_LEVELS, "xhigh", "max"]
+        : UNMAPPED_PI_LEVELS;
+    return levels.filter((level) => declared.has(level));
 }
 
 /** Declared levels that Pi accepts only after a thinking-level mapping. */
@@ -70,18 +80,22 @@ function levelsNeedingMapping(model: ProviderModel): PiThinkingLevel[] {
  */
 export function PiThinkingLevelField({
     model,
+    provider,
     value,
     blocked,
     onChange,
 }: {
     model: ProviderModel;
+    provider?: ProviderRecord | undefined;
     value: PiThinkingLevel | null;
     blocked: boolean;
     onChange: (value: PiThinkingLevel | null) => void;
 }): JSX.Element {
     const { t } = useTranslation();
-    const levels = availablePiThinkingLevels(model);
-    const mapping = levelsNeedingMapping(model);
+    const levels = availablePiThinkingLevels(model, provider);
+    const mapping = levelsNeedingMapping(model).filter(
+        (level) => !levels.includes(level),
+    );
     const supported = thinkingSupported(model);
     const unavailable = value !== null && !levels.includes(value);
     return (
@@ -158,6 +172,14 @@ export function PiThinkingLevelField({
                     })}
                 </p>
             )}
+            {model.thinkingEffort?.defaultLevel !== null &&
+                model.thinkingEffort?.defaultLevel !== undefined && (
+                    <p className={styles["hint"]}>
+                        {t("agents.modelConfig.thinkingDeclaredDefault", {
+                            value: model.thinkingEffort.defaultLevel,
+                        })}
+                    </p>
+                )}
             {levels.length > 0 && (
                 <p className={styles["hint"]}>
                     {t("agents.modelConfig.thinkingScope")}

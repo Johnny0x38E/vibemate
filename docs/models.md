@@ -2,21 +2,25 @@
 
 This page describes how vibemate discovers, stores and edits the models of a
 provider instance. Provider identities, endpoints and protocols live in
-[`integrations/providers.md`](integrations/providers.md); request settings that
-belong to an Agent are planned in [`plans/model-parameters.md`](plans/model-parameters.md).
+[`integrations/providers.md`](integrations/providers.md); native Agent injection
+of these definitions is planned in [`plans/model-parameters.md`](plans/model-parameters.md).
 
 ## Responsibility split
 
-| Location        | Responsibility                                                          |
-| --------------- | ----------------------------------------------------------------------- |
-| Provider API    | Base URL, credential reference and preferred protocol                   |
-| Provider models | Fetch, add, alias, capability evidence, context window and output limit |
-| Agent config    | Choose a Provider/model and set the options that Agent can express      |
-| Rust            | Check the combination against the provider, model, protocol and Agent   |
+| Location        | Responsibility                                                                    |
+| --------------- | --------------------------------------------------------------------------------- |
+| Provider API    | Base URL, credential reference and preferred protocol                             |
+| Provider models | Fetch, add, alias, capability evidence, context window and output limit           |
+| Agent config    | Inject the selected model definition and verified native effort defaults/mappings |
+| Rust            | Check the combination against the provider, model, protocol and Agent             |
 
-A model used by several Agents can have different request settings per Agent.
-Editing a setting never changes the central capability metadata and never
-touches another Agent.
+The saved Provider model is the only model definition. Agent adapters consume its
+capacities, image/tool/reasoning capabilities and effort list/default where their
+native format supports them. A default-only channel and a native switchable
+mapping are different adaptations. Injection may select a default from declared
+levels; it does not add another capability editor or temperature/top_p controls.
+Unmapped fields are reported without changing the Provider definition or another
+Agent.
 
 ## Terminology and persistence
 

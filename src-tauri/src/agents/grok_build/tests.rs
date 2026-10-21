@@ -1,6 +1,8 @@
 //! Isolated Grok Build tests: never touch real user configuration or OS credentials.
 use super::*;
-use crate::model_catalog::{CapabilityOverrides, ModelCapabilities};
+use crate::model_catalog::{
+    CapabilityEvidence, CapabilityOverrides, CapabilitySource, CapabilityState, ModelCapabilities,
+};
 use crate::model_identity::RouteSupport;
 use crate::models::{ModelSource, UpstreamState};
 use crate::providers::{ProviderId, ProviderKind};
@@ -290,6 +292,200 @@ fn preview_describes_only_its_own_fields_and_leaves_the_file_untouched() {
     assert_eq!(plan.agent, AgentId::GrokBuild);
     assert!(plan.restart_required);
     assert!(!plan.existing_alias);
+}
+
+#[test]
+fn context_summary_matches_the_native_write_and_serialized_contract() {
+    let f = Fixture::new();
+    let (plan, document) = build(&f.storage, &f.root, &f.provider, &f.model).unwrap();
+    let field = format!("model.{}.context_window", plan.model_alias);
+    let change = plan
+        .file
+        .changes
+        .iter()
+        .find(|change| change.key_path == field)
+        .unwrap();
+    assert_eq!(plan.context_window.source, GrokContextSource::Library);
+    assert_eq!(plan.context_window.state, GrokContextState::Written);
+    assert_eq!(
+        plan.context_window.value.as_deref(),
+        Some(change.after.as_str())
+    );
+    assert_eq!(
+        document["model"][&plan.model_alias]["context_window"].as_integer(),
+        Some(128000)
+    );
+    assert_eq!(
+        serde_json::to_value(&plan).unwrap()["contextWindow"],
+        serde_json::json!({
+            "source": "library", "state": "written", "value": "128000"
+        })
+    );
+}
+
+#[test]
+fn undeclared_capacity_preserves_native_fields_and_reports_the_native_value() {
+    let mut f = Fixture::new();
+    let alias = f.plan().model_alias;
+    f.bind(&alias);
+    f.model.model.context_window = None;
+    let text = format!(
+        "[models]\ndefault = \"mine\"\n[model.{alias}]\ncontext_window = 65536\nsupports_reasoning_effort = false\nreasoning_effort = \"high\"\ntemperature = 0.7\ntop_p = 0.9\nmax_completion_tokens = 1024\n[[model.{alias}.reasoning_efforts]]\nvalue = \"low\"\ndefault = true\n"
+    );
+    f.write("config.toml", &text);
+    let (plan, document) = build(&f.storage, &f.root, &f.provider, &f.model).unwrap();
+    assert_eq!(plan.context_window.source, GrokContextSource::NotStated);
+    assert_eq!(plan.context_window.state, GrokContextState::Unchanged);
+    assert_eq!(plan.context_window.value.as_deref(), Some("65536"));
+    assert!(
+        !plan
+            .file
+            .changes
+            .iter()
+            .any(|change| change.key_path.ends_with(".context_window"))
+    );
+    let before = text.parse::<DocumentMut>().unwrap();
+    for field in [
+        "context_window",
+        "supports_reasoning_effort",
+        "reasoning_effort",
+        "reasoning_efforts",
+        "temperature",
+        "top_p",
+        "max_completion_tokens",
+    ] {
+        assert_eq!(
+            document["model"][&alias][field].to_string(),
+            before["model"][&alias][field].to_string()
+        );
+    }
+    assert_eq!(document["models"].to_string(), before["models"].to_string());
+    assert_eq!(f.text("config.toml"), text);
+}
+
+#[test]
+fn undeclared_capacity_does_not_invent_a_default_or_expose_unknown_native_text() {
+    let mut f = Fixture::new();
+    f.model.model.context_window = None;
+    let plan = f.plan();
+    assert_eq!(plan.context_window.state, GrokContextState::NotStated);
+    assert_eq!(plan.context_window.value, None);
+    f.bind(&plan.model_alias);
+    for native in [
+        format!("\"{PRIVATE}\""),
+        format!("{{ password = \"{PRIVATE}\" }}"),
+    ] {
+        f.write(
+            "config.toml",
+            &format!("[model.{}]\ncontext_window = {native}\n", plan.model_alias),
+        );
+        let (plan, document) = build(&f.storage, &f.root, &f.provider, &f.model).unwrap();
+        assert_eq!(plan.context_window.state, GrokContextState::Unchanged);
+        assert_eq!(plan.context_window.value, None);
+        assert!(!serde_json::to_string(&plan).unwrap().contains(PRIVATE));
+        assert!(document.to_string().contains(PRIVATE));
+    }
+}
+
+#[test]
+fn preview_rejects_forged_context_summary_before_details_are_returned() {
+    use crate::configuration_preview::{PreviewError, PreviewRequest, read_preview};
+    let f = Fixture::new();
+    let environment = f.installed();
+    let mut reviewed = serde_json::to_value(f.plan()).unwrap();
+    reviewed["contextWindow"]["value"] = serde_json::json!("999999");
+    let request = PreviewRequest {
+        agent: AgentId::GrokBuild,
+        provider_id: ID.into(),
+        model_id: MODEL.into(),
+        entry_path: f.entry("downloads/grok-1.0.60-macos-aarch64"),
+        reviewed,
+        file_index: Some(0),
+    };
+    assert!(matches!(
+        read_preview(&f.storage, &environment, &f.provider, &f.model, &request),
+        Err(PreviewError::PlanStale)
+    ));
+    assert!(!f.root.join("config.toml").exists());
+}
+
+#[test]
+fn image_capability_is_injected_as_vision_and_reported_from_its_source() {
+    let mut f = Fixture::new();
+    f.model.model.capabilities.image_input = CapabilityEvidence {
+        state: CapabilityState::Supported,
+        source: Some(CapabilitySource::DeepseekModelInputModalities),
+    };
+    let (plan, document) = build(&f.storage, &f.root, &f.provider, &f.model).unwrap();
+    let alias = &plan.model_alias;
+    let field = format!("model.{alias}.vision");
+    assert_eq!(plan.image_input.source, GrokCapabilitySource::Catalog);
+    assert_eq!(plan.image_input.state, GrokCapabilityState::Written);
+    assert_eq!(plan.image_input.value, Some(true));
+    assert!(plan.file.changes.iter().any(|change| {
+        change.key_path == field && change.before.is_none() && change.after == "true"
+    }));
+    assert!(document["model"][alias]["vision"].as_bool().unwrap());
+
+    f.model.model.capabilities.image_input.state = CapabilityState::Unknown;
+    f.model.model.capabilities.image_input.source = None;
+    f.model.model.capability_overrides.image_input =
+        Some(crate::model_catalog::CapabilityOverride::Unsupported);
+    let (plan, document) = build(&f.storage, &f.root, &f.provider, &f.model).unwrap();
+    assert_eq!(
+        plan.image_input.source,
+        GrokCapabilitySource::UserDeclaration
+    );
+    assert_eq!(plan.image_input.value, Some(false));
+    assert!(
+        !document["model"][&plan.model_alias]["vision"]
+            .as_bool()
+            .unwrap()
+    );
+}
+
+#[test]
+fn unknown_image_capability_preserves_native_vision_without_exposing_other_shapes() {
+    let f = Fixture::new();
+    let alias = f.plan().model_alias;
+    f.bind(&alias);
+    f.write("config.toml", &format!("[model.{alias}]\nvision = true\n"));
+    let (plan, document) = build(&f.storage, &f.root, &f.provider, &f.model).unwrap();
+    assert_eq!(plan.image_input.source, GrokCapabilitySource::NotStated);
+    assert_eq!(plan.image_input.state, GrokCapabilityState::Unchanged);
+    assert_eq!(plan.image_input.value, Some(true));
+    assert!(
+        !plan
+            .file
+            .changes
+            .iter()
+            .any(|change| change.key_path.ends_with(".vision"))
+    );
+    assert!(document["model"][&alias]["vision"].as_bool().unwrap());
+
+    f.write(
+        "config.toml",
+        &format!("[model.{alias}]\nvision = \"{PRIVATE}\"\n"),
+    );
+    let (plan, document) = build(&f.storage, &f.root, &f.provider, &f.model).unwrap();
+    assert_eq!(plan.image_input.state, GrokCapabilityState::Unchanged);
+    assert_eq!(plan.image_input.value, None);
+    assert!(!serde_json::to_string(&plan).unwrap().contains(PRIVATE));
+    assert!(document.to_string().contains(PRIVATE));
+}
+
+#[test]
+fn malformed_native_vision_is_not_silently_overwritten() {
+    let mut f = Fixture::new();
+    let alias = f.plan().model_alias;
+    f.bind(&alias);
+    f.write(
+        "config.toml",
+        &format!("[model.{alias}]\nvision = \"unknown\"\n"),
+    );
+    f.model.model.capability_overrides.image_input =
+        Some(crate::model_catalog::CapabilityOverride::Supported);
+    assert_eq!(f.error(&f.provider, &f.model), PlanError::TargetConflict);
 }
 
 #[test]

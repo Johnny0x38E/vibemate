@@ -49,11 +49,10 @@ and current blockers are in [`todo.md`](todo.md).
    current-configuration pin, Write/Detail list actions). Windows/Linux native
    behavior and a dedicated screen-reader pass stay in the release-time platform
    check.
-2. Claude Code and Grok Build parameter mappings (P24.a–P24.d on top of the
-   verified field matrix) and the real Provider/Agent combination check (P24).
-   Request settings belong to the target Agent and require verified native
-   mappings; the Anthropic Messages backend stays refused for Grok until xAI
-   documents its key handling.
+2. Complete P24 injection of existing Provider model definitions into Claude
+   Code, Pi and Grok Build, then check real Provider/Agent combinations. Do not
+   add a second model editor or request-tuning controls. For Grok's Anthropic
+   Messages backend, keep the existing refusal until xAI documents its key handling.
 3. Skill installation from a confirmed source, update preview and application,
    and per-Agent deployment with symlink preference and a copy-sync fallback.
 4. Central MCP deployment to each Agent with a verified native format, using the

@@ -319,6 +319,46 @@ async function chooseAndPreview(modelId = FLASH): Promise<void> {
     });
 }
 
+test("verified DeepSeek Chat bindings offer mapped extended Pi levels without changing the model default", async () => {
+    loadProviders.mockResolvedValue(
+        providersPage([
+            {
+                ...deepseek,
+                protocol: "chat_completions",
+                baseUrl: "https://api.deepseek.com",
+            },
+        ]),
+    );
+    loadModels.mockResolvedValue(
+        modelsPage([
+            { ...piReasoningRow(), resolvedProtocol: "chat_completions" },
+        ]),
+    );
+    await mountPi();
+    await setFieldSelectValue(
+        await screen.findByRole("combobox", { name: "Model" }),
+        FLASH,
+    );
+    const thinking = screen.getByRole("combobox", { name: "Thinking level" });
+    expect(await fieldSelectOptionValues(thinking)).toContain("max");
+    expect(fieldSelectValue(thinking)).toBe("");
+    await setFieldSelectValue(thinking, "max");
+    vi.mocked(planPiSettings).mockResolvedValue({
+        kind: "desktop",
+        plan: piPlanWithLevel("max"),
+    });
+    await userEvent.click(
+        screen.getByRole("button", { name: "Preview changes" }),
+    );
+    await screen.findByRole("region", { name: "Pi model settings" });
+    expect(planPiSettings).toHaveBeenLastCalledWith(
+        deepseek.id,
+        FLASH,
+        "/test/pi",
+        "max",
+    );
+});
+
 test("browser preview explains that nothing can be read", async () => {
     loadProviders.mockResolvedValue({ kind: "preview" });
     await mount();
@@ -1207,6 +1247,12 @@ test("Grok previews its TOML file and applies it once", async () => {
         agent: "grokBuild",
         modelAlias: alias,
         existingAlias: true,
+        contextWindow: {
+            source: "notStated",
+            state: "unchanged",
+            value: "64000",
+        },
+        imageInput: { source: "catalog", state: "written", value: true },
         source: plan.source,
         restartRequired: true,
         precedence: [
@@ -1232,6 +1278,12 @@ test("Grok previews its TOML file and applies it once", async () => {
                     before: "••••••••",
                     after: "••••••••",
                     secret: true,
+                },
+                {
+                    keyPath: `model.${alias}.vision`,
+                    before: null,
+                    after: "true",
+                    secret: false,
                 },
             ],
         },
@@ -1265,6 +1317,17 @@ test("Grok previews its TOML file and applies it once", async () => {
     );
     await screen.findByText("/Users/test/.grok/config.toml");
     expect(grokPreview).toHaveBeenCalledWith(deepseek.id, FLASH, "/test/grok");
+    const modelSettings = screen.getByRole("region", {
+        name: "Grok Build model settings",
+    });
+    expect(modelSettings.textContent).toContain("64,000 tokens");
+    expect(modelSettings.textContent).toContain("Text and image");
+    expect(modelSettings.textContent).toContain(
+        "model.vibemate-deepseek-deepseek-flash.vision",
+    );
+    expect(modelSettings.textContent).toContain(
+        "Not written: the value already in the file stays.",
+    );
     // The planned credential is described, never carried as a value; the key it
     // replaces is shown only as the mask.
     const key = screen
@@ -1500,7 +1563,7 @@ test("Pi offers only declared levels it accepts by default and previews the one 
         "high",
     ]);
     expect(
-        screen.getByText(/vibemate does not write mappings yet: max/u),
+        screen.getByText(/no verified Pi-to-Provider mapping for: max/u),
     ).toBeTruthy();
     await setFieldSelectValue(thinking, "high");
     await userEvent.click(

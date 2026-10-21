@@ -675,9 +675,21 @@
             "thinkingScope": "Pi 会把此档位保存为该服务商与模型在其设置中的默认值。新会话和切换到该模型时使用；已恢复的会话可能保留自己的档位。其他模型与全局默认值不会改变。",
             "thinkingUnsupported": "此模型未声明推理支持，因此无法选择 Pi 思考档位。",
             "thinkingNoLevels": "此模型没有 Pi 无需映射即可接受的已声明思考档位，因此无法选择。",
-            "thinkingMappingNeeded": "以下档位需要先配置 Pi 的思考档位映射才会被接受，而 vibemate 目前不写入映射，因此不提供：{{levels}}。",
+            "thinkingDeclaredDefault": "模型声明的默认档位：{{value}}；不会自动选用。",
+            "thinkingMappingNeeded": "此绑定尚无已核实的 Pi 到 Provider 档位映射，暂不提供：{{levels}}。",
             "thinkingUnmappedValue": "{{value}}（不可选）",
             "thinkingObsolete": "已保存的选择 {{value}} 对此模型不再可选。请选择列出的档位或“不覆盖”；不会自动回退。",
+            "grokFacts": {
+                "heading": "Grok Build 模型设置",
+                "existingValue": "保留已有原生值；不显示其内容。",
+                "defaultState": "不写入：由 Grok Build 确定默认值。",
+                "imageDefaultState": "不写入：Grok Build 使用端点的模型信息。",
+                "notes": {
+                    "context": "上下文窗口是 Grok Build 使用的模型容量，不是请求输出限制。本次计划不更改默认模型。",
+                    "reasoning": "不编辑推理支持、可选档位或选用档位。保留已有字段，包括已弃用的 supports_reasoning_effort 和 reasoning_effort；字段存在不代表 Provider 已验证支持。",
+                    "requestSettings": "独立最大输出能力和工具调用能力尚无已核实的原生映射。已有请求参数保持不变，不提供请求调参控件。"
+                }
+            },
             "piFacts": {
                 "heading": "Pi 模型设置",
                 "items": {
@@ -706,7 +718,7 @@
                 "textAndImage": "文本和图片",
                 "textOnly": "仅文本",
                 "notes": {
-                    "requestSettings": "这里不编辑请求输出限制、temperature 与 top_p，这些文件中已有的值保持不变。Pi 模型定义没有工具调用字段，因此不写入工具调用支持。",
+                    "requestSettings": "这里注入已保存的模型定义，不进行请求调参；已有请求参数保持不变。Pi 模型定义没有工具调用标记，这不表示模型不能使用工具。",
                     "maxOutput": "Pi 把最大输出当作模型上限，而不是每次请求的输出限制。",
                     "precedence": "项目设置、命令行参数和恢复的会话可能覆盖已保存的思考档位；vibemate 只读取用户设置文件。"
                 }
@@ -805,7 +817,7 @@
                 "credentialConflictGeneric": "存在优先级更高的凭据，会覆盖计划中的密钥。请先处理冲突，再重新预览。"
             },
             "piRestartRequired": "新建 Pi 会话以使用这些默认设置；项目设置、命令行参数和恢复的会话可能覆盖默认选择。",
-            "piNotice": "仅在应用时从系统凭据库读取密钥，并以明文写入 models.json。替换前会备份原文件。未知模型信息沿用 Pi 默认值，推理档位保持原设置。",
+            "piNotice": "仅在应用时从系统凭据存储读取 API Key，并以明文写入 models.json。替换前会备份已有文件。注入模型已声明的能力与已核实的思考档位映射，默认档位单独选择。",
             "grokRestartRequired": "新建 Grok Build 会话后这个条目才会生效。命令行参数、shell 环境变量和策略文件都可能覆盖配置文件。",
             "notifications": {
                 "applied": "配置已写入。",

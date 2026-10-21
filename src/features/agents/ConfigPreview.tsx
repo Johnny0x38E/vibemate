@@ -60,6 +60,7 @@ import {
     availablePiThinkingLevels,
 } from "./PiThinkingLevelField";
 import { PiModelFacts } from "./PiModelFacts";
+import { GrokModelFacts } from "./GrokModelFacts";
 
 /** Saved instances are a small, hand-managed set; one page covers them. */
 const PROVIDER_PAGE_LIMIT = 100;
@@ -266,7 +267,10 @@ export function ConfigPreview({
         agent !== "pi" ||
         piThinkingLevel === null ||
         (selectedModel !== null &&
-            availablePiThinkingLevels(selectedModel).includes(piThinkingLevel));
+            availablePiThinkingLevels(
+                selectedModel,
+                selectedProvider ?? undefined,
+            ).includes(piThinkingLevel));
     const configurationBusy =
         preview.kind === "loading" ||
         apply.kind === "applying" ||
@@ -612,6 +616,10 @@ export function ConfigPreview({
                                         selectedModel !== null && (
                                             <PiThinkingLevelField
                                                 model={selectedModel}
+                                                provider={
+                                                    selectedProvider ??
+                                                    undefined
+                                                }
                                                 value={piThinkingLevel}
                                                 blocked={
                                                     blocked || configurationBusy
@@ -713,6 +721,13 @@ function PlanCard({
                 </p>
             )}
             {plan.agent === "pi" && <PiModelFacts facts={plan.modelFacts} />}
+            {plan.agent === "grokBuild" && (
+                <GrokModelFacts
+                    context={plan.contextWindow}
+                    imageInput={plan.imageInput}
+                    alias={plan.modelAlias}
+                />
+            )}
             {notices.length > 0 && (
                 <ul className={card["notices"]}>
                     {notices.map((entry) => (

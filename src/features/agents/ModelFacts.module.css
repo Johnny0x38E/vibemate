@@ -1,5 +1,5 @@
 /*
- * Pi model facts in the plan card, above the planned file changes. One row per
+ * Agent model facts in the plan card, above the planned file changes. One row per
  * setting: its value, then where the value came from, then what this plan does
  * with it. The rows share the planned-change divider, so the card reads as one list.
  */

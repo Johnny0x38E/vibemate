@@ -58,18 +58,33 @@ Grok 还发现 Claude/Cursor 兼容资源；原生 config.toml 优先于兼容 M
 规则仍需补验，见 [P24.a 逐字段矩阵](model-parameter-mapping.md)。现有适配器继续保留
 用户 effort 字段，不把此文档更新当作参数功能交付。
 
+## P24 模型注入与预览
+
+预览显示上下文来自服务商模型库，以及写入、保留或原生默认状态；只显示已解析整数，
+未知原生形状只说明保留，完整详情重新构建并比较状态。图像能力只有在中央明确声明时才
+映射到已核实的 `model.<alias>.vision` 布尔字段；未知时保留原值。
+
+模型定义只在服务商模块维护。Grok 已消费中央上下文与明确声明的图像能力；后续目标是消费
+已声明的推理信息，并用原生 `reasoning_efforts` 注入可切换档位及默认值。当前适配器尚未写该数组，
+不能将保留已有 effort 字段称为已支持切换。应核实值、默认规则与未拥有字段的保留，
+不能用弃用单值字段或全局默认替代每 alias 的映射。
+
+不提供 temperature/top_p、请求输出或推理 token 数编辑器，不将 `max_completion_tokens`
+自动等同于独立模型输出能力。保留用户原有参数、全局 `[models]`、默认模型与其它 alias。
+
 ## 模型与认证
 
 [配置参考](https://docs.x.ai/build/settings/reference)声明自定义 `[model.<alias>]`：
 
-| 作用      | 字段                                                                   |
-| --------- | ---------------------------------------------------------------------- |
-| 标识      | alias 是 Grok 内部配置身份；`model` 是发送给 Provider 的模型 ID        |
-| 协议/地址 | `base_url`、`api_backend`：`chat_completions`、`responses`、`messages` |
-| 认证      | `env_key` 指向环境变量；`api_key` 是目标私有文件中的明文值             |
-| 请求参数  | `temperature/top_p/max_completion_tokens`、推理支持与努力字段          |
-| 元数据    | `context_window`；不能当作请求参数透传                                 |
-| 路由扩展  | `extra_headers`、超时、重试、工具调用流式设置；逐项核实支持范围        |
+| 作用         | 字段                                                                                 |
+| ------------ | ------------------------------------------------------------------------------------ |
+| 标识         | alias 是 Grok 内部配置身份；`model` 是发送给 Provider 的模型 ID                      |
+| 协议/地址    | `base_url`、`api_backend`：`chat_completions`、`responses`、`messages`               |
+| 认证         | `env_key` 指向环境变量；`api_key` 是目标私有文件中的明文值                           |
+| 原生模型属性 | `vision` 表示图像输入；仅中央明确声明时写入，未知时保留现值                          |
+| 容量元数据   | `context_window`；不能当作请求参数透传                                               |
+| 用户请求值   | temperature/top_p/max_completion_tokens 与未知 effort 保持原样；不提供额外调参编辑器 |
+| 路由扩展     | `extra_headers`、超时、重试、工具调用流式设置；逐项核实支持范围                      |
 
 `[models].default` 选择新会话默认模型，环境选择与 CLI `-m` 可改变实际选择，
 恢复的会话和运行中的 TUI 也不能仅凭默认值判断。官方支持 `/model` 切换；
@@ -134,7 +149,7 @@ API key 放进共享仓库」。也就是说用户级 `config.toml` 里的 `api_
 
 vibemate 拥有的 `[model.<alias>]` 条目写入时：
 
-- **`name` 字段**固定为 `(vibemate-<服务商名>) <模型 ID>`：括号内 `vibemate` 固定，服务商显示名称转为连字符标记（与配置键同一形状），括号后一个空格接模型 ID 原文。例如 `Command Code GOAT` + `deepseek/deepseek-v4.1-flash` → `name = "(vibemate-Command-Code-GOAT) deepseek/deepseek-v4.1-flash"`；斜杠、大写和点号原样保留，不使用用户模型别名或 `upstream_name`。连续空白折叠，控制字符与不可见格式字符（含 bidi 覆盖）移除；模型 ID 过长时截断并以 `…` 结尾，整段不超过 160 个字符。推理档位是单独的请求设置，写入后由调用方追加在名称之后。
+- **`name` 字段**固定为 `(vibemate-<服务商名>) <模型 ID>`：括号内 `vibemate` 固定，服务商显示名称转为连字符标记（与配置键同一形状），括号后一个空格接模型 ID 原文。例如 `Command Code GOAT` + `deepseek/deepseek-v4.1-flash` → `name = "(vibemate-Command-Code-GOAT) deepseek/deepseek-v4.1-flash"`；斜杠、大写和点号原样保留，不使用用户模型别名或 `upstream_name`。连续空白折叠，控制字符与不可见格式字符（含 bidi 覆盖）移除；模型 ID 过长时截断并以 `…` 结尾，整段不超过 160 个字符。努力档位属于原生模型选项列表，不拼接到显示名称；该列表的注入仍待完成。
 - **格式处理**：连续空白折叠为一个空格（`name` 始终单行）；控制字符与不可见格式字符（含 bidi 覆盖）被移除，避免两个不同名称看起来相同。组合文本超过 160 个字符时截断模型 ID 部分并以 `…` 结尾；模型 ID 本身仍是身份，`name` 只是显示文本。
 - **配置别名（表名）**仍由 `choose_alias` 决定：优先复用本根下已记录的归属；否则按 `vibemate-{provider}-{model}` 等候选选取空闲名。表名是配置身份，保持稳定；**不会**接管同名但无归属记录的用户手写表。
 - **碰撞拒绝**：若计划写入的 API `model` 字段值（即 `model_id`）与当前 `config.toml` 里某个已有 `[model.<alias>]` 表名**完全相同**，预览以 `TargetConflict` / `target_conflict` 拒绝，不静默改写。典型场景：用户已手写 `[model.deepseek-flash]`，而 vibemate 又要写 `model = "deepseek-flash"`。
@@ -149,8 +164,9 @@ vibemate 拥有的 `[model.<alias>]` 条目写入时：
 
 ### 努力档位与凭据写入约定（2026-10-13）
 
-官方参考里努力档位分两处：`[models].default_reasoning_effort` 给出默认模型的默认档位；模型块内用
-`supports_reasoning_effort`（布尔）声明是否支持，再由 `reasoning_effort` 取值。可选档位写成数组表
+以下是旧版调研记录：`[models].default_reasoning_effort` 给出默认模型的默认档位；
+`supports_reasoning_effort` 与 `reasoning_effort` 已在当前随版本参考中标为弃用，不再新增写入。
+现行可选档位写成数组表
 `[[model.<alias>.reasoning_efforts]]`，每项一个 `value`，其中一项可标 `default = true`。参考页没有
 列全可选值；维护者配置里出现的是 `medium`、`high`、`xhigh`、`max`。
 

@@ -4,8 +4,9 @@
 //! Pi keeps the saved default in `settings.modelThinkingLevels["<provider>/<modelId>"]`
 //! and silently clamps a level its model does not accept. vibemate therefore saves a
 //! level only when the central model declares it and the merged `models.json`
-//! definition accepts it. This module never writes a `thinkingLevelMap`, never
-//! converts a level into a token budget and never guesses a provider value.
+//! definition accepts it. This module validates selections; `thinking_mapping`
+//! injects separately verified switchable mappings from central declarations.
+//! Neither module converts efforts into token budgets or guesses provider values.
 
 use crate::config_plan::PlanError;
 use crate::model_catalog::{CapabilityState, EffortLevel, ThinkingEffort};
@@ -63,7 +64,7 @@ impl PiThinkingLevel {
     /// Whether Pi accepts this level for a reasoning model with no map entry.
     ///
     /// `xhigh` and `max` are excluded: Pi accepts them only after a model maps
-    /// them to a provider value, and vibemate does not write such maps.
+    /// them to a provider value. Generated maps need binding-specific evidence.
     pub const fn accepted_without_mapping(self) -> bool {
         matches!(
             self,

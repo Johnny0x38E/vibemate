@@ -27,6 +27,7 @@ use std::{
 
 mod facts;
 mod thinking;
+mod thinking_mapping;
 
 use facts::capability_source;
 pub use facts::{PiFactItem, PiFactSource, PiFactState, PiModelFact};
@@ -237,6 +238,9 @@ fn verify_schema_contract(entry: &Path) -> Result<(), PlanError> {
             .iter()
             .any(|(field, kind)| field["type"].as_str() != Some(kind))
         {
+            return Err(PlanError::AgentVersionUnverified);
+        }
+        if model["thinkingLevelMap"]["$ref"].as_str() != Some("#/$defs/ThinkingLevelMap") {
             return Err(PlanError::AgentVersionUnverified);
         }
         let compat = &models["$defs"]["ProviderCompat"]["properties"];
@@ -498,6 +502,15 @@ pub(crate) fn build(
             }
         }
     }
+    thinking_mapping::inject_declared_levels(
+        selected,
+        provider,
+        model,
+        protocol,
+        &base,
+        &prefix,
+        &mut model_changes,
+    )?;
     // Check the choice against the merged definition, including any thinking-level
     // map the user wrote, before this plan produces a settings change.
     if let Some(level) = selected_thinking_level {

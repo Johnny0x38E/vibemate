@@ -1,4 +1,6 @@
 //! Isolated Pi tests: never touch real user configuration or OS credentials.
+
+mod thinking_mapping;
 use super::*;
 use crate::agents::{
     ApplyClaudeCodeRestoreRequest, ClaudeCodeRestoreError, ReviewedRestoreStepRequest,
@@ -700,8 +702,11 @@ fn undeclared_or_unaccepted_levels_are_refused_and_apply_cannot_forge_them() {
             PiThinkingLevel::High,
         ),
         (
-            "listed max still needs a Pi mapping",
-            |f| declare_thinking(f, &[EffortLevel::Max]),
+            "listed max on an unverified model still needs a Pi mapping",
+            |f| {
+                declare_thinking(f, &[EffortLevel::Max]);
+                f.model.model.model_id = "unverified-model".into();
+            },
             PiThinkingLevel::Max,
         ),
     ];

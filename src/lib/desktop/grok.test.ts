@@ -21,6 +21,8 @@ const plan: GrokPlan = {
     agent: "grokBuild",
     modelAlias: alias,
     existingAlias: false,
+    contextWindow: { source: "notStated", state: "notStated", value: null },
+    imageInput: { source: "notStated", state: "notStated", value: null },
     source: {
         providerId: id,
         providerRevision: 2,
@@ -113,6 +115,147 @@ test("accepts the whole preview and asks for the chosen pair", async () => {
         modelId,
         entryPath: "/test/grok",
     });
+});
+
+test("accepts written, preserved and undisplayed context without changing approval tokens", async () => {
+    const written: GrokPlan = {
+        ...plan,
+        contextWindow: { source: "library", state: "written", value: "128000" },
+        file: {
+            ...plan.file,
+            changes: [
+                ...plan.file.changes,
+                {
+                    keyPath: `model.${alias}.context_window`,
+                    before: null,
+                    after: "128000",
+                    secret: false,
+                },
+            ],
+        },
+    };
+    const variants: GrokPlan[] = [
+        written,
+        ...["65536", "9223372036854775807", null].map((value): GrokPlan => ({
+            ...plan,
+            existingAlias: true,
+            contextWindow: { source: "notStated", state: "unchanged", value },
+        })),
+    ];
+    for (const variant of variants) {
+        vi.mocked(invoke).mockResolvedValue(variant);
+        await expect(planGrokSettings(id, modelId, null)).resolves.toEqual({
+            kind: "desktop",
+            plan: variant,
+        });
+        expect(reviewedGrokPlan(variant)).toEqual(reviewedGrokPlan(plan));
+    }
+});
+
+test("rejects malformed context summaries and disagreements with the planned write", async () => {
+    for (const contextWindow of [
+        null,
+        { source: "catalog", state: "notStated", value: null },
+        { source: "notStated", state: "guessed", value: null },
+        { source: "notStated", state: "notStated", value: "128000" },
+        { source: "library", state: "written", value: "128000" },
+        { source: "library", state: "unchanged", value: null },
+        { source: "notStated", state: "unchanged", value: null },
+        {
+            source: "notStated",
+            state: "notStated",
+            value: null,
+            secret: "must-not-display",
+        },
+        { source: "notStated", state: "unchanged", value: "private-text" },
+        { source: "notStated", state: "unchanged", value: 128000 },
+    ]) {
+        expect(await rejectWith({ ...plan, contextWindow })).toBe(
+            "invalid_response",
+        );
+    }
+    const changes = [
+        ...plan.file.changes,
+        {
+            keyPath: `model.${alias}.context_window`,
+            before: null,
+            after: "128000",
+            secret: false,
+        },
+    ];
+    for (const contextWindow of [
+        plan.contextWindow,
+        { source: "library", state: "written", value: null },
+        { source: "library", state: "written", value: "64000" },
+        { source: "library", state: "written", value: "-1" },
+    ]) {
+        expect(
+            await rejectWith({
+                ...plan,
+                contextWindow,
+                file: { ...plan.file, changes },
+            }),
+        ).toBe("invalid_response");
+    }
+});
+
+test("validates Grok image declaration against the written vision flag", async () => {
+    const written: GrokPlan = {
+        ...plan,
+        imageInput: { source: "catalog", state: "written", value: true },
+        file: {
+            ...plan.file,
+            changes: [
+                ...plan.file.changes,
+                {
+                    keyPath: `model.${alias}.vision`,
+                    before: null,
+                    after: "true",
+                    secret: false,
+                },
+            ],
+        },
+    };
+    vi.mocked(invoke).mockResolvedValue(written);
+    await expect(planGrokSettings(id, modelId, null)).resolves.toEqual({
+        kind: "desktop",
+        plan: written,
+    });
+    for (const imageInput of [
+        { source: "catalog", state: "written", value: false },
+        { source: "notStated", state: "written", value: true },
+        { source: "userDeclaration", state: "unchanged", value: true },
+        { source: "notStated", state: "notStated", value: false },
+        { source: "catalog", state: "notStated", value: null },
+        { source: "notStated", state: "unchanged", value: "private" },
+        { source: "catalog", state: "written", value: true, extra: true },
+    ]) {
+        expect(await rejectWith({ ...written, imageInput })).toBe(
+            "invalid_response",
+        );
+    }
+    expect(
+        await rejectWith({
+            ...plan,
+            imageInput: {
+                source: "notStated",
+                state: "notStated",
+                value: null,
+            },
+            file: {
+                ...plan.file,
+                changes: [
+                    ...plan.file.changes,
+                    {
+                        keyPath: `model.${alias}.vision`,
+                        before: null,
+                        after: "true",
+                        secret: false,
+                    },
+                ],
+            },
+        }),
+    ).toBe("invalid_response");
 });
 
 test("maps each documented refusal to its own code", async () => {

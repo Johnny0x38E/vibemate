@@ -5,8 +5,8 @@
 ## P24.a 参数核实更新（2026-10-20）
 
 本机仍为 1.3.0。已核对模型/settings schema、启动档位选择与 OpenAI 协议请求构建：
-现有适配器已写入声明的 `contextWindow/maxTokens/reasoning/input`，尚未交付局部使用设置编辑。
-OpenAI sampling 对象在请求尾部合并，不能据此绕过容量校验；Messages 不支持这些 sampling 对象。
+现有适配器写入声明的 `contextWindow/maxTokens/reasoning/input` 及每模型默认思考档位，并注入已核实的档位映射。
+OpenAI sampling 对象在动态上下文限制之后合并，持久化输出键可能绕过该限制；因此它们不会作为本轮 Agent 注入选项。Messages 不支持这些 sampling 对象。
 档位可选集与 partial map/null 规则已由本机 1.3.0 源码核实（见下文 P24.c 首批）；具体 Provider 的档位值域仍需补验，见 [P24.a 逐字段矩阵](model-parameter-mapping.md)。
 
 ## P24.c 首批：每模型思考档位（2026-10-20）
@@ -28,8 +28,11 @@ vibemate 的写入规则：
 
 - 中央模型必须有效声明推理支持（覆盖声明优先，否则用目录结果），并列出该档位。目录的 `none`
   对应 Pi 的 `off`，其余名称相同；`any`、未声明与空列表不展开。
-- 界面只提供已声明、且 `off/minimal/low/medium/high` 中无需映射即可接受的档位。`xhigh` 与
-  `max` 不提供，界面说明需要 Pi 映射。
+- 基础可选集是已声明的 `off/minimal/low/medium/high`。官方 Chat 端点上的 DeepSeek
+  `deepseek-flash` 额外提供已声明的 `xhigh/max`：仅在该键不存在时补 `xhigh→high` 或
+  `max→max` 映射。所有已声明的扩展档位都会注入，与是否选择某个默认档位无关，
+  因而不必先选中该档才能在 Pi 内切换。已有用户映射（包括 null）不覆盖，其他绑定不自动生成厂商映射。
+  DeepSeek 当前官方 Chat schema 明确 `xhigh` 兼容为 `high`，不由档位名自行推断。
 - Rust 在合并后的 `models.json` 定义上再次核对：`reasoning` 必须是布尔；`thinkingLevelMap`
   可以缺失、为 `null` 或为对象，对象条目只能是字符串或 `null`。其它形状直接拒绝并返回既有的
   `target_conflict`。档位不被声明或 Pi 不接受时返回 `thinking_level_unavailable`。两种情况都不生成计划，
@@ -51,8 +54,11 @@ vibemate 的写入规则：
   `minimal/medium/low/high` 映射到 DeepSeek、OpenRouter、Command Code 的厂商值仍属 P24.a 缺口。
 - 没有「清除」动作，只能选择「不覆盖」保留原值或选择一个档位。删除模型或服务商不会自动删除该键，
   这属于尚未完成的 P35 引用约束。
-- 请求输出限制、temperature 与 top_p 不由 vibemate 编辑，已有值保持原样。Pi 模型定义没有工具调用字段，
-  因此工具调用支持不写入。`thinkingLevelMap` 仍不写入：它需要已验证的厂商映射，见上文缺口。
+- Pi 模型定义没有工具调用字段，因此不写工具声明；这不代表模型不能调用工具。
+- 不提供 temperature/top_p、请求输出或推理 token 数编辑器，保留用户原有请求参数。
+  模型最大输出仍映射为 `maxTokens`。源码显示 sampling 输出键在动态上下文限制后合并，
+  这不能作为另设输出能力字段的依据。
+- 注入映射检查安装 schema 的 `thinkingLevelMap` 字段；不能仅靠版本号假定支持。
 - 真实会话是否使用该档位仍需维护者在 Pi 中确认。
 
 ## Pi 1.x 模型配置
@@ -66,7 +72,7 @@ vibemate 的写入规则：
 - `auth.json` 高于 `models.json.apiKey`。预览只读其结构和摘要；有同名凭据则拒绝应用，不执行其中的凭据命令，不修改凭据文件。应用重新检查其摘要。
 - 应用时从 OS 凭据存储读取密钥，写入模型定义。Pi 会解释 `!command` 与 `$VAR`，因此按 1.2.0 的 `$$`/`$!` 规则转义，保证按原文使用密钥；预览的旧密钥和新密钥均为掩码。
 - 两个文件通过共享写入日志、私有备份、摘要检查、同目录临时文件和原子替换写入；多文件不是单次原子事务，后续文件失败时补偿已写文件。Unix 替换后为 0600，避免在原本 0644 的模型文件中暴露新密钥。历史恢复按 Agent 类型隔离，并检查应用后的手工改动。
-- 新建会话读取默认选择。项目设置、CLI 参数和恢复会话可能覆盖它；未知元数据沿用 Pi 默认值。每模型思考档位见下文 P24.c 首批，请求参数仍未写入。当前解析接受 JSON 对象；含 JSON 注释等不可解析内容会拒绝写入。
+- 新建会话读取默认选择。项目设置、CLI 参数和恢复会话可能覆盖它；未知元数据沿用 Pi 默认值。每模型默认思考档位与可切换映射见上文 P24.c；不添加请求调参控件。当前解析接受 JSON 对象；含 JSON 注释等不可解析内容会拒绝写入。
 
 验证与验收状态以 [todo.md](../plans/todo.md) 为准；写入成功不代表真实推理或其他平台已经通过。
 

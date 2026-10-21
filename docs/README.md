@@ -43,7 +43,7 @@ planned.
 - [`plans/todo.md`](plans/todo.md): the single task-status source for remaining
   work.
 - [`plans/model-parameters.md`](plans/model-parameters.md): model metadata and
-  per-Agent request settings that are not implemented yet.
+  how existing Provider model definitions are injected into native Agents.
 - [`plans/backend-modularity.md`](plans/backend-modularity.md): backend module
   boundaries and the unplanned future integrations.
 - [`plans/configuration-versions.md`](plans/configuration-versions.md): independent

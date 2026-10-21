@@ -675,9 +675,21 @@
             "thinkingScope": "Pi saves this level as this provider and model’s default in its settings. New sessions and switches to this model use it; a resumed session can keep its own level. Other models and the global default are not changed.",
             "thinkingUnsupported": "Reasoning support is not declared for this model, so no Pi thinking level can be chosen.",
             "thinkingNoLevels": "This model has no declared thinking level that Pi accepts without a mapping, so none can be chosen.",
-            "thinkingMappingNeeded": "Not offered because Pi needs a thinking-level mapping before it accepts them, and vibemate does not write mappings yet: {{levels}}.",
+            "thinkingDeclaredDefault": "Model-declared default: {{value}}. It is not selected automatically.",
+            "thinkingMappingNeeded": "Not offered because this binding has no verified Pi-to-Provider mapping for: {{levels}}.",
             "thinkingUnmappedValue": "{{value}} (not offered)",
             "thinkingObsolete": "The saved choice {{value}} is no longer offered for this model. Choose a listed level or Do not overwrite; nothing falls back automatically.",
+            "grokFacts": {
+                "heading": "Grok Build model settings",
+                "existingValue": "Existing native value kept; not displayed.",
+                "defaultState": "Not written: Grok Build resolves its own default.",
+                "imageDefaultState": "Not written: Grok Build uses its endpoint model metadata.",
+                "notes": {
+                    "context": "The context window is a model capacity used by Grok Build, not a request output limit. This plan does not change the default model.",
+                    "reasoning": "Reasoning support, effort lists and the selected effort are not edited. Existing fields, including deprecated supports_reasoning_effort and reasoning_effort, stay unchanged; their presence does not prove Provider support.",
+                    "requestSettings": "Maximum output capacity and tool-call capability have no verified independent native declaration in this adapter yet. Existing request parameters are preserved; no request tuning controls are provided."
+                }
+            },
             "piFacts": {
                 "heading": "Pi model settings",
                 "items": {
@@ -706,7 +718,7 @@
                 "textAndImage": "Text and image",
                 "textOnly": "Text only",
                 "notes": {
-                    "requestSettings": "Request output limit, temperature and top_p are not edited here, and existing values in these files stay as they are. Pi model definitions have no tool-call field, so tool-call support is not written.",
+                    "requestSettings": "This injects the saved model definition, not request tuning. Existing request parameters stay unchanged. Pi has no model-definition tool-call flag; this does not mean the model cannot use tools.",
                     "maxOutput": "Pi reads the maximum output as the model's limit, not as a per-request output limit.",
                     "precedence": "Project settings, command-line options and resumed sessions can override a saved thinking level. vibemate reads only the user settings file."
                 }
@@ -805,7 +817,7 @@
                 "credentialConflictGeneric": "A higher-priority credential for this managed provider would override the planned key. Resolve the conflict and preview again."
             },
             "piRestartRequired": "Start a new Pi session to use these defaults. Project settings, CLI options and resumed sessions can override them.",
-            "piNotice": "The API key is read from OS credential storage only when you apply, then written as plain text in models.json. Existing files are backed up before replacement. Unknown model metadata uses Pi defaults; reasoning levels are unchanged.",
+            "piNotice": "The API key is read from OS credential storage only when you apply, then written as plain text in models.json. Existing files are backed up before replacement. Declared model capabilities and verified thinking mappings are injected; the saved default is a separate choice.",
             "grokRestartRequired": "Start a new Grok Build session for this entry to take effect. CLI options, shell environment variables and policy files can override the settings file.",
             "notifications": {
                 "applied": "Configuration written.",

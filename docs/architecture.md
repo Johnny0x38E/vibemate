@@ -41,7 +41,7 @@ its SQL:
 - `models.rs` and `models/` hold records, bounded cursors, local lists, fuzzy
   search, manual edits and atomic selection/save transactions. Model capability
   evidence, user declarations, context window, output limit and thinking effort
-  are stored separately from request settings.
+  are stored in the Provider model definition consumed by Agent adapters.
 - `mcp.rs` and `mcp/` validate stdio/Streamable HTTP definitions and store
   non-secret metadata, stable IDs and revisions; every value is an immutable OS
   credential reference.
@@ -121,7 +121,7 @@ not appear in the interface.
 | Component           | Responsibility                                                                  |
 | ------------------- | ------------------------------------------------------------------------------- |
 | Provider adapters   | Authentication, endpoints, model discovery, and protocol-specific fields        |
-| Model configuration | Provider/model identity, capability metadata, and validated request settings    |
+| Model configuration | Provider/model identity and capability metadata; the source for Agent injection |
 | Agent adapters      | Installed-version detection, config precedence, mapping, preview, and injection |
 | Skill manager       | Central source tracking, revision updates, symlinks, and copy synchronization   |
 | MCP manager         | Shared definitions, credential references, and agent-specific config mapping    |

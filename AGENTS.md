@@ -89,7 +89,11 @@ checks in CI and Release Actions; do not weaken them to bypass a failure.
 - Separate provider protocol adapters from agent configuration adapters.
   Map supported options explicitly and report unsupported options.
 - Distinguish model capability metadata from request parameters. Treat the
-  provider/model pair as a configuration identity.
+  provider/model pair as a configuration identity. Provider models are the single
+  model-definition source; Agent injection consumes existing capabilities and
+  effort levels/defaults. Map native switching where supported, otherwise use a
+  verified default channel. Do not add a second model editor or request-tuning
+  controls (temperature, top_p, output overrides) as part of model injection.
 - Start with one Rust crate and feature modules; split crates only when needed.
   Use typed structures for common fields and validated extension fields for
   provider-specific settings. Never build an arbitrary script execution API.

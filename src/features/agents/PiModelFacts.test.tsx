@@ -66,7 +66,7 @@ test("translates the image-input tokens it knows and shows any other value as re
 test("says which settings vibemate leaves alone and where overrides come from", async () => {
     await renderFacts();
     expect(
-        screen.getByText(/temperature and top_p are not edited here/u),
+        screen.getByText(/Existing request parameters stay unchanged/u),
     ).toBeTruthy();
     expect(
         screen.getByText(/Pi reads the maximum output as the model's limit/u),

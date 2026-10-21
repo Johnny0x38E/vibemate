@@ -2,7 +2,7 @@ import type { TFunction } from "i18next";
 import type { JSX } from "react";
 import { useTranslation } from "react-i18next";
 import type { PiModelFact } from "../../lib/desktop/pi";
-import styles from "./PiModelFacts.module.css";
+import styles from "./ModelFacts.module.css";
 
 type Translator = TFunction;
 

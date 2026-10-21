@@ -30,6 +30,7 @@ use crate::config_plan::{
     digest_hex, read_target_bytes,
 };
 use crate::credentials::CredentialStore;
+use crate::model_catalog::CapabilityState;
 use crate::models::{ModelSnapshot, ProviderModel};
 use crate::providers::{ProviderProtocol, ProviderRecord, base_url_for_protocol};
 use crate::storage::Storage;
@@ -49,13 +50,14 @@ const PRECEDENCE_FILES: [&str; 2] = ["managed_config.toml", "requirements.toml"]
 ///
 /// Grok unpacks `docs/user-guide/26-config-reference.md` into its configuration
 /// root at launch, so these rows tie the plan to the version actually installed
-/// rather than to an online page. Each row is written exactly as the 1.0.60
-/// reference spells it, together with the type and scope the plan depends on.
-const CONTRACT_ROWS: [&str; 8] = [
+/// rather than to an online page. Each row records a native field this adapter
+/// consumes, together with the documented type and scope.
+const CONTRACT_ROWS: [&str; 9] = [
     "| `model.<id>.api_backend` | `chat_completions / responses / messages` |",
     "| `model.<id>.api_key` | `string` |",
     "| `model.<id>.base_url` | `string` |",
     "| `model.<id>.context_window` | `number` |",
+    "| `model.<id>.vision` | `boolean` |",
     "| `model.<id>.env_key` | `string / string[]` |",
     "| `model.<id>.model` | `string` |",
     "| `model.<id>.name` | `string` |",
@@ -94,6 +96,76 @@ pub struct GrokPlannedFile {
     pub changes: Vec<ConfigChange>,
 }
 
+/// Where the planned context capacity comes from, not proof of Provider support.
+#[derive(Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum GrokContextSource {
+    /// Saved centrally; its original provenance is not recorded.
+    Library,
+    /// No central capacity was declared; native configuration is left alone.
+    NotStated,
+}
+
+/// How the plan treats the native context capacity.
+#[derive(Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum GrokContextState {
+    /// Writes the saved central capacity.
+    Written,
+    /// Keeps an existing native field, without claiming its value is valid.
+    Unchanged,
+    /// No native field exists; Grok resolves its own default.
+    NotStated,
+}
+
+/// A credential-blind context summary built beside the actual TOML write.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GrokContextWindow {
+    /// Central metadata source; independent of the native value kept below.
+    pub source: GrokContextSource,
+    /// Whether the plan writes, preserves or omits the native field.
+    pub state: GrokContextState,
+    /// Integer spelling only. Unknown native shapes are never returned as text.
+    pub value: Option<String>,
+}
+
+/// Where a declared image-input capability came from.
+#[derive(Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum GrokCapabilitySource {
+    /// The saved Provider model contains catalog evidence.
+    Catalog,
+    /// The user explicitly declared this capability in the Provider model.
+    UserDeclaration,
+    /// The Provider model has no definitive declaration.
+    NotStated,
+}
+
+/// How the plan maps image-input capability to Grok's `vision` flag.
+#[derive(Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum GrokCapabilityState {
+    /// Writes the declared boolean to the native model entry.
+    Written,
+    /// Preserves an existing boolean and does not claim it is verified.
+    Unchanged,
+    /// No central or native value is available.
+    NotStated,
+}
+
+/// Safe summary of the Grok image-input capability mapping.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GrokImageInput {
+    /// Catalog, user or absent source for the declaration.
+    pub source: GrokCapabilitySource,
+    /// Whether the plan writes, preserves or omits the native flag.
+    pub state: GrokCapabilityState,
+    /// Boolean only; arbitrary user values are never exposed.
+    pub value: Option<bool>,
+}
+
 /// A Grok preview contains no credential values and no merged document text.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -104,6 +176,10 @@ pub struct GrokPlan {
     pub model_alias: String,
     /// Whether the alias table already existed before this plan.
     pub existing_alias: bool,
+    /// Context capacity and its source/write state; not a request output limit.
+    pub context_window: GrokContextWindow,
+    /// Image-input capability mapping, separate from model behavior proof.
+    pub image_input: GrokImageInput,
     /// The file, with every field the plan changes.
     pub file: GrokPlannedFile,
     /// Sources that can outrank the written file, checked for existence only.
@@ -364,9 +440,9 @@ pub(crate) fn build(
     let mut changes = Vec::new();
     let models = root_table(&mut target.document, "model")?;
     let entry = named_table(models, &alias)?;
-    // The TOML `name` is what Grok's model picker shows, so it reads as
-    // `(vibemate-<Provider>) <model ID>` with a reserved place for a reasoning
-    // level. The table name (`alias`) stays a separate configuration identity.
+    // The TOML `name` is what Grok's model picker shows. It identifies the
+    // Provider and upstream model; the table name (`alias`) stays a separate
+    // configuration identity. Effort choices belong in native model options.
     let display_name = crate::shared::agent_model_display_name(
         &provider.display_name,
         &model.model_id,
@@ -391,12 +467,34 @@ pub(crate) fn build(
         true,
         &mut changes,
     )?;
-    // Only declared metadata is written. Request parameters such as
-    // `max_completion_tokens` belong to the verified per-Agent mappings (P24),
-    // and `reasoning_efforts` is left exactly as the user wrote it.
-    if let Some(tokens) = model.context_window {
+    // Only verified model metadata is injected. Existing request parameters and
+    // reasoning_efforts remain user-owned until a native effort-list mapping is
+    // implemented; their presence does not establish capability support.
+    let context_window = if let Some(tokens) = model.context_window {
         set_number(entry, "context_window", tokens, &prefix, &mut changes)?;
-    }
+        GrokContextWindow {
+            source: GrokContextSource::Library,
+            state: GrokContextState::Written,
+            value: Some(tokens.to_string()),
+        }
+    } else {
+        let existing = entry.get("context_window");
+        GrokContextWindow {
+            source: GrokContextSource::NotStated,
+            state: if existing.is_some() {
+                GrokContextState::Unchanged
+            } else {
+                GrokContextState::NotStated
+            },
+            // Do not expose arbitrary strings/tables from user configuration:
+            // even a capacity field can contain misplaced credential text.
+            value: existing
+                .and_then(Item::as_integer)
+                .map(|count| count.to_string()),
+        }
+    };
+
+    let image_input = map_image_input(entry, model, &prefix, &mut changes)?;
 
     // `[models].default` is intentionally untouched: it is the user's choice,
     // and Grok's own model picker writes it. The written alias becomes
@@ -414,6 +512,8 @@ pub(crate) fn build(
             agent: AgentId::GrokBuild,
             model_alias: alias,
             existing_alias,
+            context_window,
+            image_input,
             file: GrokPlannedFile {
                 target: file,
                 changes,
@@ -692,6 +792,61 @@ fn set_number(
     Ok(())
 }
 
+/// Map a declared central image capability to Grok's per-model `vision` flag.
+/// Unknown central metadata preserves the native value; only booleans are shown.
+fn map_image_input(
+    entry: &mut Table,
+    model: &ProviderModel,
+    prefix: &str,
+    changes: &mut Vec<ConfigChange>,
+) -> Result<GrokImageInput, PlanError> {
+    let declaration = model.capability_overrides.image_input;
+    let state = declaration
+        .map(|value| value.as_state())
+        .unwrap_or(model.capabilities.image_input.state);
+    let source = if declaration.is_some() {
+        GrokCapabilitySource::UserDeclaration
+    } else if state != CapabilityState::Unknown {
+        GrokCapabilitySource::Catalog
+    } else {
+        GrokCapabilitySource::NotStated
+    };
+    match state {
+        CapabilityState::Supported | CapabilityState::Unsupported => {
+            let supported = state == CapabilityState::Supported;
+            let before = entry.get("vision");
+            let previous = before.and_then(Item::as_bool);
+            if before.is_some() && previous.is_none() {
+                return Err(PlanError::TargetConflict);
+            }
+            changes.push(ConfigChange {
+                key_path: format!("{prefix}.vision"),
+                before: previous.map(|value| value.to_string()),
+                after: supported.to_string(),
+                secret: false,
+            });
+            entry.insert("vision", value(supported));
+            Ok(GrokImageInput {
+                source,
+                state: GrokCapabilityState::Written,
+                value: Some(supported),
+            })
+        }
+        CapabilityState::Unknown => {
+            let existing = entry.get("vision").and_then(Item::as_bool);
+            Ok(GrokImageInput {
+                source,
+                state: if entry.contains_key("vision") {
+                    GrokCapabilityState::Unchanged
+                } else {
+                    GrokCapabilityState::NotStated
+                },
+                value: existing,
+            })
+        }
+    }
+}
+
 /// Apply the reviewed plan through the shared private writer.
 ///
 /// The whole preview is rebuilt and every token compared before the OS key is
@@ -714,6 +869,11 @@ pub fn apply_grok_settings(
     reviewed: &ReviewedGrokPlan,
     backups: PathBuf,
 ) -> Result<ConfigApplied, ConfigApplyError> {
+    if reviewed.provider_revision != provider.revision
+        || reviewed.model_content_digest != snapshot.content_digest
+    {
+        return Err(ConfigApplyError::PlanStale);
+    }
     let (plan, mut document) =
         build(storage, root, provider, snapshot).map_err(ConfigApplyError::from_plan)?;
     if reviewed.model_alias != plan.model_alias

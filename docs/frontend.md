@@ -1116,7 +1116,9 @@ visible: remembering separately in vibemate does not isolate native sessions.
 Pi's thinking field (`PiThinkingLevelField`) has no remembered copy. Its choice is
 the native `modelThinkingLevels` entry: a draft that any provider or model change clears,
 and that is written only through preview and apply. `availablePiThinkingLevels` offers
-only declared levels that Pi accepts by default; a draft left over from before a metadata
+declared levels that Pi accepts by default, plus the verified DeepSeek
+`deepseek-flash` Chat `xhigh/max` mappings for the official endpoint. Existing
+user map entries are never overwritten. A draft left over from before a metadata
 refresh that no longer offers it is shown as unavailable and blocks the preview.
 
 Pi plans render `PiModelFacts` in the plan card, above the file changes. Rust sends one
@@ -1125,6 +1127,15 @@ chosen thinking level), each with its source and what the plan does with it. The
 component translates the known tokens, formats token counts for the active locale and
 adds three fixed notes. It never recomputes a value, and `pi.ts` rejects a list that
 differs from Rust's fixed order or disagrees with its own state.
+
+Agent model configuration consumes Provider-model definitions; it is not a
+second model editor. No temperature/top_p or request-output fields are offered.
+Thinking selectors choose an injection default from declared model levels;
+Pi's verified mappings are injected independently so choosing one default does
+not prevent native switching to another mapped level. Existing remembered Claude
+choices are starting preferences only. Grok's `GrokModelFacts` shares
+`ModelFacts.module.css` with Pi and reports typed context source/write state,
+not arbitrary preserved TOML; Grok effort-array injection is still pending.
 
 The hook keeps the draft on save failure. Read errors require reload rather than
 pretending inheritance; conflicts and uncertain acknowledgments also offer

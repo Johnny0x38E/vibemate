@@ -30,7 +30,7 @@ P24.a 的调查记录，核实于 2026-10-20。P24.b 分批实现下述 DeepSeek
 | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 上下文容量                     | `env.CLAUDE_CODE_MAX_CONTEXT_TOKENS`：校正 Agent 假定的窗口                                                                   | **supported，条件式**。仅对不能识别、不以 `claude-` 开头且不含 `[1m]` 的自定义 ID 直接生效；其它 ID 见下文，不能无条件映射中央数字                                                                                                                   |
 | 最大输出能力                   | 未找到独立的任意模型最大输出能力声明字段                                                                                      | **unsupported，本轮最小范围**。不把中央能力值直接写成请求限制                                                                                                                                                                                        |
-| 请求输出限制                   | `env.CLAUDE_CODE_MAX_OUTPUT_TOKENS`                                                                                           | **unverified，暂不写**。官方错误说明与安装字段名证明通道存在，但本轮未取得该版本完整默认值、范围和截断规则                                                                                                                                           |
+| 请求输出限制                   | `env.CLAUDE_CODE_MAX_OUTPUT_TOKENS`                                                                                           | **supported，原生请求通道**。官方 env-vars 条目：未知模型默认 32000、上限 128000，已识别模型可能降低；不作为独立输出能力声明，本轮不提供编辑器。                                                                                                     |
 | 推理支持、可选档位、模型默认档 | 由 Claude Code 识别的模型决定；没有核实三家 Provider 任意模型能力表的通用声明方式                                             | **unverified**。不能把 Provider effort 列表写成 Claude 的模型能力，也不能用 `alwaysThinkingEnabled` 声称模型支持推理                                                                                                                                 |
 | 选用档位                       | `modelSettings.<canonical-model>.effortLevel`：`low/medium/high/xhigh`；`env.CLAUDE_CODE_EFFORT_LEVEL` 另接受 `max` 与 `auto` | **supported，通道语义**；任意第三方 ID 的 canonical 匹配及 Provider 档位传递仍 **unverified**。`max` 不能写入 `effortLevel`。第二批仅在 DeepSeek `deepseek-flash`、已声明推理支持和明确档位列表的交集内提供 env 写入；不承诺原生 Provider/model 隔离 |
 | 推理 token 数                  | `env.MAX_THINKING_TOKENS`                                                                                                     | **supported，仅固定 thinking 模型**；adaptive 模型忽略正数的数量。三家 Provider 的映射 **unverified**，首批不提供。不得由 effort 换算                                                                                                                |
@@ -77,16 +77,16 @@ env-vars 与 errors 的 thinking/output 结论来自 Context7 官方来源摘录
 
 模型定义在 `models.json.providers.<owned-provider>.models[]`，按 `id` 定位；保存的选用档位在 `settings.json`。
 
-| 信息               | 原生目标与语义                                                                                            | 状态、限制与实施决定                                                                                                                                                                                                                                |
-| ------------------ | --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 上下文容量         | 模型 `contextWindow`                                                                                      | **supported，已写入**；schema 要求大于 0，vibemate 使用正整数 token 数                                                                                                                                                                              |
-| 最大输出能力       | 模型 `maxTokens`                                                                                          | **supported，已写入**；schema 要求大于 0。运行时可用它作为缺省输出上限，但它不是用户另选的每次请求限制                                                                                                                                              |
-| 推理支持           | 模型 `reasoning` 布尔                                                                                     | **supported，已写入已声明值**；用户声明不升级为 Provider 验证                                                                                                                                                                                       |
-| 档位映射           | 模型 `thinkingLevelMap`，Pi level → 厂商字符串或 `null`                                                   | **supported**。键为 `off/minimal/low/medium/high/xhigh/max`；map 是转换，不是自由字符串列表。缺失映射不一定禁用该档，不能凭部分 map 宣称其余均不可选                                                                                                |
-| 模型默认/选用档位  | `settings.modelThinkingLevels["<provider>/<modelId>"]`                                                    | **supported**，每模型保存的启动选择；不写全局 `defaultThinkingLevel` 来表达某一个模型的默认档。Provider 的默认档只有能无歧义映射时才能作为建议值，不能自动当作用户选择。P24.c 首批已写入中央声明且 Pi 无需映射即可接受的档位（见 [Pi 契约](pi.md)） |
-| temperature、top_p | 模型 `samplingParams`；档位覆盖用 `samplingParamsByThinkingLevel`                                         | **supported，仅 OpenAI 系协议**；先模型默认、再有效 Pi 档位覆盖、最后请求级覆盖，后者优先。其它 API 忽略这两个对象，必须拒绝而非静默丢失                                                                                                            |
-| 请求输出限制       | OpenAI Chat 的 `samplingParams.max_tokens` 或 `.max_completion_tokens`；Responses 的 `.max_output_tokens` | **supported，请求构造通道**；请求尾部合并覆盖命名字段，可能绕过先前的自动容量限制。首批不提供任意原始对象，须按协议校验键和上下界；Messages 的此通道 **unsupported**                                                                                |
-| 推理 token 数      | SDK request `thinkingBudgets` 与兼容字段不等于已核实的持久 UI 配置                                        | **unverified，暂不写**。不复用 Pi 内部默认 token 数作为 Provider effort 换算                                                                                                                                                                        |
+| 信息               | 原生目标与语义                                                     | 状态、限制与实施决定                                                                                                                                                                                                                                |
+| ------------------ | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 上下文容量         | 模型 `contextWindow`                                               | **supported，已写入**；schema 要求大于 0，vibemate 使用正整数 token 数                                                                                                                                                                              |
+| 最大输出能力       | 模型 `maxTokens`                                                   | **supported，已写入**；schema 要求大于 0。运行时可用它作为缺省输出上限，但它不是用户另选的每次请求限制                                                                                                                                              |
+| 推理支持           | 模型 `reasoning` 布尔                                              | **supported，已写入已声明值**；用户声明不升级为 Provider 验证                                                                                                                                                                                       |
+| 档位映射           | 模型 `thinkingLevelMap`，Pi level → 厂商字符串或 `null`            | **supported**。键为 `off/minimal/low/medium/high/xhigh/max`；map 是转换，不是自由字符串列表。缺失映射不一定禁用该档，不能凭部分 map 宣称其余均不可选                                                                                                |
+| 模型默认/选用档位  | `settings.modelThinkingLevels["<provider>/<modelId>"]`             | **supported**，每模型保存的启动选择；不写全局 `defaultThinkingLevel` 来表达某一个模型的默认档。Provider 的默认档只有能无歧义映射时才能作为建议值，不能自动当作用户选择。P24.c 首批已写入中央声明且 Pi 无需映射即可接受的档位（见 [Pi 契约](pi.md)） |
+| temperature、top_p | 模型 `samplingParams`；档位覆盖用 `samplingParamsByThinkingLevel`  | **supported，仅 OpenAI 系协议**；先模型默认、再有效 Pi 档位覆盖、最后请求级覆盖，后者优先。其它 API 忽略这两个对象，必须拒绝而非静默丢失                                                                                                            |
+| 请求输出限制       | Chat/Responses 的 sampling 输出键                                  | **unsupported，安全持久配置**。源码确认这些键在按当前会话上下文限制输出之后合并，可绕过动态限制。vibemate 明确拒绝，不把请求值写成模型 `maxTokens`；保留已有用户键。Messages 同样不提供。                                                           |
+| 推理 token 数      | SDK request `thinkingBudgets` 与兼容字段不等于已核实的持久 UI 配置 | **unverified，暂不写**。不复用 Pi 内部默认 token 数作为 Provider effort 换算                                                                                                                                                                        |
 
 Pi 启动选择源码中：scoped model 显式档位 → 该 provider/model 保存值 → `defaultThinkingLevel` → Pi 默认；
 普通保存默认模型路径也优先 per-model。CLI、恢复会话和运行中 `/thinking` 能选择另一值，磁盘写入不证明运行中生效。
@@ -109,13 +109,14 @@ Pi 启动选择源码中：scoped model 显式档位 → 该 provider/model 保�
 | 信息               | 原生目标与语义                                                                                | 状态、限制与实施决定                                                                                                                                                      |
 | ------------------ | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 上下文容量         | `model.<alias>.context_window`                                                                | **supported，已写入**；驱动自动压缩，未知新模型未设置时默认 200000。不是请求输出长度                                                                                      |
+| 图像输入           | `model.<alias>.vision`                                                                        | **supported，已写入**；仅映射中央明确声明的 supported/unsupported；unknown 保留已有值。配置声明不证明 Provider 实际接受图片。                                             |
 | 最大输出能力       | 手册未给独立容量字段                                                                          | **unsupported，本轮最小范围**；不能改写为 `max_completion_tokens`                                                                                                         |
-| 请求输出限制       | `model.<alias>.max_completion_tokens`                                                         | **supported，字段语义**；手册仅声明 number，完整范围与各 backend 的出站键 **unverified**，写入选项暂不开放                                                                |
+| 请求输出限制       | `model.<alias>.max_completion_tokens`                                                         | **supported，原生请求字段**。不作为已核实的独立输出能力映射；本轮不写入，保留用户值。各 backend 出站键和 Provider 实际接受仍 **unverified**。                             |
 | 推理支持           | `supports_reasoning_effort` 旧布尔；新方向为 `reasoning_efforts`                              | **supported，但旧字段弃用**。显式 false 会禁止从端点或同模型目录继承菜单；不能无条件删除既有 false                                                                        |
 | 可选档位           | `[[model.<alias>.reasoning_efforts]]`                                                         | **supported，数组表字段**；省略时取端点 `/v1/models` 的 `reasoning_efforts`，否则取 `capabilities.reasoning_effort`。每项 `value/default` 的完整版本规则仍 **unverified** |
 | 模型默认档         | 上述列表中某项 `default = true` 的旧证据                                                      | **unverified，需补 1.0.62 规则**；不能把旧样本或全局默认当作当前证明                                                                                                      |
 | 实际选用档位       | 旧 `model.<alias>.reasoning_effort`；全局 `[models].default_reasoning_effort`；会话 `/effort` | 前者 **deprecated**，后者是默认模型的全局值，不满足每个受管 alias 的隔离；当前推荐的每模型持久选用通道 **unverified**，暂不写                                             |
-| temperature、top_p | `model.<alias>.temperature/top_p`                                                             | **supported，字段语义**；模型值优先于 `[models]` 的全局缺省。范围及 Provider thinking 模式组合 **unverified**                                                             |
+| temperature、top_p | `model.<alias>.temperature/top_p`                                                             | **supported，原生字段语义**。模型值优先于全局值；本轮不新增编辑器或写入，保留用户值。Provider/推理模式组合仍需单独验证。                                                  |
 | 推理 token 数      | 本轮未找到已验证的持久字段                                                                    | **unverified，暂不写**                                                                                                                                                    |
 
 七层优先级仍见 [Grok 契约](grok-build.md)：CLI、环境、requirements/MDM、允许的覆盖层、用户、managed、内置默认。
@@ -148,10 +149,18 @@ Provider 的当前范围与旧证据见 [providers](providers.md) 和 [compatibi
 本轮没有重新读取三家 Provider 的完整 schema，不能把旧目录中的某模型档位当作本轮已核实。
 Responses 与 Messages 即使有同名模型 ID，也不能照搬 Chat 的参数键。
 
+## 模型注入范围
+
+服务商模型定义已经覆盖目标属性，本表服务于原生字段适配，不要求新增 Provider 模型字段。
+有关 temperature/top_p、请求输出和 reasoning token 的行仅记录原生证据，不属于待实现编辑器。
+Claude Code 当前只提供已核实绑定的默认 effort；Pi 把映射与默认分开，所有已声明且已核实的
+扩展档位独立注入；Grok 的数组与默认注入尚未实现。独立容量、图像、工具标记须逐 Agent 判断，
+不能因没有声明字段就判定模型无法调用工具或处理图片。当前实施见 [兼容矩阵](compatibility.md)。
+
 ## P24.a 尚需补齐的证据
 
-1. Claude Code：完整 env-vars output 条目的范围/默认/截断规则；第三方 ID 的 canonical 匹配和 per-model effort 隔离。
-2. Pi：可选集与 partial map、`null` 规则已由 1.3.0 源码核实（见 [Pi 契约](pi.md)）；仍需各 Provider 协议下档位到厂商值的实际映射，以及请求输出覆盖不得绕过容量检查的验证样本。
+1. Claude Code：output 条目仅作原生请求通道证据，本轮不提供编辑器；第三方 ID 的 canonical 匹配和原生 per-model effort 隔离仍未核实。
+2. Pi：已核实 DeepSeek Chat `deepseek-flash` 的 `xhigh→high/max→max`，独立于默认选择补齐所有已声明的缺失映射；其他绑定仍需厂商证据。请求输出覆盖会绕过动态限制，且不是本轮模型注入控件。
 3. Grok：1.0.62 新数组项 `value/default` 的 schema、冲突/默认解析、推荐的持久选用通道、各 backend 的出站参数与数值范围。没有证据前不改为 deprecated 通道。
 4. Provider：重新读取三家现行 schema，逐模型确认合法档位、默认值、mandatory 与采样组合；至少使用 DeepSeek `deepseek-flash` 和一个明确 Command Code API ID 作隔离样本。不猜测不同 Provider 的 ID 或 effort 等价。
 

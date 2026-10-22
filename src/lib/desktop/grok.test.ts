@@ -10,6 +10,7 @@ import {
     planGrokSettings,
     reviewedGrokPlan,
     type GrokPlan,
+    type GrokReasoningEfforts,
 } from "./grok";
 
 vi.mock(import("@tauri-apps/api/core"));
@@ -23,6 +24,12 @@ const plan: GrokPlan = {
     existingAlias: false,
     contextWindow: { source: "notStated", state: "notStated", value: null },
     imageInput: { source: "notStated", state: "notStated", value: null },
+    reasoningEfforts: {
+        source: "notStated",
+        state: "notStated",
+        levels: [],
+        defaultLevel: null,
+    },
     source: {
         providerId: id,
         providerRevision: 2,
@@ -253,6 +260,190 @@ test("validates Grok image declaration against the written vision flag", async (
                         secret: false,
                     },
                 ],
+            },
+        }),
+    ).toBe("invalid_response");
+});
+
+test("validates the declared reasoning-effort list and its model default", async () => {
+    const written: GrokPlan = {
+        ...plan,
+        reasoningEfforts: {
+            source: "library",
+            state: "written",
+            levels: ["high", "medium"],
+            defaultLevel: "high",
+        },
+        file: {
+            ...plan.file,
+            changes: [
+                ...plan.file.changes,
+                {
+                    keyPath: `model.${alias}.reasoning_efforts`,
+                    before: null,
+                    after: "high, medium; default high",
+                    secret: false,
+                },
+            ],
+        },
+    };
+    vi.mocked(invoke).mockResolvedValue(written);
+    await expect(planGrokSettings(id, modelId, null)).resolves.toEqual({
+        kind: "desktop",
+        plan: written,
+    });
+    expect(reviewedGrokPlan(written)).toEqual(reviewedGrokPlan(plan));
+
+    const preserved: GrokReasoningEfforts[] = [
+        {
+            source: "library",
+            state: "unavailable",
+            levels: [],
+            defaultLevel: null,
+        },
+        {
+            source: "notStated",
+            state: "unchanged",
+            levels: [],
+            defaultLevel: null,
+        },
+    ];
+    for (const reasoningEfforts of preserved) {
+        const variant: GrokPlan = {
+            ...written,
+            existingAlias: true,
+            reasoningEfforts,
+            file: { ...plan.file, changes: plan.file.changes },
+        };
+        vi.mocked(invoke).mockResolvedValue(variant);
+        await expect(planGrokSettings(id, modelId, null)).resolves.toEqual({
+            kind: "desktop",
+            plan: variant,
+        });
+    }
+});
+
+test("rejects forged or contradictory reasoning-effort summaries", async () => {
+    const written: GrokPlan = {
+        ...plan,
+        reasoningEfforts: {
+            source: "library",
+            state: "written",
+            levels: ["high"],
+            defaultLevel: "high",
+        },
+        file: {
+            ...plan.file,
+            changes: [
+                ...plan.file.changes,
+                {
+                    keyPath: `model.${alias}.reasoning_efforts`,
+                    before: null,
+                    after: "high; default high",
+                    secret: false,
+                },
+            ],
+        },
+    };
+    const malformed: unknown[] = [
+        null,
+        {
+            source: "catalog",
+            state: "notStated",
+            levels: [],
+            defaultLevel: null,
+        },
+        { source: "library", state: "guessed", levels: [], defaultLevel: null },
+        {
+            source: "library",
+            state: "written",
+            levels: ["high", "high"],
+            defaultLevel: null,
+        },
+        {
+            source: "library",
+            state: "written",
+            levels: ["medium", "high"],
+            defaultLevel: null,
+        },
+        {
+            source: "library",
+            state: "written",
+            levels: ["bogus"],
+            defaultLevel: null,
+        },
+        {
+            source: "library",
+            state: "written",
+            levels: [],
+            defaultLevel: null,
+        },
+        {
+            source: "library",
+            state: "written",
+            levels: ["high"],
+            defaultLevel: "low",
+        },
+        {
+            source: "library",
+            state: "unavailable",
+            levels: ["high"],
+            defaultLevel: null,
+        },
+        {
+            source: "notStated",
+            state: "unchanged",
+            levels: [],
+            defaultLevel: null,
+        },
+        {
+            source: "library",
+            state: "written",
+            levels: ["high"],
+            defaultLevel: null,
+        },
+        {
+            source: "notStated",
+            state: "notStated",
+            levels: [],
+            defaultLevel: null,
+            extra: true,
+        },
+    ];
+    for (const reasoningEfforts of malformed) {
+        expect(await rejectWith({ ...written, reasoningEfforts })).toBe(
+            "invalid_response",
+        );
+    }
+    const effortChange = {
+        keyPath: `model.${alias}.reasoning_efforts`,
+        before: null,
+        after: "high; default high",
+        secret: false,
+    };
+    for (const change of [
+        { ...effortChange, before: "custom" },
+        { ...effortChange, after: "high" },
+        { ...effortChange, secret: true },
+    ]) {
+        expect(
+            await rejectWith({
+                ...written,
+                file: {
+                    ...written.file,
+                    changes: [...plan.file.changes, change],
+                },
+            }),
+        ).toBe("invalid_response");
+    }
+    expect(
+        await rejectWith({
+            ...plan,
+            reasoningEfforts: {
+                source: "library",
+                state: "written",
+                levels: ["high"],
+                defaultLevel: "high",
             },
         }),
     ).toBe("invalid_response");

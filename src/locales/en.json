@@ -679,14 +679,28 @@
             "thinkingMappingNeeded": "Not offered because this binding has no verified Pi-to-Provider mapping for: {{levels}}.",
             "thinkingUnmappedValue": "{{value}} (not offered)",
             "thinkingObsolete": "The saved choice {{value}} is no longer offered for this model. Choose a listed level or Do not overwrite; nothing falls back automatically.",
+            "effortLevels": {
+                "max": "Max",
+                "xhigh": "Extra high",
+                "high": "High",
+                "medium": "Medium",
+                "low": "Low",
+                "minimal": "Minimal",
+                "none": "Off"
+            },
             "grokFacts": {
                 "heading": "Grok Build model settings",
                 "existingValue": "Existing native value kept; not displayed.",
                 "defaultState": "Not written: Grok Build resolves its own default.",
                 "imageDefaultState": "Not written: Grok Build uses its endpoint model metadata.",
+                "effortList": "{{levels}}",
+                "effortListDefault": "{{levels}} (default: {{level}})",
+                "effortDefaultState": "Not written: Grok Build uses its endpoint model metadata.",
+                "effortUnavailable": "Not written",
+                "effortUnavailableState": "Not written: no explicit, supported effort list can be injected; existing native fields stay unchanged.",
                 "notes": {
                     "context": "The context window is a model capacity used by Grok Build, not a request output limit. This plan does not change the default model.",
-                    "reasoning": "Reasoning support, effort lists and the selected effort are not edited. Existing fields, including deprecated supports_reasoning_effort and reasoning_effort, stay unchanged; their presence does not prove Provider support.",
+                    "reasoning": "When the native field is absent, declared effort levels and the model default are written as reasoning_efforts. Existing lists and deprecated supports_reasoning_effort or reasoning_effort stay unchanged; their presence does not prove Provider support, and the native menu is not verified in a running session.",
                     "requestSettings": "Maximum output capacity and tool-call capability have no verified independent native declaration in this adapter yet. Existing request parameters are preserved; no request tuning controls are provided."
                 }
             },
@@ -696,6 +710,7 @@
                     "contextWindow": "Context window",
                     "maxOutputTokens": "Maximum output",
                     "reasoning": "Reasoning",
+                    "reasoningEfforts": "Reasoning efforts",
                     "imageInput": "Image input",
                     "thinkingLevel": "Thinking level"
                 },

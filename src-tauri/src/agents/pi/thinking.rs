@@ -91,10 +91,11 @@ impl PiThinkingLevel {
 
 /// Levels Pi accepts for one merged model definition, in Pi's ranking order.
 ///
-/// This follows Pi 1.3.0's `getSupportedThinkingLevels`, checked against the
-/// installed bundle: without `reasoning: true` only `off` is accepted. A reasoning
-/// model accepts every level except one whose `thinkingLevelMap` entry is `null`,
-/// and `xhigh`/`max` also need a string entry.
+/// This follows `getSupportedThinkingLevels` in Pi 1.3.0 and 1.4.0, checked
+/// against the installed bundle: without `reasoning: true` only `off` is
+/// accepted. A reasoning model accepts every level except one whose
+/// `thinkingLevelMap` entry is `null`, and `xhigh`/`max` also need a string
+/// entry.
 ///
 /// A non-boolean `reasoning`, a non-object map or a non-string entry is refused
 /// instead of guessed.

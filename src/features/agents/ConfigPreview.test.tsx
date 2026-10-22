@@ -1253,6 +1253,12 @@ test("Grok previews its TOML file and applies it once", async () => {
             value: "64000",
         },
         imageInput: { source: "catalog", state: "written", value: true },
+        reasoningEfforts: {
+            source: "library",
+            state: "written",
+            levels: ["high", "medium", "low"],
+            defaultLevel: "high",
+        },
         source: plan.source,
         restartRequired: true,
         precedence: [
@@ -1283,6 +1289,12 @@ test("Grok previews its TOML file and applies it once", async () => {
                     keyPath: `model.${alias}.vision`,
                     before: null,
                     after: "true",
+                    secret: false,
+                },
+                {
+                    keyPath: `model.${alias}.reasoning_efforts`,
+                    before: null,
+                    after: "high, medium, low; default high",
                     secret: false,
                 },
             ],
@@ -1322,6 +1334,13 @@ test("Grok previews its TOML file and applies it once", async () => {
     });
     expect(modelSettings.textContent).toContain("64,000 tokens");
     expect(modelSettings.textContent).toContain("Text and image");
+    expect(modelSettings.textContent).toContain("Reasoning efforts");
+    expect(modelSettings.textContent).toContain(
+        "High, Medium, Low (default: High)",
+    );
+    expect(modelSettings.textContent).toContain(
+        "model.vibemate-deepseek-deepseek-flash.reasoning_efforts",
+    );
     expect(modelSettings.textContent).toContain(
         "model.vibemate-deepseek-deepseek-flash.vision",
     );

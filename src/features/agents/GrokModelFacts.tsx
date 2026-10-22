@@ -1,16 +1,22 @@
 import type { JSX } from "react";
 import { useTranslation } from "react-i18next";
-import type { GrokContextWindow, GrokImageInput } from "../../lib/desktop/grok";
+import type {
+    GrokContextWindow,
+    GrokImageInput,
+    GrokReasoningEfforts,
+} from "../../lib/desktop/grok";
 import styles from "./ModelFacts.module.css";
 
 /** Translate Rust's context summary without deriving native settings or edits. */
 export function GrokModelFacts({
     context,
     imageInput,
+    reasoningEfforts,
     alias,
 }: {
     context: GrokContextWindow;
     imageInput: GrokImageInput;
+    reasoningEfforts: GrokReasoningEfforts;
     alias: string;
 }): JSX.Element {
     const { t, i18n } = useTranslation();
@@ -22,6 +28,35 @@ export function GrokModelFacts({
                   i18n.resolvedLanguage ?? i18n.language,
               ).format(count)
             : context.value;
+    const effortValue = (() => {
+        if (reasoningEfforts.state === "written") {
+            const levels = reasoningEfforts.levels
+                .map((level) => t(`agents.modelConfig.effortLevels.${level}`))
+                .join(", ");
+            return reasoningEfforts.defaultLevel === null
+                ? t("agents.modelConfig.grokFacts.effortList", { levels })
+                : t("agents.modelConfig.grokFacts.effortListDefault", {
+                      levels,
+                      level: t(
+                          `agents.modelConfig.effortLevels.${reasoningEfforts.defaultLevel}`,
+                      ),
+                  });
+        }
+        if (reasoningEfforts.state === "unchanged")
+            return t("agents.modelConfig.grokFacts.existingValue");
+        if (reasoningEfforts.state === "unavailable")
+            return t("agents.modelConfig.grokFacts.effortUnavailable");
+        return t("agents.modelConfig.piFacts.notStatedValue");
+    })();
+    const effortState =
+        reasoningEfforts.state === "notStated"
+            ? t("agents.modelConfig.grokFacts.effortDefaultState")
+            : reasoningEfforts.state === "unavailable"
+              ? t("agents.modelConfig.grokFacts.effortUnavailableState")
+              : t(
+                    `agents.modelConfig.piFacts.states.${reasoningEfforts.state}`,
+                    { target: `model.${alias}.reasoning_efforts` },
+                );
     return (
         <section
             className={styles["facts"]}
@@ -62,6 +97,20 @@ export function GrokModelFacts({
                                       },
                                   )}
                         </span>
+                    </dd>
+                </div>
+                <div className={styles["fact"]}>
+                    <dt className={styles["term"]}>
+                        {t("agents.modelConfig.piFacts.items.reasoningEfforts")}
+                    </dt>
+                    <dd className={styles["definition"]}>
+                        <span className={styles["value"]}>{effortValue}</span>
+                        <span>
+                            {t(
+                                `agents.modelConfig.piFacts.sources.${reasoningEfforts.source}`,
+                            )}
+                        </span>
+                        <span>{effortState}</span>
                     </dd>
                 </div>
                 <div className={styles["fact"]}>

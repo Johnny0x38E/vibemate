@@ -21,6 +21,18 @@ fn reference_text() -> String {
         rows.push_str(row);
         rows.push('\n');
     }
+    rows.push_str(REASONING_EFFORTS_ROW);
+    rows.push('\n');
+    rows
+}
+
+/// A reference from a release that predates the modern effort-list row.
+fn older_reference_text() -> String {
+    let mut rows = String::from("# Configuration reference\n\n");
+    for row in CONTRACT_ROWS {
+        rows.push_str(row);
+        rows.push('\n');
+    }
     rows
 }
 
@@ -486,6 +498,275 @@ fn malformed_native_vision_is_not_silently_overwritten() {
     f.model.model.capability_overrides.image_input =
         Some(crate::model_catalog::CapabilityOverride::Supported);
     assert_eq!(f.error(&f.provider, &f.model), PlanError::TargetConflict);
+}
+
+#[test]
+fn declared_reasoning_efforts_are_written_with_the_model_default() {
+    let mut f = Fixture::new();
+    f.installed();
+    f.model.model.capabilities.thinking = CapabilityEvidence {
+        state: CapabilityState::Supported,
+        source: Some(CapabilitySource::DeepseekModelEffortLevels),
+    };
+    f.model.model.thinking_effort = Some(ThinkingEffort::Listed {
+        levels: vec![EffortLevel::High, EffortLevel::Medium, EffortLevel::Low],
+        default_level: Some(EffortLevel::High),
+    });
+    let (plan, document) = build(&f.storage, &f.root, &f.provider, &f.model).unwrap();
+    let alias = &plan.model_alias;
+    assert_eq!(plan.reasoning_efforts.source, GrokEffortSource::Library);
+    assert_eq!(plan.reasoning_efforts.state, GrokEffortState::Written);
+    assert_eq!(
+        plan.reasoning_efforts.levels,
+        [EffortLevel::High, EffortLevel::Medium, EffortLevel::Low]
+    );
+    assert_eq!(
+        plan.reasoning_efforts.default_level,
+        Some(EffortLevel::High)
+    );
+    let change = plan
+        .file
+        .changes
+        .iter()
+        .find(|change| change.key_path.ends_with(".reasoning_efforts"))
+        .unwrap();
+    assert!(change.before.is_none());
+    assert_eq!(change.after, "high, medium, low; default high");
+    let serialized = serde_json::to_value(&plan).unwrap();
+    assert_eq!(serialized["reasoningEfforts"]["source"], "library");
+    assert_eq!(serialized["reasoningEfforts"]["state"], "written");
+    assert_eq!(
+        serialized["reasoningEfforts"]["levels"],
+        serde_json::json!(["high", "medium", "low"])
+    );
+    assert_eq!(serialized["reasoningEfforts"]["defaultLevel"], "high");
+    let efforts = document["model"][alias]["reasoning_efforts"]
+        .as_array_of_tables()
+        .unwrap();
+    assert_eq!(efforts.len(), 3);
+    assert_eq!(efforts.get(0).unwrap()["value"].as_str(), Some("high"));
+    assert_eq!(
+        efforts.get(0).unwrap()["label"].as_str(),
+        Some("High Effort")
+    );
+    assert_eq!(efforts.get(0).unwrap()["default"].as_bool(), Some(true));
+    assert_eq!(
+        efforts
+            .get(1)
+            .unwrap()
+            .get("default")
+            .and_then(Item::as_bool),
+        None
+    );
+}
+
+#[test]
+fn an_existing_reasoning_effort_list_is_preserved_without_exposing_it() {
+    let mut f = Fixture::new();
+    f.installed();
+    let alias = f.plan().model_alias;
+    f.bind(&alias);
+    f.write(
+        "config.toml",
+        &format!(
+            "[model.{alias}]\n[[model.{alias}.reasoning_efforts]]\nvalue = \"custom\"\nlabel = \"{PRIVATE}\"\ndefault = true\n"
+        ),
+    );
+    f.model.model.capabilities.thinking = CapabilityEvidence {
+        state: CapabilityState::Supported,
+        source: Some(CapabilitySource::DeepseekModelEffortLevels),
+    };
+    f.model.model.thinking_effort = Some(ThinkingEffort::Listed {
+        levels: vec![EffortLevel::High],
+        default_level: Some(EffortLevel::High),
+    });
+    let (plan, document) = build(&f.storage, &f.root, &f.provider, &f.model).unwrap();
+    assert_eq!(plan.reasoning_efforts.source, GrokEffortSource::NotStated);
+    assert_eq!(plan.reasoning_efforts.state, GrokEffortState::Unchanged);
+    assert!(plan.reasoning_efforts.levels.is_empty());
+    assert!(
+        !plan
+            .file
+            .changes
+            .iter()
+            .any(|change| change.key_path.ends_with(".reasoning_efforts"))
+    );
+    assert!(!serde_json::to_string(&plan).unwrap().contains(PRIVATE));
+    assert!(document.to_string().contains(PRIVATE));
+}
+
+#[test]
+fn malformed_reasoning_effort_fields_are_not_overwritten() {
+    for native in [
+        "reasoning_efforts = \"high\"\n",
+        "supports_reasoning_effort = \"false\"\n",
+    ] {
+        let mut f = Fixture::new();
+        f.installed();
+        let alias = f.plan().model_alias;
+        f.bind(&alias);
+        f.write("config.toml", &format!("[model.{alias}]\n{native}"));
+        f.model.model.capabilities.thinking = CapabilityEvidence {
+            state: CapabilityState::Supported,
+            source: Some(CapabilitySource::DeepseekModelEffortLevels),
+        };
+        f.model.model.thinking_effort = Some(ThinkingEffort::Listed {
+            levels: vec![EffortLevel::High],
+            default_level: None,
+        });
+        assert_eq!(f.error(&f.provider, &f.model), PlanError::TargetConflict);
+    }
+}
+
+#[test]
+fn unsupported_effort_statements_do_not_write_a_native_list() {
+    let mut cases: Vec<(ThinkingEffort, CapabilityState, Option<bool>)> = vec![
+        (
+            ThinkingEffort::Any {
+                default_level: None,
+            },
+            CapabilityState::Supported,
+            None,
+        ),
+        (
+            ThinkingEffort::Listed {
+                levels: Vec::new(),
+                default_level: None,
+            },
+            CapabilityState::Supported,
+            None,
+        ),
+        (
+            ThinkingEffort::Listed {
+                levels: vec![EffortLevel::High],
+                default_level: None,
+            },
+            CapabilityState::Unknown,
+            None,
+        ),
+        (
+            ThinkingEffort::Listed {
+                levels: vec![EffortLevel::High],
+                default_level: None,
+            },
+            CapabilityState::Supported,
+            Some(false),
+        ),
+    ];
+    for (statement, thinking, native_supports) in cases.drain(..) {
+        let mut f = Fixture::new();
+        f.installed();
+        let alias = f.plan().model_alias;
+        f.bind(&alias);
+        let native = native_supports.map_or(String::new(), |enabled| {
+            format!("supports_reasoning_effort = {enabled}\n")
+        });
+        f.write("config.toml", &format!("[model.{alias}]\n{native}"));
+        f.model.model.capabilities.thinking = CapabilityEvidence {
+            state: thinking,
+            source: Some(CapabilitySource::DeepseekModelEffortLevels),
+        };
+        f.model.model.thinking_effort = Some(statement);
+        let (plan, document) = build(&f.storage, &f.root, &f.provider, &f.model).unwrap();
+        assert_eq!(plan.reasoning_efforts.state, GrokEffortState::Unavailable);
+        assert_eq!(plan.reasoning_efforts.source, GrokEffortSource::Library);
+        assert!(
+            !plan
+                .file
+                .changes
+                .iter()
+                .any(|change| change.key_path.ends_with(".reasoning_efforts"))
+        );
+        assert!(
+            document["model"][alias]
+                .as_table()
+                .unwrap()
+                .get("reasoning_efforts")
+                .is_none()
+        );
+    }
+}
+
+#[test]
+fn an_unlisted_default_is_not_marked_in_the_native_array() {
+    let mut f = Fixture::new();
+    f.installed();
+    f.model.model.capabilities.thinking = CapabilityEvidence {
+        state: CapabilityState::Supported,
+        source: Some(CapabilitySource::DeepseekModelEffortLevels),
+    };
+    f.model.model.thinking_effort = Some(ThinkingEffort::Listed {
+        levels: vec![EffortLevel::High],
+        default_level: Some(EffortLevel::Off),
+    });
+    let (plan, document) = build(&f.storage, &f.root, &f.provider, &f.model).unwrap();
+    assert_eq!(plan.reasoning_efforts.default_level, None);
+    let alias = &plan.model_alias;
+    let efforts = document["model"][alias]["reasoning_efforts"]
+        .as_array_of_tables()
+        .unwrap();
+    assert_eq!(
+        efforts
+            .get(0)
+            .unwrap()
+            .get("default")
+            .and_then(Item::as_bool),
+        None
+    );
+}
+
+#[test]
+fn deprecated_effort_fields_are_left_untouched_when_the_list_is_added() {
+    let mut f = Fixture::new();
+    f.installed();
+    let alias = f.plan().model_alias;
+    f.bind(&alias);
+    f.write(
+        "config.toml",
+        &format!(
+            "[model.{alias}]\nsupports_reasoning_effort = true\nreasoning_effort = \"medium\"\n"
+        ),
+    );
+    f.model.model.capabilities.thinking = CapabilityEvidence {
+        state: CapabilityState::Supported,
+        source: Some(CapabilitySource::DeepseekModelEffortLevels),
+    };
+    f.model.model.thinking_effort = Some(ThinkingEffort::Listed {
+        levels: vec![EffortLevel::High],
+        default_level: Some(EffortLevel::High),
+    });
+    let (plan, document) = build(&f.storage, &f.root, &f.provider, &f.model).unwrap();
+    assert_eq!(plan.reasoning_efforts.state, GrokEffortState::Written);
+    let entry = document["model"][&plan.model_alias].as_table().unwrap();
+    assert_eq!(entry["supports_reasoning_effort"].as_bool(), Some(true));
+    assert_eq!(entry["reasoning_effort"].as_str(), Some("medium"));
+}
+
+#[test]
+fn an_older_reference_keeps_effort_lists_untouched() {
+    let mut f = Fixture::new();
+    f.installed();
+    f.write(
+        "docs/user-guide/26-config-reference.md",
+        &older_reference_text(),
+    );
+    f.model.model.capabilities.thinking = CapabilityEvidence {
+        state: CapabilityState::Supported,
+        source: Some(CapabilitySource::DeepseekModelEffortLevels),
+    };
+    f.model.model.thinking_effort = Some(ThinkingEffort::Listed {
+        levels: vec![EffortLevel::High],
+        default_level: Some(EffortLevel::High),
+    });
+    let (plan, document) = build(&f.storage, &f.root, &f.provider, &f.model).unwrap();
+    assert_eq!(plan.reasoning_efforts.state, GrokEffortState::Unavailable);
+    assert!(
+        document["model"][&plan.model_alias]
+            .as_table()
+            .unwrap()
+            .get("reasoning_efforts")
+            .is_none()
+    );
 }
 
 #[test]

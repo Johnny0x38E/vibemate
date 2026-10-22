@@ -85,24 +85,29 @@ review and tests.
 ### Grok Build
 
 Keep the managed-alias model identity and declared `context_window` mapping.
-Native effort tables use `[[model.<alias>.reasoning_efforts]]` with `value` and a
-possible `default = true`. This is the target for switchable options and a model
-default, not a reason to add a generic request editor. The adapter does not yet
-write this array: validate values, default selection and preservation before
-claiming support. Do not introduce writes to deprecated `supports_reasoning_effort`
-or `reasoning_effort`, and do not use the global default to represent one alias.
+Native effort tables use `[[model.<alias>.reasoning_efforts]]` with `value`,
+`label` and a possible `default = true`. The adapter writes a declared non-empty
+list only when the native field is absent, reasoning support is declared, the
+installed reference documents the field, and `supports_reasoning_effort` is not
+explicitly false. Existing arrays stay untouched; `any`, empty lists and unknown
+support are not expanded. This is model injection, not a generic request editor.
+It does not prove the native menu or a running session selects the value. Do not
+introduce writes to deprecated `supports_reasoning_effort` or `reasoning_effort`,
+and do not use the global default to represent one alias.
 
 The documented Grok `vision` flag now consumes an explicit central image-input
-state. Independent output-capacity and tool metadata mappings remain to be
-established. `max_completion_tokens` is a request setting; the existence of that
-key alone does not prove an independent capability declaration.
+state. Independent output-capacity and tool metadata mappings remain
+unsupported: the manual has no model-level field for either.
+`max_completion_tokens` is a request setting; the existence of that key alone
+does not prove an independent capability declaration, so the adapter does not
+write it.
 
 ## Evidence and implementation order
 
 Reuse the [field matrix](../integrations/model-parameter-mapping.md) and existing
 [Claude Code](../integrations/claude-code.md), [Pi](../integrations/pi.md) and
 [Grok Build](../integrations/grok-build.md) research. The recorded installations
-are Claude Code 2.1.304, Pi 1.3.0 and Grok Build 1.0.62; do not repeat a full survey
+are Claude Code 2.1.304, Pi 1.4.0 and Grok Build 1.0.67; do not repeat a full survey
 unless an actual conflict or known deprecation requires it.
 
 First remove the out-of-scope request editor and fix mappings coupled to one

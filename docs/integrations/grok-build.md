@@ -1,19 +1,19 @@
 # Grok Build 配置接入约定
 
-核实日期：2026-10-09（P03），2026-10-16 按安装版本重新核实。本机验证平台为 macOS Apple Silicon。
+核实日期：2026-10-09（P03），2026-10-16、2026-10-23 按安装版本重新核实。本机验证平台为 macOS Apple Silicon。
 
 ## 产品与安装身份
 
 [官方介绍](https://docs.x.ai/build/overview)与 [xai-org/grok-build](https://github.com/xai-org/grok-build)
 确认 Grok Build 是 xAI 的编码 Agent，支持 TUI、headless 与 ACP。本机命令是
 `grok`，`grok --help` 标题为 Grok Build TUI；`grok --version` 返回
-`grok 1.0.60 (01a8e1c591c0) [stable]`。本机入口是 `~/.grok/bin/grok` 符号链接，指向
-`~/.grok/downloads/grok-1.0.60-macos-aarch64`，`bin/agent` 指向同一文件；`downloads/`
-仍保留旧的 `grok-1.0.52-…` 与无版本号的 `grok-macos-aarch64`，因此适配器只能使用解析后的
+`grok 1.0.67 (2fe064390d07)`。本机入口是 `~/.grok/bin/grok` 符号链接，指向
+`~/.grok/downloads/grok-1.0.67-macos-aarch64`，`bin/agent` 指向同一文件；`downloads/`
+仍保留 `grok-1.0.62-…`、无版本号的 `grok-macos-aarch64` 等旧文件，因此适配器只能使用解析后的
 目标，不能假定目录里只有一个二进制。
 
 Grok 启动时把随版本发布的手册解包到 `~/.grok/docs/user-guide/`，并写入
-`~/.grok/.metadata_version`（本机内容为 `1.0.60`）。这两份产物与配置根同目录，是**与安装
+`~/.grok/.metadata_version`（本机内容为 `1.0.67`）。这两份产物与配置根同目录，是**与安装
 版本绑定**的合约证据：适配器可以据此判断本机字段是否与被核实的格式一致，而不必依赖在线文档。
 `~/.grok/CHANGELOG.md` 同样按版本记录变更。
 官方源码许可证为 Apache-2.0；本次仅记录接入规则，没有将源码加入 MIT 应用。
@@ -49,14 +49,15 @@ Grok 还发现 Claude/Cursor 兼容资源；原生 config.toml 优先于兼容 M
 通过来源信息区分自己管理的条目、兼容来源、项目覆盖与策略固定项，不替用户关闭
 整个兼容层。`inspect --json` 是发现报告，不是连接成功证明。
 
-## P24.a 参数核实更新（2026-10-20）
+## P24.a 参数核实更新（2026-10-20，2026-10-23 复核）
 
-本机现为 `grok 1.0.62 (1474f9cbdd91)`，`.metadata_version` 同为 `1.0.62`。
-随版本 `26-config-reference.md` 已将 `supports_reasoning_effort` 和单值
-`reasoning_effort` 标为弃用，推荐 `reasoning_efforts`。在线简表仍列旧字段，不能据此
-新增弃用字段写入。下文 1.0.60 的努力档位说明保留为旧证据；新数组项、默认与持久选用
-规则仍需补验，见 [P24.a 逐字段矩阵](model-parameter-mapping.md)。现有适配器继续保留
-用户 effort 字段，不把此文档更新当作参数功能交付。
+本机现为 `grok 1.0.67 (2fe064390d07)`，`.metadata_version` 同为 `1.0.67`；
+1.0.62 与 1.0.67 的随版本文档都将 `supports_reasoning_effort` 和单值
+`reasoning_effort` 标为弃用，推荐 `reasoning_efforts`。1.0.67 二进制内嵌的默认模型目录
+给出数组项 `value/label/description/default`；适配器只写 `value/label/default`。
+在线简表仍列旧字段，不能据此新增弃用字段写入。下文 1.0.60 的努力档位说明保留为旧证据；
+逐字段状态见 [P24.a 逐字段矩阵](model-parameter-mapping.md)。运行中菜单与持久选用通道
+仍未核实，现有适配器保留用户 effort 字段，不把此文档更新当作会话切换已交付。
 
 ## P24 模型注入与预览
 
@@ -64,13 +65,17 @@ Grok 还发现 Claude/Cursor 兼容资源；原生 config.toml 优先于兼容 M
 未知原生形状只说明保留，完整详情重新构建并比较状态。图像能力只有在中央明确声明时才
 映射到已核实的 `model.<alias>.vision` 布尔字段；未知时保留原值。
 
-模型定义只在服务商模块维护。Grok 已消费中央上下文与明确声明的图像能力；后续目标是消费
-已声明的推理信息，并用原生 `reasoning_efforts` 注入可切换档位及默认值。当前适配器尚未写该数组，
-不能将保留已有 effort 字段称为已支持切换。应核实值、默认规则与未拥有字段的保留，
-不能用弃用单值字段或全局默认替代每 alias 的映射。
+模型定义只在服务商模块维护。Grok 已消费中央上下文、明确声明的图像能力和非空档位列表：
+`reasoning_efforts` 只在原生字段缺失、中央 `Listed` 非空、推理支持为 supported、安装参考
+含该字段且未被 `supports_reasoning_effort = false` 禁用时写入。每项写 `value/label`，中央
+默认档在列表内时写 `default = true`；标签是英文展示文本。已有数组保留且不解析显示，
+`any`、空列表与未知支持不展开。不写旧布尔/单值字段，也不改全局
+`[models].default_reasoning_effort` 或 `[models].default`。原生菜单是否出现以及运行中
+`/effort` 何时生效仍未验证，不能把写入数组称为已切换。
 
 不提供 temperature/top_p、请求输出或推理 token 数编辑器，不将 `max_completion_tokens`
 自动等同于独立模型输出能力。保留用户原有参数、全局 `[models]`、默认模型与其它 alias。
+模型级工具能力没有已核实字段，因此不写工具声明；这不表示模型不能调用工具。
 
 ## 模型与认证
 
@@ -162,13 +167,15 @@ vibemate 拥有的 `[model.<alias>]` 条目写入时：
 预览、权限、脱敏与私有备份策略。认证文件（如 `auth.json`、`mcp_credentials.json`）
 未在本次读取；未验证本机权限或 Windows ACL，不能承诺固定权限。
 
-### 努力档位与凭据写入约定（2026-10-13）
+### 努力档位与凭据写入约定（2026-10-13，2026-10-23 更新）
 
-以下是旧版调研记录：`[models].default_reasoning_effort` 给出默认模型的默认档位；
+`[models].default_reasoning_effort` 给出默认模型的默认档位；
 `supports_reasoning_effort` 与 `reasoning_effort` 已在当前随版本参考中标为弃用，不再新增写入。
 现行可选档位写成数组表
-`[[model.<alias>.reasoning_efforts]]`，每项一个 `value`，其中一项可标 `default = true`。参考页没有
-列全可选值；维护者配置里出现的是 `medium`、`high`、`xhigh`、`max`。
+`[[model.<alias>.reasoning_efforts]]`，每项一个 `value` 和 `label`，其中一项可标 `default = true`。
+1.0.67 内嵌的默认模型目录还带 `description`，但适配器不写该字段。参考页没有列全可选值；
+维护者配置里出现的是 `medium`、`high`、`xhigh`、`max`。适配器只在原生字段缺失时写入中央
+已声明的非空列表，已有数组保持原样；单项默认只在中央默认档也出现在列表内时标记。
 
 **凭据注入走配置文件，不写环境变量**：适配 Grok Build 时把密钥写入其私有配置的 `api_key`。认证顺序
 是 `api_key` → `env_key` → 活动会话 Token → `XAI_API_KEY`，所以写入 `api_key` 会**接管**已有的
@@ -279,3 +286,22 @@ enabled = false
   未读取 `auth.json` 与 `mcp_credentials.json`。
 - 仍未核实：`api_key` 在各 `api_backend` 下实际使用的请求头、`config.toml` 权限是否被强制、
   模型段落的运行时重读语义、`requirements.toml`/MDM 在本机的存在与影响。
+
+## 2026-10-23 复核（P24.d）
+
+- `grok --version` 为 `grok 1.0.67 (2fe064390d07)`；`~/.grok/.metadata_version` 同为 `1.0.67`；
+  `~/.grok/bin/grok` 指向 `downloads/grok-1.0.67-macos-aarch64`，`downloads/` 仍保留 1.0.62。
+- 1.0.62 与 1.0.67 的 `26-config-reference.md` 都列出 `model.<id>.reasoning_efforts`
+  （`array of tables`）；1.0.67 二进制内嵌的默认模型目录显示每项为
+  `value`、`label`、`description` 和可选 `default`。适配器只写 `value/label/default`。
+- 写入边界：仅当原生 `reasoning_efforts` 缺失、中央 `Listed` 非空、推理支持为 supported、
+  安装参考含该字段且 `supports_reasoning_effort` 未显式为 false 时，写入已声明档位；
+  中央默认档同时出现在列表内时标 `default = true`。已有数组、旧布尔/单值字段、全局
+  `[models]` 与其他 alias 不改。`any`、空列表和未知支持不展开。
+- 独立最大输出仍无模型级字段；`max_completion_tokens` 是请求字段，适配器不写。
+  工具调用没有已核实模型级字段，适配器不写工具声明。
+- Rust 666 项通过、4 项忽略（含 3 项真实网络检查）；前端 1129 项通过；`check:frontend`、
+  fmt/Clippy 与锁定 no-bundle 桌面构建通过。临时 `GROK_HOME` 中让 Grok 1.0.67 读取同一数组表写法，
+  `grok models` 正常列出条目且无解析警告；这不证明原生菜单或会话切换。
+- 未启动 Grok 会话、未发送请求。原生 effort 菜单、运行中 `/effort` 切换、各 backend 出站载荷
+  与真实 Provider 接受结果仍未验证。

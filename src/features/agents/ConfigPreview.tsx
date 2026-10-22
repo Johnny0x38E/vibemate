@@ -725,6 +725,7 @@ function PlanCard({
                 <GrokModelFacts
                     context={plan.contextWindow}
                     imageInput={plan.imageInput}
+                    reasoningEfforts={plan.reasoningEfforts}
                     alias={plan.modelAlias}
                 />
             )}

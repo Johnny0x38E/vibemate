@@ -679,14 +679,28 @@
             "thinkingMappingNeeded": "此绑定尚无已核实的 Pi 到 Provider 档位映射，暂不提供：{{levels}}。",
             "thinkingUnmappedValue": "{{value}}（不可选）",
             "thinkingObsolete": "已保存的选择 {{value}} 对此模型不再可选。请选择列出的档位或“不覆盖”；不会自动回退。",
+            "effortLevels": {
+                "max": "最高",
+                "xhigh": "极高",
+                "high": "高",
+                "medium": "中",
+                "low": "低",
+                "minimal": "最低",
+                "none": "关闭"
+            },
             "grokFacts": {
                 "heading": "Grok Build 模型设置",
                 "existingValue": "保留已有原生值；不显示其内容。",
                 "defaultState": "不写入：由 Grok Build 确定默认值。",
                 "imageDefaultState": "不写入：Grok Build 使用端点的模型信息。",
+                "effortList": "{{levels}}",
+                "effortListDefault": "{{levels}}（默认：{{level}}）",
+                "effortDefaultState": "不写入：Grok Build 使用端点的模型信息。",
+                "effortUnavailable": "不写入",
+                "effortUnavailableState": "不写入：没有可安全注入的明确受支持档位列表，已有原生字段保持不变。",
                 "notes": {
                     "context": "上下文窗口是 Grok Build 使用的模型容量，不是请求输出限制。本次计划不更改默认模型。",
-                    "reasoning": "不编辑推理支持、可选档位或选用档位。保留已有字段，包括已弃用的 supports_reasoning_effort 和 reasoning_effort；字段存在不代表 Provider 已验证支持。",
+                    "reasoning": "原生字段不存在时，已声明的推理档位和模型默认值会写入 reasoning_efforts。已有列表和已弃用的 supports_reasoning_effort 或 reasoning_effort 保持不变；字段存在不代表 Provider 已验证支持，也未验证运行中会话的原生菜单。",
                     "requestSettings": "独立最大输出能力和工具调用能力尚无已核实的原生映射。已有请求参数保持不变，不提供请求调参控件。"
                 }
             },
@@ -696,6 +710,7 @@
                     "contextWindow": "上下文窗口",
                     "maxOutputTokens": "最大输出",
                     "reasoning": "推理支持",
+                    "reasoningEfforts": "可选推理档位",
                     "imageInput": "图片输入",
                     "thinkingLevel": "思考档位"
                 },

@@ -30,14 +30,14 @@ use crate::config_plan::{
     digest_hex, read_target_bytes,
 };
 use crate::credentials::CredentialStore;
-use crate::model_catalog::CapabilityState;
+use crate::model_catalog::{CapabilityState, EffortLevel, ThinkingEffort};
 use crate::models::{ModelSnapshot, ProviderModel};
 use crate::providers::{ProviderProtocol, ProviderRecord, base_url_for_protocol};
 use crate::storage::Storage;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use toml_edit::{DocumentMut, Item, Table, table, value};
+use toml_edit::{ArrayOfTables, DocumentMut, Item, Table, table, value};
 
 /// Grok reads all user settings from this one file below its configuration root.
 const CONFIG_FILE: &str = "config.toml";
@@ -63,6 +63,11 @@ const CONTRACT_ROWS: [&str; 9] = [
     "| `model.<id>.name` | `string` |",
     "| `models.disabled_models` | `string[]` |",
 ];
+
+/// The modern effort-list row, checked separately so an older installed
+/// reference keeps its native list untouched instead of receiving a field it
+/// does not document.
+const REASONING_EFFORTS_ROW: &str = "| `model.<id>.reasoning_efforts` | `array of tables` |";
 
 /// Whether a higher-precedence configuration file was located.
 #[derive(Debug, Serialize, PartialEq, Eq)]
@@ -166,6 +171,47 @@ pub struct GrokImageInput {
     pub value: Option<bool>,
 }
 
+/// Where the saved reasoning-effort statement came from.
+///
+/// The model library does not record whether a catalog refresh or the user
+/// supplied the list, so "library" means saved centrally, not Provider-verified.
+#[derive(Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum GrokEffortSource {
+    /// At least one effort statement is stored with the model.
+    Library,
+    /// No effort statement is stored and no native list is claimed.
+    NotStated,
+}
+
+/// How the plan treats Grok's native `reasoning_efforts` array.
+#[derive(Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum GrokEffortState {
+    /// Writes a non-empty declared list with an optional default entry.
+    Written,
+    /// Keeps an existing native list without reading or displaying it.
+    Unchanged,
+    /// No central list; Grok resolves its menu from the endpoint.
+    NotStated,
+    /// A central statement exists, but it cannot be injected safely.
+    Unavailable,
+}
+
+/// Safe summary of the declared effort list. Native table text is never returned.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GrokReasoningEfforts {
+    /// Library or absent source for the declaration.
+    pub source: GrokEffortSource,
+    /// Whether the plan writes, preserves or omits the native array.
+    pub state: GrokEffortState,
+    /// Declared levels in display order; empty unless [`Self::state`] is written.
+    pub levels: Vec<EffortLevel>,
+    /// Declared default among `levels`, when one was written.
+    pub default_level: Option<EffortLevel>,
+}
+
 /// A Grok preview contains no credential values and no merged document text.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -180,6 +226,8 @@ pub struct GrokPlan {
     pub context_window: GrokContextWindow,
     /// Image-input capability mapping, separate from model behavior proof.
     pub image_input: GrokImageInput,
+    /// Declared native effort list and its model default, when written.
+    pub reasoning_efforts: GrokReasoningEfforts,
     /// The file, with every field the plan changes.
     pub file: GrokPlannedFile,
     /// Sources that can outrank the written file, checked for existence only.
@@ -467,9 +515,9 @@ pub(crate) fn build(
         true,
         &mut changes,
     )?;
-    // Only verified model metadata is injected. Existing request parameters and
-    // reasoning_efforts remain user-owned until a native effort-list mapping is
-    // implemented; their presence does not establish capability support.
+    // Only verified model metadata is injected. Existing request parameters stay
+    // user-owned; an existing reasoning_efforts array is preserved by its own
+    // mapper instead of being rewritten.
     let context_window = if let Some(tokens) = model.context_window {
         set_number(entry, "context_window", tokens, &prefix, &mut changes)?;
         GrokContextWindow {
@@ -495,6 +543,7 @@ pub(crate) fn build(
     };
 
     let image_input = map_image_input(entry, model, &prefix, &mut changes)?;
+    let reasoning_efforts = map_reasoning_efforts(root, entry, model, &prefix, &mut changes)?;
 
     // `[models].default` is intentionally untouched: it is the user's choice,
     // and Grok's own model picker writes it. The written alias becomes
@@ -514,6 +563,7 @@ pub(crate) fn build(
             existing_alias,
             context_window,
             image_input,
+            reasoning_efforts,
             file: GrokPlannedFile {
                 target: file,
                 changes,
@@ -844,6 +894,144 @@ fn map_image_input(
                 value: existing,
             })
         }
+    }
+}
+
+/// Inject a declared effort list only when the native field is absent.
+///
+/// An existing `reasoning_efforts` array is user data: it may carry custom
+/// labels, descriptions or efforts, so the plan preserves it and never parses it
+/// for display. A key with any other shape is a conflict. The deprecated
+/// `supports_reasoning_effort` and `reasoning_effort` fields are never written;
+/// an explicit `false` only prevents the new list from being added.
+fn map_reasoning_efforts(
+    root: &Path,
+    entry: &mut Table,
+    model: &ProviderModel,
+    prefix: &str,
+    changes: &mut Vec<ConfigChange>,
+) -> Result<GrokReasoningEfforts, PlanError> {
+    if let Some(existing) = entry.get("reasoning_efforts") {
+        if !matches!(existing, Item::ArrayOfTables(_)) && existing.as_array().is_none() {
+            return Err(PlanError::TargetConflict);
+        }
+        return Ok(GrokReasoningEfforts {
+            source: GrokEffortSource::NotStated,
+            state: GrokEffortState::Unchanged,
+            levels: Vec::new(),
+            default_level: None,
+        });
+    }
+    let Some(statement) = &model.thinking_effort else {
+        return Ok(GrokReasoningEfforts {
+            source: GrokEffortSource::NotStated,
+            state: GrokEffortState::NotStated,
+            levels: Vec::new(),
+            default_level: None,
+        });
+    };
+    let thinking = model
+        .capability_overrides
+        .thinking
+        .map(|value| value.as_state())
+        .unwrap_or(model.capabilities.thinking.state);
+    let native_supports = match entry.get("supports_reasoning_effort") {
+        None => None,
+        Some(item) => Some(item.as_bool().ok_or(PlanError::TargetConflict)?),
+    };
+    // An open (`any`) or empty statement cannot become a concrete menu, and
+    // unknown reasoning support must not be turned into a capability claim.
+    let ThinkingEffort::Listed {
+        levels,
+        default_level,
+    } = statement
+    else {
+        return Ok(unavailable_efforts());
+    };
+    if levels.is_empty()
+        || thinking != CapabilityState::Supported
+        || native_supports == Some(false)
+        || !supports_reasoning_efforts(root)
+    {
+        return Ok(unavailable_efforts());
+    }
+    // `none` may be a declared default without appearing in the list; only a
+    // default that is also selectable is marked in the native array.
+    let default_level = default_level.filter(|level| levels.contains(level));
+    let mut array = ArrayOfTables::new();
+    for level in levels {
+        let mut table = Table::new();
+        table.insert("value", value(level.as_str()));
+        table.insert("label", value(effort_label(*level)));
+        if default_level == Some(*level) {
+            table.insert("default", value(true));
+        }
+        array.push(table);
+    }
+    entry.insert("reasoning_efforts", Item::ArrayOfTables(array));
+    changes.push(ConfigChange {
+        key_path: format!("{prefix}.reasoning_efforts"),
+        before: None,
+        after: effort_list_text(levels, default_level),
+        secret: false,
+    });
+    Ok(GrokReasoningEfforts {
+        source: GrokEffortSource::Library,
+        state: GrokEffortState::Written,
+        levels: levels.clone(),
+        default_level,
+    })
+}
+
+/// A saved statement that cannot become a safe native list.
+fn unavailable_efforts() -> GrokReasoningEfforts {
+    GrokReasoningEfforts {
+        source: GrokEffortSource::Library,
+        state: GrokEffortState::Unavailable,
+        levels: Vec::new(),
+        default_level: None,
+    }
+}
+
+/// Whether the installed reference documents the modern effort-list field.
+///
+/// The base contract still accepts older 1.0 patch releases. Their native effort
+/// fields stay untouched rather than receiving a key their manual does not name.
+fn supports_reasoning_efforts(root: &Path) -> bool {
+    let path = root.join("docs/user-guide/26-config-reference.md");
+    let Ok((target, bytes)) = read_target_bytes(&path) else {
+        return false;
+    };
+    if !target.exists || target.symlink {
+        return false;
+    }
+    std::str::from_utf8(&bytes).is_ok_and(|text| text.contains(REASONING_EFFORTS_ROW))
+}
+
+/// The label written into Grok's native menu. Values are canonical tokens; these
+/// labels are display text and do not claim Provider behavior.
+const fn effort_label(level: EffortLevel) -> &'static str {
+    match level {
+        EffortLevel::Max => "Max Effort",
+        EffortLevel::XHigh => "Extra High Effort",
+        EffortLevel::High => "High Effort",
+        EffortLevel::Medium => "Medium Effort",
+        EffortLevel::Low => "Low Effort",
+        EffortLevel::Minimal => "Minimal Effort",
+        EffortLevel::Off => "Off",
+    }
+}
+
+/// Stable display text for the planned array, kept in lockstep with the frontend.
+fn effort_list_text(levels: &[EffortLevel], default_level: Option<EffortLevel>) -> String {
+    let tokens = levels
+        .iter()
+        .map(|level| level.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
+    match default_level {
+        Some(level) => format!("{tokens}; default {}", level.as_str()),
+        None => tokens,
     }
 }
 

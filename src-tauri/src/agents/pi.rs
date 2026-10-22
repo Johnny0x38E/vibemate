@@ -2,7 +2,8 @@
 //!
 //! Owns a provider namespace per saved instance, preserves other providers/models,
 //! and writes models before the default selection. It never runs Pi, an extension
-//! or a credential command. The contract is verified against Pi 1.2.0 and 1.3.0, with installed schema checks.
+//! or a credential command. The contract is verified against Pi 1.2.0, 1.3.0 and
+//! 1.4.0, with installed schema checks.
 
 use super::{AgentId, ConfigApplied, ConfigApplyError, DiscoveryEnvironment, DiscoveryInput};
 use crate::config_apply::{

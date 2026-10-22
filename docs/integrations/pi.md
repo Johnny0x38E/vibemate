@@ -1,17 +1,28 @@
 # Pi 配置接入约定
 
-最新核实：2026-10-16，当前托管安装为 Pi 1.3.0；本机平台为 macOS Apple Silicon。P02 的 1.1.0 历史证据保留在下文，配置写入适配以本节的现行规则为准。
+最新核实：2026-10-22，当前托管安装为 Pi 1.4.0；本机平台为 macOS Apple Silicon。P02 的 1.1.0 与 1.3.0 历史证据保留在下文，配置写入适配以本节的现行规则为准。
+
+## 1.4.0 复核（2026-10-22）
+
+本机托管安装已升级至 1.4.0（2026-10-21 发布；1.3.0 发布目录仍保留）。按安装包、CHANGELOG 与源码复核：
+
+- 版本门禁接受 1.4.0；`models.json` 与 `settings.json` 的结构和所用字段与 1.3.0 相同，`thinkingLevelMap` 的 `$defs` 引用未变。
+- schema 补充了字段说明和显式默认值：`contextWindow` 128000、`maxTokens` 16384、`reasoning` false、`input` `["text"]`、`authHeader` false。这些默认值在 1.3.0 的 `provider-composer.js` 中已生效，不是 1.4.0 的新行为。
+- `thinkingLevelMap` 的 partial/null 规则写入了 schema：`null` 排除该档，未映射的 `off` 到 `high` 仍可用，`xhigh`/`max` 只有显式字符串映射才可用。1.4.0 的 `getSupportedThinkingLevels` 与 1.3.0 相同，P24.c 的注入规则无需修改。
+- 1.4.0 起 compaction 与分支摘要使用模型的 `maxTokens` 作为输出上限，并按上下文收缩；`reserveTokens` 只决定何时开始压缩。该变化不新增配置字段，但说明 `maxTokens` 会同时影响摘要请求。
+- 新增 `docs/models-configuration.md` 作为 `models.json` 的逐字段参考。内置 provider 的目录更新（如 `MiniMax-M3.1-Flash`、Xiaomi 默认模型、xAI `xhigh`）不改变 vibemate 自定义 provider 条目。
+- 本次未启动 Pi 会话、未发送 Provider 请求，也未在真实 Tauri 窗口重新验收；以上结论来自安装包、schema、CHANGELOG 与源码对照。
 
 ## P24.a 参数核实更新（2026-10-20）
 
-本机仍为 1.3.0。已核对模型/settings schema、启动档位选择与 OpenAI 协议请求构建：
+该次核对时本机为 1.3.0；1.4.0 的复核见上节。已核对模型/settings schema、启动档位选择与 OpenAI 协议请求构建：
 现有适配器写入声明的 `contextWindow/maxTokens/reasoning/input` 及每模型默认思考档位，并注入已核实的档位映射。
 OpenAI sampling 对象在动态上下文限制之后合并，持久化输出键可能绕过该限制；因此它们不会作为本轮 Agent 注入选项。Messages 不支持这些 sampling 对象。
-档位可选集与 partial map/null 规则已由本机 1.3.0 源码核实（见下文 P24.c 首批）；具体 Provider 的档位值域仍需补验，见 [P24.a 逐字段矩阵](model-parameter-mapping.md)。
+档位可选集与 partial map/null 规则已由本机 1.3.0 源码核实（见下文 P24.c 首批），1.4.0 的同一实现见上节；具体 Provider 的档位值域仍需补验，见 [P24.a 逐字段矩阵](model-parameter-mapping.md)。
 
 ## P24.c 首批：每模型思考档位（2026-10-20）
 
-可选集以本机 1.3.0 安装包为准。`dist/bundle/chunks/bedrock-converse-stream.js` 中的
+可选集首次以 1.3.0 安装包核对；1.4.0 的同一实现见上节，规则未变。`dist/bundle/chunks/bedrock-converse-stream.js` 中的
 `getSupportedThinkingLevels` 与 `clampThinkingLevel` 原文抽出后在 Node 中运行，结果如下：
 
 - `reasoning` 不为 `true` 时只接受 `off`。
@@ -63,14 +74,14 @@ vibemate 的写入规则：
 
 ## Pi 1.x 模型配置
 
-重新核对 [官方模型文档](https://pi.dev/docs/latest/models)、[配置文档](https://pi.dev/docs/latest/configuration) 与已安装 1.2.0、1.3.0 包中的 `model-config.js`、`provider-composer.js`、`resolve-config-value.js`、`settings-manager.js` 和 `model-resolver.js`。
+重新核对 [官方模型文档](https://pi.dev/docs/latest/models)、[配置文档](https://pi.dev/docs/latest/configuration) 与已安装 1.2.0、1.3.0、1.4.0 包中的 `model-config.js`、`provider-composer.js`、`resolve-config-value.js`、`settings-manager.js` 和 `model-resolver.js`。
 
 - 用户目录使用桌面进程的 `PI_CODING_AGENT_DIR`，未设置时为 `~/.pi/agent`；无效覆盖不回退。配置操作验证包入口或官方托管安装布局，并读取当前激活版本；稳定 1.x（1.2 起）检查包内 `models.schema.json`、`settings.schema.json` 的所用字段与兼容选项，不因小版本号变化直接拒绝。预览不启动 Pi。
 - 每个服务商实例的配置键使用 `vibemate-<可读配置名称>`；空格和分隔符转为连字符，同名冲突才加 ID 短后缀。配置键是 Provider 身份，`/model` 列表按该键分组并显示它。
 - 模型条目的 `name` 固定为 `(vibemate-<服务商名>) <模型 ID>`（例如 `(vibemate-Command-Code-GOAT) deepseek/deepseek-v4.1-flash`），与 Grok Build 共用 `shared::agent_model_display_name`：括号内 `vibemate` 固定、服务商显示名称转为连字符标记，括号后一个空格接模型 ID 原文；连续空白折叠、不可见字符移除、超长截断并以 `…` 结尾（整段不超过 160 个字符）。用户模型别名和 `upstream_name` 不再写入该字段。单独设置 Provider `name` 不能替代配置键。
 - 已保存模型的 `resolvedProtocol` 分别映射 `openai-completions`、`openai-responses` 和 `anthropic-messages`。需要不同官方地址时按已核实的模板选择；自定义地址不猜测另一协议的路径。DeepSeek/OpenRouter Chat 的兼容字段仅用于各自官方地址。
 - `auth.json` 高于 `models.json.apiKey`。预览只读其结构和摘要；有同名凭据则拒绝应用，不执行其中的凭据命令，不修改凭据文件。应用重新检查其摘要。
-- 应用时从 OS 凭据存储读取密钥，写入模型定义。Pi 会解释 `!command` 与 `$VAR`，因此按 1.2.0 的 `$$`/`$!` 规则转义，保证按原文使用密钥；预览的旧密钥和新密钥均为掩码。
+- 应用时从 OS 凭据存储读取密钥，写入模型定义。Pi 会解释 `!command` 与 `$VAR`，因此按 1.2.0 起沿用至 1.4.0 的 `$$`/`$!` 规则转义，保证按原文使用密钥；预览的旧密钥和新密钥均为掩码。
 - 两个文件通过共享写入日志、私有备份、摘要检查、同目录临时文件和原子替换写入；多文件不是单次原子事务，后续文件失败时补偿已写文件。Unix 替换后为 0600，避免在原本 0644 的模型文件中暴露新密钥。历史恢复按 Agent 类型隔离，并检查应用后的手工改动。
 - 新建会话读取默认选择。项目设置、CLI 参数和恢复会话可能覆盖它；未知元数据沿用 Pi 默认值。每模型默认思考档位与可切换映射见上文 P24.c；不添加请求调参控件。当前解析接受 JSON 对象；含 JSON 注释等不可解析内容会拒绝写入。
 
@@ -129,7 +140,7 @@ Pi 的 `/model` 切换是**会话级**的：它写入 session JSONL（`model_cha
 [模型文档](https://pi.dev/docs/latest/models)支持兼容端点的 `baseUrl`、`api`、
 `apiKey`、`headers`、`models` 与 `modelOverrides`。模型字段包括 `id/name`、
 `reasoning/input`、`contextWindow/maxTokens`、成本、采样参数与兼容设置。
-`maxTokens` 描述模型上限，不能直接等同于每次请求想要的输出长度。
+`maxTokens` 描述模型上限，不能直接等同于每次请求想要的输出长度；1.4.0 起它也是 compaction 与分支摘要的输出上限。
 
 首条 DeepSeek 路径使用 `openai-completions`。安装 schema 明确允许
 `compat.maxTokensField = max_tokens`、`compat.thinkingFormat = deepseek`；
@@ -150,7 +161,8 @@ OpenRouter 可使用自己的 thinking 格式和 routing 设置。Claude 使用
 | `settings.json` | `defaultThinkingLevel`、`modelThinkingLevels`（键是 `provider/model`） | 保存**每个模型选定的档位**                     |
 
 也就是说 Pi 自己就把「能力声明」与「选定值」分开存：前者在模型定义，后者在 settings。
-`thinkingLevelMap` 允许只映射部分档位（维护者的映像是只写了 `max`）。
+`thinkingLevelMap` 允许只映射部分档位：`null` 排除该档，未映射的 `off` 到 `high` 仍可用，
+`xhigh`/`max` 只有显式字符串映射才可用。
 
 认证优先级由官方 models 文档与 [Providers](https://pi.dev/docs/latest/providers)
 说明：运行时 `--api-key` → `auth.json` → `models.json` 的 `apiKey` → Provider

@@ -10,9 +10,10 @@
 2. Agent 列表当前模型展示已合入本机（维护者 2026-10-19 检查通过）：Claude Code 读取 `env.ANTHROPIC_MODEL`/`model`，Pi 读取最新 session 的模型元数据，Grok Build 读取 `[models].default`；只有仍归属 vibemate 的 Provider/model 才显示服务商与模型，否则显示「自有配置」，未发现或不可读显示「暂无配置摘要」。Grok 写入不再修改 `[models].default`。
 3. 六 Agent 固定目录、只读发现、显式与自动版本读取已交付并通过验收（2026-10-13）。
 4. 维护者已确认 H1/H3 桌面目视验收通过；H3 已完成，H1 的 Windows/Linux 原生分页验证仍随 P37 跟踪。
-5. P24.c 首批（每模型思考档位，以及 Pi 计划中的模型设置行）已在本机完成代码与自动化检查，待维护者桌面验收。
+5. P24.c 首批（每模型思考档位，以及 Pi 计划中的模型设置行）已在本机完成代码与自动化检查，待维护者桌面验收；本机 Pi 已升级至 1.4.0，2026-10-22 复核所用字段与档位规则未变。
 6. P26 已交付：Git 固定修订与已核实的 `skills@1.7.4` npx 安装均在隔离目录获取并导入，失败不改变已有库；来源页可补记获取方式。P27–P30 待做。
 7. 下一条业务主线按 P24 剩余项 → Skill 更新/部署（P27–P30）→ MCP 部署 → P35 引用约束的顺序推进；见 [phase-1](phase-1.md)。
+8. P24.d 首批已合入本机：Grok Build 只在原生字段缺失时写入已声明的 `reasoning_efforts` 列表与列表内默认档；已有数组、旧字段和全局默认保持不变，原生菜单与运行中切换仍待验证。
 
 ## 文档整理（2026-10-19）
 
@@ -123,7 +124,7 @@ P15 的真实连接记录来自维护者确认，不代表代理重新执行，�
 
 ### Task P24.a: 核实模型字段与 Agent 参数映射
 
-**状态：** 已有证据供 P24.b–d 按字段实施；未核实项继续记录，不作全部字段的前置阻塞。维护者 2026-10-20 决定复用先前调研，遇到实际冲突或已知弃用再针对性查证。[逐字段证据矩阵](../integrations/model-parameter-mapping.md) 记录本机 Claude Code 2.1.304、Pi 1.3.0、Grok Build 1.0.62 与剩余缺口，整项验收暂不勾选。
+**状态：** 已有证据供 P24.b–d 按字段实施；未核实项继续记录，不作全部字段的前置阻塞。维护者 2026-10-20 决定复用先前调研，遇到实际冲突或已知弃用再针对性查证。[逐字段证据矩阵](../integrations/model-parameter-mapping.md) 记录本机 Claude Code 2.1.304、Pi 1.4.0、Grok Build 1.0.67 与剩余缺口；2026-10-22 按 Pi 1.4.0 复核，2026-10-23 按 Grok 1.0.67 复核 `reasoning_efforts` 数组项，整项验收暂不勾选。
 
 **Description:** 建立三个 Agent 消费现有服务商模型定义的逐字段矩阵，要求见 [model-parameters.md](model-parameters.md)。不新增第二套模型定义或请求调参编辑器。
 
@@ -146,7 +147,10 @@ P24.b = Claude Code；P24.c = Pi；P24.d = Grok Build。服务商模型是唯一
 - [x] **P24.c 已交付：** 上下文、最大输出、推理/图片能力、每模型默认思考档位与来源/状态预览。服务商默认档位目前仅显示、不自动选用；用户可从已声明的可映射档位选默认值。「不覆盖」保留原值。
 - [x] **P24.c 本轮纠偏：** 官方 DeepSeek Chat `deepseek-flash` 的所有已声明 `xhigh/max` 独立注入映射，不再只写选中默认档的映射；保留用户 map/null 与原有请求参数。实现与回归检查通过；维护者原生操作/切换验收仍待执行。
 - [ ] **P24.c 剩余：** 其他 Provider/模型的厂商映射、真实 Agent 内部切换；模型/服务商删除的键清理随 P35。
-- [ ] **P24.d 剩余：** 用原生 `reasoning_efforts` 注入已有档位列表与默认值；独立最大输出与工具能力映射逐项确认；图像能力已映射到 Grok 的 `vision`。当前有模型身份/协议/上下文与已声明图像能力 (`vision`) 注入，以及上下文来源预览；不声称 effort 切换已交付。
+- [x] **P24.d 首批已交付：** 非空中央 `Listed` 档位在原生 `reasoning_efforts` 缺失、推理支持为 supported、安装参考含该字段且未被 `supports_reasoning_effort = false` 禁用时，写入 `value/label`；列表内中央默认档标 `default = true`。已有数组、旧布尔/单值字段、全局 `[models]` 与其他 alias 保持不变；`any`、空列表和未知支持不展开。图像能力继续映射到 `vision`。
+- [ ] **P24.d 剩余：** 原生菜单是否出现及运行中 `/effort` 切换、各 backend 出站载荷与真实 Provider 接受结果未验证；独立最大输出与工具能力已确认没有已核实模型级字段，不写入。不声称 effort 切换已交付。
+
+**Verification:** Rust 666 项通过、4 项忽略；前端 1129 项通过；`check:frontend`、fmt/Clippy 与锁定 no-bundle 桌面构建通过；临时 `GROK_HOME` 中的数组表配置被 Grok 1.0.67 正常读取。未启动 Grok 会话或发送 Provider 请求；原生菜单、运行中切换与 Windows/Linux 未验证。
 
 **Acceptance criteria（每个 Agent 分别满足）:**
 

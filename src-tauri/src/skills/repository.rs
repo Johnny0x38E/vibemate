@@ -4,7 +4,9 @@
 //! import service, and a failed insert is compensated there.
 
 use super::manifest;
-use super::types::{DeleteSkillRequest, FetchMethod, SkillError, SkillPage, SkillRecord};
+use super::types::{
+    DeleteSkillRequest, FetchMethod, SkillError, SkillPage, SkillRecord, SkillRevisionCheckStatus,
+};
 use super::validation::{
     cursor, cursor_for, description, identity, skill_name, stored_installer_command,
     stored_installer_version, stored_path, stored_revision, stored_url,
@@ -72,6 +74,10 @@ struct StoredRow {
     fetch_method: Option<String>,
     installer_version: Option<String>,
     installer_command: Option<String>,
+    remote_revision: Option<String>,
+    update_check_status: Option<String>,
+    last_checked_at: Option<i64>,
+    last_check_error: Option<String>,
     content_digest: String,
     file_count: i64,
     byte_size: i64,
@@ -177,6 +183,8 @@ pub(super) fn update_source(
             "UPDATE skill
              SET source_url=?1, source_revision=?2, fetch_method=?3,
                  installer_version=?4, installer_command=?5,
+                 remote_revision=NULL, update_check_status=NULL,
+                 last_checked_at=NULL, last_check_error=NULL,
                  revision=revision+1, updated_at=max(updated_at,?6)
              WHERE id=?7 AND revision=?8",
             params![
@@ -325,6 +333,7 @@ fn read_row(connection: &Connection, id: &str) -> Result<Option<StoredRow>, Skil
         .query_row(
             "SELECT name, description, origin_path, source_url, source_revision,
                     fetch_method, installer_version, installer_command,
+                    remote_revision, update_check_status, last_checked_at, last_check_error,
                     content_digest, file_count, byte_size, revision, imported_at, updated_at
              FROM skill WHERE id=?1",
             [id],
@@ -338,12 +347,16 @@ fn read_row(connection: &Connection, id: &str) -> Result<Option<StoredRow>, Skil
                     fetch_method: row.get(5)?,
                     installer_version: row.get(6)?,
                     installer_command: row.get(7)?,
-                    content_digest: row.get(8)?,
-                    file_count: row.get(9)?,
-                    byte_size: row.get(10)?,
-                    revision: row.get(11)?,
-                    imported_at: row.get(12)?,
-                    updated_at: row.get(13)?,
+                    remote_revision: row.get(8)?,
+                    update_check_status: row.get(9)?,
+                    last_checked_at: row.get(10)?,
+                    last_check_error: row.get(11)?,
+                    content_digest: row.get(12)?,
+                    file_count: row.get(13)?,
+                    byte_size: row.get(14)?,
+                    revision: row.get(15)?,
+                    imported_at: row.get(16)?,
+                    updated_at: row.get(17)?,
                 })
             },
         )
@@ -362,6 +375,9 @@ fn validate_row(row: StoredRow, id: &str) -> Result<SkillRecord, SkillError> {
         stored_url(url)?;
     }
     if let Some(revision) = &row.source_revision {
+        stored_revision(revision)?;
+    }
+    if let Some(revision) = &row.remote_revision {
         stored_revision(revision)?;
     }
     let digest_is_sha256 = row.content_digest.len() == 64
@@ -398,6 +414,30 @@ fn validate_row(row: StoredRow, id: &str) -> Result<SkillRecord, SkillError> {
                 && row.installer_command.is_some()
         }
     };
+    let update_check_status = row
+        .update_check_status
+        .as_deref()
+        .map(revision_check_status_from_stored)
+        .transpose()?;
+    let check_fields_consistent = match update_check_status {
+        None => {
+            row.remote_revision.is_none()
+                && row.last_checked_at.is_none()
+                && row.last_check_error.is_none()
+        }
+        Some(SkillRevisionCheckStatus::UpToDate | SkillRevisionCheckStatus::UpdateAvailable) => {
+            row.remote_revision.is_some()
+                && row.last_checked_at.is_some_and(|value| value >= 0)
+                && row.last_check_error.is_none()
+        }
+        Some(SkillRevisionCheckStatus::Error) => {
+            row.last_checked_at.is_some_and(|value| value >= 0)
+                && row
+                    .last_check_error
+                    .as_ref()
+                    .is_some_and(|code| (1..=64).contains(&code.len()))
+        }
+    };
     if let Some(version) = &row.installer_version {
         stored_installer_version(version)?;
     }
@@ -410,6 +450,7 @@ fn validate_row(row: StoredRow, id: &str) -> Result<SkillRecord, SkillError> {
         || !source_exists
         || !revision_belongs_to_url
         || !fetch_fields_consistent
+        || !check_fields_consistent
     {
         return Err(SkillError::InvalidStoredSkill);
     }
@@ -423,6 +464,10 @@ fn validate_row(row: StoredRow, id: &str) -> Result<SkillRecord, SkillError> {
         fetch_method,
         installer_version: row.installer_version,
         installer_command: row.installer_command,
+        remote_revision: row.remote_revision,
+        update_check_status,
+        last_checked_at_ms: row.last_checked_at,
+        last_check_error: row.last_check_error,
         content_digest: row.content_digest,
         file_count: row.file_count,
         byte_size: row.byte_size,
@@ -430,4 +475,129 @@ fn validate_row(row: StoredRow, id: &str) -> Result<SkillRecord, SkillError> {
         imported_at_ms: row.imported_at,
         updated_at_ms: row.updated_at,
     })
+}
+
+fn revision_check_status_value(status: SkillRevisionCheckStatus) -> &'static str {
+    match status {
+        SkillRevisionCheckStatus::UpToDate => "up_to_date",
+        SkillRevisionCheckStatus::UpdateAvailable => "update_available",
+        SkillRevisionCheckStatus::Error => "error",
+    }
+}
+
+fn revision_check_status_from_stored(value: &str) -> Result<SkillRevisionCheckStatus, SkillError> {
+    match value {
+        "up_to_date" => Ok(SkillRevisionCheckStatus::UpToDate),
+        "update_available" => Ok(SkillRevisionCheckStatus::UpdateAvailable),
+        "error" => Ok(SkillRevisionCheckStatus::Error),
+        _ => Err(SkillError::InvalidStoredSkill),
+    }
+}
+
+/// Content fields written when a skill update replaces the managed copy.
+pub(super) struct ContentReplace<'a> {
+    pub(super) description: &'a str,
+    pub(super) source_revision: Option<&'a str>,
+    pub(super) installer_command: Option<&'a str>,
+    pub(super) content_digest: &'a str,
+    pub(super) file_count: i64,
+    pub(super) byte_size: i64,
+}
+
+/// Replace managed content metadata and clear stale revision-check state.
+///
+/// Bumps `revision`. Git updates may set a new `source_revision`; npx leaves it
+/// null. The revision check is set to `up_to_date` with `remote_revision` equal
+/// to the new source tip when Git supplies one.
+pub(super) fn replace_skill_content(
+    storage: &Storage,
+    id: &str,
+    expected_revision: i64,
+    update: &ContentReplace<'_>,
+    now_ms: i64,
+) -> Result<(), SkillError> {
+    identity(id)?;
+    let connection = lock(storage)?;
+    let (remote_revision, check_status, checked_at) = match update.source_revision {
+        Some(revision) => (
+            Some(revision),
+            Some(revision_check_status_value(
+                SkillRevisionCheckStatus::UpToDate,
+            )),
+            Some(now_ms),
+        ),
+        None => (None, None, None),
+    };
+    let changed = connection
+        .execute(
+            "UPDATE skill
+             SET description=?1, source_revision=?2, installer_command=?3,
+                 content_digest=?4, file_count=?5, byte_size=?6,
+                 remote_revision=?7, update_check_status=?8,
+                 last_checked_at=?9, last_check_error=NULL,
+                 revision=revision+1, updated_at=max(updated_at,?10)
+             WHERE id=?11 AND revision=?12",
+            params![
+                update.description,
+                update.source_revision,
+                update.installer_command,
+                update.content_digest,
+                update.file_count,
+                update.byte_size,
+                remote_revision,
+                check_status,
+                checked_at,
+                now_ms,
+                id,
+                expected_revision
+            ],
+        )
+        .map_err(|_| SkillError::WriteFailed)?;
+    if changed == 1 {
+        return Ok(());
+    }
+    let exists: bool = connection
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM skill WHERE id=?1)",
+            [id],
+            |row| row.get(0),
+        )
+        .map_err(|_| SkillError::ReadFailed)?;
+    Err(if exists {
+        SkillError::RevisionConflict
+    } else {
+        SkillError::NotFound
+    })
+}
+
+/// Persist one lightweight revision-check outcome without bumping `revision`.
+pub(super) fn store_revision_check(
+    storage: &Storage,
+    id: &str,
+    remote_revision: Option<&str>,
+    status: SkillRevisionCheckStatus,
+    last_check_error: Option<&str>,
+    now_ms: i64,
+) -> Result<(), SkillError> {
+    identity(id)?;
+    let connection = lock(storage)?;
+    let changed = connection
+        .execute(
+            "UPDATE skill
+             SET remote_revision=?1, update_check_status=?2,
+                 last_checked_at=?3, last_check_error=?4
+             WHERE id=?5",
+            params![
+                remote_revision,
+                revision_check_status_value(status),
+                now_ms,
+                last_check_error,
+                id
+            ],
+        )
+        .map_err(|_| SkillError::WriteFailed)?;
+    if changed == 1 {
+        return Ok(());
+    }
+    Err(SkillError::NotFound)
 }

@@ -38,10 +38,10 @@ vi.mock(import("../../lib/desktop/history"), async (original) => ({
 }));
 vi.mock(import("../../lib/desktop/skills"), async (original) => ({
     ...(await original()),
-    listPiSkillDeployments: vi.fn(),
+    listAgentSkillDeployments: vi.fn(),
 }));
 import { readConfigurationHistory } from "../../lib/desktop/history";
-import { listPiSkillDeployments } from "../../lib/desktop/skills";
+import { listAgentSkillDeployments } from "../../lib/desktop/skills";
 const probe = vi.mocked(probeAgentVersion);
 const pi: AgentObservation = {
     id: "pi",
@@ -80,7 +80,7 @@ const result: DiscoveryResult = {
 };
 const read = vi.mocked(discoverAgents);
 const loadHistory = vi.mocked(readConfigurationHistory);
-const listDeployments = vi.mocked(listPiSkillDeployments);
+const listDeployments = vi.mocked(listAgentSkillDeployments);
 beforeEach(() => {
     read.mockReset().mockResolvedValue(result);
     probe.mockReset();

@@ -17,14 +17,18 @@ import {
     deleteSkill,
     getSkill,
     importSkillFolder,
+    installMarketplaceSkill,
     installSkill,
+    listMarketplaceSkills,
     listSkillDeployments,
     listSkills,
     pickSkillFolder,
-    previewPiSkillDeploy,
+    previewMarketplaceInstall,
+    previewSkillDeploy,
     previewSkillInstall,
     setSkillSource,
     SkillRequestError,
+    type MarketplaceSkill,
     type SkillInstallPreview,
     type SkillInstallReport,
     type SkillRecord,
@@ -39,10 +43,13 @@ vi.mock(import("../../lib/desktop/skills"), async (importOriginal) => ({
     importSkillFolder: vi.fn(),
     previewSkillInstall: vi.fn(),
     installSkill: vi.fn(),
+    listMarketplaceSkills: vi.fn(),
+    previewMarketplaceInstall: vi.fn(),
+    installMarketplaceSkill: vi.fn(),
     setSkillSource: vi.fn(),
     deleteSkill: vi.fn(),
     cleanupDeletedSkillCopies: vi.fn(),
-    previewPiSkillDeploy: vi.fn(),
+    previewSkillDeploy: vi.fn(),
     listSkillDeployments: vi.fn(),
 }));
 const list = vi.mocked(listSkills);
@@ -51,10 +58,13 @@ const pick = vi.mocked(pickSkillFolder);
 const create = vi.mocked(importSkillFolder);
 const preview = vi.mocked(previewSkillInstall);
 const install = vi.mocked(installSkill);
+const listMarketplace = vi.mocked(listMarketplaceSkills);
+const previewMarketplace = vi.mocked(previewMarketplaceInstall);
+const installMarketplace = vi.mocked(installMarketplaceSkill);
 const save = vi.mocked(setSkillSource);
 const remove = vi.mocked(deleteSkill);
 const removeCopies = vi.mocked(cleanupDeletedSkillCopies);
-const previewDeploy = vi.mocked(previewPiSkillDeploy);
+const previewDeploy = vi.mocked(previewSkillDeploy);
 const listDeployments = vi.mocked(listSkillDeployments);
 
 const ID = "0123456789abcdef0123456789abcdef";
@@ -68,6 +78,10 @@ const row: SkillRecord = {
     fetchMethod: null,
     installerVersion: null,
     installerCommand: null,
+    remoteRevision: null,
+    updateCheckStatus: null,
+    lastCheckedAtMs: null,
+    lastCheckError: null,
     contentDigest: "ab".repeat(32),
     fileCount: 2,
     byteSize: 2048,
@@ -160,6 +174,43 @@ beforeEach(() => {
         preview: gitPreview,
     });
     install.mockReset().mockResolvedValue(gitReport);
+    const marketplaceRow: MarketplaceSkill = {
+        id: "mattpocock/skills/tdd",
+        source: "mattpocock/skills",
+        skillId: "tdd",
+        name: "tdd",
+        installs: 42,
+    };
+    listMarketplace.mockReset().mockResolvedValue({
+        kind: "desktop",
+        skills: [marketplaceRow],
+    });
+    previewMarketplace.mockReset().mockResolvedValue({
+        kind: "desktop",
+        preview: {
+            method: "git",
+            sourceUrl: "https://github.com/mattpocock/skills",
+            revision: "HEAD",
+            installer: "git",
+            installerVersion: null,
+            command:
+                "git fetch --depth 1 https://github.com/mattpocock/skills HEAD && git checkout --detach FETCH_HEAD",
+        },
+    });
+    installMarketplace.mockReset().mockResolvedValue({
+        ...gitReport,
+        sourceUrl: "https://github.com/mattpocock/skills",
+        command:
+            "git fetch --depth 1 https://github.com/mattpocock/skills HEAD && git checkout --detach FETCH_HEAD",
+        imported: [
+            {
+                ...installedRow,
+                sourceUrl: "https://github.com/mattpocock/skills",
+                installerCommand:
+                    "git fetch --depth 1 https://github.com/mattpocock/skills HEAD && git checkout --detach FETCH_HEAD",
+            },
+        ],
+    });
     previewDeploy.mockReset().mockResolvedValue({ kind: "preview" });
     listDeployments.mockReset().mockResolvedValue({ kind: "preview" });
     save.mockReset().mockResolvedValue({
@@ -542,6 +593,48 @@ test("leftover files after a delete can be cleaned up", async () => {
     expect(
         screen.queryByRole("button", { name: "Retry file cleanup" }),
     ).toBeNull();
+});
+
+test("marketplace browse reviews HEAD before installing", async () => {
+    list.mockResolvedValueOnce(page([row])).mockResolvedValue(
+        page([row, installedRow], null, 2),
+    );
+    await setup();
+    fireEvent.click(
+        await screen.findByRole("button", { name: "Browse marketplace" }),
+    );
+    expect(
+        await screen.findByRole("heading", { name: "Install from skills.sh" }),
+    ).toBeDefined();
+    await waitFor(() => {
+        expect(listMarketplace).toHaveBeenCalledWith("all_time");
+    });
+    fireEvent.click(
+        await screen.findByRole("button", {
+            name: /tdd.*mattpocock\/skills/,
+        }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Review command" }));
+    expect(
+        await screen.findByText(
+            "git fetch --depth 1 https://github.com/mattpocock/skills HEAD && git checkout --detach FETCH_HEAD",
+        ),
+    ).toBeDefined();
+    expect(previewMarketplace).toHaveBeenCalledWith({
+        source: "mattpocock/skills",
+        skillId: "tdd",
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Install" }));
+    await waitFor(() => {
+        expect(installMarketplace).toHaveBeenCalledWith({
+            source: "mattpocock/skills",
+            skillId: "tdd",
+        });
+    });
+    expect(await screen.findByRole("button", { name: "Done" })).toBeDefined();
+    expect(
+        screen.getByText("https://github.com/mattpocock/skills"),
+    ).toBeDefined();
 });
 
 test("install shows the exact command before it runs", async () => {

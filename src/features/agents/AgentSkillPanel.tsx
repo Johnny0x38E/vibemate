@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type JSX } from "react";
 import { useTranslation } from "react-i18next";
 import {
-    listPiSkillDeployments,
+    listAgentSkillDeployments,
     SkillRequestError,
+    type SkillDeployAgent,
     type SkillDeploymentRecord,
     type SkillErrorCode,
 } from "../../lib/desktop/skills";
@@ -20,6 +21,11 @@ function errorCode(error: unknown): SkillErrorCode {
     return error instanceof SkillRequestError ? error.code : "operation_failed";
 }
 
+function asDeployAgent(agentId: AgentId): SkillDeployAgent | null {
+    if (agentId === "pi" || agentId === "grokBuild") return agentId;
+    return null;
+}
+
 /** Inputs for {@link AgentSkillPanel}. */
 export interface AgentSkillPanelProps {
     agentId: AgentId;
@@ -28,15 +34,16 @@ export interface AgentSkillPanelProps {
 }
 
 /**
- * Read-only Skill slot on an Agent detail page. Pi lists vibemate-managed
- * deployments and offers a jump to the Skills module; other Agents stay honest
- * about missing support.
+ * Read-only Skill slot on an Agent detail page. Pi and Grok Build list
+ * vibemate-managed deployments and offer a jump to the Skills module; other
+ * Agents stay honest about missing support.
  */
 export function AgentSkillPanel({
     agentId,
     onOpenSkills,
 }: AgentSkillPanelProps): JSX.Element {
     const { t } = useTranslation();
+    const deployAgent = asDeployAgent(agentId);
     const [answer, setAnswer] = useState<{
         agentId: AgentId;
         state: PanelState;
@@ -44,21 +51,22 @@ export function AgentSkillPanel({
     const generation = useRef(0);
 
     // When the Agent identity changes, reset in render so the effect only
-    // starts the Pi read and never calls setState synchronously for "unsupported".
+    // starts the supported read and never calls setState synchronously for
+    // "unsupported".
     if (answer.agentId !== agentId) {
         setAnswer({ agentId, state: { kind: "loading" } });
     }
     const state: PanelState | { kind: "unsupported" } =
-        agentId !== "pi"
+        deployAgent === null
             ? { kind: "unsupported" }
             : answer.agentId === agentId
               ? answer.state
               : { kind: "loading" };
 
     useEffect(() => {
-        if (agentId !== "pi") return;
+        if (deployAgent === null) return;
         const token = ++generation.current;
-        void listPiSkillDeployments().then(
+        void listAgentSkillDeployments(deployAgent).then(
             (result) => {
                 if (generation.current !== token) return;
                 setAnswer({
@@ -80,7 +88,7 @@ export function AgentSkillPanel({
         return () => {
             generation.current += 1;
         };
-    }, [agentId]);
+    }, [agentId, deployAgent]);
 
     return (
         <div className={styles["skillPanel"]}>

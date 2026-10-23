@@ -8,15 +8,46 @@ GitHub release notes are extracted from the matching version section only.
 
 ### Added
 
-- Deploy a central Skill into Pi's user-level `skills/` directory. Preview names
-  the target path and whether it is empty, vibemate-owned or foreign; symlink is
-  preferred when the platform can create one, otherwise the user must choose
-  copy. Apply records ownership (schema v28) with the skill revision and content
-  digest; disable removes only a still-managed target and leaves user content
-  alone. Deleting a Skill that is still deployed returns `skill_in_use`. The
-  Skill detail page owns the deploy controls; the Pi Agent Skill segment lists
-  deployments read-only and jumps to the Skills module. Grok Build and Claude
-  Code skill deployment, and Skill updates, remain unimplemented.
+- Apply a reviewed Skill update after digest preview. Apply re-checks digests
+  and refuses a stale plan; `keep` writes nothing; `replace` swaps the managed
+  copy, advances the Git source revision, marks the revision check up to date,
+  and refreshes owned Agent deployments (symlink metadata or copy rewrite) with
+  per-target outcomes. Partial deploy refresh failures leave the library change
+  in place and do not touch foreign Agent content. Git update preview/apply
+  fetches `HEAD`; the recorded pin remains the digest baseline.
+
+- Lightweight Git revision check for Skills with a recorded fetch method. The
+  check runs `git ls-remote` for remote `HEAD`, compares it to the recorded
+  revision, and stores `up_to_date` / `update_available` / `error` without
+  downloading the tree or bumping the skill metadata revision (schema v30).
+  List rows hint when an update is available; npx sources stay on the digest
+  preview path.
+
+- Browse and install Skills from the public skills.sh marketplace. Leaderboards
+  and search return GitHub-installable rows only; non-GitHub hosts are refused.
+  Review shows the Git `HEAD` command for the selected skill before Install
+  clones into an isolated workspace and copies the skill into the central
+  library with the resolved commit recorded. Catalog failures use dedicated
+  `marketplace_*` codes. Agent deploy remains a separate step.
+
+- Preview a Skill update from a recorded Git or skills-installer source. The
+  check re-acquires into a temporary workspace, compares the live library digest
+  with the candidate, reports current / local-modified / upstream-changed /
+  diverged status, path-level diffs and keep/replace strategies, then removes the
+  workspace. Preview never writes the library or Agent targets. Skills without a
+  fetch method stay non-updatable.
+
+- Deploy a central Skill into Pi or Grok Build user-level `skills/` directories
+  (`PI_CODING_AGENT_DIR|~/.pi/agent` and `GROK_HOME|~/.grok`). Preview names the
+  Agent, target path and whether it is empty, vibemate-owned or foreign; symlink
+  is preferred when the platform can create one, otherwise the user must choose
+  copy. Apply records ownership (schema v29, `pi` or `grokBuild`) with the skill
+  revision and content digest; one skill may land on both Agents independently.
+  Disable removes only a still-managed target and leaves user content alone.
+  Deleting a Skill that is still deployed returns `skill_in_use`. The Skill
+  detail page owns the deploy controls and Agent selector; Pi and Grok Agent
+  Skill segments list deployments read-only and jump to the Skills module.
+  Claude Code skill deployment remains unimplemented.
 
 - Grok Build writes a declared, non-empty reasoning-effort list and its model default to the native `reasoning_efforts` array when that field is absent. Each entry carries `value`, a generated English `label`, and `default = true` on the central default when that level is in the list. Existing arrays, deprecated effort fields, `[models]` globals, unrelated aliases and request parameters stay unchanged; open (`any`), empty and unsupported statements are not expanded. Isolated macOS Grok 1.0.67 checks confirm the injected menu, declared default and running-session selection for Chat Completions and Responses; six isolated local-stub samples confirm Chat's `reasoning_effort` and Responses' `reasoning.effort`, including the declared default. Both backends also send the changed effort on the next isolated TUI request. Grok persists its own selection globally and reuses it in new sessions; vibemate does not write that global setting. Real Provider acceptance remains unverified. Independent maximum-output and tool mappings remain unwritten.
 

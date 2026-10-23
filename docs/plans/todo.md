@@ -12,9 +12,9 @@
 4. 维护者已确认 H1/H3 桌面目视验收通过；H3 已完成，H1 的 Windows/Linux 原生分页验证仍随 P37 跟踪。
 5. P24.c 首批（每模型思考档位，以及 Pi 计划中的模型设置行）已在本机完成代码与自动化检查，待维护者桌面验收；本机 Pi 已升级至 1.4.0，2026-10-22 复核所用字段与档位规则未变。
 6. P26 已交付：Git 固定修订与已核实的 `skills@1.7.4` npx 安装均在隔离目录获取并导入，失败不改变已有库；来源页可补记获取方式。
-7. P27 已交付：向 Pi `<agent-dir>/skills/<name>/` 部署（symlink 优先、显式 copy-sync、所有权、禁用只撤托管目标、删除 `skill_in_use`、Agent Skill 只读槽）。P28–P30 待做。
+7. P27–P30 已交付：Pi/Grok Skill 部署、更新预览与应用（keep/replace、部署刷新）；Claude Code 部署待做。
 8. P24.d 首批已合入本机：Grok Build 只在原生字段缺失时写入已声明的 `reasoning_efforts` 列表与列表内默认档；已有数组、旧字段和全局默认保持不变；隔离 macOS Chat/Responses 已确认原生菜单、列表默认档与运行中选择更新，本地 stub 已核实 backend 字段/默认档及运行中切档后的下一请求；Grok 自身将选用值全局持久化并供新会话读取，真实 Provider 接受仍待验证。
-9. 下一条业务主线按 P24 剩余项 → Skill 更新/部署（P28–P30）→ MCP 部署 → P35 引用约束的顺序推进；见 [phase-1](phase-1.md)。
+9. skills.sh 市场浏览/安装、Git revision 检查与 P30 应用更新已交付。Skill 方向参考 [skills-marketplace-reference](skills-marketplace-reference.md)；不引入 preset/工作区。下一条主线按 P24 剩余项 → MCP 部署 → P35 的顺序推进；见 [phase-1](phase-1.md)。
 
 ## 文档整理（2026-10-19）
 
@@ -59,6 +59,11 @@
 | P25 / P31       | 中央 Skill 库与本地导入/删除；中央 MCP 定义与删除                                    | [skills](../skills.md)、[mcp](../mcp.md)                                                   |
 | P26             | Git 固定修订与已核实 npx 安装器；隔离获取、命令确认、来源/获取方式记录               | [skills](../skills.md)                                                                     |
 | P27             | 向 Pi 部署 Skill：预览、symlink/copy-sync、所有权、禁用、Agent 只读槽                | [skills](../skills.md)、[Pi](../integrations/pi.md)                                        |
+| P28             | 向 Grok Build 部署 Skill：同路径约定、独立所有权与撤销，schema v29                   | [skills](../skills.md)、[Grok](../integrations/grok-build.md)                              |
+| P29             | 预览 Skill 更新：按已记录 Git/npx 获取、比对摘要与路径差异、命名 keep/replace 策略   | [skills](../skills.md)                                                                     |
+| P30             | 应用 Skill 更新：摘要令牌复核、keep/replace、中央库替换与部署刷新                    | [skills](../skills.md)                                                                     |
+| 市场安装        | skills.sh 浏览/搜索与 GitHub `HEAD` 安装入中央库；非 GitHub 来源拒绝                 | [skills](../skills.md)、[marketplace 参考](skills-marketplace-reference.md)                |
+| Revision 检查   | Git `ls-remote` 对比已记录修订并存储状态；列表提示 update_available；npx 不走此路    | [skills](../skills.md)                                                                     |
 
 P15 的真实连接记录来自维护者确认，不代表代理重新执行，也不补写未提供的模型、协议或套餐细节。
 
@@ -241,43 +246,49 @@ P24.b = Claude Code；P24.c = Pi；P24.d = Grok Build。服务商模型是唯一
 
 ### Task P28: 向 Grok Build 部署 Skill
 
+**状态：** 已完成（代码与自动化检查）。真实 Grok 可发现性、维护者桌面目视与 Windows/Linux 原生验证仍未完成。
+
 **Acceptance criteria:**
 
-- [ ] 仅对已确认支持的格式部署，未知能力明确为待决，不创建无效目录。
-- [ ] 正确处理目标冲突、symlink 权限与 copy-sync，并记录部署 revision。
-- [ ] 撤销、重试和部分失败不会影响其他 Agent 或用户 Skill。
+- [x] 仅对已确认支持的格式部署（用户级 `GROK_HOME|~/.grok/skills/<name>/` 与 `SKILL.md`）；未知能力明确为待决，不创建无效目录。
+- [x] 正确处理目标冲突、symlink 权限与 copy-sync，并记录部署 revision（schema v29）。
+- [x] 撤销、重试和部分失败不会影响其他 Agent 或用户 Skill。
 
-**Verification:** Rust 与部署 UI 回归测试；真实 Agent 支持时检查可发现性，缺口由维护者决定。
+**Verification:** Rust 678 项通过、4 项忽略（含 7 项部署：Pi symlink、Grok copy、双 Agent 独立部署/撤销、foreign 冲突、过期审批、`skill_in_use`）；fmt/Clippy `-D warnings` 与 `check:frontend`（1132 项 UI 测试）通过。真实 Grok 发现、维护者桌面目视与 Windows/Linux 仍随发布前专项。
 
 **Dependencies:** P03,P27。
 
 ### Task P29: 预览 Skill 更新
 
+**状态：** 已完成（代码与自动化检查）。真实网络获取与维护者桌面目视仍未完成；应用更新见 P30。
+
 **Acceptance criteria:**
 
-- [ ] 只对来源明确的 Skill 检查更新，Git/npx 使用已记录的获取方式和版本。
-- [ ] 比较原 revision、中央本地修改与候选内容，显示差异与可选处理策略。
-- [ ] 更新预览不写中央或 Agent 目标；超时/失效/版本变化有明确错误。
+- [x] 只对来源明确的 Skill 检查更新，Git/npx 使用已记录的获取方式和版本。
+- [x] 比较原 revision、中央本地修改与候选内容，显示差异与可选处理策略。
+- [x] 更新预览不写中央或 Agent 目标；超时/失效/版本变化有明确错误。
 
-**Verification:** 三方内容样本测试与更新预览 UI 测试；`check:frontend` 与 Rust fmt/Clippy。
+**Verification:** Rust 685 项通过、4 项忽略（含 7 项更新预览：无 fetch method、current/local/upstream/diverged、过期修订、超时）；fmt/Clippy `-D warnings` 与 `check:frontend`（1132 项 UI 测试）通过。真实网络与桌面目视仍随发布前专项。
 
 **Dependencies:** P26,P27,P28。
 
 ### Task P30: 应用 Skill 更新
 
+**状态：** 已完成（代码与自动化检查）。真实网络获取、桌面目视与 Windows/Linux 原生验证仍随发布前专项。
+
 **Acceptance criteria:**
 
-- [ ] 应用前重新检查内容摘要，不能覆盖未处理的本地修改或过期计划。
-- [ ] 中央与链接/复制目标按操作日志更新，显示逐目标状态；部分失败可恢复。
-- [ ] 失败和回滚保留来源/revision/所有权一致性，不删除其他 Agent 内容。
+- [x] 应用前重新检查内容摘要，不能覆盖未处理的本地修改或过期计划。
+- [x] 中央与链接/复制目标按操作日志更新，显示逐目标状态；部分失败可恢复。
+- [x] 失败和回滚保留来源/revision/所有权一致性，不删除其他 Agent 内容。
 
-**Verification:** 故障注入与提交/恢复 UI 测试；Tauri 测试样本和一次 copy-sync 部分失败恢复。
+**Verification:** Rust apply/keep/replace/stale/strategy 与部署刷新测试；fmt/Clippy/`check:frontend` 随交付跑通。真实网络与桌面目视仍待维护者。
 
 **Dependencies:** P19,P29。
 
 ### Checkpoint C30（P25–P30）
 
-- [ ] P25–P30 均已勾选。
+- [x] P25–P30 均已勾选（桌面/跨平台专项仍随 P37 等跟踪）。
 
 ## 阶段 G：MCP
 

@@ -63,14 +63,14 @@ pub(super) enum ResolvedSource {
 }
 
 impl ResolvedSource {
-    fn method(&self) -> FetchMethod {
+    pub(super) fn method(&self) -> FetchMethod {
         match self {
             Self::Git { .. } => FetchMethod::Git,
             Self::Npx { .. } => FetchMethod::Npx,
         }
     }
 
-    fn url(&self) -> &str {
+    pub(super) fn url(&self) -> &str {
         match self {
             Self::Git { url, .. } | Self::Npx { url, .. } => url,
         }
@@ -92,13 +92,13 @@ impl ResolvedSource {
         }
     }
 
-    fn skill(&self) -> Option<&str> {
+    pub(super) fn skill(&self) -> Option<&str> {
         match self {
             Self::Git { skill, .. } | Self::Npx { skill, .. } => skill.as_deref(),
         }
     }
 
-    fn command(&self) -> Result<String, SkillError> {
+    pub(super) fn command(&self) -> Result<String, SkillError> {
         let command = match self {
             Self::Git { url, revision, .. } => {
                 format!("git fetch --depth 1 {url} {revision} && git checkout --detach FETCH_HEAD")
@@ -273,7 +273,7 @@ pub(super) fn reviewed_source_fields(
 }
 
 /// Validate a request into the values execution needs.
-fn resolve_source(request: &SkillInstallSource) -> Result<ResolvedSource, SkillError> {
+pub(super) fn resolve_source(request: &SkillInstallSource) -> Result<ResolvedSource, SkillError> {
     match request {
         SkillInstallSource::Git(GitInstallSource {
             repository,
@@ -307,22 +307,22 @@ fn resolve_source(request: &SkillInstallSource) -> Result<ResolvedSource, SkillE
 }
 
 /// What one acquisition step produced.
-struct Acquired {
+pub(super) struct Acquired {
     /// Directory that contains the acquired skill folders.
-    root: PathBuf,
+    pub(super) root: PathBuf,
     /// Resolved Git commit, or `None` for the npx installer.
-    revision: Option<String>,
+    pub(super) revision: Option<String>,
     /// Exit code of the successful installer.
-    exit_status: i32,
+    pub(super) exit_status: i32,
 }
 
-/// The acquisition step, replaceable in tests.
-trait SkillInstaller {
+/// The acquisition step, replaceable in tests and by the update preview.
+pub(super) trait SkillInstaller {
     fn acquire(&self, source: &ResolvedSource, workspace: &Path) -> Result<Acquired, SkillError>;
 }
 
 /// Production acquisition through Git or the reviewed npx installer.
-pub struct SystemSkillInstaller;
+pub(super) struct SystemSkillInstaller;
 
 impl SkillInstaller for SystemSkillInstaller {
     fn acquire(&self, source: &ResolvedSource, workspace: &Path) -> Result<Acquired, SkillError> {
@@ -390,17 +390,70 @@ fn acquire_git(workspace: &Path, url: &str, revision: &str) -> Result<Acquired, 
     }
     let head = run(&["rev-parse", "HEAD"])?;
     let commit = String::from_utf8(head.stdout).map_err(|_| SkillError::InstallerOutputInvalid)?;
-    let commit = commit.trim();
+    let commit = parse_commit_sha(commit.trim())?;
+    Ok(Acquired {
+        root: repository,
+        revision: Some(commit),
+        exit_status: 0,
+    })
+}
+
+/// Resolve remote default-branch tip with `git ls-remote <url> HEAD`.
+///
+/// No local repository is created. The call uses the same cleared environment
+/// and timeout bounds as a Git install fetch.
+///
+/// # Errors
+/// Missing Git, timeouts, non-zero exits, and unparseable output.
+pub(super) fn ls_remote_head(repository_url: &str) -> Result<String, SkillError> {
+    let url = validation::github_repository(repository_url)?;
+    let clone_url = format!("{url}.git");
+    let workspace = Workspace::new()?;
+    let home = workspace.path().join("home");
+    let empty_config = workspace.path().join("gitconfig");
+    fs::create_dir_all(&home).map_err(|_| SkillError::InstallWorkspaceFailed)?;
+    fs::write(&empty_config, []).map_err(|_| SkillError::InstallWorkspaceFailed)?;
+    let mut environment = base_environment();
+    environment.push(("HOME".into(), home.as_os_str().to_owned()));
+    environment.push(("USERPROFILE".into(), home.as_os_str().to_owned()));
+    environment.push(("GIT_CONFIG_NOSYSTEM".into(), "1".into()));
+    environment.push((
+        "GIT_CONFIG_GLOBAL".into(),
+        empty_config.as_os_str().to_owned(),
+    ));
+    environment.push(("GIT_TERMINAL_PROMPT".into(), "0".into()));
+    environment.push(("GIT_LFS_SKIP_SMUDGE".into(), "1".into()));
+    environment.push(("GIT_OPTIONAL_LOCKS".into(), "0".into()));
+    let output = run_bounded(
+        OsStr::new("git"),
+        &[
+            OsString::from("ls-remote"),
+            OsString::from(&clone_url),
+            OsString::from("HEAD"),
+        ],
+        workspace.path(),
+        &environment,
+        GIT_TIMEOUT,
+    )
+    .map_err(|error| match error {
+        SkillError::InstallerUnavailable
+        | SkillError::InstallTimedOut
+        | SkillError::InstallWorkspaceFailed => error,
+        _ => SkillError::RevisionCheckFailed,
+    })?;
+    let text = String::from_utf8(output.stdout).map_err(|_| SkillError::RevisionCheckFailed)?;
+    let line = text.lines().next().unwrap_or("").trim();
+    let sha = line.split_whitespace().next().unwrap_or("");
+    parse_commit_sha(sha).map_err(|_| SkillError::RevisionCheckFailed)
+}
+
+fn parse_commit_sha(value: &str) -> Result<String, SkillError> {
     let commit_is_sha =
-        (40..=64).contains(&commit.len()) && commit.bytes().all(|byte| byte.is_ascii_hexdigit());
+        (40..=64).contains(&value.len()) && value.bytes().all(|byte| byte.is_ascii_hexdigit());
     if !commit_is_sha {
         return Err(SkillError::InstallerOutputInvalid);
     }
-    Ok(Acquired {
-        root: repository,
-        revision: Some(commit.to_ascii_lowercase()),
-        exit_status: 0,
-    })
+    Ok(value.to_ascii_lowercase())
 }
 
 /// Run the allowlisted npx installer in an isolated home, then return its
@@ -608,7 +661,10 @@ fn read_bounded(mut reader: impl Read) -> Vec<u8> {
 }
 
 /// Find bounded skill folders below an acquired root.
-fn discover_remote(root: &Path, selector: Option<&str>) -> Result<Vec<PathBuf>, SkillError> {
+pub(super) fn discover_remote(
+    root: &Path,
+    selector: Option<&str>,
+) -> Result<Vec<PathBuf>, SkillError> {
     let mut candidates = Vec::new();
     collect_candidates(root, 0, &mut candidates)?;
     candidates.sort();
@@ -687,12 +743,12 @@ fn candidate_matches(path: &Path, selector: &str) -> bool {
 }
 
 /// A private temporary directory removed on every exit path.
-struct Workspace {
+pub(super) struct Workspace {
     root: PathBuf,
 }
 
 impl Workspace {
-    fn new() -> Result<Self, SkillError> {
+    pub(super) fn new() -> Result<Self, SkillError> {
         static NEXT: AtomicU64 = AtomicU64::new(0);
         let base = std::env::temp_dir();
         for _ in 0..8 {
@@ -714,7 +770,7 @@ impl Workspace {
         Err(SkillError::InstallWorkspaceFailed)
     }
 
-    fn path(&self) -> &Path {
+    pub(super) fn path(&self) -> &Path {
         &self.root
     }
 }

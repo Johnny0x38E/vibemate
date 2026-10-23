@@ -4,12 +4,17 @@ import {
     cleanupDeletedSkillCopies,
     deleteSkill,
     importSkillFolder,
+    installMarketplaceSkill,
     installSkill,
+    listMarketplaceSkills,
     listSkills,
     pickSkillFolder,
+    previewMarketplaceInstall,
     previewSkillInstall,
+    searchMarketplaceSkills,
     setSkillSource,
     SkillRequestError,
+    type MarketplaceSkill,
     type SkillRecord,
 } from "./skills";
 vi.mock(import("@tauri-apps/api/core"));
@@ -27,6 +32,10 @@ const row: SkillRecord = {
     fetchMethod: null,
     installerVersion: null,
     installerCommand: null,
+    remoteRevision: null,
+    updateCheckStatus: null,
+    lastCheckedAtMs: null,
+    lastCheckError: null,
     contentDigest: DIGEST,
     fileCount: 2,
     byteSize: 128,
@@ -581,4 +590,133 @@ test("an install report must describe the reviewed command and rows", async () =
     await expect(installSkill(source)).rejects.toMatchObject({
         code: "installer_failed",
     });
+});
+
+const marketplaceRow: MarketplaceSkill = {
+    id: "mattpocock/skills/tdd",
+    source: "mattpocock/skills",
+    skillId: "tdd",
+    name: "tdd",
+    installs: 42,
+};
+const MARKETPLACE_COMMAND =
+    "git fetch --depth 1 https://github.com/mattpocock/skills HEAD && git checkout --detach FETCH_HEAD";
+
+test("marketplace browse and search validate catalog rows", async () => {
+    vi.mocked(invoke).mockResolvedValue([marketplaceRow]);
+    await expect(listMarketplaceSkills("trending")).resolves.toEqual({
+        kind: "desktop",
+        skills: [marketplaceRow],
+    });
+    expect(vi.mocked(invoke)).toHaveBeenCalledWith("list_marketplace_skills", {
+        board: "trending",
+    });
+
+    vi.mocked(invoke).mockResolvedValue([marketplaceRow]);
+    await expect(searchMarketplaceSkills("td")).resolves.toEqual({
+        kind: "desktop",
+        skills: [marketplaceRow],
+    });
+    expect(vi.mocked(invoke)).toHaveBeenCalledWith(
+        "search_marketplace_skills",
+        { query: "td", limit: 40 },
+    );
+
+    await expect(searchMarketplaceSkills("a")).rejects.toMatchObject({
+        code: "invalid_request",
+    });
+
+    vi.mocked(invoke).mockResolvedValue([
+        { ...marketplaceRow, id: "wrong/id" },
+    ]);
+    await expect(listMarketplaceSkills("all_time")).rejects.toMatchObject({
+        code: "invalid_response",
+    });
+
+    vi.mocked(isTauri).mockReturnValue(false);
+    vi.mocked(invoke).mockClear();
+    await expect(listMarketplaceSkills("hot")).resolves.toEqual({
+        kind: "preview",
+    });
+    await expect(searchMarketplaceSkills("td")).resolves.toEqual({
+        kind: "preview",
+    });
+    expect(vi.mocked(invoke)).not.toHaveBeenCalled();
+});
+
+test("marketplace install reviews HEAD and rejects a non-git preview", async () => {
+    vi.mocked(invoke).mockResolvedValue({
+        method: "git",
+        sourceUrl: "https://github.com/mattpocock/skills",
+        revision: "HEAD",
+        installer: "git",
+        installerVersion: null,
+        command: MARKETPLACE_COMMAND,
+    });
+    await expect(
+        previewMarketplaceInstall({
+            source: "mattpocock/skills",
+            skillId: "tdd",
+        }),
+    ).resolves.toMatchObject({
+        kind: "desktop",
+        preview: { revision: "HEAD", command: MARKETPLACE_COMMAND },
+    });
+
+    vi.mocked(invoke).mockResolvedValue({
+        method: "git",
+        sourceUrl: "https://github.com/mattpocock/skills",
+        revision: "main",
+        installer: "git",
+        installerVersion: null,
+        command: MARKETPLACE_COMMAND.replace("HEAD", "main"),
+    });
+    await expect(
+        previewMarketplaceInstall({
+            source: "mattpocock/skills",
+            skillId: "tdd",
+        }),
+    ).rejects.toMatchObject({ code: "invalid_response" });
+
+    const imported: SkillRecord = {
+        ...row,
+        originPath: null,
+        sourceUrl: "https://github.com/mattpocock/skills",
+        sourceRevision: COMMIT,
+        fetchMethod: "git",
+        installerVersion: null,
+        installerCommand: MARKETPLACE_COMMAND,
+    };
+    vi.mocked(invoke).mockResolvedValue({
+        method: "git",
+        sourceUrl: "https://github.com/mattpocock/skills",
+        revision: COMMIT,
+        installer: "git",
+        installerVersion: null,
+        command: MARKETPLACE_COMMAND,
+        exitStatus: 0,
+        imported: [imported],
+        skipped: [],
+    });
+    await expect(
+        installMarketplaceSkill({
+            source: "mattpocock/skills",
+            skillId: "tdd",
+        }),
+    ).resolves.toMatchObject({
+        revision: COMMIT,
+        imported: [imported],
+    });
+    expect(vi.mocked(invoke)).toHaveBeenCalledWith(
+        "install_marketplace_skill",
+        { request: { source: "mattpocock/skills", skillId: "tdd" } },
+    );
+
+    vi.mocked(invoke).mockRejectedValue("marketplace_source_unsupported");
+    await expect(
+        installMarketplaceSkill({
+            source: "mattpocock/skills",
+            skillId: "tdd",
+        }),
+    ).rejects.toMatchObject({ code: "marketplace_source_unsupported" });
 });

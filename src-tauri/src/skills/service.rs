@@ -27,6 +27,10 @@ use std::path::{Path, PathBuf};
 const DIGEST_DOMAIN: &[u8] = b"vibemate-skill-v1\0";
 /// Temporary directories are hidden and never match a 32-character ID.
 const TEMPORARY_PREFIX: &str = ".import-";
+/// Staging directory while an update copies candidate content into place.
+const REPLACE_PREFIX: &str = ".replace-";
+/// Previous managed copy parked during a content replace until metadata commits.
+const REPLACE_OLD_PREFIX: &str = ".replace-old-";
 /// Directory name prefix of a managed copy parked for removal. No record ever
 /// points at such a name, so a cleanup sweep can never delete live content.
 const PARKED_PREFIX: &str = ".delete-";
@@ -122,6 +126,99 @@ pub(super) fn import_one(
         now_ms,
         &Provenance::local(&origin_path),
     )
+}
+
+/// Inputs for replacing one managed skill copy with candidate content.
+pub(super) struct ManagedReplace<'a> {
+    pub(super) id: &'a str,
+    pub(super) expected_revision: i64,
+    pub(super) candidate: &'a Path,
+    pub(super) source_revision: Option<&'a str>,
+    pub(super) installer_command: Option<&'a str>,
+    pub(super) now_ms: i64,
+}
+
+/// Replace one managed copy with candidate content and update its metadata.
+///
+/// Copies into a staging sibling, parks the current managed directory, then
+/// renames the staging directory into place. Metadata is written only after the
+/// filesystem swap; a refused write restores the parked copy. The skill name
+/// must match the existing record.
+///
+/// # Errors
+/// Rejects a stale revision, a mismatched skill name, copy failures and storage
+/// write failures. A failed restore after a refused metadata write reports
+/// `outcome_unknown`.
+pub(super) fn replace_managed_content(
+    library: &SkillLibrary,
+    storage: &Storage,
+    request: &ManagedReplace<'_>,
+) -> Result<SkillRecord, SkillError> {
+    validation::identity(request.id)?;
+    if request.expected_revision < 1 || request.now_ms < 0 {
+        return Err(SkillError::InvalidRequest);
+    }
+    let source = resolved_source_directory(library, request.candidate)?;
+    let plan = manifest::inspect(&source)?;
+    let current = repository::get_skill(storage, request.id)?;
+    if current.revision != request.expected_revision {
+        return Err(SkillError::RevisionConflict);
+    }
+    if plan.name != current.name {
+        return Err(SkillError::SkillNotFoundInSource);
+    }
+    let root = library.root();
+    let target = root.join(request.id);
+    let temporary = root.join(format!("{REPLACE_PREFIX}{}", request.id));
+    let parked = root.join(format!("{REPLACE_OLD_PREFIX}{}", request.id));
+    let _ = fs::remove_dir_all(&temporary);
+    let _ = fs::remove_dir_all(&parked);
+    fs::create_dir(&temporary).map_err(|_| SkillError::WriteFailed)?;
+    let digest = match copy(&source, &plan, &temporary) {
+        Ok(digest) => digest,
+        Err(error) => {
+            let _ = fs::remove_dir_all(&temporary);
+            return Err(error);
+        }
+    };
+    if fs::rename(&target, &parked).is_err() {
+        let _ = fs::remove_dir_all(&temporary);
+        return Err(SkillError::WriteFailed);
+    }
+    if fs::rename(&temporary, &target).is_err() {
+        let _ = fs::remove_dir_all(&temporary);
+        if fs::rename(&parked, &target).is_err() {
+            return Err(SkillError::OutcomeUnknown);
+        }
+        return Err(SkillError::WriteFailed);
+    }
+    let update = repository::ContentReplace {
+        description: &plan.description,
+        source_revision: request.source_revision,
+        installer_command: request.installer_command,
+        content_digest: &digest,
+        file_count: plan.files.len() as i64,
+        byte_size: plan.total_bytes as i64,
+    };
+    match repository::replace_skill_content(
+        storage,
+        request.id,
+        request.expected_revision,
+        &update,
+        request.now_ms,
+    ) {
+        Ok(()) => {
+            let _ = fs::remove_dir_all(&parked);
+            repository::get_skill(storage, request.id)
+        }
+        Err(error) => {
+            let _ = fs::remove_dir_all(&target);
+            if fs::rename(&parked, &target).is_err() {
+                return Err(SkillError::OutcomeUnknown);
+            }
+            Err(error)
+        }
+    }
 }
 
 /// Import one skill acquired from a remote source.

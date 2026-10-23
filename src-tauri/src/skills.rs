@@ -6,26 +6,37 @@
 mod deploy;
 mod install;
 mod manifest;
+mod marketplace;
 mod repository;
 mod service;
 mod types;
+mod update;
 mod validation;
 
 pub use deploy::{
-    apply_pi_skill_deploy, disable_pi_skill_deploy, list_pi_skill_deployments,
-    list_skill_deployments, preview_pi_skill_deploy,
+    apply_skill_deploy, disable_skill_deploy, list_agent_skill_deployments, list_skill_deployments,
+    preview_skill_deploy,
 };
 pub use install::{install_skill, preview_skill_install};
+pub use marketplace::{
+    install_marketplace_skill, list_marketplace_skills, preview_marketplace_install,
+    search_marketplace_skills,
+};
 pub use repository::{get_skill, list_skills};
 pub use service::{cleanup_deleted_skill_copies, delete_skill, import_folder, set_skill_source};
 pub use types::{
-    DeleteSkillRequest, DeletedSkill, DisablePiSkillDeployRequest, FetchMethod, GitInstallSource,
-    ImportFolderReport, ImportFolderRequest, NpxInstallSource, PiSkillDeployDisabled,
-    PiSkillDeployPreview, PiSkillDeployed, PickedFolder, ReviewedPiSkillDeploy,
-    SetSkillSourceRequest, SkillDeployMode, SkillDeployTargetState, SkillDeploymentRecord,
-    SkillError, SkillInstallPreview, SkillInstallReport, SkillInstallSource, SkillPage,
-    SkillRecord, SkippedSkill,
+    ApplySkillUpdateRequest, CheckSkillRevisionRequest, DeleteSkillRequest, DeletedSkill,
+    DisableSkillDeployRequest, FetchMethod, GitInstallSource, ImportFolderReport,
+    ImportFolderRequest, MarketplaceBoard, MarketplaceInstallRequest, MarketplaceSkill,
+    NpxInstallSource, PickedFolder, PreviewSkillUpdateRequest, ReviewedSkillDeploy,
+    SetSkillSourceRequest, SkillDeployAgent, SkillDeployDisabled, SkillDeployMode,
+    SkillDeployPreview, SkillDeployTargetState, SkillDeployed, SkillDeploymentRecord, SkillError,
+    SkillInstallPreview, SkillInstallReport, SkillInstallSource, SkillPage, SkillRecord,
+    SkillRevisionCheckStatus, SkillUpdateApplied, SkillUpdateDeployOutcome,
+    SkillUpdateDeployResult, SkillUpdateDiff, SkillUpdatePreview, SkillUpdateStatus,
+    SkillUpdateStrategy, SkippedSkill,
 };
+pub use update::{apply_skill_update, check_skill_revision, preview_skill_update};
 
 use std::path::PathBuf;
 

@@ -3,13 +3,14 @@ import { useTranslation } from "react-i18next";
 import { DetailFact, DetailPanel } from "../../components/DetailForm";
 import { FieldSelect } from "../../components/FieldSelect";
 import {
-    applyPiSkillDeploy,
-    disablePiSkillDeploy,
+    applySkillDeploy,
+    disableSkillDeploy,
     listSkillDeployments,
-    previewPiSkillDeploy,
+    previewSkillDeploy,
     SkillRequestError,
-    type PiSkillDeployPreview,
+    type SkillDeployAgent,
     type SkillDeployMode,
+    type SkillDeployPreview,
     type SkillDeploymentRecord,
     type SkillErrorCode,
     type SkillRecord,
@@ -17,12 +18,14 @@ import {
 import buttons from "../../components/actionButtons.module.css";
 import styles from "./SkillLibrary.module.css";
 
+const DEPLOY_AGENTS: SkillDeployAgent[] = ["pi", "grokBuild"];
+
 type PanelState =
     | { kind: "loading" }
     | { kind: "preview_only" }
     | {
           kind: "ready";
-          preview: PiSkillDeployPreview | null;
+          preview: SkillDeployPreview | null;
           deployments: SkillDeploymentRecord[];
       }
     | { kind: "error"; code: SkillErrorCode; uncertain: boolean };
@@ -30,6 +33,7 @@ type PanelState =
 type Answer = {
     skillId: string;
     skillRevision: number;
+    agentId: SkillDeployAgent;
     state: PanelState;
 };
 
@@ -49,6 +53,14 @@ function uncertain(code: SkillErrorCode): boolean {
     ].includes(code);
 }
 
+function agentLabel(
+    agentId: SkillDeployAgent,
+): "skills.deploy.agentPi" | "skills.deploy.agentGrokBuild" {
+    return agentId === "pi"
+        ? "skills.deploy.agentPi"
+        : "skills.deploy.agentGrokBuild";
+}
+
 /** Inputs for {@link SkillDeployPanel}. */
 export interface SkillDeployPanelProps {
     record: SkillRecord;
@@ -57,9 +69,9 @@ export interface SkillDeployPanelProps {
 }
 
 /**
- * Deploy one library skill into Pi's user skills directory. Symlink is preferred
- * when available; copy-sync is an explicit choice. Foreign targets are shown but
- * never overwritten. Disable only removes a still-owned target.
+ * Deploy one library skill into a supported Agent skills directory. Symlink is
+ * preferred when available; copy-sync is an explicit choice. Foreign targets are
+ * shown but never overwritten. Disable only removes a still-owned target.
  */
 export function SkillDeployPanel({
     record,
@@ -69,9 +81,11 @@ export function SkillDeployPanel({
     const prefix = useId();
     const skillId = record.id;
     const skillRevision = record.revision;
+    const [agentId, setAgentId] = useState<SkillDeployAgent>("pi");
     const [answer, setAnswer] = useState<Answer>({
         skillId,
         skillRevision,
+        agentId,
         state: { kind: "loading" },
     });
     const [mode, setMode] = useState<SkillDeployMode>("symlink");
@@ -84,11 +98,18 @@ export function SkillDeployPanel({
     const generation = useRef(0);
 
     const sameRecord =
-        answer.skillId === skillId && answer.skillRevision === skillRevision;
-    // Reset in render when the detail page shows a different skill or revision,
-    // so the effect never calls setState synchronously for "loading".
+        answer.skillId === skillId &&
+        answer.skillRevision === skillRevision &&
+        answer.agentId === agentId;
+    // Reset in render when the detail page shows a different skill, revision,
+    // or Agent, so the effect never calls setState synchronously for "loading".
     if (!sameRecord) {
-        setAnswer({ skillId, skillRevision, state: { kind: "loading" } });
+        setAnswer({
+            skillId,
+            skillRevision,
+            agentId,
+            state: { kind: "loading" },
+        });
     }
     const state: PanelState = sameRecord ? answer.state : { kind: "loading" };
 
@@ -104,7 +125,7 @@ export function SkillDeployPanel({
         void (async () => {
             try {
                 const [previewResult, listResult] = await Promise.all([
-                    previewPiSkillDeploy(skillId),
+                    previewSkillDeploy(agentId, skillId),
                     listSkillDeployments(skillId),
                 ]);
                 if (generation.current !== token) return;
@@ -115,6 +136,7 @@ export function SkillDeployPanel({
                     setAnswer({
                         skillId,
                         skillRevision,
+                        agentId,
                         state: { kind: "preview_only" },
                     });
                     return;
@@ -126,6 +148,7 @@ export function SkillDeployPanel({
                 setAnswer({
                     skillId,
                     skillRevision,
+                    agentId,
                     state: {
                         kind: "ready",
                         preview,
@@ -138,6 +161,7 @@ export function SkillDeployPanel({
                 setAnswer({
                     skillId,
                     skillRevision,
+                    agentId,
                     state: { kind: "error", code, uncertain: uncertain(code) },
                 });
             }
@@ -145,14 +169,14 @@ export function SkillDeployPanel({
         return () => {
             generation.current += 1;
         };
-    }, [skillId, skillRevision, attempt]);
+    }, [skillId, skillRevision, agentId, attempt]);
 
     function reload(): void {
         setActionError(null);
         setAttempt((value) => value + 1);
     }
 
-    async function deploy(preview: PiSkillDeployPreview): Promise<void> {
+    async function deploy(preview: SkillDeployPreview): Promise<void> {
         if (busy || !preview.canApply) return;
         const chosen =
             !preview.symlinkAvailable || mode === "copy" ? "copy" : mode;
@@ -160,7 +184,8 @@ export function SkillDeployPanel({
         setBusy(true);
         setActionError(null);
         try {
-            await applyPiSkillDeploy({
+            await applySkillDeploy({
+                agentId: preview.agentId,
                 skillId: preview.skillId,
                 expectedSkillRevision: preview.skillRevision,
                 configRoot: preview.configRoot,
@@ -182,7 +207,8 @@ export function SkillDeployPanel({
         setBusy(true);
         setActionError(null);
         try {
-            await disablePiSkillDeploy({
+            await disableSkillDeploy({
+                agentId: row.agentId,
                 skillId: row.skillId,
                 configRoot: row.configRoot,
             });
@@ -198,6 +224,26 @@ export function SkillDeployPanel({
 
     return (
         <DetailPanel label={t("skills.deploy.title")}>
+            <DetailFact
+                label={t("skills.deploy.agent")}
+                value={
+                    <FieldSelect
+                        id={`${prefix}-agent`}
+                        value={agentId}
+                        options={DEPLOY_AGENTS.map((id) => ({
+                            value: id,
+                            label: t(agentLabel(id)),
+                        }))}
+                        blocked={busy}
+                        size="fill"
+                        onChange={(value) => {
+                            if (value === "pi" || value === "grokBuild") {
+                                setAgentId(value);
+                            }
+                        }}
+                    />
+                }
+            />
             {state.kind === "loading" && (
                 <p className={styles["hint"]}>{t("skills.deploy.loading")}</p>
             )}
@@ -321,7 +367,7 @@ export function SkillDeployPanel({
                                 <div className={styles["deployRow"]}>
                                     <p className={styles["longValue"]}>
                                         {t("skills.deploy.rowSummary", {
-                                            agent: t("skills.deploy.agentPi"),
+                                            agent: t(agentLabel(row.agentId)),
                                             mode: t(
                                                 row.mode === "symlink"
                                                     ? "skills.deploy.modeSymlink"

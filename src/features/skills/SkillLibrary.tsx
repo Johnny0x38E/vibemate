@@ -29,6 +29,7 @@ import {
 } from "../../lib/desktop/skills";
 import { SkillDetail } from "./SkillDetail";
 import { SkillInstallDialog } from "./SkillInstallDialog";
+import { SkillMarketplaceDialog } from "./SkillMarketplaceDialog";
 import { skillSource } from "./skillSource";
 import buttons from "../../components/actionButtons.module.css";
 import dialog from "./SkillDeleteDialog.module.css";
@@ -80,7 +81,11 @@ function rowSourceText(
                     version: source.installerVersion ?? "",
                 })
               : t("skills.sourceManual");
-    return `${address}${revision} · ${method}`;
+    const update =
+        record.updateCheckStatus === "update_available"
+            ? ` · ${t("skills.update.revisionStatuses.update_available")}`
+            : "";
+    return `${address}${revision} · ${method}${update}`;
 }
 
 /** The sidebar page stays mounted while hidden, so drafts and pages survive. */
@@ -123,6 +128,7 @@ export function SkillLibrary({
     const [report, setReport] = useState<ImportReport | null>(null);
     const [formBlocked, setFormBlocked] = useState(false);
     const [installOpen, setInstallOpen] = useState(false);
+    const [marketplaceOpen, setMarketplaceOpen] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState<SkillRecord | null>(null);
     // A deletion whose files could not be removed keeps offering the retry.
     const [cleanupPending, setCleanupPending] = useState(false);
@@ -135,12 +141,14 @@ export function SkillLibrary({
     const cancelDelete = useRef<HTMLButtonElement>(null);
     const deleteTrigger = useRef<HTMLElement | null>(null);
     const installTrigger = useRef<HTMLButtonElement>(null);
+    const marketplaceTrigger = useRef<HTMLButtonElement>(null);
     const busy = action.kind === "picking" || action.kind === "importing";
     // A running deletion shows its progress on the dialog button, so it blocks
     // the list without joining the import progress area.
     const blocked =
         busy ||
         installOpen ||
+        marketplaceOpen ||
         action.kind === "deleting" ||
         (action.kind === "error" && action.uncertain) ||
         (list.kind === "ready" && list.more === "loading");
@@ -441,8 +449,23 @@ export function SkillLibrary({
                         dataFocus="heading"
                         trailing={
                             <div className={styles["headerActions"]}>
-                                {/* Importing adds an existing folder; installing
-                                fetches a reviewed remote source. */}
+                                {/* Marketplace browse, hand-entered install and
+                                local import are separate acquisition paths. */}
+                                <button
+                                    ref={marketplaceTrigger}
+                                    className={[
+                                        buttons["secondary"],
+                                        buttons["withIcon"],
+                                    ].join(" ")}
+                                    type="button"
+                                    aria-disabled={blocked}
+                                    onClick={() => {
+                                        setMarketplaceOpen(true);
+                                    }}
+                                >
+                                    <Icon name="skills" />
+                                    {t("skills.marketplace.open")}
+                                </button>
                                 <button
                                     ref={installTrigger}
                                     className={[
@@ -754,6 +777,12 @@ export function SkillLibrary({
                 onOpenChange={setInstallOpen}
                 onInstalled={installed}
                 returnFocus={installTrigger}
+            />
+            <SkillMarketplaceDialog
+                open={marketplaceOpen}
+                onOpenChange={setMarketplaceOpen}
+                onInstalled={installed}
+                returnFocus={marketplaceTrigger}
             />
         </section>
     );

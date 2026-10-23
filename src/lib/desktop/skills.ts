@@ -40,6 +40,14 @@ const SKILL_CODES = [
     "target_changed",
     "symlink_unavailable",
     "deploy_mode_invalid",
+    "update_unavailable",
+    "marketplace_unavailable",
+    "marketplace_response_invalid",
+    "marketplace_source_unsupported",
+    "marketplace_timed_out",
+    "revision_check_failed",
+    "update_plan_stale",
+    "update_strategy_invalid",
 ] as const;
 /** Sanitized domain, preview or response-validation failure. */
 export type SkillErrorCode =
@@ -84,6 +92,9 @@ export interface SkillInstallPreview {
     command: string;
 }
 /** Safe metadata for one imported skill; no file content crosses IPC. */
+/** Outcome of the last lightweight Git `ls-remote` check. */
+export type SkillRevisionCheckStatus =
+    "up_to_date" | "update_available" | "error";
 export interface SkillRecord {
     id: string;
     name: string;
@@ -94,6 +105,10 @@ export interface SkillRecord {
     fetchMethod: SkillFetchMethod | null;
     installerVersion: string | null;
     installerCommand: string | null;
+    remoteRevision: string | null;
+    updateCheckStatus: SkillRevisionCheckStatus | null;
+    lastCheckedAtMs: number | null;
+    lastCheckError: SkillErrorCode | null;
     contentDigest: string;
     fileCount: number;
     byteSize: number;
@@ -137,6 +152,21 @@ export interface SkillInstallReport {
     imported: SkillRecord[];
     skipped: SkippedSkill[];
 }
+/** skills.sh leaderboard page the catalog dialog can load. */
+export type MarketplaceBoard = "all_time" | "trending" | "hot";
+/** One GitHub-installable row from the skills.sh catalog. */
+export interface MarketplaceSkill {
+    id: string;
+    source: string;
+    skillId: string;
+    name: string;
+    installs: number;
+}
+/** Install one marketplace row at Git HEAD. */
+export interface MarketplaceInstallRequest {
+    source: string;
+    skillId: string;
+}
 
 /** Skill names follow the library rules: letters, digits, dot, dash, underscore. */
 const NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
@@ -155,6 +185,12 @@ const MAX_BYTES = 64 * 1024 * 1024;
 const MAX_CANDIDATES = 64;
 /** Sanity bound for the reported library total. */
 const MAX_TOTAL = 100_000;
+/** Catalog search and leaderboard bounds, mirroring the Rust marketplace module. */
+const MAX_MARKETPLACE_ROWS = 100;
+const MAX_MARKETPLACE_SEARCH = 60;
+/** Public GitHub `owner/repo` as skills.sh returns it for installable rows. */
+const GITHUB_OWNER_REPO =
+    /^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}\/[A-Za-z0-9._-]{1,100}$/;
 
 function invalid(): never {
     throw new SkillRequestError("invalid_response");
@@ -210,6 +246,17 @@ function boolean(value: unknown): boolean {
     if (typeof value !== "boolean") invalid();
     return value;
 }
+function revisionCheckStatus(value: unknown): SkillRevisionCheckStatus | null {
+    if (value === null) return null;
+    if (
+        value === "up_to_date" ||
+        value === "update_available" ||
+        value === "error"
+    )
+        return value;
+    invalid();
+}
+
 function record(value: unknown): SkillRecord {
     const data = object(value, [
         "id",
@@ -221,6 +268,10 @@ function record(value: unknown): SkillRecord {
         "fetchMethod",
         "installerVersion",
         "installerCommand",
+        "remoteRevision",
+        "updateCheckStatus",
+        "lastCheckedAtMs",
+        "lastCheckError",
         "contentDigest",
         "fileCount",
         "byteSize",
@@ -228,6 +279,13 @@ function record(value: unknown): SkillRecord {
         "importedAtMs",
         "updatedAtMs",
     ]);
+    const updateCheckStatus = revisionCheckStatus(data["updateCheckStatus"]);
+    const lastCheckError =
+        data["lastCheckError"] === null
+            ? null
+            : (SKILL_CODES.find((code) => code === data["lastCheckError"]) ??
+              null);
+    if (data["lastCheckError"] !== null && lastCheckError === null) invalid();
     const row: SkillRecord = {
         id: string(data["id"]),
         name: string(data["name"]),
@@ -238,6 +296,13 @@ function record(value: unknown): SkillRecord {
         fetchMethod: fetchMethod(data["fetchMethod"]),
         installerVersion: optionalString(data["installerVersion"]),
         installerCommand: optionalString(data["installerCommand"]),
+        remoteRevision: optionalString(data["remoteRevision"]),
+        updateCheckStatus,
+        lastCheckedAtMs:
+            data["lastCheckedAtMs"] === null
+                ? null
+                : integer(data["lastCheckedAtMs"], 0),
+        lastCheckError,
         contentDigest: string(data["contentDigest"]),
         fileCount: integer(data["fileCount"], 1),
         byteSize: integer(data["byteSize"], 1),
@@ -286,6 +351,28 @@ function record(value: unknown): SkillRecord {
     )
         invalid();
     if (row.installerCommand !== null) command(row.installerCommand);
+    // Revision-check columns are either all empty or a consistent outcome.
+    if (row.updateCheckStatus === null) {
+        if (
+            row.remoteRevision !== null ||
+            row.lastCheckedAtMs !== null ||
+            row.lastCheckError !== null
+        )
+            invalid();
+    } else if (
+        row.lastCheckedAtMs === null ||
+        (row.updateCheckStatus === "error"
+            ? row.lastCheckError === null
+            : row.remoteRevision === null || row.lastCheckError !== null)
+    ) {
+        invalid();
+    }
+    if (
+        row.remoteRevision !== null &&
+        (row.remoteRevision.trim() === "" ||
+            hasControlCharacter(row.remoteRevision))
+    )
+        invalid();
     return row;
 }
 /** The cursor carries both ordering parts: skill name, then identity. */
@@ -538,7 +625,144 @@ export async function installSkill(
     source: SkillInstallSource,
 ): Promise<SkillInstallReport> {
     desktop();
-    const data = object(await call("install_skill", { source }), [
+    return installSkillReport(await call("install_skill", { source }), source);
+}
+
+function marketplaceSkill(value: unknown): MarketplaceSkill {
+    const data = object(value, ["id", "source", "skillId", "name", "installs"]);
+    const id = string(data["id"]);
+    const source = string(data["source"]);
+    const skillId = string(data["skillId"]);
+    const name = string(data["name"]);
+    const installs = integer(data["installs"], 0);
+    // Catalog rows are display data: require a GitHub source and safe labels.
+    // Install still re-validates the skill selector through the Git path.
+    if (
+        id === "" ||
+        id.length > 256 ||
+        hasControlCharacter(id) ||
+        !GITHUB_OWNER_REPO.test(source) ||
+        skillId === "" ||
+        skillId.length > 64 ||
+        skillId.includes("/") ||
+        hasControlCharacter(skillId) ||
+        name.trim() === "" ||
+        name.length > 128 ||
+        hasControlCharacter(name) ||
+        id !== `${source}/${skillId}`
+    )
+        invalid();
+    return { id, source, skillId, name, installs };
+}
+
+function marketplaceRows(value: unknown, limit: number): MarketplaceSkill[] {
+    if (!Array.isArray(value) || value.length > limit) invalid();
+    const rows = value.map((entry: unknown) => marketplaceSkill(entry));
+    if (new Set(rows.map((row) => row.id)).size !== rows.length) invalid();
+    return rows;
+}
+
+/**
+ * Search the skills.sh catalog. Browser mode returns an honest preview marker;
+ * it never invents rows.
+ */
+export async function searchMarketplaceSkills(
+    query: string,
+    limit = 40,
+): Promise<
+    { kind: "preview" } | { kind: "desktop"; skills: MarketplaceSkill[] }
+> {
+    if (!isTauri()) return { kind: "preview" };
+    const trimmed = query.trim();
+    if (
+        trimmed.length < 2 ||
+        trimmed.length > 200 ||
+        limit < 1 ||
+        limit > MAX_MARKETPLACE_SEARCH
+    )
+        throw new SkillRequestError("invalid_request");
+    return {
+        kind: "desktop",
+        skills: marketplaceRows(
+            await call("search_marketplace_skills", { query: trimmed, limit }),
+            MAX_MARKETPLACE_SEARCH,
+        ),
+    };
+}
+
+/**
+ * Load one skills.sh leaderboard. Browser mode returns an honest preview marker.
+ */
+export async function listMarketplaceSkills(
+    board: MarketplaceBoard,
+): Promise<
+    { kind: "preview" } | { kind: "desktop"; skills: MarketplaceSkill[] }
+> {
+    if (!isTauri()) return { kind: "preview" };
+    return {
+        kind: "desktop",
+        skills: marketplaceRows(
+            await call("list_marketplace_skills", { board }),
+            MAX_MARKETPLACE_ROWS,
+        ),
+    };
+}
+
+/** Show the Git HEAD command for one marketplace row before anything runs. */
+export async function previewMarketplaceInstall(
+    request: MarketplaceInstallRequest,
+): Promise<
+    { kind: "preview" } | { kind: "desktop"; preview: SkillInstallPreview }
+> {
+    if (!isTauri()) return { kind: "preview" };
+    const source = request.source.trim();
+    const skillId = request.skillId.trim();
+    if (!GITHUB_OWNER_REPO.test(source) || !NAME_PATTERN.test(skillId))
+        throw new SkillRequestError("invalid_request");
+    const preview = installPreview(
+        await call("preview_marketplace_install", {
+            request: { source, skillId },
+        }),
+    );
+    if (preview.method !== "git" || preview.revision !== "HEAD") invalid();
+    return { kind: "desktop", preview };
+}
+
+/** Install one marketplace skill from GitHub HEAD into the central library. */
+export async function installMarketplaceSkill(
+    request: MarketplaceInstallRequest,
+): Promise<SkillInstallReport> {
+    desktop();
+    const source = request.source.trim();
+    const skillId = request.skillId.trim();
+    if (!GITHUB_OWNER_REPO.test(source) || !NAME_PATTERN.test(skillId))
+        throw new SkillRequestError("invalid_request");
+    const report = installSkillReport(
+        await call("install_marketplace_skill", {
+            request: { source, skillId },
+        }),
+        {
+            method: "git",
+            source: {
+                repository: source,
+                revision: "HEAD",
+                skill: skillId,
+            },
+        },
+    );
+    if (report.method !== "git" || report.revision === null) invalid();
+    return report;
+}
+
+/**
+ * Shared install-report validation used by both hand-entered and marketplace
+ * installs. The expected source method must match what Rust recorded.
+ */
+function installSkillReport(
+    value: unknown,
+    source: SkillInstallSource,
+): SkillInstallReport {
+    const data = object(value, [
         "method",
         "sourceUrl",
         "revision",
@@ -573,9 +797,9 @@ export async function installSkill(
     }
     if (!Array.isArray(data["imported"]) || !Array.isArray(data["skipped"]))
         invalid();
-    const imported = data["imported"].map((value: unknown) => record(value));
-    const skipped = data["skipped"].map((value: unknown) =>
-        skippedSkill(value),
+    const imported = data["imported"].map((entry: unknown) => record(entry));
+    const skipped = data["skipped"].map((entry: unknown) =>
+        skippedSkill(entry),
     );
     if (
         method !== source.method ||
@@ -609,6 +833,7 @@ export async function installSkill(
         skipped,
     };
 }
+
 /**
  * Remove one reviewed skill record and vibemate's managed copy of it. The
  * folder the skill was imported from is never part of this request. A stale
@@ -639,8 +864,11 @@ export type SkillDeployMode = "symlink" | "copy";
 /** Filesystem classification of the deploy target at preview time. */
 export type SkillDeployTargetState =
     "absent" | "owned_symlink" | "owned_copy" | "foreign";
-/** Preview of deploying one skill into Pi's user skills directory. */
-export interface PiSkillDeployPreview {
+/** Agents that accept central skill deployment in this build. */
+export type SkillDeployAgent = "pi" | "grokBuild";
+/** Preview of deploying one skill into an Agent user skills directory. */
+export interface SkillDeployPreview {
+    agentId: SkillDeployAgent;
     skillId: string;
     skillName: string;
     skillRevision: number;
@@ -653,16 +881,18 @@ export interface PiSkillDeployPreview {
     suggestedMode: SkillDeployMode;
     canApply: boolean;
 }
-/** Result of applying a reviewed Pi skill deployment. */
-export interface PiSkillDeployed {
+/** Result of applying a reviewed skill deployment. */
+export interface SkillDeployed {
+    agentId: SkillDeployAgent;
     skillId: string;
     skillName: string;
     skillRevision: number;
     mode: SkillDeployMode;
     targetPath: string;
 }
-/** Outcome of disabling a Pi skill deployment. */
-export interface PiSkillDeployDisabled {
+/** Outcome of disabling a skill deployment. */
+export interface SkillDeployDisabled {
+    agentId: SkillDeployAgent;
     skillId: string;
     targetPath: string;
     targetRemoved: boolean;
@@ -672,7 +902,7 @@ export interface PiSkillDeployDisabled {
 export interface SkillDeploymentRecord {
     skillId: string;
     skillName: string;
-    agentId: string;
+    agentId: SkillDeployAgent;
     configRoot: string;
     mode: SkillDeployMode;
     skillRevision: number;
@@ -688,10 +918,18 @@ const TARGET_STATES = [
     "owned_copy",
     "foreign",
 ] as const;
+const DEPLOY_AGENTS = ["pi", "grokBuild"] as const;
 
 function deployMode(value: unknown): SkillDeployMode {
     const text = string(value);
     const known = DEPLOY_MODES.find((mode) => mode === text);
+    if (known === undefined) invalid();
+    return known;
+}
+
+function deployAgent(value: unknown): SkillDeployAgent {
+    const text = string(value);
+    const known = DEPLOY_AGENTS.find((agent) => agent === text);
     if (known === undefined) invalid();
     return known;
 }
@@ -703,8 +941,9 @@ function targetState(value: unknown): SkillDeployTargetState {
     return known;
 }
 
-function deployPreview(value: unknown): PiSkillDeployPreview {
+function deployPreview(value: unknown): SkillDeployPreview {
     const data = object(value, [
+        "agentId",
         "skillId",
         "skillName",
         "skillRevision",
@@ -735,6 +974,7 @@ function deployPreview(value: unknown): PiSkillDeployPreview {
     )
         invalid();
     return {
+        agentId: deployAgent(data["agentId"]),
         skillId,
         skillName,
         skillRevision: integer(data["skillRevision"], 1),
@@ -763,13 +1003,11 @@ function deploymentRecord(value: unknown): SkillDeploymentRecord {
     ]);
     const skillId = string(data["skillId"]);
     const skillName = string(data["skillName"]);
-    const agentId = string(data["agentId"]);
     const configRoot = string(data["configRoot"]);
     const contentDigest = string(data["contentDigest"]);
     if (
         !ID_PATTERN.test(skillId) ||
         !NAME_PATTERN.test(skillName) ||
-        agentId !== "pi" ||
         !DIGEST_PATTERN.test(contentDigest) ||
         hasControlCharacter(configRoot) ||
         configRoot.trim() === ""
@@ -778,7 +1016,7 @@ function deploymentRecord(value: unknown): SkillDeploymentRecord {
     return {
         skillId,
         skillName,
-        agentId,
+        agentId: deployAgent(data["agentId"]),
         configRoot,
         mode: deployMode(data["mode"]),
         skillRevision: integer(data["skillRevision"], 1),
@@ -789,46 +1027,55 @@ function deploymentRecord(value: unknown): SkillDeploymentRecord {
 }
 
 /**
- * Preview deploying one library skill into Pi. Browser mode reports that the
- * desktop app is required; it never invents a successful path.
+ * Preview deploying one library skill into an Agent skills directory. Browser
+ * mode reports that the desktop app is required; it never invents a path.
  */
-export async function previewPiSkillDeploy(
+export async function previewSkillDeploy(
+    agentId: SkillDeployAgent,
     skillId: string,
 ): Promise<
-    { kind: "preview" } | { kind: "desktop"; preview: PiSkillDeployPreview }
+    { kind: "preview" } | { kind: "desktop"; preview: SkillDeployPreview }
 > {
     if (!isTauri()) return { kind: "preview" };
     const preview = deployPreview(
-        await call("preview_pi_skill_deploy", { skillId }),
+        await call("preview_skill_deploy", { agentId, skillId }),
     );
-    if (preview.skillId !== skillId) invalid();
+    if (preview.skillId !== skillId || preview.agentId !== agentId) invalid();
     return { kind: "desktop", preview };
 }
 
-/** Apply a reviewed Pi skill deployment. */
-export async function applyPiSkillDeploy(input: {
+/** Apply a reviewed skill deployment. */
+export async function applySkillDeploy(input: {
+    agentId: SkillDeployAgent;
     skillId: string;
     expectedSkillRevision: number;
     configRoot: string;
     mode: SkillDeployMode;
     targetState: SkillDeployTargetState;
-}): Promise<PiSkillDeployed> {
+}): Promise<SkillDeployed> {
     desktop();
-    const data = object(
-        await call("apply_pi_skill_deploy", { reviewed: input }),
-        ["skillId", "skillName", "skillRevision", "mode", "targetPath"],
-    );
+    const data = object(await call("apply_skill_deploy", { reviewed: input }), [
+        "agentId",
+        "skillId",
+        "skillName",
+        "skillRevision",
+        "mode",
+        "targetPath",
+    ]);
     const skillId = string(data["skillId"]);
     const skillName = string(data["skillName"]);
     const targetPath = string(data["targetPath"]);
+    const agentId = deployAgent(data["agentId"]);
     if (
         skillId !== input.skillId ||
+        agentId !== input.agentId ||
         !NAME_PATTERN.test(skillName) ||
         hasControlCharacter(targetPath) ||
         targetPath.trim() === ""
     )
         invalid();
     return {
+        agentId,
         skillId,
         skillName,
         skillRevision: integer(data["skillRevision"], 1),
@@ -837,25 +1084,29 @@ export async function applyPiSkillDeploy(input: {
     };
 }
 
-/** Revoke one vibemate-managed Pi skill deployment. */
-export async function disablePiSkillDeploy(input: {
+/** Revoke one vibemate-managed skill deployment. */
+export async function disableSkillDeploy(input: {
+    agentId: SkillDeployAgent;
     skillId: string;
     configRoot: string;
-}): Promise<PiSkillDeployDisabled> {
+}): Promise<SkillDeployDisabled> {
     desktop();
     const data = object(
-        await call("disable_pi_skill_deploy", { request: input }),
-        ["skillId", "targetPath", "targetRemoved", "leftForeign"],
+        await call("disable_skill_deploy", { request: input }),
+        ["agentId", "skillId", "targetPath", "targetRemoved", "leftForeign"],
     );
     const skillId = string(data["skillId"]);
     const targetPath = string(data["targetPath"]);
+    const agentId = deployAgent(data["agentId"]);
     if (
         skillId !== input.skillId ||
+        agentId !== input.agentId ||
         hasControlCharacter(targetPath) ||
         targetPath.trim() === ""
     )
         invalid();
     return {
+        agentId,
         skillId,
         targetPath,
         targetRemoved: boolean(data["targetRemoved"]),
@@ -863,17 +1114,18 @@ export async function disablePiSkillDeploy(input: {
     };
 }
 
-/** List deployments for the resolved Pi agent directory. */
-export async function listPiSkillDeployments(): Promise<
+/** List deployments for one resolved Agent configuration root. */
+export async function listAgentSkillDeployments(
+    agentId: SkillDeployAgent,
+): Promise<
     { kind: "preview" } | { kind: "desktop"; items: SkillDeploymentRecord[] }
 > {
     if (!isTauri()) return { kind: "preview" };
-    const data = await call("list_pi_skill_deployments", {});
+    const data = await call("list_agent_skill_deployments", { agentId });
     if (!Array.isArray(data)) invalid();
-    return {
-        kind: "desktop",
-        items: data.map((value: unknown) => deploymentRecord(value)),
-    };
+    const items = data.map((value: unknown) => deploymentRecord(value));
+    if (items.some((row) => row.agentId !== agentId)) invalid();
+    return { kind: "desktop", items };
 }
 
 /** List deployments recorded for one central skill. */
@@ -888,4 +1140,304 @@ export async function listSkillDeployments(
     const items = data.map((value: unknown) => deploymentRecord(value));
     if (items.some((row) => row.skillId !== skillId)) invalid();
     return { kind: "desktop", items };
+}
+
+/** Classification of local vs upstream change for an update preview. */
+export type SkillUpdateStatus =
+    "current" | "local_modified" | "upstream_changed" | "diverged";
+/** How apply may resolve an update preview. */
+export type SkillUpdateStrategy = "keep" | "replace";
+/** Per-deployment outcome after replacing library content. */
+export type SkillUpdateDeployOutcome =
+    "refreshed" | "symlink_updated" | "failed";
+/** Path-level summary versus the live managed copy. */
+export interface SkillUpdateDiff {
+    addedFiles: string[];
+    removedFiles: string[];
+    changedFiles: string[];
+    descriptionChanged: boolean;
+    liveDescription: string;
+    candidateDescription: string;
+}
+/** Preview of updating one library skill from its recorded source. */
+export interface SkillUpdatePreview {
+    skillId: string;
+    skillName: string;
+    skillRevision: number;
+    fetchMethod: SkillFetchMethod;
+    sourceUrl: string;
+    command: string;
+    recordedSourceRevision: string | null;
+    candidateSourceRevision: string | null;
+    recordedContentDigest: string;
+    liveContentDigest: string;
+    candidateContentDigest: string;
+    candidateFileCount: number;
+    candidateByteSize: number;
+    status: SkillUpdateStatus;
+    strategies: SkillUpdateStrategy[];
+    diff: SkillUpdateDiff;
+}
+/** One Agent deployment touched while applying a skill update. */
+export interface SkillUpdateDeployResult {
+    agentId: SkillDeployAgent;
+    configRoot: string;
+    mode: SkillDeployMode;
+    outcome: SkillUpdateDeployOutcome;
+}
+/** Result of applying a reviewed keep or replace strategy. */
+export interface SkillUpdateApplied {
+    skill: SkillRecord;
+    strategy: SkillUpdateStrategy;
+    status: SkillUpdateStatus;
+    deployments: SkillUpdateDeployResult[];
+}
+
+const UPDATE_STATUSES = [
+    "current",
+    "local_modified",
+    "upstream_changed",
+    "diverged",
+] as const;
+const UPDATE_STRATEGIES = ["keep", "replace"] as const;
+
+function updateStatus(value: unknown): SkillUpdateStatus {
+    const text = string(value);
+    const known = UPDATE_STATUSES.find((status) => status === text);
+    if (known === undefined) invalid();
+    return known;
+}
+
+function updateStrategy(value: unknown): SkillUpdateStrategy {
+    const text = string(value);
+    const known = UPDATE_STRATEGIES.find((strategy) => strategy === text);
+    if (known === undefined) invalid();
+    return known;
+}
+
+function pathList(value: unknown): string[] {
+    if (!Array.isArray(value) || value.length > 64) invalid();
+    return value.map((entry: unknown) => {
+        const path = string(entry);
+        if (
+            path.trim() === "" ||
+            hasControlCharacter(path) ||
+            path.length > 512
+        )
+            invalid();
+        return path;
+    });
+}
+
+function updateDiff(value: unknown): SkillUpdateDiff {
+    const data = object(value, [
+        "addedFiles",
+        "removedFiles",
+        "changedFiles",
+        "descriptionChanged",
+        "liveDescription",
+        "candidateDescription",
+    ]);
+    const liveDescription = string(data["liveDescription"]);
+    const candidateDescription = string(data["candidateDescription"]);
+    if (
+        liveDescription.trim() === "" ||
+        candidateDescription.trim() === "" ||
+        hasControlCharacter(liveDescription) ||
+        hasControlCharacter(candidateDescription)
+    )
+        invalid();
+    return {
+        addedFiles: pathList(data["addedFiles"]),
+        removedFiles: pathList(data["removedFiles"]),
+        changedFiles: pathList(data["changedFiles"]),
+        descriptionChanged: boolean(data["descriptionChanged"]),
+        liveDescription,
+        candidateDescription,
+    };
+}
+
+function updatePreview(value: unknown): SkillUpdatePreview {
+    const data = object(value, [
+        "skillId",
+        "skillName",
+        "skillRevision",
+        "fetchMethod",
+        "sourceUrl",
+        "command",
+        "recordedSourceRevision",
+        "candidateSourceRevision",
+        "recordedContentDigest",
+        "liveContentDigest",
+        "candidateContentDigest",
+        "candidateFileCount",
+        "candidateByteSize",
+        "status",
+        "strategies",
+        "diff",
+    ]);
+    const skillId = string(data["skillId"]);
+    const skillName = string(data["skillName"]);
+    const sourceUrl = string(data["sourceUrl"]);
+    const command = string(data["command"]);
+    const recordedContentDigest = string(data["recordedContentDigest"]);
+    const liveContentDigest = string(data["liveContentDigest"]);
+    const candidateContentDigest = string(data["candidateContentDigest"]);
+    const fetchMethod = string(data["fetchMethod"]);
+    if (
+        !ID_PATTERN.test(skillId) ||
+        !NAME_PATTERN.test(skillName) ||
+        (fetchMethod !== "git" && fetchMethod !== "npx") ||
+        !DIGEST_PATTERN.test(recordedContentDigest) ||
+        !DIGEST_PATTERN.test(liveContentDigest) ||
+        !DIGEST_PATTERN.test(candidateContentDigest) ||
+        hasControlCharacter(sourceUrl) ||
+        hasControlCharacter(command) ||
+        sourceUrl.trim() === "" ||
+        command.trim() === ""
+    )
+        invalid();
+    if (!Array.isArray(data["strategies"]) || data["strategies"].length > 8)
+        invalid();
+    const recordedSourceRevision =
+        data["recordedSourceRevision"] === null
+            ? null
+            : string(data["recordedSourceRevision"]);
+    const candidateSourceRevision =
+        data["candidateSourceRevision"] === null
+            ? null
+            : string(data["candidateSourceRevision"]);
+    if (
+        recordedSourceRevision !== null &&
+        (recordedSourceRevision.trim() === "" ||
+            hasControlCharacter(recordedSourceRevision))
+    )
+        invalid();
+    if (
+        candidateSourceRevision !== null &&
+        (candidateSourceRevision.trim() === "" ||
+            hasControlCharacter(candidateSourceRevision))
+    )
+        invalid();
+    return {
+        skillId,
+        skillName,
+        skillRevision: integer(data["skillRevision"], 1),
+        fetchMethod,
+        sourceUrl,
+        command,
+        recordedSourceRevision,
+        candidateSourceRevision,
+        recordedContentDigest,
+        liveContentDigest,
+        candidateContentDigest,
+        candidateFileCount: integer(data["candidateFileCount"], 0),
+        candidateByteSize: integer(data["candidateByteSize"], 0),
+        status: updateStatus(data["status"]),
+        strategies: data["strategies"].map((entry: unknown) =>
+            updateStrategy(entry),
+        ),
+        diff: updateDiff(data["diff"]),
+    };
+}
+
+/**
+ * Preview updating one library skill from its recorded Git or npx source.
+ * Browser mode reports that the desktop app is required; it never invents a
+ * successful comparison.
+ */
+export async function previewSkillUpdate(input: {
+    id: string;
+    expectedRevision: number;
+}): Promise<
+    { kind: "preview" } | { kind: "desktop"; preview: SkillUpdatePreview }
+> {
+    if (!isTauri()) return { kind: "preview" };
+    const preview = updatePreview(
+        await call("preview_skill_update", { request: input }),
+    );
+    if (
+        preview.skillId !== input.id ||
+        preview.skillRevision !== input.expectedRevision
+    )
+        invalid();
+    return { kind: "desktop", preview };
+}
+
+const UPDATE_DEPLOY_OUTCOMES = [
+    "refreshed",
+    "symlink_updated",
+    "failed",
+] as const;
+
+function updateDeployOutcome(value: unknown): SkillUpdateDeployOutcome {
+    const text = string(value);
+    const known = UPDATE_DEPLOY_OUTCOMES.find((outcome) => outcome === text);
+    if (known === undefined) invalid();
+    return known;
+}
+
+function updateDeployResult(value: unknown): SkillUpdateDeployResult {
+    if (!isObject(value)) invalid();
+    return {
+        agentId: deployAgent(value["agentId"]),
+        configRoot: string(value["configRoot"]),
+        mode: deployMode(value["mode"]),
+        outcome: updateDeployOutcome(value["outcome"]),
+    };
+}
+
+function updateApplied(value: unknown): SkillUpdateApplied {
+    if (!isObject(value)) invalid();
+    const deployments = value["deployments"];
+    if (!Array.isArray(deployments)) invalid();
+    return {
+        skill: record(value["skill"]),
+        strategy: updateStrategy(value["strategy"]),
+        status: updateStatus(value["status"]),
+        deployments: deployments.map((row: unknown) => updateDeployResult(row)),
+    };
+}
+
+/**
+ * Apply a reviewed keep or replace strategy after an update preview. Browser
+ * mode refuses; it never invents a successful apply.
+ */
+export async function applySkillUpdate(input: {
+    id: string;
+    expectedRevision: number;
+    strategy: SkillUpdateStrategy;
+    expectedStatus: SkillUpdateStatus;
+    expectedRecordedDigest: string;
+    expectedLiveDigest: string;
+    expectedCandidateDigest: string;
+    expectedCandidateSourceRevision: string | null;
+}): Promise<SkillUpdateApplied> {
+    desktop();
+    if (!ID_PATTERN.test(input.id) || input.expectedRevision < 1) {
+        throw new SkillRequestError("invalid_request");
+    }
+    const applied = updateApplied(
+        await call("apply_skill_update", { request: input }),
+    );
+    if (
+        applied.skill.id !== input.id ||
+        applied.strategy !== input.strategy ||
+        applied.status !== input.expectedStatus
+    ) {
+        invalid();
+    }
+    return applied;
+}
+
+/**
+ * Resolve remote Git `HEAD` for one skill and store the comparison. Browser
+ * mode refuses; it never invents an up-to-date result.
+ */
+export async function checkSkillRevision(id: string): Promise<SkillRecord> {
+    desktop();
+    if (!ID_PATTERN.test(id)) throw new SkillRequestError("invalid_request");
+    const row = record(await call("check_skill_revision", { request: { id } }));
+    if (row.id !== id || row.updateCheckStatus === null) invalid();
+    return row;
 }

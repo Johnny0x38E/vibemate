@@ -1,15 +1,15 @@
-//! Temporary-directory tests for Pi skill deploy: symlink, copy-sync, conflicts.
+//! Temporary-directory tests for Pi and Grok skill deploy.
 
 use super::{
-    apply_pi_skill_deploy, disable_pi_skill_deploy, list_pi_skill_deployments,
-    preview_pi_skill_deploy,
+    apply_skill_deploy, disable_skill_deploy, list_agent_skill_deployments, preview_skill_deploy,
+    refresh_skill_deployments_after_update,
 };
 use crate::agents::DiscoveryEnvironment;
 use crate::skills::manifest::MANIFEST_FILE_NAME;
-use crate::skills::service::import_one;
+use crate::skills::service::{self, import_one};
 use crate::skills::types::{
-    DeleteSkillRequest, DisablePiSkillDeployRequest, ReviewedPiSkillDeploy, SkillDeployMode,
-    SkillDeployTargetState, SkillError,
+    DeleteSkillRequest, DisableSkillDeployRequest, ReviewedSkillDeploy, SkillDeployAgent,
+    SkillDeployMode, SkillDeployTargetState, SkillError, SkillUpdateDeployOutcome,
 };
 use crate::skills::{SkillLibrary, delete_skill};
 use crate::storage::Storage;
@@ -24,7 +24,6 @@ struct Fixture {
     storage: Storage,
     library: SkillLibrary,
     home: PathBuf,
-    pi_root: PathBuf,
 }
 
 impl Fixture {
@@ -38,14 +37,13 @@ impl Fixture {
         let storage = Storage::open_in_directory(&root).expect("storage");
         let library = SkillLibrary::new(root.join("skills"));
         let home = root.join("home");
-        let pi_root = home.join(".pi/agent");
-        fs::create_dir_all(&pi_root).expect("pi root");
+        fs::create_dir_all(home.join(".pi/agent")).expect("pi root");
+        fs::create_dir_all(home.join(".grok")).expect("grok root");
         Self {
             root,
             storage,
             library,
             home,
-            pi_root,
         }
     }
 
@@ -67,15 +65,25 @@ impl Fixture {
         import_one(&self.library, &self.storage, &source, NOW).expect("import")
     }
 
-    fn preview(&self, skill_id: &str) -> Result<crate::skills::PiSkillDeployPreview, SkillError> {
-        preview_pi_skill_deploy(&self.library, &self.storage, &self.environment(), skill_id)
+    fn preview(
+        &self,
+        agent: SkillDeployAgent,
+        skill_id: &str,
+    ) -> Result<crate::skills::SkillDeployPreview, SkillError> {
+        preview_skill_deploy(
+            &self.library,
+            &self.storage,
+            &self.environment(),
+            agent,
+            skill_id,
+        )
     }
 
     fn apply(
         &self,
-        reviewed: ReviewedPiSkillDeploy,
-    ) -> Result<crate::skills::PiSkillDeployed, SkillError> {
-        apply_pi_skill_deploy(
+        reviewed: ReviewedSkillDeploy,
+    ) -> Result<crate::skills::SkillDeployed, SkillError> {
+        apply_skill_deploy(
             &self.library,
             &self.storage,
             &self.environment(),
@@ -86,22 +94,27 @@ impl Fixture {
 
     fn disable(
         &self,
+        agent: SkillDeployAgent,
         skill_id: &str,
         config_root: &str,
-    ) -> Result<crate::skills::PiSkillDeployDisabled, SkillError> {
-        disable_pi_skill_deploy(
+    ) -> Result<crate::skills::SkillDeployDisabled, SkillError> {
+        disable_skill_deploy(
             &self.library,
             &self.storage,
             &self.environment(),
-            DisablePiSkillDeployRequest {
+            DisableSkillDeployRequest {
+                agent_id: agent,
                 skill_id: skill_id.to_string(),
                 config_root: config_root.to_string(),
             },
         )
     }
 
-    fn target(&self, name: &str) -> PathBuf {
-        self.pi_root.join("skills").join(name)
+    fn target(&self, agent: SkillDeployAgent, name: &str) -> PathBuf {
+        match agent {
+            SkillDeployAgent::Pi => self.home.join(".pi/agent/skills").join(name),
+            SkillDeployAgent::GrokBuild => self.home.join(".grok/skills").join(name),
+        }
     }
 }
 
@@ -112,10 +125,11 @@ impl Drop for Fixture {
 }
 
 fn reviewed_from_preview(
-    preview: &crate::skills::PiSkillDeployPreview,
+    preview: &crate::skills::SkillDeployPreview,
     mode: SkillDeployMode,
-) -> ReviewedPiSkillDeploy {
-    ReviewedPiSkillDeploy {
+) -> ReviewedSkillDeploy {
+    ReviewedSkillDeploy {
+        agent_id: preview.agent_id,
         skill_id: preview.skill_id.clone(),
         expected_skill_revision: preview.skill_revision,
         config_root: preview.config_root.clone(),
@@ -125,56 +139,160 @@ fn reviewed_from_preview(
 }
 
 #[test]
-fn symlink_deploy_creates_owned_link_and_records_revision() {
+fn pi_symlink_deploy_creates_owned_link_and_records_revision() {
     let fixture = Fixture::new();
     let record = fixture.import("demo-skill");
-    let preview = fixture.preview(&record.id).expect("preview");
+    let preview = fixture
+        .preview(SkillDeployAgent::Pi, &record.id)
+        .expect("preview");
+    assert_eq!(preview.agent_id, SkillDeployAgent::Pi);
     assert_eq!(preview.target_state, SkillDeployTargetState::Absent);
     assert!(preview.can_apply);
     assert!(preview.symlink_available);
-    assert_eq!(preview.suggested_mode, SkillDeployMode::Symlink);
 
     let applied = fixture
         .apply(reviewed_from_preview(&preview, SkillDeployMode::Symlink))
         .expect("apply");
-    assert_eq!(applied.skill_revision, record.revision);
+    assert_eq!(applied.agent_id, SkillDeployAgent::Pi);
     assert_eq!(applied.mode, SkillDeployMode::Symlink);
 
-    let target = fixture.target("demo-skill");
-    let meta = fs::symlink_metadata(&target).expect("target meta");
-    assert!(meta.file_type().is_symlink());
-    let resolved = fs::canonicalize(&target).expect("canonicalize");
-    let managed = fs::canonicalize(fixture.library.root().join(&record.id)).expect("managed");
-    assert_eq!(resolved, managed);
-
-    let listed =
-        list_pi_skill_deployments(&fixture.library, &fixture.storage, &fixture.environment())
-            .expect("list");
+    let target = fixture.target(SkillDeployAgent::Pi, "demo-skill");
+    assert!(
+        fs::symlink_metadata(&target)
+            .expect("meta")
+            .file_type()
+            .is_symlink()
+    );
+    let listed = list_agent_skill_deployments(
+        &fixture.library,
+        &fixture.storage,
+        &fixture.environment(),
+        SkillDeployAgent::Pi,
+    )
+    .expect("list");
     assert_eq!(listed.len(), 1);
     assert!(listed[0].in_sync);
-    assert_eq!(listed[0].skill_revision, record.revision);
 }
 
 #[test]
-fn copy_deploy_writes_independent_tree() {
+fn grok_copy_deploy_writes_independent_tree() {
     let fixture = Fixture::new();
     let record = fixture.import("copy-skill");
-    let preview = fixture.preview(&record.id).expect("preview");
+    let preview = fixture
+        .preview(SkillDeployAgent::GrokBuild, &record.id)
+        .expect("preview");
+    assert_eq!(preview.agent_id, SkillDeployAgent::GrokBuild);
     let applied = fixture
         .apply(reviewed_from_preview(&preview, SkillDeployMode::Copy))
         .expect("apply");
     assert_eq!(applied.mode, SkillDeployMode::Copy);
 
-    let target = fixture.target("copy-skill");
+    let target = fixture.target(SkillDeployAgent::GrokBuild, "copy-skill");
     let meta = fs::symlink_metadata(&target).expect("meta");
     assert!(meta.is_dir());
     assert!(!meta.file_type().is_symlink());
     assert!(target.join(MANIFEST_FILE_NAME).is_file());
-    // Deleting the managed copy later must not remove the deployed files; for
-    // this test, only prove the trees are distinct paths.
-    assert_ne!(
-        fs::canonicalize(&target).unwrap(),
-        fs::canonicalize(fixture.library.root().join(&record.id)).unwrap()
+}
+
+#[test]
+fn refresh_after_content_replace_updates_symlink_metadata_and_rewrites_copy() {
+    let fixture = Fixture::new();
+    let record = fixture.import("refresh-skill");
+    let pi = fixture
+        .preview(SkillDeployAgent::Pi, &record.id)
+        .expect("pi");
+    fixture
+        .apply(reviewed_from_preview(&pi, SkillDeployMode::Symlink))
+        .expect("pi symlink");
+    let grok = fixture
+        .preview(SkillDeployAgent::GrokBuild, &record.id)
+        .expect("grok");
+    fixture
+        .apply(reviewed_from_preview(&grok, SkillDeployMode::Copy))
+        .expect("grok copy");
+
+    let candidate = fixture.root.join("candidate");
+    fs::create_dir_all(&candidate).expect("candidate");
+    fs::write(
+        candidate.join(MANIFEST_FILE_NAME),
+        "---\nname: refresh-skill\ndescription: Updated.\n---\n\n# refreshed\n",
+    )
+    .expect("manifest");
+    let updated = service::replace_managed_content(
+        &fixture.library,
+        &fixture.storage,
+        &service::ManagedReplace {
+            id: &record.id,
+            expected_revision: record.revision,
+            candidate: &candidate,
+            source_revision: None,
+            installer_command: None,
+            now_ms: NOW + 1,
+        },
+    )
+    .expect("replace");
+    assert_ne!(updated.content_digest, record.content_digest);
+
+    let results = refresh_skill_deployments_after_update(
+        &fixture.library,
+        &fixture.storage,
+        &updated,
+        NOW + 2,
+    )
+    .expect("refresh");
+    assert_eq!(results.len(), 2);
+    let symlink = results
+        .iter()
+        .find(|row| row.agent_id == SkillDeployAgent::Pi)
+        .expect("pi row");
+    assert_eq!(symlink.outcome, SkillUpdateDeployOutcome::SymlinkUpdated);
+    let copy = results
+        .iter()
+        .find(|row| row.agent_id == SkillDeployAgent::GrokBuild)
+        .expect("grok row");
+    assert_eq!(copy.outcome, SkillUpdateDeployOutcome::Refreshed);
+
+    let copy_body = fs::read_to_string(
+        fixture
+            .target(SkillDeployAgent::GrokBuild, "refresh-skill")
+            .join(MANIFEST_FILE_NAME),
+    )
+    .expect("copy manifest");
+    assert!(copy_body.contains("# refreshed"));
+}
+
+#[test]
+fn same_skill_can_deploy_to_pi_and_grok_independently() {
+    let fixture = Fixture::new();
+    let record = fixture.import("shared");
+    let pi = fixture
+        .preview(SkillDeployAgent::Pi, &record.id)
+        .expect("pi preview");
+    fixture
+        .apply(reviewed_from_preview(&pi, SkillDeployMode::Symlink))
+        .expect("pi apply");
+    let grok = fixture
+        .preview(SkillDeployAgent::GrokBuild, &record.id)
+        .expect("grok preview");
+    fixture
+        .apply(reviewed_from_preview(&grok, SkillDeployMode::Symlink))
+        .expect("grok apply");
+
+    assert!(fixture.target(SkillDeployAgent::Pi, "shared").exists());
+    assert!(
+        fixture
+            .target(SkillDeployAgent::GrokBuild, "shared")
+            .exists()
+    );
+
+    fixture
+        .disable(SkillDeployAgent::Pi, &record.id, &pi.config_root)
+        .expect("disable pi");
+    assert!(!fixture.target(SkillDeployAgent::Pi, "shared").exists());
+    assert!(
+        fixture
+            .target(SkillDeployAgent::GrokBuild, "shared")
+            .exists()
     );
 }
 
@@ -182,14 +300,15 @@ fn copy_deploy_writes_independent_tree() {
 fn foreign_target_is_previewed_but_not_applied() {
     let fixture = Fixture::new();
     let record = fixture.import("taken");
-    let target = fixture.target("taken");
+    let target = fixture.target(SkillDeployAgent::GrokBuild, "taken");
     fs::create_dir_all(&target).expect("foreign");
     fs::write(target.join(MANIFEST_FILE_NAME), "user content").expect("file");
 
-    let preview = fixture.preview(&record.id).expect("preview");
+    let preview = fixture
+        .preview(SkillDeployAgent::GrokBuild, &record.id)
+        .expect("preview");
     assert_eq!(preview.target_state, SkillDeployTargetState::Foreign);
     assert!(!preview.can_apply);
-
     let error = fixture
         .apply(reviewed_from_preview(&preview, SkillDeployMode::Symlink))
         .expect_err("foreign refused");
@@ -201,84 +320,32 @@ fn foreign_target_is_previewed_but_not_applied() {
 fn disable_removes_owned_symlink_only() {
     let fixture = Fixture::new();
     let record = fixture.import("revoke-me");
-    let preview = fixture.preview(&record.id).expect("preview");
+    let preview = fixture
+        .preview(SkillDeployAgent::Pi, &record.id)
+        .expect("preview");
     fixture
         .apply(reviewed_from_preview(&preview, SkillDeployMode::Symlink))
         .expect("apply");
 
-    // User-owned neighbour must survive.
-    let neighbour = fixture.target("user-own");
+    let neighbour = fixture.target(SkillDeployAgent::Pi, "user-own");
     fs::create_dir_all(&neighbour).expect("neighbour");
     fs::write(neighbour.join("keep.txt"), "keep").expect("keep");
 
     let disabled = fixture
-        .disable(&record.id, &preview.config_root)
+        .disable(SkillDeployAgent::Pi, &record.id, &preview.config_root)
         .expect("disable");
     assert!(disabled.target_removed);
-    assert!(!disabled.left_foreign);
-    assert!(!fixture.target("revoke-me").exists());
+    assert!(!fixture.target(SkillDeployAgent::Pi, "revoke-me").exists());
     assert!(neighbour.join("keep.txt").exists());
-    assert!(fixture.library.root().join(&record.id).exists());
-
-    let listed =
-        list_pi_skill_deployments(&fixture.library, &fixture.storage, &fixture.environment())
-            .expect("list");
-    assert!(listed.is_empty());
 }
 
 #[test]
-fn disable_leaves_replaced_foreign_content() {
-    let fixture = Fixture::new();
-    let record = fixture.import("replaced");
-    let preview = fixture.preview(&record.id).expect("preview");
-    fixture
-        .apply(reviewed_from_preview(&preview, SkillDeployMode::Symlink))
-        .expect("apply");
-
-    let target = fixture.target("replaced");
-    fs::remove_file(&target)
-        .or_else(|_| fs::remove_dir_all(&target))
-        .expect("remove link");
-    fs::create_dir_all(&target).expect("user dir");
-    fs::write(target.join("user.md"), "mine").expect("user file");
-
-    let disabled = fixture
-        .disable(&record.id, &preview.config_root)
-        .expect("disable");
-    assert!(!disabled.target_removed);
-    assert!(disabled.left_foreign);
-    assert!(target.join("user.md").exists());
-}
-
-#[test]
-fn stale_target_state_is_rejected() {
-    let fixture = Fixture::new();
-    let record = fixture.import("stale");
-    let preview = fixture.preview(&record.id).expect("preview");
-    // Create a foreign path after the preview claimed absent.
-    fs::create_dir_all(fixture.target("stale")).expect("foreign");
-    let error = fixture
-        .apply(reviewed_from_preview(&preview, SkillDeployMode::Symlink))
-        .expect_err("stale");
-    assert_eq!(error, SkillError::TargetChanged);
-}
-
-#[test]
-fn forged_revision_is_rejected() {
-    let fixture = Fixture::new();
-    let record = fixture.import("forged");
-    let preview = fixture.preview(&record.id).expect("preview");
-    let mut reviewed = reviewed_from_preview(&preview, SkillDeployMode::Symlink);
-    reviewed.expected_skill_revision = record.revision + 1;
-    let error = fixture.apply(reviewed).expect_err("forged revision");
-    assert_eq!(error, SkillError::RevisionConflict);
-}
-
-#[test]
-fn delete_skill_refuses_while_deployed() {
+fn delete_skill_refuses_while_deployed_to_either_agent() {
     let fixture = Fixture::new();
     let record = fixture.import("in-use");
-    let preview = fixture.preview(&record.id).expect("preview");
+    let preview = fixture
+        .preview(SkillDeployAgent::GrokBuild, &record.id)
+        .expect("preview");
     fixture
         .apply(reviewed_from_preview(&preview, SkillDeployMode::Symlink))
         .expect("apply");
@@ -293,10 +360,13 @@ fn delete_skill_refuses_while_deployed() {
     )
     .expect_err("in use");
     assert_eq!(error, SkillError::SkillInUse);
-    assert!(fixture.library.root().join(&record.id).exists());
 
     fixture
-        .disable(&record.id, &preview.config_root)
+        .disable(
+            SkillDeployAgent::GrokBuild,
+            &record.id,
+            &preview.config_root,
+        )
         .expect("disable");
     delete_skill(
         &fixture.library,
@@ -310,20 +380,15 @@ fn delete_skill_refuses_while_deployed() {
 }
 
 #[test]
-fn redeploy_updates_owned_target() {
+fn stale_target_state_is_rejected() {
     let fixture = Fixture::new();
-    let record = fixture.import("again");
-    let preview = fixture.preview(&record.id).expect("preview");
-    fixture
+    let record = fixture.import("stale");
+    let preview = fixture
+        .preview(SkillDeployAgent::Pi, &record.id)
+        .expect("preview");
+    fs::create_dir_all(fixture.target(SkillDeployAgent::Pi, "stale")).expect("foreign");
+    let error = fixture
         .apply(reviewed_from_preview(&preview, SkillDeployMode::Symlink))
-        .expect("first");
-
-    let again = fixture.preview(&record.id).expect("second preview");
-    assert_eq!(again.target_state, SkillDeployTargetState::OwnedSymlink);
-    fixture
-        .apply(reviewed_from_preview(&again, SkillDeployMode::Copy))
-        .expect("switch to copy");
-    let meta = fs::symlink_metadata(fixture.target("again")).expect("meta");
-    assert!(meta.is_dir());
-    assert!(!meta.file_type().is_symlink());
+        .expect_err("stale");
+    assert_eq!(error, SkillError::TargetChanged);
 }

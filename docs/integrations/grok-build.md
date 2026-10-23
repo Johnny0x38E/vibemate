@@ -201,6 +201,8 @@ N 处。P22/P23 首批按「只写选中条目」实现：一次预览只写选�
 `SKILL.md` 的目录：用户 `.grok/skills/`、沿项目目录发现的 `.grok/skills/`、
 启用插件与 `[skills].paths`，还有 `.agents`/Claude/Cursor 兼容来源。
 目录链接在本机隔离检查中可发现，其他平台链接与复制同步保持待验。
+vibemate 只写入用户级 `<GROK_HOME|~/.grok>/skills/<name>/`（见
+[skills.md](../skills.md)）；不写项目路径或兼容来源目录。
 
 `[skills].disabled` 按名称发现但不激活资源；本机 `inspect` 确认停用的 Skill
 仍被报告并带 `disabled: true`。管理名称冲突与来源，不能误停同名用户资源。
@@ -226,7 +228,7 @@ MCP；兼容来源还可能以 disabled 状态列出。因此适配器必须结�
 | 关系                  | 可用原生方向                                                                       | 实现前还需验证                                                                |
 | --------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
 | Provider/Model → Grok | 用户级 model alias 与协议；`disabled_models` 移除目录模型；不写 `[models].default` | 模型身份恢复、实际请求字段与生效会话；hidden_models 仅隐藏，仍可通过 CLI 使用 |
-| Skill → Grok          | skills.disabled 或撤销自己的部署                                                   | 名称/来源冲突、项目兼容覆盖、运行时刷新                                       |
+| Skill → Grok          | 用户级 `skills/<name>/` 部署（symlink/copy）或撤销自己的部署；也可 skills.disabled | 名称/来源冲突、项目兼容覆盖、运行时刷新                                       |
 | MCP → Grok            | per-server enabled，原生 CLI/TUI 开关                                              | 原生/项目/兼容来源合并、策略限制、连接及关闭效果                              |
 
 没有发现第一阶段必须加入本地代理或启动器的证据；三个原生协议入口能作为适配

@@ -786,6 +786,10 @@ fn ipc_payloads_match_the_frontend_contract() {
         fetch_method: None,
         installer_version: None,
         installer_command: None,
+        remote_revision: None,
+        update_check_status: None,
+        last_checked_at_ms: None,
+        last_check_error: None,
         content_digest: "ab".repeat(32),
         file_count: 2,
         byte_size: 128,
@@ -809,11 +813,15 @@ fn ipc_payloads_match_the_frontend_contract() {
             "importedAtMs",
             "installerCommand",
             "installerVersion",
+            "lastCheckError",
+            "lastCheckedAtMs",
             "name",
             "originPath",
+            "remoteRevision",
             "revision",
             "sourceRevision",
             "sourceUrl",
+            "updateCheckStatus",
             "updatedAtMs",
         ]
     );
@@ -969,6 +977,30 @@ fn ipc_payloads_match_the_frontend_contract() {
         (SkillError::InvalidStoredSkill, "invalid_stored_skill"),
         (SkillError::OutcomeUnknown, "outcome_unknown"),
         (SkillError::OperationFailed, "operation_failed"),
+        (SkillError::SkillInUse, "skill_in_use"),
+        (
+            SkillError::AgentLocationUnavailable,
+            "agent_location_unavailable",
+        ),
+        (SkillError::TargetConflict, "target_conflict"),
+        (SkillError::TargetChanged, "target_changed"),
+        (SkillError::SymlinkUnavailable, "symlink_unavailable"),
+        (SkillError::DeployModeInvalid, "deploy_mode_invalid"),
+        (SkillError::UpdateUnavailable, "update_unavailable"),
+        (
+            SkillError::MarketplaceUnavailable,
+            "marketplace_unavailable",
+        ),
+        (
+            SkillError::MarketplaceResponseInvalid,
+            "marketplace_response_invalid",
+        ),
+        (
+            SkillError::MarketplaceSourceUnsupported,
+            "marketplace_source_unsupported",
+        ),
+        (SkillError::MarketplaceTimedOut, "marketplace_timed_out"),
+        (SkillError::RevisionCheckFailed, "revision_check_failed"),
     ];
     for (error, expected) in codes {
         assert_eq!(

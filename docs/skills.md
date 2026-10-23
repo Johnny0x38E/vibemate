@@ -1,34 +1,41 @@
 # Central Skill library
 
 `src/features/skills/` and `src-tauri/src/skills/` implement the central Skill
-library. Installing from a confirmed GitHub source and deploying a library Skill
-into Pi's user-level `skills/` directory are implemented. Update comparison and
-deployment to other Agents are not; see [`plans/todo.md`](plans/todo.md).
+library. Installing from a confirmed GitHub source, browsing/installing from the
+skills.sh marketplace at Git `HEAD`, a lightweight Git revision check via
+`ls-remote`, previewing an update from a recorded Git or npx fetch method, and
+deploying a library Skill into Pi or Grok Build user-level `skills/` directories
+are implemented. Applying an update and Claude Code deployment are not; see
+[`plans/todo.md`](plans/todo.md) and the
+[marketplace reference](plans/skills-marketplace-reference.md).
 
 ## Scope
 
 - Import existing local Skill folders (a directory holding `SKILL.md`) into the
   central library.
-- Install from a public GitHub repository at a pinned Git revision, or through
-  the reviewed `skills` npx installer.
+- Install from a public GitHub repository at a pinned Git revision, through the
+  reviewed `skills` npx installer, or from the skills.sh marketplace at `HEAD`.
 - Store managed copies in the app data directory; original folders are never
   moved, modified or deleted.
 - Record a stable ID, content digest, origin path or upstream source, revision,
   fetch method and the reviewed install command.
 - Page the list with a bounded cursor; an address with no fetch method is shown
   as not auto-updatable.
-- Deploy a library Skill into Pi (`PI_CODING_AGENT_DIR` or `~/.pi/agent`) as a
-  symlink when possible, or as an explicit copy-sync; revoke only vibemate-owned
-  targets.
+- Preview an update for a skill that has a recorded Git or npx fetch method:
+  re-acquire into a temporary workspace, compare digests and path lists, and name
+  keep/replace strategies without writing the library or Agent targets.
+- Deploy a library Skill into Pi or Grok Build as a symlink when possible, or as
+  an explicit copy-sync; revoke only vibemate-owned targets.
 - Delete a library entry with a bilingual confirmation; deletion refuses while
   any deployment row remains.
 
 ## Data model
 
 Migration v10 created `skill`; v11 rebuilt it to widen the content limits; v27
-added the fetch method and installer fields; v28 added `skill_deployment` for
-per-Agent ownership. Files live in `<app-data>/skills/<id>/`. Managed copies
-move with the database, so a backup of the app-data folder stays complete.
+added the fetch method and installer fields; v28–v29 added `skill_deployment`
+for per-Agent ownership; v30 added revision-check columns. Files live in
+`<app-data>/skills/<id>/`. Managed copies move with the database, so a backup of
+the app-data folder stays complete.
 
 | Field                                     | Meaning                                                                   |
 | ----------------------------------------- | ------------------------------------------------------------------------- |
@@ -39,6 +46,8 @@ move with the database, so a backup of the app-data folder stays complete.
 | `source_url` / `source_revision`          | Upstream source and pinned revision; empty means unknown                  |
 | `fetch_method`                            | `git` or `npx`; empty means only an address is known                      |
 | `installer_version` / `installer_command` | Reviewed npx version and exact command; empty for Git and unknown sources |
+| `remote_revision` / `update_check_status` | Last `ls-remote` tip and outcome; empty until a Git revision check runs   |
+| `last_checked_at` / `last_check_error`    | Check bookkeeping; error stores a safe code only                          |
 | `content_digest`                          | SHA-256 over the ordered relative paths and contents                      |
 | `file_count` / `byte_size`                | Managed copy size, for display and bounds                                 |
 | `revision`                                | Metadata revision, incremented on source edits                            |
@@ -83,12 +92,24 @@ one file ≤ 16 MiB, total ≤ 64 MiB, at most 2048 files, at most 64 Skill fold
 per selection. `.git` is skipped at every level. Import never executes anything
 from a Skill and never reads files outside it.
 
+## Marketplace installation
+
+**Browse marketplace** loads skills.sh leaderboards (`all_time`, `trending`,
+`hot`) or search results. Only public GitHub `owner/repo` rows are shown;
+site-only hosts are filtered out. Choosing a row reviews the same Git
+acquisition path as a hand-entered install, pinned to `HEAD` for the named
+skill selector. Confirming runs Git in the private workspace and imports that
+skill into the central library with the resolved commit as `source_revision`.
+Catalog HTTP failures map to `marketplace_*` codes; a non-GitHub source refused
+at confirm time is `marketplace_source_unsupported`. Deploy remains a separate
+step on the Skill detail page.
+
 ## Remote installation
 
-**Install from source** reviews one of two acquisition paths. Both run in a
-private temporary workspace under the system temporary directory; the workspace
-is removed on every outcome. The reviewed command is shown before any process
-starts. Nothing inside a Skill is executed.
+**Install from source** reviews one of two hand-entered acquisition paths. Both
+run in a private temporary workspace under the system temporary directory; the
+workspace is removed on every outcome. The reviewed command is shown before any
+process starts. Nothing inside a Skill is executed.
 
 ### Git
 
@@ -155,7 +176,46 @@ deliberately forwards no Git credential helper or token.
 
 Auto-update is decided by whether an explicit fetch method and its fields are
 recorded, not by who installed the Skill. A locally imported Skill can gain the
-same Git or npx fields in its source editor; P29 will use those fields.
+same Git or npx fields in its source editor; the update preview uses those fields.
+
+## Revision check
+
+**Check remote revision** is Git-only. It runs `git ls-remote <url> HEAD` with
+the same cleared environment as a Git install, compares that tip to the recorded
+`source_revision`, and stores `remote_revision`, `update_check_status`
+(`up_to_date` / `update_available` / `error`), `last_checked_at` and a safe
+`last_check_error` code when needed (schema v30). The skill metadata `revision`
+is not bumped. npx-recorded skills cannot use this path. List rows show an
+update-available hint when the stored status says so. Batch check and monorepo
+subdirectory tree-id equality are not in this slice.
+
+## Update preview and apply
+
+**Preview content changes** on the Skill detail page only runs when
+`fetch_method` is `git` or `npx` with the required fields. Git update
+acquisition always fetches `HEAD` (the recorded pin remains the digest
+baseline). npx re-runs the reviewed installer version. The preview acquires into
+a private temporary workspace, finds the candidate matching the skill name, and
+digests both the live managed copy and the candidate. The workspace is removed
+before the result returns. Preview never writes the library or any Agent
+`skills/` directory.
+
+| Status             | Meaning                                                        |
+| ------------------ | -------------------------------------------------------------- |
+| `current`          | Live, recorded and candidate digests match                     |
+| `local_modified`   | Managed copy differs; candidate matches the recorded digest    |
+| `upstream_changed` | Managed copy matches recorded; candidate differs               |
+| `diverged`         | Local edits and candidate both differ from the recorded digest |
+
+When a change is present, the preview offers `keep` and `replace`. **Apply**
+re-acquires and refuses when digests, status or the candidate revision no longer
+match the reviewed tokens (`update_plan_stale`). `keep` writes nothing.
+`replace` swaps the managed copy (staging + park + rename), advances
+`source_revision` for Git, marks the revision check `up_to_date`, then refreshes
+owned deployments: symlinks get ownership metadata only; owned copies are
+rewritten. Per-target refresh failures are reported without rolling back the
+library or touching foreign Agent content. Path lists name added, removed and
+changed relative paths (bounded), and whether the description text differs.
 
 ## Deletion
 
@@ -178,27 +238,36 @@ stays until that record is deleted. Deleting a Skill that still has a
 `skill_deployment` row returns `skill_in_use`; revoke the deployment first. P35
 will add richer reference UI.
 
-## Deploy to Pi
+## Deploy to Pi and Grok Build
 
-Deployment writes only the Pi user-level directory resolved the same way as
-model configuration: `PI_CODING_AGENT_DIR` when set, otherwise `~/.pi/agent`.
-The target is `<agent-dir>/skills/<skill-name>/`. Shared locations such as
-`~/.agents/skills/` are not written.
+Deployment writes only each Agent's user-level skills directory, resolved the
+same way as model configuration:
 
-1. **Preview** classifies the target as absent, vibemate-owned symlink, owned
-   copy, or foreign; probes whether a directory symlink can be created under
-   `skills/`; and suggests symlink when available, otherwise copy.
-2. **Apply** requires the reviewed skill revision, config root, mode and target
-   state. Symlink mode is refused when the probe fails. Foreign targets are
-   never overwritten. After a successful filesystem write, schema v28 records
-   ownership (`mode`, skill revision, content digest). A failed record attempt
-   rolls back the filesystem write when possible, otherwise `outcome_unknown`.
+| Agent      | Root resolution                           | Target                        |
+| ---------- | ----------------------------------------- | ----------------------------- |
+| Pi         | `PI_CODING_AGENT_DIR`, else `~/.pi/agent` | `<root>/skills/<skill-name>/` |
+| Grok Build | `GROK_HOME`, else `~/.grok`               | `<root>/skills/<skill-name>/` |
+
+Both Agents use the same `SKILL.md` directory form. Shared locations such as
+`~/.agents/skills/` and project-local discovery paths are not written. Claude
+Code skill deployment remains unimplemented.
+
+1. **Preview** names the Agent, classifies the target as absent, vibemate-owned
+   symlink, owned copy, or foreign; probes whether a directory symlink can be
+   created under `skills/`; and suggests symlink when available, otherwise copy.
+2. **Apply** requires the reviewed Agent, skill revision, config root, mode and
+   target state. Symlink mode is refused when the probe fails. Foreign targets
+   are never overwritten. After a successful filesystem write, schema v29 records
+   ownership (`agent_id` is `pi` or `grokBuild`, plus mode, skill revision and
+   content digest). A failed record attempt rolls back the filesystem write when
+   possible, otherwise `outcome_unknown`. One skill may be deployed to Pi and
+   Grok independently; revoking one does not touch the other.
 3. **Disable** removes only a still-owned symlink or copy. If the user replaced
    the target, the path is left alone and the ownership row is cleared.
 
-The Skill detail page owns the deploy controls. The Agent detail Skill segment
-for Pi is read-only: it lists deployments for that agent directory and jumps to
-the Skills module.
+The Skill detail page owns the deploy controls and an Agent selector. The Agent
+detail Skill segment for Pi and Grok Build is read-only: it lists deployments for
+that agent directory and jumps to the Skills module.
 
 ## Interface
 

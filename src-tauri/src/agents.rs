@@ -46,6 +46,9 @@ pub struct ApplyClaudeCodeSettingsRequest {
 /// Claude Code settings root, shared by discovery and the configuration preview.
 pub(crate) use discovery::claude_config_root;
 pub use discovery::discover_agents;
+/// Grok Build root (`GROK_HOME` or `~/.grok`), shared by configuration writes
+/// and skill deployment.
+pub(crate) use discovery::grok_config_root;
 /// Pi agent directory (`PI_CODING_AGENT_DIR` or `~/.pi/agent`), shared by
 /// configuration writes and skill deployment.
 pub(crate) use discovery::pi_config_root;

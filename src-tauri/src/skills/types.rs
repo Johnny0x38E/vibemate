@@ -82,6 +82,22 @@ pub enum SkillError {
     SymlinkUnavailable,
     /// The requested deploy mode is not allowed for this preview.
     DeployModeInvalid,
+    /// The skill has no recorded fetch method, so an update check cannot run.
+    UpdateUnavailable,
+    /// The skills.sh catalog could not be reached.
+    MarketplaceUnavailable,
+    /// The skills.sh catalog returned a body this build cannot parse.
+    MarketplaceResponseInvalid,
+    /// The marketplace entry is not a public GitHub `owner/repo` source.
+    MarketplaceSourceUnsupported,
+    /// Contacting skills.sh exceeded the time limit.
+    MarketplaceTimedOut,
+    /// Resolving the remote Git revision failed after contacting the host.
+    RevisionCheckFailed,
+    /// Digests or status changed after the update preview the user reviewed.
+    UpdatePlanStale,
+    /// The chosen update strategy is not valid for the current comparison status.
+    UpdateStrategyInvalid,
 }
 
 /// Import the skills inside one chosen folder.
@@ -281,6 +297,14 @@ pub struct SkillRecord {
     pub installer_version: Option<String>,
     /// Command that was reviewed and run for this source.
     pub installer_command: Option<String>,
+    /// Latest remote HEAD from the last revision check, when known.
+    pub remote_revision: Option<String>,
+    /// Result of the last lightweight revision check, or null when never checked.
+    pub update_check_status: Option<SkillRevisionCheckStatus>,
+    /// When the last revision check finished, in Unix milliseconds.
+    pub last_checked_at_ms: Option<i64>,
+    /// Safe error code from the last failed revision check.
+    pub last_check_error: Option<String>,
     /// SHA-256 of the imported content, used as the change baseline.
     pub content_digest: String,
     /// Number of files in the managed copy.
@@ -293,6 +317,26 @@ pub struct SkillRecord {
     pub imported_at_ms: i64,
     /// Last metadata change in Unix milliseconds.
     pub updated_at_ms: i64,
+}
+
+/// Outcome of comparing the recorded Git revision to remote `HEAD`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SkillRevisionCheckStatus {
+    /// Recorded `source_revision` still matches remote `HEAD`.
+    UpToDate,
+    /// Remote `HEAD` differs from the recorded revision.
+    UpdateAvailable,
+    /// The check contacted the remote but could not complete cleanly.
+    Error,
+}
+
+/// Check one Git-backed skill's remote `HEAD` without downloading the tree.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CheckSkillRevisionRequest {
+    /// Central skill identity.
+    pub id: String,
 }
 
 /// One bounded page of skill records, ordered by name.
@@ -332,10 +376,243 @@ pub enum SkillDeployTargetState {
     Foreign,
 }
 
-/// Preview of deploying one central skill into Pi's user skills directory.
+/// Whether a recorded fetch method found a content change worth reviewing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SkillUpdateStatus {
+    /// Live library, recorded digest and candidate digest all match.
+    Current,
+    /// The managed copy differs from the recorded digest; the candidate matches
+    /// the recorded baseline.
+    LocalModified,
+    /// The managed copy still matches the recorded digest; the candidate differs.
+    UpstreamChanged,
+    /// Local edits and a different candidate both diverge from the recorded
+    /// baseline (and from each other when digests differ).
+    Diverged,
+}
+
+/// How the user may resolve an update preview.
+///
+/// Preview only names the strategies. Apply re-checks digests before acting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SkillUpdateStrategy {
+    /// Leave the managed copy and source metadata unchanged.
+    Keep,
+    /// Replace the managed copy with the candidate content.
+    Replace,
+}
+
+/// Request to preview an update using the skill's recorded fetch method.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PreviewSkillUpdateRequest {
+    /// Central skill identity.
+    pub id: String,
+    /// Library revision the detail page loaded.
+    pub expected_revision: i64,
+}
+
+/// Apply a reviewed update strategy after a digest preview.
+///
+/// Every digest and the comparison status must match the preview the user saw.
+/// `keep` never writes files. `replace` re-acquires, verifies digests, then
+/// swaps the managed copy and refreshes owned Agent deployments.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ApplySkillUpdateRequest {
+    /// Central skill identity.
+    pub id: String,
+    /// Library revision the preview was built from.
+    pub expected_revision: i64,
+    /// Strategy chosen from the preview.
+    pub strategy: SkillUpdateStrategy,
+    /// Comparison status the preview reported.
+    pub expected_status: SkillUpdateStatus,
+    /// Recorded content digest from the preview.
+    pub expected_recorded_digest: String,
+    /// Live library digest from the preview.
+    pub expected_live_digest: String,
+    /// Candidate digest from the preview.
+    pub expected_candidate_digest: String,
+    /// Candidate Git commit from the preview, when the fetch method is Git.
+    pub expected_candidate_source_revision: Option<String>,
+}
+
+/// One Agent deployment touched while applying a skill update.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PiSkillDeployPreview {
+pub struct SkillUpdateDeployResult {
+    /// Agent that holds the deployment.
+    pub agent_id: SkillDeployAgent,
+    /// Configuration root recorded for the deployment.
+    pub config_root: String,
+    /// Deploy mode that was refreshed.
+    pub mode: SkillDeployMode,
+    /// Whether the target was rewritten, only had metadata updated, or failed.
+    pub outcome: SkillUpdateDeployOutcome,
+}
+
+/// Per-deployment outcome of an applied skill update.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SkillUpdateDeployOutcome {
+    /// Copy target was rewritten from the new managed content.
+    Refreshed,
+    /// Symlink still points at the managed path; ownership metadata was updated.
+    SymlinkUpdated,
+    /// The target could not be refreshed; the central library change stands.
+    Failed,
+}
+
+/// Result of applying a reviewed skill update.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillUpdateApplied {
+    /// Library record after the apply (unchanged for `keep`).
+    pub skill: SkillRecord,
+    /// Strategy that was applied.
+    pub strategy: SkillUpdateStrategy,
+    /// Comparison status re-verified at apply time.
+    pub status: SkillUpdateStatus,
+    /// Owned deployments refreshed after a replace, empty for `keep`.
+    pub deployments: Vec<SkillUpdateDeployResult>,
+}
+
+/// Path-level summary of how the candidate differs from the live managed copy.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillUpdateDiff {
+    /// Relative paths present only in the candidate.
+    pub added_files: Vec<String>,
+    /// Relative paths present only in the live managed copy.
+    pub removed_files: Vec<String>,
+    /// Relative paths present in both with different content digests.
+    pub changed_files: Vec<String>,
+    /// Whether the frontmatter description text differs.
+    pub description_changed: bool,
+    /// Description currently in the live managed copy.
+    pub live_description: String,
+    /// Description from the candidate `SKILL.md`.
+    pub candidate_description: String,
+}
+
+/// Which skills.sh leaderboard page to load for browsing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MarketplaceBoard {
+    /// Default all-time leaderboard on skills.sh.
+    AllTime,
+    /// Trending leaderboard.
+    Trending,
+    /// Hot leaderboard.
+    Hot,
+}
+
+/// One catalog row from skills.sh (search or leaderboard).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarketplaceSkill {
+    /// Stable catalog identity `source/skillId`.
+    pub id: String,
+    /// GitHub `owner/repo` when installable; other hosts are filtered out.
+    pub source: String,
+    /// Skill directory / frontmatter name used as the install selector.
+    pub skill_id: String,
+    /// Display name from the catalog.
+    pub name: String,
+    /// Install count reported by skills.sh (informational only).
+    pub installs: u64,
+}
+
+/// Install one marketplace skill into the central library via Git HEAD.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct MarketplaceInstallRequest {
+    /// GitHub `owner/repo` from the catalog row.
+    pub source: String,
+    /// Skill selector matching the catalog `skillId`.
+    pub skill_id: String,
+}
+
+/// Preview of updating one library skill from its recorded source.
+///
+/// Acquisition may contact the network and write a temporary workspace that is
+/// removed before this value returns. The central library and Agent targets are
+/// never modified.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillUpdatePreview {
+    /// Central skill identity.
+    pub skill_id: String,
+    /// Skill name used as the acquisition selector.
+    pub skill_name: String,
+    /// Library revision the preview was built from.
+    pub skill_revision: i64,
+    /// Recorded fetch method used for acquisition.
+    pub fetch_method: FetchMethod,
+    /// Canonical source URL from the record.
+    pub source_url: String,
+    /// Exact command that would be used to re-acquire (display text).
+    pub command: String,
+    /// Recorded Git revision, or null for npx.
+    pub recorded_source_revision: Option<String>,
+    /// Resolved Git commit from this acquisition, or null for npx.
+    pub candidate_source_revision: Option<String>,
+    /// Content digest stored with the library row.
+    pub recorded_content_digest: String,
+    /// Digest of the managed copy on disk at preview time.
+    pub live_content_digest: String,
+    /// Digest of the matching candidate from the acquired source.
+    pub candidate_content_digest: String,
+    /// Candidate file count after the same bounds as import.
+    pub candidate_file_count: i64,
+    /// Candidate total bytes after the same bounds as import.
+    pub candidate_byte_size: i64,
+    /// Classification of local vs upstream change.
+    pub status: SkillUpdateStatus,
+    /// Strategies apply may offer for this status.
+    pub strategies: Vec<SkillUpdateStrategy>,
+    /// Path and description summary versus the live managed copy.
+    pub diff: SkillUpdateDiff,
+}
+
+/// Agents that accept central skill deployment in this build.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SkillDeployAgent {
+    /// Earendil Pi user agent directory.
+    Pi,
+    /// xAI Grok Build configuration root.
+    GrokBuild,
+}
+
+impl SkillDeployAgent {
+    /// Wire value stored in `skill_deployment.agent_id`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Pi => "pi",
+            Self::GrokBuild => "grokBuild",
+        }
+    }
+
+    /// Parse a stored or IPC agent identity.
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "pi" => Some(Self::Pi),
+            "grokBuild" => Some(Self::GrokBuild),
+            _ => None,
+        }
+    }
+}
+
+/// Preview of deploying one central skill into an Agent skills directory.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillDeployPreview {
+    /// Target Agent for this preview.
+    pub agent_id: SkillDeployAgent,
     /// Central skill identity.
     pub skill_id: String,
     /// Skill name used as the target directory name.
@@ -344,7 +621,7 @@ pub struct PiSkillDeployPreview {
     pub skill_revision: i64,
     /// Content digest that would be recorded on apply.
     pub content_digest: String,
-    /// Absolute Pi agent directory used for this preview.
+    /// Absolute Agent configuration root used for this preview.
     pub config_root: String,
     /// Absolute target path under `<config_root>/skills/<name>/`.
     pub target_path: String,
@@ -360,15 +637,17 @@ pub struct PiSkillDeployPreview {
     pub can_apply: bool,
 }
 
-/// Tokens from a reviewed Pi skill deploy preview.
+/// Tokens from a reviewed skill deploy preview.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ReviewedPiSkillDeploy {
+pub struct ReviewedSkillDeploy {
+    /// Target Agent the preview named.
+    pub agent_id: SkillDeployAgent,
     /// Central skill identity the preview named.
     pub skill_id: String,
     /// Library revision the user reviewed.
     pub expected_skill_revision: i64,
-    /// Absolute Pi agent directory from the preview.
+    /// Absolute Agent configuration root from the preview.
     pub config_root: String,
     /// Deploy mode the user confirmed.
     pub mode: SkillDeployMode,
@@ -376,10 +655,12 @@ pub struct ReviewedPiSkillDeploy {
     pub target_state: SkillDeployTargetState,
 }
 
-/// Result of applying a reviewed Pi skill deployment.
+/// Result of applying a reviewed skill deployment.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PiSkillDeployed {
+pub struct SkillDeployed {
+    /// Target Agent that received the deployment.
+    pub agent_id: SkillDeployAgent,
     /// Central skill identity.
     pub skill_id: String,
     /// Skill name at the target.
@@ -392,20 +673,24 @@ pub struct PiSkillDeployed {
     pub target_path: String,
 }
 
-/// Request to revoke one vibemate-managed Pi skill deployment.
+/// Request to revoke one vibemate-managed skill deployment.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct DisablePiSkillDeployRequest {
+pub struct DisableSkillDeployRequest {
+    /// Target Agent that holds the deployment.
+    pub agent_id: SkillDeployAgent,
     /// Central skill identity.
     pub skill_id: String,
-    /// Absolute Pi agent directory that holds the deployment.
+    /// Absolute Agent configuration root that holds the deployment.
     pub config_root: String,
 }
 
-/// Outcome of disabling a Pi skill deployment.
+/// Outcome of disabling a skill deployment.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PiSkillDeployDisabled {
+pub struct SkillDeployDisabled {
+    /// Target Agent that was reviewed.
+    pub agent_id: SkillDeployAgent,
     /// Central skill identity.
     pub skill_id: String,
     /// Absolute target path that was reviewed.
@@ -424,7 +709,7 @@ pub struct SkillDeploymentRecord {
     pub skill_id: String,
     /// Skill name at deploy time (target directory name).
     pub skill_name: String,
-    /// Agent identity wire value (`pi`).
+    /// Agent identity wire value (`pi` or `grokBuild`).
     pub agent_id: String,
     /// Absolute Agent configuration root.
     pub config_root: String,

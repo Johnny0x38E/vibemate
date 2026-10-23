@@ -560,6 +560,44 @@ const MIGRATIONS: &[Migration] = &[
             UNIQUE(skill_id, agent_id, config_root)
         ) STRICT, WITHOUT ROWID;",
     },
+    Migration {
+        version: 29,
+        // P28: allow Grok Build deployments beside Pi. SQLite cannot widen a
+        // CHECK in place, so the table is rebuilt and existing Pi rows kept.
+        sql: "CREATE TABLE skill_deployment_v29 (
+            skill_id TEXT NOT NULL REFERENCES skill(id) ON DELETE RESTRICT,
+            agent_id TEXT NOT NULL CHECK(agent_id IN ('pi','grokBuild')),
+            config_root TEXT NOT NULL CHECK(length(config_root) BETWEEN 1 AND 4096),
+            target_name TEXT NOT NULL CHECK(length(target_name) BETWEEN 1 AND 64),
+            mode TEXT NOT NULL CHECK(mode IN ('symlink','copy')),
+            skill_revision INTEGER NOT NULL CHECK(skill_revision >= 1),
+            content_digest TEXT NOT NULL
+                CHECK(length(content_digest)=64 AND content_digest NOT GLOB '*[^0-9a-f]*'),
+            deployed_at INTEGER NOT NULL CHECK(deployed_at >= 0),
+            PRIMARY KEY(agent_id, config_root, target_name),
+            UNIQUE(skill_id, agent_id, config_root)
+        ) STRICT, WITHOUT ROWID;
+        INSERT INTO skill_deployment_v29
+            SELECT skill_id, agent_id, config_root, target_name, mode,
+                   skill_revision, content_digest, deployed_at
+            FROM skill_deployment;
+        DROP TABLE skill_deployment;
+        ALTER TABLE skill_deployment_v29 RENAME TO skill_deployment;",
+    },
+    Migration {
+        version: 30,
+        // Lightweight Git revision check: ls-remote HEAD vs recorded
+        // source_revision. Does not bump skill.revision; apply remains P30.
+        sql: "ALTER TABLE skill ADD COLUMN remote_revision TEXT
+                CHECK(remote_revision IS NULL OR length(remote_revision) BETWEEN 1 AND 128);
+            ALTER TABLE skill ADD COLUMN update_check_status TEXT
+                CHECK(update_check_status IS NULL OR update_check_status IN
+                    ('up_to_date','update_available','error'));
+            ALTER TABLE skill ADD COLUMN last_checked_at INTEGER
+                CHECK(last_checked_at IS NULL OR last_checked_at >= 0);
+            ALTER TABLE skill ADD COLUMN last_check_error TEXT
+                CHECK(last_check_error IS NULL OR length(last_check_error) BETWEEN 1 AND 64);",
+    },
 ];
 
 /// Errors from opening or migrating the private database.

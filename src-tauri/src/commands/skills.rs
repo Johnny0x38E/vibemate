@@ -1,11 +1,13 @@
 //! Skill library IPC: list entries, choose a folder, import its skills, record
-//! a source, delete a reviewed entry, and deploy a skill into Pi's user skills
-//! directory. Importing copies files into the private library and never
-//! executes a skill command; deleting removes only vibemate's own copy. Deploy
-//! prefers a symlink and falls back to copy-sync only when the user chooses it.
-//! All work happens on the blocking pool because it touches the disk, and the
-//! folder dialog is opened from Rust so the frontend never calls the dialog
-//! plugin's own commands.
+//! a source, preview or apply an update from a recorded fetch method, delete a
+//! reviewed entry, and deploy a skill into an Agent skills directory. Importing
+//! copies files into the private library and never executes a skill command;
+//! deleting removes only vibemate's own copy. Update preview acquires into a
+//! temporary workspace and never writes the library; apply re-checks digests
+//! before keep or replace. Deploy prefers a symlink and falls back to copy-sync
+//! only when the user chooses it. All work happens on the blocking pool because
+//! it touches the disk, and the folder dialog is opened from Rust so the
+//! frontend never calls the dialog plugin's own commands.
 
 use super::agents::environment;
 use super::state::with_skill_library;
@@ -81,6 +83,69 @@ pub(crate) fn preview_skill_install(
     crate::skills::preview_skill_install(source)
 }
 
+/// Search the skills.sh catalog for installable GitHub skills.
+#[tauri::command]
+pub(crate) async fn search_marketplace_skills(
+    query: String,
+    limit: Option<u32>,
+) -> Result<Vec<crate::skills::MarketplaceSkill>, crate::skills::SkillError> {
+    let limit = limit.unwrap_or(40) as usize;
+    crate::skills::search_marketplace_skills(&query, limit).await
+}
+
+/// Load one skills.sh leaderboard page (GitHub-installable rows only).
+#[tauri::command]
+pub(crate) async fn list_marketplace_skills(
+    board: crate::skills::MarketplaceBoard,
+) -> Result<Vec<crate::skills::MarketplaceSkill>, crate::skills::SkillError> {
+    crate::skills::list_marketplace_skills(board).await
+}
+
+/// Show the Git command for installing one marketplace skill at HEAD.
+#[tauri::command]
+pub(crate) fn preview_marketplace_install(
+    request: crate::skills::MarketplaceInstallRequest,
+) -> Result<crate::skills::SkillInstallPreview, crate::skills::SkillError> {
+    crate::skills::preview_marketplace_install(request)
+}
+
+/// Install one marketplace skill from GitHub HEAD into the central library.
+#[tauri::command]
+pub(crate) async fn install_marketplace_skill(
+    app: tauri::AppHandle,
+    request: crate::skills::MarketplaceInstallRequest,
+) -> Result<crate::skills::SkillInstallReport, crate::skills::SkillError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let now = crate::shared::current_unix_millis()
+            .map_err(|_| crate::skills::SkillError::OperationFailed)?;
+        with_skill_library(&app, |library, storage| {
+            crate::skills::install_marketplace_skill(library, storage, request, now)
+        })
+    })
+    .await
+    .map_err(|_| crate::skills::SkillError::OperationFailed)?
+}
+
+/// Resolve remote Git `HEAD` for one skill and store the comparison outcome.
+///
+/// Does not download the tree or bump the skill metadata revision. npx sources
+/// are refused with `update_unavailable`.
+#[tauri::command]
+pub(crate) async fn check_skill_revision(
+    app: tauri::AppHandle,
+    request: crate::skills::CheckSkillRevisionRequest,
+) -> Result<crate::skills::SkillRecord, crate::skills::SkillError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let now = crate::shared::current_unix_millis()
+            .map_err(|_| crate::skills::SkillError::OperationFailed)?;
+        with_skill_library(&app, |_, storage| {
+            crate::skills::check_skill_revision(storage, request, now)
+        })
+    })
+    .await
+    .map_err(|_| crate::skills::SkillError::OperationFailed)?
+}
+
 /// Acquire a reviewed source in a private workspace and import its skills.
 ///
 /// The installer only runs after the interface's explicit confirmation. A
@@ -125,6 +190,45 @@ pub(crate) async fn get_skill(
 ) -> Result<crate::skills::SkillRecord, crate::skills::SkillError> {
     tauri::async_runtime::spawn_blocking(move || {
         with_skill_library(&app, |_, storage| crate::skills::get_skill(storage, &id))
+    })
+    .await
+    .map_err(|_| crate::skills::SkillError::OperationFailed)?
+}
+
+/// Preview updating one skill from its recorded Git or npx source.
+///
+/// Acquisition may contact the network. The central library and Agent targets
+/// are never modified; the temporary workspace is removed before returning.
+#[tauri::command]
+pub(crate) async fn preview_skill_update(
+    app: tauri::AppHandle,
+    request: crate::skills::PreviewSkillUpdateRequest,
+) -> Result<crate::skills::SkillUpdatePreview, crate::skills::SkillError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        with_skill_library(&app, |library, storage| {
+            crate::skills::preview_skill_update(library, storage, request)
+        })
+    })
+    .await
+    .map_err(|_| crate::skills::SkillError::OperationFailed)?
+}
+
+/// Apply a reviewed keep or replace strategy after an update preview.
+///
+/// Re-checks digests before acting. `keep` writes nothing; `replace` swaps the
+/// managed copy and refreshes owned deployments. Partial deploy failures leave
+/// the library change in place.
+#[tauri::command]
+pub(crate) async fn apply_skill_update(
+    app: tauri::AppHandle,
+    request: crate::skills::ApplySkillUpdateRequest,
+) -> Result<crate::skills::SkillUpdateApplied, crate::skills::SkillError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let now = crate::shared::current_unix_millis()
+            .map_err(|_| crate::skills::SkillError::OperationFailed)?;
+        with_skill_library(&app, |library, storage| {
+            crate::skills::apply_skill_update(library, storage, request, now)
+        })
     })
     .await
     .map_err(|_| crate::skills::SkillError::OperationFailed)?
@@ -178,69 +282,71 @@ pub(crate) async fn cleanup_deleted_skill_copies(
     .map_err(|_| crate::skills::SkillError::OperationFailed)?
 }
 
-/// Preview deploying one central skill into the resolved Pi agent directory.
+/// Preview deploying one central skill into a resolved Agent skills directory.
 #[tauri::command]
-pub(crate) async fn preview_pi_skill_deploy(
+pub(crate) async fn preview_skill_deploy(
     app: tauri::AppHandle,
+    agent_id: crate::skills::SkillDeployAgent,
     skill_id: String,
-) -> Result<crate::skills::PiSkillDeployPreview, crate::skills::SkillError> {
+) -> Result<crate::skills::SkillDeployPreview, crate::skills::SkillError> {
     let environment =
         environment(&app).map_err(|_| crate::skills::SkillError::AgentLocationUnavailable)?;
     tauri::async_runtime::spawn_blocking(move || {
         with_skill_library(&app, |library, storage| {
-            crate::skills::preview_pi_skill_deploy(library, storage, &environment, &skill_id)
+            crate::skills::preview_skill_deploy(library, storage, &environment, agent_id, &skill_id)
         })
     })
     .await
     .map_err(|_| crate::skills::SkillError::OperationFailed)?
 }
 
-/// Apply a reviewed Pi skill deployment after the interface shows the preview.
+/// Apply a reviewed skill deployment after the interface shows the preview.
 #[tauri::command]
-pub(crate) async fn apply_pi_skill_deploy(
+pub(crate) async fn apply_skill_deploy(
     app: tauri::AppHandle,
-    reviewed: crate::skills::ReviewedPiSkillDeploy,
-) -> Result<crate::skills::PiSkillDeployed, crate::skills::SkillError> {
+    reviewed: crate::skills::ReviewedSkillDeploy,
+) -> Result<crate::skills::SkillDeployed, crate::skills::SkillError> {
     let environment =
         environment(&app).map_err(|_| crate::skills::SkillError::AgentLocationUnavailable)?;
     tauri::async_runtime::spawn_blocking(move || {
         let now = crate::shared::current_unix_millis()
             .map_err(|_| crate::skills::SkillError::OperationFailed)?;
         with_skill_library(&app, |library, storage| {
-            crate::skills::apply_pi_skill_deploy(library, storage, &environment, reviewed, now)
+            crate::skills::apply_skill_deploy(library, storage, &environment, reviewed, now)
         })
     })
     .await
     .map_err(|_| crate::skills::SkillError::OperationFailed)?
 }
 
-/// Revoke one vibemate-managed Pi skill deployment without touching the library.
+/// Revoke one vibemate-managed skill deployment without touching the library.
 #[tauri::command]
-pub(crate) async fn disable_pi_skill_deploy(
+pub(crate) async fn disable_skill_deploy(
     app: tauri::AppHandle,
-    request: crate::skills::DisablePiSkillDeployRequest,
-) -> Result<crate::skills::PiSkillDeployDisabled, crate::skills::SkillError> {
+    request: crate::skills::DisableSkillDeployRequest,
+) -> Result<crate::skills::SkillDeployDisabled, crate::skills::SkillError> {
     let environment =
         environment(&app).map_err(|_| crate::skills::SkillError::AgentLocationUnavailable)?;
     tauri::async_runtime::spawn_blocking(move || {
         with_skill_library(&app, |library, storage| {
-            crate::skills::disable_pi_skill_deploy(library, storage, &environment, request)
+            crate::skills::disable_skill_deploy(library, storage, &environment, request)
         })
     })
     .await
     .map_err(|_| crate::skills::SkillError::OperationFailed)?
 }
 
-/// List deployments recorded for the resolved Pi agent directory.
+/// List deployments recorded for one resolved Agent configuration root.
 #[tauri::command]
-pub(crate) async fn list_pi_skill_deployments(
+pub(crate) async fn list_agent_skill_deployments(
     app: tauri::AppHandle,
+    agent_id: crate::skills::SkillDeployAgent,
 ) -> Result<Vec<crate::skills::SkillDeploymentRecord>, crate::skills::SkillError> {
     let environment =
         environment(&app).map_err(|_| crate::skills::SkillError::AgentLocationUnavailable)?;
     tauri::async_runtime::spawn_blocking(move || {
         with_skill_library(&app, |library, storage| {
-            crate::skills::list_pi_skill_deployments(library, storage, &environment)
+            crate::skills::list_agent_skill_deployments(library, storage, &environment, agent_id)
         })
     })
     .await

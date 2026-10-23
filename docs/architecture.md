@@ -31,7 +31,7 @@ storage, registers plugins and managed state, and registers every command.
 ### Persistence
 
 `src-tauri/src/storage.rs` owns the private SQLite database in the app-data
-folder and its forward-only migrations, currently schema v31. Each feature owns
+folder and its forward-only migrations, currently schema v32. Each feature owns
 its SQL:
 
 - `providers.rs` keeps the public entrypoints while `providers/` separates types,
@@ -117,8 +117,8 @@ running-session state is unknown, show that next to the enabled configuration.
 
 Agent adapters translate a switch into the verified native operation. Every
 mutation uses preview, concurrent-change checks, backups and rollback. Skill
-deployment to Claude Code, Pi and Grok Build is implemented; MCP deployment is
-not yet; see [plans/todo.md](plans/todo.md).
+deployment to Claude Code, Pi and Grok Build and Pi MCP deployment are
+implemented; Grok MCP deployment remains; see [plans/todo.md](plans/todo.md).
 
 ## Planned boundaries
 

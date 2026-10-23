@@ -58,6 +58,11 @@ pub fn save_definition(
     request: SaveMcpRequest,
     now_ms: i64,
 ) -> Result<McpRecord, McpError> {
+    // Central edits and native deployment share a cross-instance lock so a
+    // credential reference cannot change between approval and native writing.
+    let _configuration_guard = storage
+        .lock_configuration()
+        .map_err(|_| McpError::StorageUnavailable)?;
     let (existing_id, revision, enabled, valid) = validate(request)?;
     if now_ms < 0 {
         return Err(McpError::InvalidRequest);
@@ -142,6 +147,9 @@ pub fn delete_definition(
     store: &dyn CredentialStore,
     request: DeleteMcpRequest,
 ) -> Result<DeletedMcp, McpError> {
+    let _configuration_guard = storage
+        .lock_configuration()
+        .map_err(|_| McpError::StorageUnavailable)?;
     identity(&request.id)?;
     if request.expected_revision < 1 {
         return Err(McpError::InvalidRequest);

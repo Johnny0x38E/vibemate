@@ -1,0 +1,45 @@
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+    margin-top: var(--space-md);
+}
+
+.recovery {
+    margin-top: var(--space-md);
+    padding: var(--space-md);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    overflow-wrap: anywhere;
+}
+
+.recovery h3,
+.history {
+    margin: 0;
+}
+
+.history {
+    padding: 0;
+    list-style: none;
+}
+
+.history li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    padding-block: var(--space-sm);
+}
+
+.history li > div {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.history time {
+    color: var(--color-summary);
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+}

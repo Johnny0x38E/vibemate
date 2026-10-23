@@ -15,7 +15,7 @@ does not own.
 
 ## Journal
 
-Add schema v32 (or the next free version if feat-mcp takes v32):
+Add schema v33 (v31 is Claude Code Skill deployment and v32 is Pi MCP):
 
 ```sql
 CREATE TABLE skill_deploy_operation (
@@ -97,7 +97,7 @@ acceptance evidence exist.
 
 ## Tests
 
-- Migrate v31 to v32; preserve unrelated rows.
+- Migrate v32 to v33; preserve unrelated rows.
 - Crash after filesystem write with no ownership row -> `needs_record`; Finish
   records ownership and clears the journal.
 - Crash after target removal with a stale ownership row ->

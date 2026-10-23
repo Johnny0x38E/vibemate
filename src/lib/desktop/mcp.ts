@@ -10,6 +10,7 @@ const MCP_CODES = [
     "display_name_invalid",
     "server_name_invalid",
     "server_name_taken",
+    "mcp_in_use",
     "command_invalid",
     "args_invalid",
     "cwd_invalid",

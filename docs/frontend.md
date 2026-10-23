@@ -964,11 +964,35 @@ literal value without shell quoting. Saving only stores a definition, and
 enable/disable describes central state — never an applied Agent config or
 connection.
 
-MCP list rows currently show "Not registered" / 「未注册」. Agent registration is
-not implemented, and discovering an Agent or enabling a central definition does
-not establish a registration. When actual registration relationships are
-available, this subline should show one name badge per registered Agent instead
-of the empty-state text; it must not infer registrations from local discovery.
+MCP list rows report recorded Pi registrations in the active Pi directory,
+not discovered Agents or live connections. `usePiMcpRegistrations` finishes all
+bounded root pages before showing a complete summary; unreadable/partial results
+cannot become a false unregistered state. Visibility/epoch changes invalidate
+old requests. The Pi Agent MCP slot reuses this read-only observation and links
+to central management. Other Agents explicitly remain unimplemented.
+
+`McpPiManager` owns deployment/update, native enable/disable, revoke, history and
+interruption review. Each file mutation first obtains a sanitized plan, then
+requires a separate confirmation; cancelling never applies. `PiMcpReview` reuses
+the existing field-summary renderer and shows separate masked entry details.
+Close stays outside the scrollable body and nested Escape restores focus.
+Closing/hiding/retrying ignores late reads. Confirmed writes cannot be dismissed
+or double-submitted: the parent keeps its busy guard even if hiding unmounts the
+dialog, and settlement requests a fresh observation. Uncertain writes discard
+their approval and read recovery state instead of blindly retrying.
+
+History pages retain the selected source identity. Recovery has its own
+before/intended observation review and explicit metadata-only confirmation;
+divergence has no confirm action. The delete dialog's `McpDeleteReferences`
+reads references across Pi directories before enabling delete; Rust still makes
+the authoritative transactional check.
+
+`src/lib/desktop/piMcp.ts` validates strict state/plan/history/result shapes,
+identity/revision/action, cursors/order, placeholder-only env/headers and protected
+summary values. Raw errors, native bytes and credential values are discarded.
+Browser mode refuses native operations rather than simulating successful writes.
+Rust selects native paths and rechecks approvals; React sends no paths or native
+documents. No capabilities or CSP permissions were added.
 
 `McpForm` clears typed values on every submit, cancel, transport change and hide,
 and its hidden transition clears during rendering so a hidden panel cannot retain
@@ -997,10 +1021,18 @@ only to visible secondary pages (Provider create/edit, MCP create/edit and Agent
 details). Lists, Settings, Overview and Skills keep their previous scrolling.
 
 Recorded isolated Linux Tauri checks covered no-secret stdio save/edit/restart
-without executing its test command. Real MCP credential-store, native and visual
-acceptance passed the maintainer review on 2026-10-13; Windows/Linux remain under
-the release-time platform check, and passing checks do not establish layout or
-accessibility acceptance.
+without executing its test command. Earlier central-definition credential/native/
+visual acceptance passed maintainer review; that does not cover Pi deployment.
+A new isolated macOS Tauri WebView run exercised nine real-IPC lifecycle checks:
+deploy, enable, disable, revoke, retained-entry restore, reference protection,
+Agent summary and final central deletion, with temporary HOME/Pi/app data and no
+credential fields or server execution. After explicit approval, another nine
+installed Pi CLI probes verified actual local stdio/loopback HTTP discovery,
+disable, selected-result restore and revoke following native UI writes, without
+Provider credentials or external requests. Browser mocks separately checked both
+languages/themes, 720×560, long data and nested keyboard/recovery behavior.
+OS-credential deployment and Windows/Linux remain separate acceptance checks;
+builds and behavior tests do not prove visual accessibility.
 
 ## Read-only Agent discovery
 

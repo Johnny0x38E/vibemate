@@ -623,6 +623,42 @@ const MIGRATIONS: &[Migration] = &[
         DROP TABLE skill_deployment;
         ALTER TABLE skill_deployment_v31 RENAME TO skill_deployment;",
     },
+    Migration {
+        // Renumbered from 31 during the feat-mcp merge; v31 is the Claude Code
+        // Skill deployment target on main.
+        version: 32,
+        // MCP owns entries, never whole files. Intents bridge the filesystem and
+        // SQLite commit; history keeps only references/digests, never values.
+        sql: "CREATE TABLE pi_mcp_deployment (
+            config_root TEXT NOT NULL CHECK(length(config_root) BETWEEN 1 AND 4096),
+            definition_id TEXT NOT NULL REFERENCES mcp_definition(id) ON DELETE RESTRICT,
+            server_name TEXT NOT NULL CHECK(length(server_name) BETWEEN 1 AND 64),
+            namespace TEXT NOT NULL CHECK(length(namespace) BETWEEN 1 AND 64),
+            definition_revision INTEGER NOT NULL CHECK(definition_revision>=1),
+            entry_digest TEXT NOT NULL CHECK(length(entry_digest)=64 AND entry_digest NOT GLOB '*[^0-9a-f]*'),
+            generation TEXT NOT NULL CHECK(length(generation)=32 AND generation NOT GLOB '*[^0-9a-f]*'),
+            enabled INTEGER NOT NULL CHECK(enabled IN (0,1)),
+            PRIMARY KEY(config_root,definition_id),
+            UNIQUE(config_root,namespace)
+        ) STRICT, WITHOUT ROWID;
+        CREATE TABLE pi_mcp_change (
+            id TEXT PRIMARY KEY CHECK(length(id)=32 AND id NOT GLOB '*[^0-9a-f]*'),
+            config_root TEXT NOT NULL CHECK(length(config_root) BETWEEN 1 AND 4096),
+            definition_id TEXT NOT NULL CHECK(length(definition_id)=32),
+            server_name TEXT NOT NULL CHECK(length(server_name) BETWEEN 1 AND 64),
+            definition_revision INTEGER NOT NULL CHECK(definition_revision>=1),
+            action TEXT NOT NULL CHECK(action IN ('deploy','enable','disable','revoke','restore')),
+            state TEXT NOT NULL CHECK(state IN ('prepared','completed','aborted')),
+            before_digest TEXT CHECK(before_digest IS NULL OR length(before_digest)=64),
+            intended_digest TEXT CHECK(intended_digest IS NULL OR length(intended_digest)=64),
+            before_owner TEXT CHECK(before_owner IS NULL OR json_valid(before_owner)),
+            after_owner TEXT CHECK(after_owner IS NULL OR json_valid(after_owner)),
+            operation_id TEXT REFERENCES config_operation(id) ON DELETE RESTRICT,
+            created_at INTEGER NOT NULL CHECK(created_at>=0)
+        ) STRICT;
+        CREATE UNIQUE INDEX pi_mcp_one_pending_root ON pi_mcp_change(config_root) WHERE state='prepared';
+        CREATE INDEX pi_mcp_history ON pi_mcp_change(config_root,definition_id,created_at DESC,id DESC);",
+    },
 ];
 
 /// Errors from opening or migrating the private database.

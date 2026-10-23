@@ -7,6 +7,13 @@ pub use types::{
     ConnectionInput, ConnectionRecord, DeleteMcpRequest, DeletedMcp, McpError, McpPage, McpRecord,
     SaveMcpRequest, SecretInput,
 };
+pub mod pi_deployment;
+mod pi_preflight;
+pub use pi_preflight::{PiMcpPreflight, PiMcpPreflightError, preflight_pi_registration};
+mod pi_preview;
+pub use pi_preview::{
+    PiMcpPreview, PiMcpPreviewError, PreviewPiMcpRequest, preview_pi_registration,
+};
 mod repository;
 mod service;
 pub use repository::{get_definition, list_definitions};

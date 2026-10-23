@@ -30,6 +30,15 @@ fn references(
         .map_err(|_| McpError::ReadFailed)
 }
 
+pub(super) fn secret_references(
+    storage: &Storage,
+    id: &str,
+) -> Result<BTreeMap<(String, String), String>, McpError> {
+    identity(id)?;
+    let connection = lock(storage)?;
+    references(&connection, id)
+}
+
 fn read_record(connection: &rusqlite::Connection, id: &str) -> Result<McpRecord, McpError> {
     let row: Option<(String,String,bool,i64,String,i64,i64)> = connection.query_row(
         "SELECT display_name,server_name,enabled,revision,connection,created_at,updated_at FROM mcp_definition WHERE id=?1", [id],
@@ -377,6 +386,13 @@ pub(super) fn commit_definition_delete(
     let record = read_record(&tx, &request.id)?;
     if record.revision != request.expected_revision {
         return Err(McpError::RevisionConflict);
+    }
+    let in_use: bool = tx.query_row(
+        "SELECT EXISTS(SELECT 1 FROM pi_mcp_deployment WHERE definition_id=?1) OR EXISTS(SELECT 1 FROM pi_mcp_change WHERE definition_id=?1 AND state='prepared')",
+        [&request.id], |row| row.get(0),
+    ).map_err(|_| McpError::ReadFailed)?;
+    if in_use {
+        return Err(McpError::McpInUse);
     }
     tx.execute(
         "INSERT OR IGNORE INTO mcp_cleanup(definition_id,credential_ref) SELECT definition_id,credential_ref FROM mcp_secret WHERE definition_id=?1",

@@ -29,6 +29,9 @@ import {
     type SaveMcpInput,
 } from "../../lib/desktop/mcp";
 import { McpForm } from "./McpForm";
+import { McpPiManager } from "./McpPiManager";
+import { McpDeleteReferences } from "./McpDeleteReferences";
+import { usePiMcpRegistrations } from "./usePiMcpRegistrations";
 import buttons from "../../components/actionButtons.module.css";
 import chip from "../../components/infoChip.module.css";
 import surfaceList from "../../components/surfaceList.module.css";
@@ -95,7 +98,7 @@ function preservedRequest(record: McpRecord): SaveMcpInput {
                   },
     };
 }
-/** Central list/edit/enablement management; it exposes no deployment or execution action. */
+/** Central definitions and reviewed Pi registration; never executes a server. */
 export function McpView({
     hidden = false,
     homeRef,
@@ -106,7 +109,15 @@ export function McpView({
     const [page, setPage] = useState<PageState>({ kind: "list" });
     const [action, setAction] = useState<ActionState>({ kind: "idle" });
     const [formBlocked, setFormBlocked] = useState(false);
+    const [deploymentEpoch, setDeploymentEpoch] = useState(0);
+    const [deploymentBusy, setDeploymentBusy] = useState(false);
+    const registrations = usePiMcpRegistrations(hidden, deploymentEpoch);
     const [deleteTarget, setDeleteTarget] = useState<McpRecord | null>(null);
+    const [deleteAllowed, setDeleteAllowed] = useState(false);
+    const [previewTarget, setPreviewTarget] = useState<{
+        record: McpRecord;
+        trigger: HTMLElement | null;
+    } | null>(null);
     const cancelDelete = useRef<HTMLButtonElement>(null);
     const deleteTrigger = useRef<HTMLElement | null>(null);
     const active = useRef(true);
@@ -116,10 +127,19 @@ export function McpView({
     const root = useRef<HTMLElement>(null);
     const focusRequested = useRef(false);
     const blocked =
+        deploymentBusy ||
+        previewTarget !== null ||
         deleteTarget !== null ||
         action.kind === "running" ||
         (action.kind === "error" && action.uncertain) ||
         (list.kind === "ready" && list.more === "loading");
+    // Clear on the hidden transition before a portal can appear over another
+    // module; unmounting the dialog also invalidates its in-flight read.
+    const [wasHidden, setWasHidden] = useState(hidden);
+    if (hidden !== wasHidden) {
+        setWasHidden(hidden);
+        if (hidden) setPreviewTarget(null);
+    }
     useImperativeHandle(homeRef, () => ({
         openHome() {
             if (blocked || formBlocked || mutationPending.current) return false;
@@ -279,7 +299,8 @@ export function McpView({
         }
     }
     async function remove(): Promise<void> {
-        if (deleteTarget === null || mutationPending.current) return;
+        if (deleteTarget === null || !deleteAllowed || mutationPending.current)
+            return;
         const target = deleteTarget;
         mutationPending.current = true;
         setAction({ kind: "running" });
@@ -499,9 +520,20 @@ export function McpView({
                                                         styles["subline"]
                                                     }
                                                 >
-                                                    {t(
-                                                        "mcp.list.registeredAgents",
-                                                    )}
+                                                    {registrations.kind ===
+                                                    "ready"
+                                                        ? t(
+                                                              registrations.value.deployments.some(
+                                                                  (item) =>
+                                                                      item.definitionId ===
+                                                                      record.id,
+                                                              )
+                                                                  ? "mcp.pi.manage.registeredSummary"
+                                                                  : "mcp.pi.states.unregistered",
+                                                          )
+                                                        : t(
+                                                              "mcp.pi.manage.summaryUnknown",
+                                                          )}
                                                 </p>
                                                 {record.cleanupPending && (
                                                     <p
@@ -529,6 +561,31 @@ export function McpView({
                                                         listActions["group"]
                                                     }
                                                 >
+                                                    <IconButton
+                                                        icon="info"
+                                                        blocked={blocked}
+                                                        label={t(
+                                                            "mcp.pi.manage.open",
+                                                            {
+                                                                name: record.displayName,
+                                                            },
+                                                        )}
+                                                        onClick={() => {
+                                                            if (
+                                                                blocked ||
+                                                                mutationPending.current
+                                                            )
+                                                                return;
+                                                            setPreviewTarget({
+                                                                record,
+                                                                trigger:
+                                                                    document.activeElement instanceof
+                                                                    HTMLElement
+                                                                        ? document.activeElement
+                                                                        : null,
+                                                            });
+                                                        }}
+                                                    />
                                                     <IconButton
                                                         icon="edit"
                                                         blocked={blocked}
@@ -587,6 +644,9 @@ export function McpView({
                                                                 HTMLElement
                                                                     ? document.activeElement
                                                                     : null;
+                                                            setDeleteAllowed(
+                                                                false,
+                                                            );
                                                             setDeleteTarget(
                                                                 record,
                                                             );
@@ -632,6 +692,28 @@ export function McpView({
                     )}
                 </>
             )}
+            {!hidden && previewTarget !== null && (
+                <McpPiManager
+                    key={`${previewTarget.record.id}-${String(previewTarget.record.revision)}`}
+                    record={previewTarget.record}
+                    returnFocus={previewTarget.trigger}
+                    onClose={() => {
+                        setPreviewTarget(null);
+                    }}
+                    onReload={() => {
+                        setPreviewTarget(null);
+                        void reload();
+                    }}
+                    onBusyChange={(busy) => {
+                        mutationPending.current = busy;
+                        if (active.current) setDeploymentBusy(busy);
+                    }}
+                    onChanged={() => {
+                        if (active.current)
+                            setDeploymentEpoch((value) => value + 1);
+                    }}
+                />
+            )}
             <Dialog.Root
                 open={deleteTarget !== null}
                 onOpenChange={(open) => {
@@ -662,6 +744,20 @@ export function McpView({
                                 name: deleteTarget?.displayName ?? "",
                             })}
                         </Dialog.Description>
+                        {deleteTarget !== null && (
+                            <McpDeleteReferences
+                                key={deleteTarget.id}
+                                definitionId={deleteTarget.id}
+                                onChecked={setDeleteAllowed}
+                                onManage={() => {
+                                    setPreviewTarget({
+                                        record: deleteTarget,
+                                        trigger: deleteTrigger.current,
+                                    });
+                                    setDeleteTarget(null);
+                                }}
+                            />
+                        )}
                         <div className={dialog["actions"]}>
                             <button
                                 ref={cancelDelete}
@@ -678,7 +774,9 @@ export function McpView({
                             <button
                                 type="button"
                                 className={buttons["dangerSecondary"]}
-                                aria-disabled={action.kind === "running"}
+                                aria-disabled={
+                                    action.kind === "running" || !deleteAllowed
+                                }
                                 onClick={() => {
                                     void remove();
                                 }}

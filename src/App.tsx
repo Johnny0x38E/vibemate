@@ -177,6 +177,9 @@ export default function App({ languageSettings }: AppProps): JSX.Element {
                             onOpenSkills={() => {
                                 navigate("skills");
                             }}
+                            onOpenMcp={() => {
+                                navigate("mcp");
+                            }}
                         />
                     )}
                     {skillsVisited && (

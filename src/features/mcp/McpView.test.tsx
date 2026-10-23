@@ -22,6 +22,25 @@ import {
     type McpRecord,
 } from "../../lib/desktop/mcp";
 import { McpView } from "./McpView";
+import {
+    PiMcpError,
+    applyPiMcpChange,
+    readPiMcpState,
+    readPiMcpHistory,
+    previewPiMcpChange,
+} from "../../lib/desktop/piMcp";
+import {
+    emptyPiMcpState,
+    piMcpDeployment,
+    piMcpPlan,
+} from "../../test/piMcpFixtures";
+vi.mock(import("../../lib/desktop/piMcp"), async (original) => ({
+    ...(await original()),
+    readPiMcpState: vi.fn(),
+    readPiMcpHistory: vi.fn(),
+    previewPiMcpChange: vi.fn(),
+    applyPiMcpChange: vi.fn(),
+}));
 vi.mock(import("../../lib/desktop/mcp"), async (importOriginal) => ({
     ...(await importOriginal()),
     listMcpDefinitions: vi.fn(),
@@ -76,6 +95,13 @@ async function setup(
     );
 }
 beforeEach(() => {
+    vi.mocked(readPiMcpState).mockReset().mockResolvedValue(emptyPiMcpState);
+    vi.mocked(readPiMcpHistory)
+        .mockReset()
+        .mockResolvedValue({ items: [], nextCursor: null });
+    vi.mocked(previewPiMcpChange)
+        .mockReset()
+        .mockResolvedValue({ ...piMcpPlan, definitionId: row.id });
     list.mockReset().mockResolvedValue(page([row]));
     get.mockReset().mockResolvedValue(row);
     save.mockReset().mockResolvedValue({ ...row, revision: 2, enabled: false });
@@ -89,10 +115,169 @@ afterEach(() => {
     cleanup();
 });
 
+test("hiding MCP closes its preview and ignores a late native result", async () => {
+    let fail: (error: Error) => void = () => {};
+    vi.mocked(readPiMcpHistory).mockReturnValue(
+        new Promise((_, reject) => {
+            fail = reject;
+        }),
+    );
+    const i18n = await createAppI18n("en");
+    const view = (hidden: boolean) => (
+        <StrictMode>
+            <I18nextProvider i18n={i18n}>
+                <McpView hidden={hidden} />
+            </I18nextProvider>
+        </StrictMode>
+    );
+    const rendered = render(view(false));
+    fireEvent.click(
+        await screen.findByRole("button", { name: "Manage Pi · Tools" }),
+    );
+    expect(screen.getByRole("dialog")).toBeDefined();
+    rendered.rerender(view(true));
+    await act(async () => {
+        fail(new PiMcpError("outcome_unknown"));
+        await Promise.resolve();
+    });
+    rendered.rerender(view(false));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(save).not.toHaveBeenCalled();
+});
+
+test("Pi preview reads a list revision and reloads without mutating the definition", async () => {
+    vi.mocked(previewPiMcpChange).mockRejectedValue(
+        new PiMcpError("definition_changed"),
+    );
+    await setup();
+    fireEvent.click(
+        await screen.findByRole("button", { name: "Manage Pi · Tools" }),
+    );
+    fireEvent.click(
+        await screen.findByRole("button", { name: "Review deployment" }),
+    );
+    await screen.findByRole("alert");
+    expect(previewPiMcpChange).toHaveBeenCalledWith({
+        definitionId: row.id,
+        expectedRevision: row.revision,
+        action: "deploy",
+        historyId: null,
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Reload definitions" }));
+    await waitFor(() => {
+        expect(list).toHaveBeenCalledTimes(2);
+    });
+    expect(save).not.toHaveBeenCalled();
+    expect(clean).not.toHaveBeenCalled();
+    expect(deleteMcpDefinition).not.toHaveBeenCalled();
+    expect(
+        screen.getByText("Not registered in this Pi directory"),
+    ).toBeDefined();
+});
+
+test("deletion lists Pi references from other roots and cannot orphan them", async () => {
+    vi.mocked(readPiMcpState).mockImplementation((id) =>
+        Promise.resolve(
+            id == null
+                ? emptyPiMcpState
+                : {
+                      ...emptyPiMcpState,
+                      deployments: [
+                          {
+                              ...piMcpDeployment,
+                              definitionId: row.id,
+                              configRoot: "/older/pi-directory",
+                          },
+                      ],
+                  },
+        ),
+    );
+    await setup();
+    fireEvent.click(
+        await screen.findByRole("button", { name: "Delete “Tools”" }),
+    );
+    await screen.findByText(/Pi reference: \/older\/pi-directory/);
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    expect(deleteMcpDefinition).not.toHaveBeenCalled();
+    fireEvent.click(
+        screen.getByRole("button", { name: "Manage Pi references" }),
+    );
+    await screen.findByRole("dialog", { name: "Pi registration · Tools" });
+    expect(deleteMcpDefinition).not.toHaveBeenCalled();
+});
+
+test("unknown reference reads block deletion and provide a safe retry", async () => {
+    vi.mocked(readPiMcpState).mockImplementation((id) =>
+        id == null
+            ? Promise.resolve(emptyPiMcpState)
+            : Promise.reject(new PiMcpError("storage_unavailable")),
+    );
+    await setup();
+    fireEvent.click(
+        await screen.findByRole("button", { name: "Delete “Tools”" }),
+    );
+    await screen.findByRole("alert");
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    expect(deleteMcpDefinition).not.toHaveBeenCalled();
+    vi.mocked(readPiMcpState).mockResolvedValue(emptyPiMcpState);
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() => {
+        expect(
+            screen
+                .getByRole("button", { name: "Delete" })
+                .getAttribute("aria-disabled"),
+        ).toBe("false");
+    });
+});
+
+test("hiding a confirmed Pi write retains the home guard until its result settles", async () => {
+    const homeRef = createRef<ModuleNavigationHandle>();
+    let resolve: (value: {
+        changeId: string;
+        registered: boolean;
+        reloadRequired: boolean;
+    }) => void = () => {};
+    vi.mocked(applyPiMcpChange).mockReturnValue(
+        new Promise((done) => {
+            resolve = done;
+        }),
+    );
+    const i18n = await createAppI18n("en");
+    const view = (hidden: boolean) => (
+        <I18nextProvider i18n={i18n}>
+            <McpView hidden={hidden} homeRef={homeRef} />
+        </I18nextProvider>
+    );
+    const rendered = render(view(false));
+    fireEvent.click(
+        await screen.findByRole("button", { name: "Manage Pi · Tools" }),
+    );
+    fireEvent.click(
+        await screen.findByRole("button", { name: "Review deployment" }),
+    );
+    fireEvent.click(
+        await screen.findByRole("button", { name: "Confirm file change" }),
+    );
+    rendered.rerender(view(true));
+    expect(homeRef.current?.openHome()).toBe(false);
+    await act(async () => {
+        resolve({
+            changeId: "b".repeat(32),
+            registered: true,
+            reloadRequired: true,
+        });
+        await Promise.resolve();
+    });
+    expect(homeRef.current?.openHome()).toBe(true);
+});
+
 test("central enablement does not imply Agent registration", async () => {
     await setup("en");
     await screen.findByText("Tools");
-    expect(screen.getByText("Not registered")).toBeDefined();
+    expect(
+        screen.getByText("Not registered in this Pi directory"),
+    ).toBeDefined();
     expect(screen.queryByText("mcp.list.registeredAgents")).toBeNull();
     expect(save).not.toHaveBeenCalled();
     fireEvent.click(
@@ -101,7 +286,9 @@ test("central enablement does not imply Agent registration", async () => {
     await screen.findByRole("button", {
         name: "Enable “Tools” definition",
     });
-    expect(screen.getByText("Not registered")).toBeDefined();
+    expect(
+        screen.getByText("Not registered in this Pi directory"),
+    ).toBeDefined();
     expect(clean).not.toHaveBeenCalled();
     expect(get).not.toHaveBeenCalled();
 });

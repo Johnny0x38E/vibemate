@@ -45,6 +45,8 @@ pub enum McpError {
     NotFound,
     /// Another writer changed this definition.
     RevisionConflict,
+    /// A Pi registration or interrupted deployment still references this definition.
+    McpInUse,
     /// Persisted metadata failed validation and was left unchanged.
     InvalidStoredDefinition,
     /// Commit or compensation could not establish a clean result; reload first.

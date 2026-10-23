@@ -1,0 +1,36 @@
+.popup {
+    display: flex;
+    flex-direction: column;
+    width: min(36rem, calc(100vw - 32px));
+    overflow: hidden;
+}
+
+.content {
+    min-height: 0;
+    overflow: auto;
+}
+
+.section {
+    margin-top: var(--space-md);
+}
+
+.notice {
+    margin: var(--space-sm) 0;
+    color: var(--color-text);
+    font-size: 0.8125rem;
+    line-height: 1.55;
+    overflow-wrap: anywhere;
+}
+
+.code {
+    margin: var(--space-md) 0 0;
+    padding: var(--space-sm);
+    overflow: auto;
+    max-height: 50dvh;
+    min-height: 0;
+    background: var(--color-background);
+    color: var(--color-text);
+    font-size: 0.8125rem;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}

@@ -225,6 +225,8 @@ pub enum OperationKind {
     ClaudeCodeSettings,
     /// Pi provider/model definitions and default model selection.
     PiSettings,
+    /// Pi user-level MCP entries, independently journaled from model settings.
+    PiMcp,
     /// Grok Build model entry and default model selection in `config.toml`.
     GrokSettings,
 }
@@ -235,6 +237,7 @@ impl OperationKind {
         match self {
             Self::ClaudeCodeSettings => "claude_code_settings",
             Self::PiSettings => "pi_settings",
+            Self::PiMcp => "pi_mcp",
             Self::GrokSettings => "grok_settings",
         }
     }
@@ -244,6 +247,7 @@ impl OperationKind {
         match value {
             "claude_code_settings" => Some(Self::ClaudeCodeSettings),
             "pi_settings" => Some(Self::PiSettings),
+            "pi_mcp" => Some(Self::PiMcp),
             "grok_settings" => Some(Self::GrokSettings),
             _ => None,
         }
@@ -746,6 +750,7 @@ mod cleanup;
 mod history;
 mod history_delete;
 mod inspection;
+mod mcp_support;
 mod operations;
 mod resolution;
 mod restore;
@@ -773,6 +778,7 @@ pub use inspection::{
     RevisionBackupState, RevisionInspection, RevisionMatch, inspect_interrupted_revisions,
     operation_requires_resolution,
 };
+pub(crate) use mcp_support::{read_mcp_written_file, resolve_mcp_observation_locked};
 pub use operations::{
     begin_operation, finish_operation, has_recorded_target, operation, recent_operations,
     record_step_applied, record_step_failed, record_step_restored, unfinished_operations,
@@ -784,8 +790,8 @@ pub use restore::{
     RestoreAction, RestoreOutcome, RestorePlan, RestoreStepOutcome, RestoreStepPlan,
     ReviewedRestoreStep, apply_restore, plan_restore, remove_created_file, restore_file,
 };
-pub(crate) use service::apply_private_files;
 pub use service::{AppliedOperation, PlannedFile, StepOutcome, apply_files, compensate_operation};
+pub(crate) use service::{apply_private_files, apply_private_files_locked};
 pub use version_restore::{
     CurrentConfigText, ReviewedVersionFile, VersionRestoreAction, VersionRestoreFile,
     VersionRestoreFileOutcome, VersionRestoreOutcome, VersionRestorePlan, apply_version_restore,

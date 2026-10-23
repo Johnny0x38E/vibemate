@@ -296,14 +296,18 @@ P24.b = Claude Code；P24.c = Pi；P24.d = Grok Build。服务商模型是唯一
 
 ### Task P32: 向 Pi 注入 MCP 配置
 
+**状态：** 已完成 Pi 配置管理闭环及隔离服务器发现／停用验收：中央 revision／完整文件审批复核、受管条目所有权、部署／更新、原生启停、撤销、所选历史条目恢复、显式中断核对、跨目录引用删除保护及 Agent 只读汇总。凭据只在 Rust 部署／更新时读取，保留其它条目和顶层字段；不覆盖外来或被外部修改的受管条目，不自动重放。Pi 1.4.0 原生 stdio/Streamable HTTP 已核实，无桥接。实现边界见 [mcp-deployment](mcp-deployment.md)。经用户明确授权，真实 Pi 1.4.0 CLI 对 stdio 与本机 loopback Streamable HTTP 的发现／停用／恢复／撤销验收已通过；Grok P33 和 MCP 整体交付仍未完成。
+
+**Verification：** 19 项 Rust 生命周期测试覆盖两种传输、权限／脱敏、条目恢复、备份损坏／借用拒绝、并发锁、审批防重放和三个中断窗口；全量 Rust 724 通过、4 忽略，fmt/Clippy、`check:frontend`（1211 项 UI 测试）与锁定 no-bundle macOS 构建通过。真实 macOS Tauri WebView／IPC 在唯一应用标识、临时 HOME／应用数据／Pi 根下完成 9 项配置生命周期检查，未使用 OS 凭据字段。Pi 1.4.0 纯解析器验证 6 份实际结果副本及 14 项配置／字面值断言。浏览器隔离 mock 检查中英浅／深色、720×560 长名称／路径、详情键盘／逐层 Escape 与焦点返回、恢复审阅；mock 不冒充真实 IPC。另 9 项真实 Pi CLI 检查验证 stdio/HTTP 启用时发现固定工具、停用后启动次数／HTTP 初始化次数不增加、恢复后重新连接、撤销后不再列出。CLI 使用干净环境、隔离 HOME／工作目录及 offline／禁用版本检查；未启动 Agent 推理会话、读取真实凭据或请求外部服务。临时服务器全部退出，无关条目及顶层字段保留。前端 chunk 大于 500 kB 的既有警告仍在；Windows/Linux 与 OS 凭据部署仍需独立验收。
+
 **Acceptance criteria:**
 
-- [ ] 原生支持时按实际格式预览并应用，保留无关字段和已有 MCP 条目。
-- [ ] 凭据在 Rust 中解析，差异脱敏，写入/撤销/恢复复用安全机制。
-- [ ] 无原生支持时明确标记为不支持、不实现桥接（维护者决定 2026-10-13）。
-- [ ] 在 Agent 详情汇总区添加 MCP 只读槽位（部署状态 + 跳转 MCP 模块）。
+- [x] 原生支持时按实际格式预览并应用，保留无关字段和已有 MCP 条目。
+- [x] 凭据在 Rust 中解析，差异脱敏，写入/撤销/恢复复用安全机制。
+- [x] 无原生支持时明确标记为不支持、不实现桥接（维护者决定 2026-10-13）。
+- [x] 在 Agent 详情汇总区添加 MCP 只读槽位（部署状态 + 跳转 MCP 模块）。
 
-**Verification:** Rust 映射/恢复测试及部署 UI 测试；真实 Pi 用无敏感测试服务器确认发现/禁用。
+**Verification:** Rust 映射/恢复测试及部署 UI 测试通过；真实 macOS Tauri 配置闭环与 Pi 1.4.0 的 stdio／loopback HTTP 无敏感测试服务器发现／停用／恢复／撤销均通过。此结果不代表真实第三方服务、Provider 请求或 Windows/Linux 验收。
 
 **Dependencies:** P02,P19,P21,P31（已完成）。
 
@@ -327,7 +331,7 @@ P24.b = Claude Code；P24.c = Pi；P24.d = Grok Build。服务商模型是唯一
 
 ### Task P34: 恢复未完成操作
 
-**Description:** 在启动时发现上次中断的 Agent 配置或 Skill/MCP 部署操作，提供明确的恢复入口，不静默重放敏感操作。Agent 配置的中断核对与显式解决已交付（见 H1），本任务补 Skill/MCP 操作类型与统一入口。
+**Description:** 在启动时发现上次中断的 Agent 配置或 Skill/MCP 部署操作，提供明确的恢复入口，不静默重放敏感操作。Agent 配置的中断核对与显式解决已交付（见 H1）；P32 已补 Pi MCP 的持久意图、精确 before/intended 核对及不重放的显式解决。本任务仍需补齐 Skill／Grok MCP 与统一入口，不能因 Pi 切片而整体勾选。
 
 **Acceptance criteria:**
 
@@ -341,7 +345,7 @@ P24.b = Claude Code；P24.c = Pi；P24.d = Grok Build。服务商模型是唯一
 
 ### Task P35: 约束被引用配置的删除
 
-**Description:** 完善 Provider/Model/Skill/MCP 的删除行为，防止已有 Agent 引用突然失效。
+**Description:** 完善 Provider/Model/Skill/MCP 的删除行为，防止已有 Agent 引用突然失效。P32 已实现 Pi MCP 跨目录注册／未完成意图引用展示及事务内删除拒绝；其余 Provider/Model/Skill/Grok MCP 引用与清理仍待完成，不整体勾选。
 
 **Acceptance criteria:**
 

@@ -36,6 +36,7 @@ import { AgentVersionPanel } from "./AgentVersionPanel";
 import { CurrentConfigPin, RestoreView } from "./RestoreView";
 import { WriteConfigDialog } from "./WriteConfigDialog";
 import { AgentSkillPanel } from "./AgentSkillPanel";
+import { AgentMcpPanel } from "./AgentMcpPanel";
 import underlineTabs from "../../components/underlineTabs.module.css";
 import {
     readConfigurationHistory,
@@ -84,11 +85,14 @@ export function AgentList({
     hidden = false,
     homeRef,
     onOpenSkills,
+    onOpenMcp,
 }: {
     hidden?: boolean;
     homeRef?: Ref<ModuleNavigationHandle>;
     /** Jump to the Skills module from the Skill detail slot. */
     onOpenSkills?: () => void;
+    /** Jump to central MCP registration management from the read-only slot. */
+    onOpenMcp?: () => void;
 }): JSX.Element {
     const { t } = useTranslation();
     const [state, setState] = useState<State>({ kind: "loading" });
@@ -948,9 +952,13 @@ export function AgentList({
                         aria-labelledby={`agent-segment-${id}-mcp`}
                         hidden={segment !== "mcp"}
                     >
-                        <p className={styles["hint"]}>
-                            {t("agents.mcpPanel.empty")}
-                        </p>
+                        <AgentMcpPanel
+                            agentId={id}
+                            hidden={hidden || segment !== "mcp"}
+                            onOpenMcp={() => {
+                                onOpenMcp?.();
+                            }}
+                        />
                     </div>
                     <div
                         role="tabpanel"

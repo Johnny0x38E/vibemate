@@ -1,4 +1,7 @@
 //! Fault-injection tests for central definitions, with temporary DBs and fake credentials.
+mod pi_preflight_tests;
+mod pi_preview_tests;
+
 use super::repository::lock;
 use super::validation::{field_name, normalize_url, validate};
 use super::*;

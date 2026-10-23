@@ -8,6 +8,26 @@ GitHub release notes are extracted from the matching version section only.
 
 ### Added
 
+- Complete Pi MCP configuration management from the central list: review and
+  confirm deployment/update, native enable/disable, owned-entry revoke and
+  retained-entry restore. Rust selects the user-level path, rechecks central and
+  file revisions, resolves OS values only for deployment/update and uses the
+  existing private backup/atomic-write journal. Per-root entry ownership refuses
+  foreign/modified entries; history restores only the selected operation's own
+  entry copy, preserving unrelated current content and warning about old
+  credentials. Durable interruptions require explicit observed-state
+  reconciliation without replaying file writes. Central deletion checks all Pi
+  references, and Agent details show read-only disk registrations with a management
+  link. Bilingual masked review/details, stale-read and duplicate-submit guards
+  distinguish written/enabled from effective/connected. Nine isolated macOS
+  Tauri WebView/IPC checks passed with temporary app/Pi data and no credential
+  fields or server execution. After explicit approval, nine additional installed
+  Pi 1.4.0 CLI checks verified real local stdio/loopback HTTP tool discovery,
+  disable without reconnect, selected-result restore and revoke from native UI
+  writes. No real configuration, Provider credentials, inference session or
+  external service was used. OS-credential deployment and Windows/Linux
+  acceptance remain separate. Grok MCP deployment is not included.
+
 - Apply a reviewed Skill update after digest preview. Apply re-checks digests
   and refuses a stale plan; `keep` writes nothing; `replace` swaps the managed
   copy, advances the Git source revision, marks the revision check up to date,

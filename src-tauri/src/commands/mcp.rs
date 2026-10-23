@@ -4,6 +4,28 @@ use super::state::{CredentialLock, with_mcp_storage};
 use crate::credentials::OsCredentialStore;
 use tauri::Manager;
 
+/// Preview a Rust-selected Pi MCP target without credentials, writes or execution.
+#[tauri::command]
+pub(crate) async fn preview_pi_mcp_registration(
+    app: tauri::AppHandle,
+    request: crate::mcp::PreviewPiMcpRequest,
+) -> Result<crate::mcp::PiMcpPreview, crate::mcp::PiMcpPreviewError> {
+    use crate::mcp::PiMcpPreviewError;
+    let environment =
+        super::agents::environment(&app).map_err(|_| PiMcpPreviewError::TargetUnavailable)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let status = app
+            .try_state::<crate::storage::StorageStatus>()
+            .ok_or(PiMcpPreviewError::DefinitionUnavailable)?;
+        let storage = status
+            .storage()
+            .map_err(|_| PiMcpPreviewError::DefinitionUnavailable)?;
+        crate::mcp::preview_pi_registration(storage, &environment, &request)
+    })
+    .await
+    .map_err(|_| PiMcpPreviewError::OperationFailed)?
+}
+
 /// Read central MCP metadata, without executing servers or opening credentials.
 #[tauri::command]
 pub(crate) async fn list_mcp_definitions(

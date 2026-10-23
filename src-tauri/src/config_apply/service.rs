@@ -114,6 +114,30 @@ fn apply_with_mode(
     let _mutation_lock = storage
         .lock_configuration()
         .map_err(|_| WriteError::StorageUnavailable)?;
+    apply_locked(storage, kind, owner, files, backups, private)
+}
+
+/// Apply while the caller holds the shared configuration file lock across its
+/// own durable intent and ownership updates. Never call without that guard.
+pub(crate) fn apply_private_files_locked(
+    storage: &Storage,
+    kind: OperationKind,
+    owner: Option<&str>,
+    files: &[PlannedFile],
+    backups: &BackupStore,
+    _guard: &std::fs::File,
+) -> Result<AppliedOperation, WriteError> {
+    apply_locked(storage, kind, owner, files, backups, true)
+}
+
+fn apply_locked(
+    storage: &Storage,
+    kind: OperationKind,
+    owner: Option<&str>,
+    files: &[PlannedFile],
+    backups: &BackupStore,
+    private: bool,
+) -> Result<AppliedOperation, WriteError> {
     super::versions::materialize_locked(storage, backups)?;
     if files.is_empty() {
         return Err(WriteError::InvalidRequest);

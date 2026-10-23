@@ -44,6 +44,8 @@ planned.
   work.
 - [`plans/model-parameters.md`](plans/model-parameters.md): model metadata and
   how existing Provider model definitions are injected into native Agents.
+- [`plans/mcp-deployment.md`](plans/mcp-deployment.md): Pi registration lifecycle,
+  entry ownership, private writes and recovery boundaries; Grok remains separate.
 - [`plans/backend-modularity.md`](plans/backend-modularity.md): backend module
   boundaries and the unplanned future integrations.
 - [`plans/configuration-versions.md`](plans/configuration-versions.md): independent

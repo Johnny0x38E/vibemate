@@ -189,7 +189,9 @@ pub(crate) fn render_text(
 /// Format used by one Agent adapter.
 pub(crate) fn format_for(kind: OperationKind) -> ConfigFormat {
     match kind {
-        OperationKind::ClaudeCodeSettings | OperationKind::PiSettings => ConfigFormat::Json,
+        OperationKind::ClaudeCodeSettings | OperationKind::PiSettings | OperationKind::PiMcp => {
+            ConfigFormat::Json
+        }
         OperationKind::GrokSettings => ConfigFormat::Toml,
     }
 }
@@ -559,7 +561,7 @@ fn index_path(base: &str, index: usize) -> String {
 /// while `api_key`, `x-api-key`, `ANTHROPIC_AUTH_TOKEN`, `clientSecret` and
 /// `password` are. Values under a masked key are replaced as a whole, including
 /// nested objects and arrays.
-pub(super) fn is_secret_key(key: &str) -> bool {
+pub(crate) fn is_secret_key(key: &str) -> bool {
     let lower = key.to_ascii_lowercase();
     let compact: String = lower
         .chars()

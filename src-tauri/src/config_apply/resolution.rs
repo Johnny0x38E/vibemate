@@ -79,6 +79,18 @@ pub fn resolve_interrupted_revisions(
     let _mutation_lock = storage
         .lock_configuration()
         .map_err(|_| WriteError::StorageUnavailable)?;
+    resolve_interrupted_revisions_locked(storage, operation_id, reviewed, backups, &_mutation_lock)
+}
+
+/// Resolve within a caller's larger intent/ownership transaction boundary.
+/// The caller must keep the shared configuration guard alive throughout.
+pub(crate) fn resolve_interrupted_revisions_locked(
+    storage: &Storage,
+    operation_id: &str,
+    reviewed: &RevisionResolutionPlan,
+    backups: &BackupStore,
+    _guard: &std::fs::File,
+) -> Result<OperationState, WriteError> {
     let mut connection = storage.lock().map_err(|_| WriteError::StorageUnavailable)?;
     let transaction = connection
         .transaction_with_behavior(TransactionBehavior::Immediate)

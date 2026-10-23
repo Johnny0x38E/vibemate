@@ -13,7 +13,7 @@
 5. P24.c 首批（每模型思考档位，以及 Pi 计划中的模型设置行）已在本机完成代码与自动化检查，待维护者桌面验收；本机 Pi 已升级至 1.4.0，2026-10-22 复核所用字段与档位规则未变。
 6. P26 已交付：Git 固定修订与已核实的 `skills@1.7.4` npx 安装均在隔离目录获取并导入，失败不改变已有库；来源页可补记获取方式。P27–P30 待做。
 7. 下一条业务主线按 P24 剩余项 → Skill 更新/部署（P27–P30）→ MCP 部署 → P35 引用约束的顺序推进；见 [phase-1](phase-1.md)。
-8. P24.d 首批已合入本机：Grok Build 只在原生字段缺失时写入已声明的 `reasoning_efforts` 列表与列表内默认档；已有数组、旧字段和全局默认保持不变，原生菜单与运行中切换仍待验证。
+8. P24.d 首批已合入本机：Grok Build 只在原生字段缺失时写入已声明的 `reasoning_efforts` 列表与列表内默认档；已有数组、旧字段和全局默认保持不变；隔离 macOS Chat/Responses 已确认原生菜单、列表默认档与运行中选择更新，本地 stub 已核实 backend 字段/默认档及运行中切档后的下一请求；Grok 自身将选用值全局持久化并供新会话读取，真实 Provider 接受仍待验证。
 
 ## 文档整理（2026-10-19）
 
@@ -131,8 +131,8 @@ P15 的真实连接记录来自维护者确认，不代表代理重新执行，�
 **Acceptance criteria:**
 
 - [ ] 复用官方文档与安装版本证据，核对上下文、最大输出能力、图像、工具、推理支持/可切换档位/默认档的原生映射。请求调参字段不是新增编辑目标。
-- [ ] 记录每个 Agent/协议的目标字段、优先级、来源、限制及 supported/unsupported/unverified；区分 Provider API ID 与 Agent alias。
-- [ ] 给出各 Agent 最小可交付字段与拒绝原因，不猜测 effort 与 token 数量转换或未知档位。
+- [x] 记录每个 Agent/协议的目标字段、优先级、来源、限制及 supported/unsupported/unverified；区分 Provider API ID 与 Agent alias。
+- [x] 给出各 Agent 最小可交付字段与拒绝原因，不猜测 effort 与 token 数量转换或未知档位。
 
 **Verification:** 复核文档与安装 schema/随版本手册；不读取或输出真实凭据，不启动推理。
 
@@ -145,12 +145,17 @@ P24.b = Claude Code；P24.c = Pi；P24.d = Grok Build。服务商模型是唯一
 - [x] **P24.b 已交付：** 单一模型注入时，Claude Code 的会话模型与 class alias 均指向同一已选模型；已核实 DeepSeek `deepseek-flash` 上下文校正、中央声明列表内的显式默认 effort、独立记忆起始偏好。env 非原生每模型隔离，不代表所有自定义模型可在内部切换。
 - [ ] **P24.b 剩余：** 其它模型的容量与能力映射、默认值注入规则；不得以请求输出编辑器替代独立最大输出能力。
 - [x] **P24.c 已交付：** 上下文、最大输出、推理/图片能力、每模型默认思考档位与来源/状态预览。服务商默认档位目前仅显示、不自动选用；用户可从已声明的可映射档位选默认值。「不覆盖」保留原值。
-- [x] **P24.c 本轮纠偏：** 官方 DeepSeek Chat `deepseek-flash` 的所有已声明 `xhigh/max` 独立注入映射，不再只写选中默认档的映射；保留用户 map/null 与原有请求参数。实现与回归检查通过；维护者原生操作/切换验收仍待执行。
-- [ ] **P24.c 剩余：** 其他 Provider/模型的厂商映射、真实 Agent 内部切换；模型/服务商删除的键清理随 P35。
+- [x] **P24.c 本轮纠偏：** 官方 DeepSeek Chat `deepseek-flash` 的所有已声明 `xhigh/max` 独立注入映射，不再只写选中默认档的映射；保留用户 map/null 与原有请求参数。实现与回归检查通过；代理隔离 Pi 原生菜单与会话切换检查通过，维护者 Tauri 预览/应用/恢复及真实请求验收仍待执行。
+- [x] **P24.c 原生菜单与选择：** Pi 1.4.0 隔离 macOS 会话通过 11 项断言：扩展档位显示与 `max` 选择、每模型启动默认档优先于全局值、同 ID 跨 Provider 默认隔离、用户 null 排除与拒绝不可用档、切回模型重新采用保存档位；会话选择不改保存档位或模型文件。合成密钥、临时目录、禁网 sandbox，无 Provider 请求。步骤与边界见 [Pi 契约](../integrations/pi.md#p24c-隔离原生菜单与切换验证)。
+- [x] **P24.c 厂商映射补充：** 官方 DeepSeek Chat 的精确 `deepseek-v4-pro` 使用 `xhigh→high/max→max`；官方 OpenRouter Chat 对明确列表注入 `xhigh→xhigh/max→max`，独立于默认选择并保留用户 map/null。4 个安装 SDK 发送前载荷样本确认 DeepSeek 顶层与 OpenRouter 嵌套努力字段，fetch 调用为 0；Rust 回归覆盖过期审批、双文件恢复与协议/base/ID 边界，前端覆盖选项与预览参数。
+- [ ] **P24.c 剩余：** 其它未核实绑定不生成厂商 map；真实 Provider 接受与维护者 Tauri 预览/应用/恢复验收仍待完成；模型/服务商删除的键清理随 P35。
 - [x] **P24.d 首批已交付：** 非空中央 `Listed` 档位在原生 `reasoning_efforts` 缺失、推理支持为 supported、安装参考含该字段且未被 `supports_reasoning_effort = false` 禁用时，写入 `value/label`；列表内中央默认档标 `default = true`。已有数组、旧布尔/单值字段、全局 `[models]` 与其他 alias 保持不变；`any`、空列表和未知支持不展开。图像能力继续映射到 `vision`。
-- [ ] **P24.d 剩余：** 原生菜单是否出现及运行中 `/effort` 切换、各 backend 出站载荷与真实 Provider 接受结果未验证；独立最大输出与工具能力已确认没有已核实模型级字段，不写入。不声称 effort 切换已交付。
+- [x] **P24.d 原生菜单与选择：** Grok 1.0.67 的隔离 macOS Chat/Responses 会话均显示注入列表、启动选用列表默认档，并通过 `/effort` 完成 `high → max → high`；重新打开菜单确认活动档位。10 项断言通过，使用合成密钥、临时 HOME/GROK_HOME/cwd，sandbox 拒绝网络及真实配置读取；无模型提示词或 Provider 请求。复验步骤见 [Grok 契约](../integrations/grok-build.md#p24d-隔离原生菜单与切换验证)。
+- [x] **P24.d backend 载荷：** 隔离 macOS 的两个 backend 分别以列表默认、显式 high/max 发送合成样本到回环 HTTP stub，6 项通过；Chat 输出 `reasoning_effort`，Responses 输出 `reasoning.effort`。stub 故意返回 400 后终止，不联系真实 Provider、不代表推理成功；辅助请求与目标 API ID 分别核对。
+- [x] **P24.d 运行中请求与持久化：** 两种 backend 的隔离 TUI 均确认 `/effort high→max` 后下一合成请求发送 max；Grok 自身写入全局 `default_reasoning_effort=max`，重启新会话优先采用它而非模型列表默认。vibemate 不写该全局字段，不声称每 alias 持久隔离。
+- [ ] **P24.d 剩余：** 真实 Provider 接受结果与维护者桌面验收未完成；独立最大输出与工具能力已确认没有已核实模型级字段，不写入。本地样本不等于完整真实组合验收。
 
-**Verification:** Rust 666 项通过、4 项忽略；前端 1129 项通过；`check:frontend`、fmt/Clippy 与锁定 no-bundle 桌面构建通过；临时 `GROK_HOME` 中的数组表配置被 Grok 1.0.67 正常读取。未启动 Grok 会话或发送 Provider 请求；原生菜单、运行中切换与 Windows/Linux 未验证。
+**Verification:** Rust 666 项通过、4 项忽略；前端 1129 项通过；`check:frontend`、fmt/Clippy 与锁定 no-bundle 桌面构建通过；临时 `GROK_HOME` 中的数组表配置被 Grok 1.0.67 正常读取。该批实现检查未启动 Grok 会话或发送 Provider 请求；后续隔离 macOS 原生菜单与切换检查见上。随后 6 个回环 stub 载荷样本及 4 个 Pi SDK 发送前样本通过，均无真实 Provider 请求；真实接受与 Windows/Linux 未验证。本轮完整检查通过：前端 1132 项，Rust 671 项、4 忽略，fmt、Clippy 与锁定 no-bundle 桌面构建通过。另已确认两 backend 的运行中下一请求与原生全局持久化。
 
 **Acceptance criteria（每个 Agent 分别满足）:**
 
@@ -169,7 +174,7 @@ P24.b = Claude Code；P24.c = Pi；P24.d = Grok Build。服务商模型是唯一
 
 - 不修改服务商模型 schema，保留原有容量/能力/档位定义；撤回 temperature/top_p、请求输出编辑及其错误码和仅相关测试。
 - Pi 映射改为注入所有已声明且已核实的扩展档，不以选中的默认值限制可切换集合；未知绑定不生成厂商值，用户 map/null 和请求参数不接管。
-- Grok 按中央明确声明把图像能力注入 native `vision`，未知时保留原值并在预览显示来源/处理。effort 数组/default 尚未实现，文档明确待做。
+- Grok 按中央明确声明把图像能力注入 native `vision`，未知时保留原值并在预览显示来源/处理。effort 数组/default 随后已按 P24.d 交付，原生菜单与会话选择验证见上；真实请求仍待验收。
 - Claude 的会话模型与 class alias 按单一模型注入设计指向同一选定模型；其默认选择从中央已声明列表取值，不要求每个 alias 单独选择。
 - 桌面/浏览器由维护者验收：依次预览→详情→应用→历史恢复；检查中央能力值、默认值与可切换映射分别正确，用户未拥有字段和其他 alias 不变，恢复到原字节。真实推理与 Windows/Linux 未验收，代理不新建浏览器空间。
 
@@ -179,11 +184,13 @@ P24.b = Claude Code；P24.c = Pi；P24.d = Grok Build。服务商模型是唯一
 
 **Acceptance criteria:**
 
-- [ ] 每个组合有 supported/unsupported/unverified 状态及原因、版本与证据。
+- [x] 每个组合有 supported/unsupported/unverified 状态及原因、版本与证据；九种组合见 [兼容矩阵](../integrations/compatibility.md#p24-九种组合的状态)，配置通道状态与真实 Provider 结果分列，不把 unverified 当通过。
 - [ ] 切换账户或模型保持稳定绑定，并正确提示项目/环境变量覆盖。
 - [ ] 回归工具调用、推理/图像参数等已支持能力，未支持项不被静默丢弃。
 
-独立最小推理检查已按维护者决定取消，不实现检查按钮或测试请求；真实调用由维护者在注入 Agent 后验证。
+独立最小推理检查已按维护者决定取消，不实现检查按钮或真实 Provider 测试请求；真实调用由维护者在注入 Agent 后验证。本轮只使用合成密钥的 SDK 发送前截获与回环 HTTP stub；验收步骤见 [维护者交接](model-parameters.md#maintainer-acceptance-handoff)。
+
+**当前完成障碍：** 代码、回归和本机锁定构建已通过；P24.b 的其它 Claude ID 容量/能力通道仍为有原因的 unverified，不猜测写入。P24 整项仍需维护者完成真实 Provider/Agent 组合及 Tauri 预览→详情→应用→恢复验收，不能由代理的隔离样本替代或提前勾选。维护者本轮决定暂不执行真实验收；不再发起真实请求，P24 保持未完成，待恢复验收后继续。
 
 **Verification:** 运行映射样本与 UI 切换测试、完整项目检查；真实用例仅使用许可的测试凭据。
 

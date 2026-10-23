@@ -15,6 +15,9 @@ P24.a 的调查记录，核实于 2026-10-20；Pi 部分于 2026-10-22 按 1.4.0
 | Pi          | `pi --version` → `1.4.0`（1.3.0 证据保留）                                      | 该安装包的 schema、模型解析器、启动选择器和协议请求构建源码；1.4.0 与 1.3.0 的档位逻辑一致 |
 | Grok Build  | `grok --version` → `grok 1.0.67 (2fe064390d07)`；`.metadata_version` → `1.0.67` | 本机随版本解包的用户手册与内嵌默认模型目录；未证明公开 main 与二进制源码一致               |
 
+本轮补充固定版本读取已返回 Claude Code 2.1.308；上表 2.1.304 是已有映射调查基线，
+没有将新版本号当作新增兼容性验证。Pi/Grok 隔离样本仍使用表内版本。
+
 - **supported**：原生字段及其记录的语义有证据；不等于 Provider 接受该参数。
 - **unsupported**：没有相应的独立声明通道，或已核实该通道忽略此字段；不能换成另一个含义的字段。
 - **unverified**：字段、范围、模型匹配或协议行为证据不足；暂不提供写入选项。
@@ -66,6 +69,13 @@ P24.a 的调查记录，核实于 2026-10-20；Pi 部分于 2026-10-22 按 1.4.0
 
 请求输出限制、其它模型/Provider 档位和 canonical 匹配仍受逐字段缺口限制。DeepSeek 官方配方的 `max` 不是任意 Provider 或模型的通用规则。
 
+针对剩余声明通道复核现行 model-config 页：`_SUPPORTED_CAPABILITIES` 能声明
+`effort/xhigh_effort/max_effort/thinking/adaptive_thinking/interleaved_thinking`，但官方只明确
+`_NAME/_DESCRIPTION` 也适用于 `ANTHROPIC_BASE_URL` 网关，未证明能力后缀在本阶段两家
+网关生效。它还是完整启用/禁用集合，不能把中央单个 reasoning 布尔转换为整表而关闭未声明能力。
+因此网关能力声明保持 **unverified**，不写这些后缀；图像、工具与独立输出能力仍无已核实通道。
+容量识别继续仅对已有精确 Flash 绑定写入，不能由“不含 claude”推断任意 ID 一定不被识别。
+
 证据：[Model configuration](https://code.claude.com/docs/en/model-config)、
 [All settings](https://code.claude.com/docs/en/settings-reference)、
 [Environment variables](https://code.claude.com/docs/en/env-vars)、
@@ -93,10 +103,13 @@ env-vars 与 errors 的 thinking/output 结论来自 Context7 官方来源摘录
 
 Pi 启动选择源码中：scoped model 显式档位 → 该 provider/model 保存值 → `defaultThinkingLevel` → Pi 默认；
 普通保存默认模型路径也优先 per-model。CLI、恢复会话和运行中 `/thinking` 能选择另一值，磁盘写入不证明运行中生效。
+Pi 1.4.0 隔离 macOS 原生会话已确认扩展档位菜单、`max` 选择、每模型启动默认档、
+同 ID 跨 Provider 隔离与 null 排除。切回模型时重新采用其保存档位，不保留离开前的临时选择。
+11 项断言与复验步骤见 [Pi 契约](pi.md#p24c-隔离原生菜单与切换验证)；未发送 Provider 请求。
 项目设置可覆盖用户设置；既有全局、项目与会话设置必须在预览中区分。
 
 **最小可交付切片：** 保持现有容量/能力映射，增加字段来源与状态展示（P24.c 首批已在计划卡片中交付，见 [Pi 契约](pi.md)）；随后按已验证模型映射交付
-`thinkingLevelMap` 与 provider/model 局部的保存档位。采样/输出设置另拆一批，验证不得覆盖容量安全限制。
+`thinkingLevelMap` 与 provider/model 局部的保存档位。采样/请求输出不属于本轮注入，不另建编辑器。
 不接管别的 Provider 的同名 ID，不更改全局默认档位；已有 map、采样对象和未知字段按所有权保留。
 
 证据：官方 [Models](https://pi.dev/docs/latest/models) 及安装包 1.4.0 的 `docs/models.md`、
@@ -119,7 +132,7 @@ Pi 启动选择源码中：scoped model 显式档位 → 该 provider/model 保�
 | 请求输出限制       | `model.<alias>.max_completion_tokens`                                                         | **supported，原生请求字段**。不作为已核实的独立输出能力映射；本轮不写入，保留用户值。各 backend 出站键和 Provider 实际接受仍 **unverified**。                                                                                                      |
 | 推理支持           | `supports_reasoning_effort` 旧布尔；新方向为 `reasoning_efforts`                              | **supported，但旧字段弃用**。适配器不新增或删除该布尔；显式 false 会阻止新列表注入，保留原值。不能把字段存在当作 Provider 验证。                                                                                                                   |
 | 可选档位           | `[[model.<alias>.reasoning_efforts]]`                                                         | **supported，已写入**。仅在原生字段缺失、中央 `Listed` 非空、推理支持为 supported、安装参考含该字段且未被显式 false 禁用时写入；每项 `value/label`，中央默认档在列表内时该项 `default = true`。已有数组保留不覆盖；`any`、空列表、未知支持不展开。 |
-| 模型默认档         | 上述列表中某项 `default = true`                                                               | **supported，已写入中央声明的默认档**；只在该档同时出现在列表中时标记。它不等于会话当前选用值，运行中 `/effort` 与切换行为仍 **unverified**。                                                                                                      |
+| 模型默认档         | 上述列表中某项 `default = true`                                                               | **supported，已写入中央声明的默认档**；只在该档同时出现在列表中时标记。隔离 macOS Chat/Responses 会话已确认启动选用列表默认档及 `/effort` 切换；请求字段与 Provider 接受仍 **unverified**。                                                        |
 | 实际选用档位       | 旧 `model.<alias>.reasoning_effort`；全局 `[models].default_reasoning_effort`；会话 `/effort` | 前者 **deprecated**，后者是默认模型的全局值，不满足每个受管 alias 的隔离；适配器不写这两处，也不改 `[models].default`。                                                                                                                            |
 | 工具调用能力       | 手册未给模型级工具能力字段                                                                    | **unsupported，本轮最小范围**；不写工具声明，字段缺失不代表模型不能调用工具。                                                                                                                                                                      |
 | temperature、top_p | `model.<alias>.temperature/top_p`                                                             | **supported，原生字段语义**。模型值优先于全局值；本轮不新增编辑器或写入，保留用户值。Provider/推理模式组合仍需单独验证。                                                                                                                           |
@@ -131,7 +144,7 @@ Pi 启动选择源码中：scoped model 显式档位 → 该 provider/model 保�
 
 **最小可交付切片：** 保持窗口与图像写入并展示来源；已声明的非空档位列表和默认值写入
 `reasoning_efforts`。已有列表、旧布尔/单值字段、请求参数和其它 alias 保持原样。
-不声称原生菜单或运行中会话已切换。
+隔离 macOS Chat/Responses 会话已确认原生菜单、默认档和会话内切换；6 个回环 stub 样本确认两个 backend 的努力字段及列表默认值，不声称真实 Provider 接受已验证。
 
 证据：本机 `.metadata_version`（1.0.67）、`docs/user-guide/11-custom-models.md` 的 Context Window/Global Default Values、
 `26-config-reference.md` 的 model 与 models 表（尤其 471–479 行）、`04-slash-commands.md` 的 `/effort`，
@@ -144,14 +157,14 @@ Pi 启动选择源码中：scoped model 显式档位 → 该 provider/model 保�
 
 以下是配置与请求构造证据，不是实际兼容矩阵；原有组合限制继续有效。
 
-| Provider / 协议                | Claude Code                                           | Pi 1.4.0                                                                                                                                                                           | Grok 1.0.67                                                                                             |
-| ------------------------------ | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| DeepSeek / OpenAI Chat         | 不适用此入口                                          | `openai-completions`；`compat.thinkingFormat=deepseek`，输出键按 `compat.maxTokensField`。实现可发送 `thinking.type` 与 `reasoning_effort`，合法 effort 仍需该模型的 Provider 证据 | `chat_completions` 可配置；DeepSeek thinking 对象与 effort 的转换未核实，不能只写同名 effort 就声称兼容 |
-| DeepSeek / Messages            | 官方专用网关配方；上下文与 `max` 不泛化为其它模型     | `anthropic-messages` 不接受上述 OpenAI sampling 配置；effort/budget 的厂商映射未核实                                                                                               | 现有适配器拒绝 Messages，认证请求头未核实；本轮不解除限制                                               |
-| OpenRouter / OpenAI Chat       | 不适用此入口                                          | `thinkingFormat=openrouter` 构造嵌套 `reasoning.effort`，不冒充直接 `reasoning_effort`；mandatory、effort 范围仍按 Provider/model 检查                                             | 通道可配置，嵌套 reasoning 与选择值的实际映射未核实                                                     |
-| OpenRouter / Messages          | 现有专用网关配方，仅保证 Anthropic 模型；保留原有限制 | sampling 配置同上不适用；推理档位按具体模型/协议核实                                                                                                                               | 继续拒绝 Messages                                                                                       |
-| Command Code / Chat、Responses | 现有网关身份仍未核实，继续拒绝                        | 分别 `openai-completions`、`openai-responses`；输出/采样键必须分开；档位不凭 endpoint 名决定                                                                                       | 两个 backend 可配置；具体 reasoning 载荷、值域与 Provider 接受结果未核实                                |
-| Command Code / Messages        | 继续拒绝；原有证据仅允许 Claude 模型走此路由          | 可表达模型容量；不使用 OpenAI sampling 字段；推理参数需单独验证                                                                                                                    | 继续拒绝 Messages                                                                                       |
+| Provider / 协议                | Claude Code                                           | Pi 1.4.0                                                                                                                                                                           | Grok 1.0.67                                                                                                 |
+| ------------------------------ | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| DeepSeek / OpenAI Chat         | 不适用此入口                                          | `openai-completions`；`compat.thinkingFormat=deepseek`，输出键按 `compat.maxTokensField`。实现可发送 `thinking.type` 与 `reasoning_effort`，合法 effort 仍需该模型的 Provider 证据 | `chat_completions` 可配置；本地样本输出顶层 `reasoning_effort`；DeepSeek 真实接受与其它 thinking 字段仍未验 |
+| DeepSeek / Messages            | 官方专用网关配方；上下文与 `max` 不泛化为其它模型     | `anthropic-messages` 不接受上述 OpenAI sampling 配置；effort/budget 的厂商映射未核实                                                                                               | 现有适配器拒绝 Messages，认证请求头未核实；本轮不解除限制                                                   |
+| OpenRouter / OpenAI Chat       | 不适用此入口                                          | `thinkingFormat=openrouter` 构造嵌套 `reasoning.effort`，不冒充直接 `reasoning_effort`；mandatory、effort 范围仍按 Provider/model 检查                                             | Chat 输出顶层 `reasoning_effort`（官方网关接受的 shorthand）；真实模型/路由接受未验                         |
+| OpenRouter / Messages          | 现有专用网关配方，仅保证 Anthropic 模型；保留原有限制 | sampling 配置同上不适用；推理档位按具体模型/协议核实                                                                                                                               | 继续拒绝 Messages                                                                                           |
+| Command Code / Chat、Responses | 现有网关身份仍未核实，继续拒绝                        | 分别 `openai-completions`、`openai-responses`；输出/采样键必须分开；档位不凭 endpoint 名决定                                                                                       | 本地样本确认 Chat `reasoning_effort`、Responses `reasoning.effort`；模型值域/Provider 接受未验              |
+| Command Code / Messages        | 继续拒绝；原有证据仅允许 Claude 模型走此路由          | 可表达模型容量；不使用 OpenAI sampling 字段；推理参数需单独验证                                                                                                                    | 继续拒绝 Messages                                                                                           |
 
 Provider 的当前范围与旧证据见 [providers](providers.md) 和 [compatibility](compatibility.md)。
 本轮没有重新读取三家 Provider 的完整 schema，不能把旧目录中的某模型档位当作本轮已核实。
@@ -162,14 +175,14 @@ Responses 与 Messages 即使有同名模型 ID，也不能照搬 Chat 的参数
 服务商模型定义已经覆盖目标属性，本表服务于原生字段适配，不要求新增 Provider 模型字段。
 有关 temperature/top_p、请求输出和 reasoning token 的行仅记录原生证据，不属于待实现编辑器。
 Claude Code 当前只提供已核实绑定的默认 effort；Pi 把映射与默认分开，所有已声明且已核实的
-扩展档位独立注入；Grok 的数组与默认注入尚未实现。独立容量、图像、工具标记须逐 Agent 判断，
+扩展档位独立注入；Grok 已注入缺失数组和列表内默认档，并在隔离 macOS 会话中确认菜单与选择更新。独立容量、图像、工具标记须逐 Agent 判断，
 不能因没有声明字段就判定模型无法调用工具或处理图片。当前实施见 [兼容矩阵](compatibility.md)。
 
 ## P24.a 尚需补齐的证据
 
 1. Claude Code：output 条目仅作原生请求通道证据，本轮不提供编辑器；第三方 ID 的 canonical 匹配和原生 per-model effort 隔离仍未核实。
-2. Pi：已核实 DeepSeek Chat `deepseek-flash` 的 `xhigh→high/max→max`，独立于默认选择补齐所有已声明的缺失映射；其他绑定仍需厂商证据。请求输出覆盖会绕过动态限制，且不是本轮模型注入控件。
-3. Grok：1.0.67 已核实数组项 `value/label/default`、内嵌默认模型目录和显式 false 的阻止规则；已有数组保留。运行中 `/effort` 菜单、会话切换、各 backend 的出站参数与数值范围仍未核实。没有证据前不改为 deprecated 通道。
+2. Pi：已核实并实现官方 DeepSeek Chat Flash/Pro 的 `xhigh→high/max→max` 与 OpenRouter Chat 的 `xhigh→xhigh/max→max`；四个安装 SDK 发送前载荷样本通过，独立于默认选择注入；其它绑定仍需厂商证据。请求输出覆盖会绕过动态限制，且不是本轮模型注入控件。
+3. Grok：1.0.67 已核实数组项 `value/label/default`、内嵌默认模型目录和显式 false 的阻止规则；已有数组保留。隔离 macOS Chat/Responses 已验证 `/effort` 菜单、列表默认档及 `high ↔ max` 会话切换；本地 stub 的 6 个样本确认两个 backend 的努力值字段和列表默认档；随后原生 TUI 确认切档后的下一请求和重启选择，Grok 自身持久化到全局默认字段而非每 alias；真实 Provider 合法范围仍未核实。没有证据前不改为 deprecated 通道。
 4. Provider：重新读取三家现行 schema，逐模型确认合法档位、默认值、mandatory 与采样组合；至少使用 DeepSeek `deepseek-flash` 和一个明确 Command Code API ID 作隔离样本。不猜测不同 Provider 的 ID 或 effort 等价。
 
 这些缺口不应被标为已核实；按维护者决定，可使用已有证据分批实现，实际遇到对应限制时再补证，不要求先完成新一轮全面调研。
@@ -183,4 +196,4 @@ codegraph 未找到本 checkout 的索引，已按工具指引改用文件工具
 
 2026-10-22 按 Pi 1.4.0 复核了安装包版本、CHANGELOG、两版 schema 差异、`getSupportedThinkingLevels` 与 compaction 文档；未启动 Pi 会话、未发送请求，也未在真实 Tauri 窗口重新验收。
 
-2026-10-23 按 Grok 1.0.67 复核了参考页、内嵌默认模型目录、二进制字段与显式 false 规则；未启动 Grok 会话、未发送请求，原生菜单与运行中切换仍未验证。
+2026-10-23 的 Grok 字段复核未启动会话或发送请求；随后已完成隔离原生菜单/选择、6 个回环 stub 载荷样本及 4 个 Pi SDK 发送前样本，详见各 Agent 契约。仍未发送真实 Provider 请求。

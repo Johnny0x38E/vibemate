@@ -240,6 +240,12 @@ SQLite v26 的 `claude_effort_preference` 以 Provider/model 为主键。读取�
 偏好读取失败不按“不覆盖”继续；界面提供重新读取。模型元数据让旧档位无法映射时，界面保留并明确标记该值，禁止直接生成预览，要求用户选择可用档位或“不覆盖”。保存冲突保留草稿，并提示读取最新值；切换绑定或卸载后忽略旧异步响应。偏好只是起始草稿，不是已审批配置的实时数据源；另一窗口的偏好修改不会替换已经明确预览的档位，原有模型摘要和文件过期检查继续生效。
 
 其它窗口、输出限制、自动压缩策略和其它绑定的档位映射仍属 [P24](../plans/model-parameters.md)。
+本轮固定 `claude --version` 返回 2.1.308，原有映射调查基线为 2.1.304；未仅因小版本变化
+重新调查全部字段或声称完成原生请求验收。针对剩余能力声明复核现行 model-config：
+`_SUPPORTED_CAPABILITIES` 是完整能力集合，文档只明确 `_NAME/_DESCRIPTION` 同时支持
+`ANTHROPIC_BASE_URL` 网关，未明确能力后缀也适用于本阶段两家网关。因此不写该字段，
+不把中央单个推理布尔扩展成会关闭其它能力的完整表。其它 ID 的容量识别、图像/工具和独立
+输出能力通道仍按字段矩阵标为 unverified/unsupported；这不是新增请求调参表单的理由。
 
 未映射项（保持未知，不做猜测）：`[1m]` 上下文变体、`ANTHROPIC_DEFAULT_FABLE_MODEL`、
 `ANTHROPIC_DEFAULT_MODEL`、`ANTHROPIC_CUSTOM_MODEL_OPTION` 等选择器条目、

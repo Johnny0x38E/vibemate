@@ -40,9 +40,11 @@ vibemate 的写入规则：
 - 中央模型必须有效声明推理支持（覆盖声明优先，否则用目录结果），并列出该档位。目录的 `none`
   对应 Pi 的 `off`，其余名称相同；`any`、未声明与空列表不展开。
 - 基础可选集是已声明的 `off/minimal/low/medium/high`。官方 Chat 端点上的 DeepSeek
-  `deepseek-flash` 额外提供已声明的 `xhigh/max`：仅在该键不存在时补 `xhigh→high` 或
-  `max→max` 映射。所有已声明的扩展档位都会注入，与是否选择某个默认档位无关，
-  因而不必先选中该档才能在 Pi 内切换。已有用户映射（包括 null）不覆盖，其他绑定不自动生成厂商映射。
+  `deepseek-flash`、`deepseek-v4-pro` 额外提供已声明的 `xhigh/max`：仅在该键不存在时补
+  `xhigh→high` 或 `max→max` 映射。官方 OpenRouter Chat 则为任何明确列出相应档位的模型补
+  `xhigh→xhigh/max→max`，由网关按该模型能力处理。所有已声明的扩展档位都会注入，与是否选择某个默认档位无关，
+  因而不必先选中该档才能在 Pi 内切换。已有用户映射（包括 null）不覆盖，其他绑定不自动生成厂商映射；非官方地址、Responses/Messages
+  不复用这两条 Chat 规则。
   DeepSeek 当前官方 Chat schema 明确 `xhigh` 兼容为 `high`，不由档位名自行推断。
 - Rust 在合并后的 `models.json` 定义上再次核对：`reasoning` 必须是布尔；`thinkingLevelMap`
   可以缺失、为 `null` 或为对象，对象条目只能是字符串或 `null`。其它形状直接拒绝并返回既有的
@@ -62,7 +64,9 @@ vibemate 的写入规则：
 边界：
 
 - 证明的是 Pi 的配置语义与启动读取顺序，不证明某个 Provider 对该档位的实际请求值。
-  `minimal/medium/low/high` 映射到 DeepSeek、OpenRouter、Command Code 的厂商值仍属 P24.a 缺口。
+  DeepSeek Chat 官方 schema 允许 `minimal→low`、`medium/xhigh→high`，并接受 `low/high/max`；
+  Pi 的基础档位透传依赖这些兼容规则。OpenRouter Chat 使用网关努力值，不等同于直连上游值。
+  Command Code 与其它协议的厂商范围仍需按模型核实。
 - 没有「清除」动作，只能选择「不覆盖」保留原值或选择一个档位。删除模型或服务商不会自动删除该键，
   这属于尚未完成的 P35 引用约束。
 - Pi 模型定义没有工具调用字段，因此不写工具声明；这不代表模型不能调用工具。
@@ -70,7 +74,55 @@ vibemate 的写入规则：
   模型最大输出仍映射为 `maxTokens`。源码显示 sampling 输出键在动态上下文限制后合并，
   这不能作为另设输出能力字段的依据。
 - 注入映射检查安装 schema 的 `thinkingLevelMap` 字段；不能仅靠版本号假定支持。
-- 真实会话是否使用该档位仍需维护者在 Pi 中确认。
+- 隔离原生会话的菜单、启动默认档和运行中选择已验证，见下节；真实请求是否使用该厂商值仍需维护者确认。
+
+## P24.c 隔离原生菜单与切换验证
+
+在已安装 Pi 1.4.0 中启动临时 PTY 会话。`HOME`、`PI_CODING_AGENT_DIR` 与 cwd 均为
+临时目录；直接使用已安装的 Node 与 Pi CLI 入口，环境不继承 Provider 凭据。
+开启 `--offline`，关闭遥测、扩展、MCP、Skill、提示模板、上下文文件、主题发现与工具，
+并用 `--no-approve` 忽略项目资源。macOS sandbox 拒绝全部网络及真实 Pi/Agents/Claude
+配置读取，只允许读取 Pi 1.4.0 安装目录及其父目录的路径元数据。
+
+两个自定义 Provider 均使用 API ID `deepseek-flash`、`openai-completions`、合成密钥与
+`http://127.0.0.1:9/v1`。模型声明 `reasoning: true`，窗口 32768、最大输出 8192，
+兼容格式为 `deepseek`。A 的 map 为 `xhigh→high/max→max`，B 的对应键均为 `null`。
+`settings.json` 保存 A 的启动默认档 `xhigh`、B 的 `medium`，全局默认为 `low`。
+该地址仅供无网络原生配置检查，不是适配器新增的厂商映射范围。
+
+11 项断言通过：
+
+- 启动采用 A 的 `xhigh`，优先于全局 `low`；菜单显示活动 `xhigh` 和可选 `max`。
+- `/thinking max` 成功，重新打开菜单确认活动档为 `max`。
+- `/model vibemate-probe-b/deepseek-flash` 切到同 ID 的 B 后，活动档为其保存的 `medium`。
+  菜单不含 `xhigh/max`，直接输入 `/thinking max` 返回不可用错误，未静默接受。
+- 切回 A 后重新采用保存的 `xhigh`，不沿用离开前临时选择的 `max`。
+- 会话内选择未改写两个 `modelThinkingLevels` 值、全局 `defaultThinkingLevel` 或模型文件字节。
+  Pi 启动会保存其它设置，因此不声称整个 `settings.json` 字节不变。
+
+复验时，输入 `/thinking` 查看菜单；输入带参数的命令时，先确认自动补全，再提交命令。
+检查完成后终止临时进程并清理目录。未提交模型提示词、调用工具或发送 Provider 请求。
+这证明原生菜单与会话选择，不证明 `xhigh→high/max→max` 的出站载荷、Provider 接受、
+维护者 Tauri 预览/应用/恢复验收或 Windows/Linux 行为。
+
+## P24.c OpenRouter 与 DeepSeek Pro 映射证据
+
+针对新映射复核 [DeepSeek Chat schema](https://api-docs.deepseek.com/api/create-chat-completion/)：
+模型枚举同时列出 `deepseek-flash` 与 `deepseek-v4-pro`；努力值为 `none/low/high/max`，
+兼容 `minimal→low` 与 `medium/xhigh→high`。因此 Pro 使用同一已核实 Chat 映射，
+不按字符串前缀匹配其它 DeepSeek ID。
+
+[OpenRouter reasoning](https://openrouter.ai/docs/guides/best-practices/reasoning-tokens)
+与官方请求 schema 明确接受 `xhigh/max`；具体可用值仍取中央模型的明确列表。
+Pi 1.4.0 的 `pi-ai/dist/api/openai-completions.js` 在 `thinkingFormat=openrouter` 时
+把 `thinkingLevelMap` 值写入嵌套 `reasoning.effort`，不是顶层 DeepSeek 字段。
+使用已安装 `streamSimple` 的 `onPayload` 回调在网络发送前截获并中断，分别确认
+DeepSeek 的 `xhigh→high/max→max` 和 OpenRouter 的 `xhigh→xhigh/max→max`；
+4 个样本通过，替换后的 fetch 调用计数为 0，不是 Provider 调用成功证明。
+
+Rust 回归覆盖缺省选用值下的全列表注入、显式选用任一扩展档、用户 map/null 与请求参数保留、
+过期审批、双文件字节恢复、精确 ID/官方 base/协议边界及不展开 `any`。
+前端只在同一绑定条件下提供声明档位，默认仍需显式选择，不能因目录声明而覆盖原生设置。
 
 ## Pi 1.x 模型配置
 

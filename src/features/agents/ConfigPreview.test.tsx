@@ -33,6 +33,7 @@ import {
     setFieldSelectValue,
 } from "../../test/fieldSelect";
 import { ConfigPreview } from "./ConfigPreview";
+import { availablePiThinkingLevels } from "./PiThinkingLevelField";
 import { piModelFactsFixture } from "../../test/piFacts";
 import { effortPreferenceFixture } from "../../test/claudePreference";
 import {
@@ -1607,6 +1608,110 @@ test("Pi offers only declared levels it accepts by default and previews the one 
             expect.objectContaining({ selectedThinkingLevel: "high" }),
         );
     });
+});
+
+test("Pi offers declared OpenRouter gateway extensions without auto-selecting the default", async () => {
+    const model: ProviderModel = {
+        ...piReasoningRow(OPUS),
+        providerId: openrouter.id,
+        resolvedProtocol: "chat_completions",
+        thinkingEffort: {
+            kind: "listed",
+            levels: ["high", "xhigh", "max"],
+            defaultLevel: "max",
+        },
+    };
+    vi.mocked(listProviders).mockResolvedValue(providersPage([openrouter]));
+    loadModels.mockResolvedValue(modelsPage([model]));
+    await mountPi();
+    await setFieldSelectValue(
+        await screen.findByRole("combobox", { name: "Model" }),
+        OPUS,
+    );
+    const thinking = screen.getByRole("combobox", { name: "Thinking level" });
+    expect(await fieldSelectOptionValues(thinking)).toEqual([
+        "",
+        "high",
+        "xhigh",
+        "max",
+    ]);
+    expect(fieldSelectValue(thinking)).toBe("");
+    await setFieldSelectValue(thinking, "xhigh");
+    await userEvent.click(
+        screen.getByRole("button", { name: "Preview changes" }),
+    );
+    await waitFor(() => {
+        expect(planPiSettings).toHaveBeenCalledWith(
+            openrouter.id,
+            OPUS,
+            "/test/pi",
+            "xhigh",
+        );
+    });
+});
+
+test("Pi offers the verified DeepSeek Pro extensions only for its exact official Chat binding", () => {
+    const provider: ProviderRecord = {
+        ...deepseek,
+        baseUrl: "https://api.deepseek.com",
+        protocol: "chat_completions",
+    };
+    const model: ProviderModel = {
+        ...piReasoningRow("deepseek-v4-pro"),
+        resolvedProtocol: "chat_completions",
+        thinkingEffort: {
+            kind: "listed",
+            levels: ["xhigh", "max"],
+            defaultLevel: "max",
+        },
+    };
+    expect(availablePiThinkingLevels(model, provider)).toEqual([
+        "xhigh",
+        "max",
+    ]);
+    expect(
+        availablePiThinkingLevels(
+            { ...model, modelId: "deepseek-v4-pro[1m]" },
+            provider,
+        ),
+    ).toEqual([]);
+    expect(
+        availablePiThinkingLevels(
+            { ...model, resolvedProtocol: "responses" },
+            provider,
+        ),
+    ).toEqual([]);
+});
+
+test("Pi does not offer OpenRouter extensions on unverified routes or expand any", () => {
+    const model: ProviderModel = {
+        ...piReasoningRow(OPUS),
+        providerId: openrouter.id,
+        resolvedProtocol: "chat_completions",
+        thinkingEffort: {
+            kind: "listed",
+            levels: ["high", "xhigh", "max"],
+            defaultLevel: null,
+        },
+    };
+    expect(
+        availablePiThinkingLevels(model, {
+            ...openrouter,
+            baseUrl: "https://openrouter.ai.example/api/v1",
+        }),
+    ).toEqual(["high"]);
+    expect(
+        availablePiThinkingLevels(
+            { ...model, resolvedProtocol: "responses" },
+            openrouter,
+        ),
+    ).toEqual(["high"]);
+    expect(
+        availablePiThinkingLevels(
+            { ...model, thinkingEffort: { kind: "any", defaultLevel: "max" } },
+            openrouter,
+        ),
+    ).toEqual([]);
 });
 
 test("changing the Pi model discards the chosen level and its preview", async () => {

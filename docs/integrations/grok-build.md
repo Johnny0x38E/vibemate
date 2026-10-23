@@ -56,8 +56,10 @@ Grok 还发现 Claude/Cursor 兼容资源；原生 config.toml 优先于兼容 M
 `reasoning_effort` 标为弃用，推荐 `reasoning_efforts`。1.0.67 二进制内嵌的默认模型目录
 给出数组项 `value/label/description/default`；适配器只写 `value/label/default`。
 在线简表仍列旧字段，不能据此新增弃用字段写入。下文 1.0.60 的努力档位说明保留为旧证据；
-逐字段状态见 [P24.a 逐字段矩阵](model-parameter-mapping.md)。运行中菜单与持久选用通道
-仍未核实，现有适配器保留用户 effort 字段，不把此文档更新当作会话切换已交付。
+逐字段状态见 [P24.a 逐字段矩阵](model-parameter-mapping.md)。隔离 macOS 原生检查已确认 Chat/Responses 的菜单、列表默认档和会话内切换；
+本地 stub 已核实 Chat 的 `reasoning_effort` 与 Responses 的 `reasoning.effort`；
+隔离 TUI 已确认切档后的下一请求和新会话读取持久选择；Grok 自身将选择保存到全局
+`[models].default_reasoning_effort`，不是每 alias 默认。真实 Provider 接受仍未核实。
 
 ## P24 模型注入与预览
 
@@ -70,8 +72,9 @@ Grok 还发现 Claude/Cursor 兼容资源；原生 config.toml 优先于兼容 M
 含该字段且未被 `supports_reasoning_effort = false` 禁用时写入。每项写 `value/label`，中央
 默认档在列表内时写 `default = true`；标签是英文展示文本。已有数组保留且不解析显示，
 `any`、空列表与未知支持不展开。不写旧布尔/单值字段，也不改全局
-`[models].default_reasoning_effort` 或 `[models].default`。原生菜单是否出现以及运行中
-`/effort` 何时生效仍未验证，不能把写入数组称为已切换。
+`[models].default_reasoning_effort` 或 `[models].default`。隔离 macOS 的 Chat/Responses 会话已确认菜单展示、列表默认档和运行中
+`/effort` 选择更新；本地 stub 另确认两个 backend 的努力值字段及列表默认档。
+这仍不证明真实 Provider 接受该档位。
 
 不提供 temperature/top_p、请求输出或推理 token 数编辑器，不将 `max_completion_tokens`
 自动等同于独立模型输出能力。保留用户原有参数、全局 `[models]`、默认模型与其它 alias。
@@ -154,7 +157,7 @@ API key 放进共享仓库」。也就是说用户级 `config.toml` 里的 `api_
 
 vibemate 拥有的 `[model.<alias>]` 条目写入时：
 
-- **`name` 字段**固定为 `(vibemate-<服务商名>) <模型 ID>`：括号内 `vibemate` 固定，服务商显示名称转为连字符标记（与配置键同一形状），括号后一个空格接模型 ID 原文。例如 `Command Code GOAT` + `deepseek/deepseek-v4.1-flash` → `name = "(vibemate-Command-Code-GOAT) deepseek/deepseek-v4.1-flash"`；斜杠、大写和点号原样保留，不使用用户模型别名或 `upstream_name`。连续空白折叠，控制字符与不可见格式字符（含 bidi 覆盖）移除；模型 ID 过长时截断并以 `…` 结尾，整段不超过 160 个字符。努力档位属于原生模型选项列表，不拼接到显示名称；该列表的注入仍待完成。
+- **`name` 字段**固定为 `(vibemate-<服务商名>) <模型 ID>`：括号内 `vibemate` 固定，服务商显示名称转为连字符标记（与配置键同一形状），括号后一个空格接模型 ID 原文。例如 `Command Code GOAT` + `deepseek/deepseek-v4.1-flash` → `name = "(vibemate-Command-Code-GOAT) deepseek/deepseek-v4.1-flash"`；斜杠、大写和点号原样保留，不使用用户模型别名或 `upstream_name`。连续空白折叠，控制字符与不可见格式字符（含 bidi 覆盖）移除；模型 ID 过长时截断并以 `…` 结尾，整段不超过 160 个字符。努力档位属于原生模型选项列表，不拼接到显示名称；该列表按上文边界注入，原生菜单验证不代表 Provider 已接受。
 - **格式处理**：连续空白折叠为一个空格（`name` 始终单行）；控制字符与不可见格式字符（含 bidi 覆盖）被移除，避免两个不同名称看起来相同。组合文本超过 160 个字符时截断模型 ID 部分并以 `…` 结尾；模型 ID 本身仍是身份，`name` 只是显示文本。
 - **配置别名（表名）**仍由 `choose_alias` 决定：优先复用本根下已记录的归属；否则按 `vibemate-{provider}-{model}` 等候选选取空闲名。表名是配置身份，保持稳定；**不会**接管同名但无归属记录的用户手写表。
 - **碰撞拒绝**：若计划写入的 API `model` 字段值（即 `model_id`）与当前 `config.toml` 里某个已有 `[model.<alias>]` 表名**完全相同**，预览以 `TargetConflict` / `target_conflict` 拒绝，不静默改写。典型场景：用户已手写 `[model.deepseek-flash]`，而 vibemate 又要写 `model = "deepseek-flash"`。
@@ -303,5 +306,68 @@ enabled = false
 - Rust 666 项通过、4 项忽略（含 3 项真实网络检查）；前端 1129 项通过；`check:frontend`、
   fmt/Clippy 与锁定 no-bundle 桌面构建通过。临时 `GROK_HOME` 中让 Grok 1.0.67 读取同一数组表写法，
   `grok models` 正常列出条目且无解析警告；这不证明原生菜单或会话切换。
-- 未启动 Grok 会话、未发送请求。原生 effort 菜单、运行中 `/effort` 切换、各 backend 出站载荷
+- 此次字段复核未启动 Grok 会话、未发送请求。后续原生菜单检查见下节；各 backend 出站载荷
   与真实 Provider 接受结果仍未验证。
+
+## P24.d 隔离原生菜单与切换验证
+
+使用同一 `grok 1.0.67 (2fe064390d07)`，分别对 `chat_completions` 与 `responses` 启动
+临时 PTY 会话。`HOME`、`GROK_HOME` 和 cwd 均指向临时目录；环境只含基础终端变量、
+关闭更新的开关与合成密钥变量。关闭 leader、更新、遥测、trace 上传和兼容资源，
+并传入 `--no-subagents --disable-web-search --no-alt-screen`。
+macOS `sandbox-exec` 拒绝全部网络访问及真实 Grok/Claude/Cursor 目录读取，
+仅允许读取已安装 Grok 二进制及下载目录；未读取真实认证或配置文件。
+
+复验样本：模型 alias/API ID 均为 `vibemate-effort-probe`，`base_url` 为
+`http://127.0.0.1:9/v1`，`env_key` 指向合成变量，窗口为 32768。
+临时 `[models].default` 指向该 alias（只为选择测试模型，vibemate 适配器仍不写全局默认）。
+声明两项 `reasoning_efforts`：`high / Probe High / default = true` 和 `max / Probe Max`。
+不设置旧 effort 字段或全局默认 effort。两种 backend 各通过以下五项检查：
+
+1. 启动状态显示 `Vibemate effort probe (high)`，确认列表默认档被选用。
+2. 输入 `/effort`，菜单显示 `Probe High (active)` 和 `Probe Max`。
+3. 下箭头、回车选 `max`，TUI 确认 `Switched to Vibemate effort probe (max effort)`。
+4. 再次打开 `/effort`，显示 `Probe Max (active)`。
+5. 选择 `Probe High`，TUI 确认切回 `high effort`。
+
+共 10 项断言通过；每次退出后清理临时配置与会话文件。未提交模型提示词、执行工具或发送
+Provider 请求。这里只验证合成模型的原生菜单与会话状态，不验证三家 Provider 的合法档位、
+请求接受结果或 Windows/Linux 行为；backend 字段与原生持久化检查见下文。
+
+## P24.d 本地 backend 载荷验证
+
+同一 Grok 1.0.67 在临时 HOME/GROK_HOME/cwd 中，以合成密钥连接仅绑定
+`127.0.0.1` 的 HTTP stub。macOS sandbox 只允许回环网络，拒绝真实配置读取；
+关闭 leader、更新、遥测和兼容资源，传入 `--no-subagents --disable-web-search --max-turns 1`。
+headless 样本使用 `-m vibemate-probe --verbatim -p` 和无敏感信息的合成提示词，
+不连接三家 Provider，不执行工具。
+
+模型 API ID 为 `vibemate-synthetic-model`，列表声明 `high`（默认）与 `max`。
+两种 backend 分别检查未传 CLI effort、显式 `high` 与显式 `max`，共 6 个样本通过：
+
+| backend            | 实际路径               | 模型请求 effort 字段                                | 未传 CLI effort |
+| ------------------ | ---------------------- | --------------------------------------------------- | --------------- |
+| `chat_completions` | `/v1/chat/completions` | `reasoning_effort: high/max`                        | 列表默认 `high` |
+| `responses`        | `/v1/responses`        | `reasoning: { effort: high/max, summary: concise }` | 列表默认 `high` |
+
+stub 在记录 JSON 后故意返回 HTTP 400，Grok 退出码 1 是样本预期，不是推理测试失败或成功。
+样本还捕获到目标请求前两个 `model=grok-4.6` 的辅助请求；只对确切合成 API ID 的请求
+断言模型字段，不能把后台请求误当成用户选择。它们均发往同一本地 stub，没有外部网络。
+此次只核实出站形状，不能替代运行中切档后真实请求、Provider 对该模型档位的接受、
+工具/图像调用、恢复后使用或跨平台验收。
+
+## P24.d 运行中下一请求与重启选择
+
+沿用上节回环 stub 与隔离 sandbox，分别启动 Chat/Responses 原生 TUI。每种 backend：
+先提交合成提示词，确认目标 API ID 的请求采用列表默认 `high`；通过 `/effort` 菜单切到
+`max` 后再提交合成提示词，确认下一请求确实发送 `max`。两个 backend 均通过，
+不是只检查菜单文字。stub 仍故意返回 400，不执行推理或工具。
+
+随后检查临时 `config.toml` 并重启为新会话：Grok 自己写入
+`[models].default_reasoning_effort = "max"`，没有写模型级旧 `reasoning_effort`；
+新会话启动采用 `max`，而不再采用模型列表中的 `high` 默认。两种 backend 均确认。
+因此原生 `/effort` 的保存有全局范围，不能描述为 vibemate Provider/alias 隔离的默认档。
+vibemate 继续保留该全局值、不写入它；声明列表默认不能保证覆盖用户已保存的全局选择。
+
+此次确认运行中切档对下一请求生效及原生全局持久化，仍未证明真实 Provider 的模型接受。
+临时配置与会话在进程退出后删除，真实配置未改动。

@@ -53,10 +53,13 @@ export function availablePiThinkingLevels(
         model.thinkingEffort.levels.map((token) => PI_LEVEL_BY_TOKEN[token]),
     );
     const verifiedMap =
-        provider?.kind === "deepseek" &&
-        model.modelId === "deepseek-flash" &&
         model.resolvedProtocol === "chat_completions" &&
-        provider.baseUrl === "https://api.deepseek.com";
+        ((provider?.kind === "deepseek" &&
+            (model.modelId === "deepseek-flash" ||
+                model.modelId === "deepseek-v4-pro") &&
+            provider.baseUrl === "https://api.deepseek.com") ||
+            (provider?.kind === "openrouter" &&
+                provider.baseUrl === "https://openrouter.ai/api/v1"));
     const levels: readonly PiThinkingLevel[] = verifiedMap
         ? [...UNMAPPED_PI_LEVELS, "xhigh", "max"]
         : UNMAPPED_PI_LEVELS;

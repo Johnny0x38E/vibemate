@@ -70,10 +70,19 @@ is a model limit. Pi has no corresponding model-definition tool-call flag; that
 absence does not mean the model cannot call tools.
 
 Inject verified `thinkingLevelMap` entries for all declared supported levels, not
-only for a selected default. Current generated extended mappings are limited to
-DeepSeek `deepseek-flash` on its official Chat endpoint: `xhigh→high`, `max→max`.
-Existing user entries, including null exclusions, are preserved. Other bindings
-remain pending rather than receiving guessed vendor values.
+only for a selected default. Generated extended mappings cover DeepSeek
+`deepseek-flash` and `deepseek-v4-pro` on its official Chat endpoint:
+`xhigh→high`, `max→max`. Official OpenRouter Chat uses `xhigh→xhigh/max→max`
+for models explicitly declaring those values. Pi emits the latter in nested
+`reasoning.effort`; four installed-SDK payload samples were captured before
+network access. Existing user entries, including null exclusions, are preserved.
+Custom bases, other APIs and unverified bindings receive no guessed mappings.
+
+Isolated macOS Pi 1.4.0 checks confirm the extended menu, runtime selection,
+per-model startup defaults, same-ID Provider isolation and null exclusions.
+Switching away and back reloads the model's saved thinking level rather than
+retaining its temporary session choice. These checks do not verify outbound
+Provider values or real requests.
 
 Default selection remains separate in
 `modelThinkingLevels["<provider>/<modelId>"]`; no override preserves the saved
@@ -91,7 +100,14 @@ list only when the native field is absent, reasoning support is declared, the
 installed reference documents the field, and `supports_reasoning_effort` is not
 explicitly false. Existing arrays stay untouched; `any`, empty lists and unknown
 support are not expanded. This is model injection, not a generic request editor.
-It does not prove the native menu or a running session selects the value. Do not
+Isolated macOS Grok 1.0.67 checks confirm that Chat and Responses sessions show
+the injected menu, select the list default and update the active selection through
+`/effort`. Six local-stub samples confirm Chat's `reasoning_effort` and Responses'
+`reasoning.effort`, including list defaults. A separate TUI check confirms that
+switching to `max` changes the next request in both backends. Grok itself persists
+that choice in global `[models].default_reasoning_effort`, and a fresh session
+uses it ahead of the list default. vibemate preserves that global field; it must
+not claim alias-local persistence. These samples do not prove Provider acceptance. Do not
 introduce writes to deprecated `supports_reasoning_effort` or `reasoning_effort`,
 and do not use the global default to represent one alias.
 
@@ -114,6 +130,54 @@ First remove the out-of-scope request editor and fix mappings coupled to one
 selected default. Then address remaining Agent-native injection gaps in reviewable
 behaviors. Keep unsupported and unverified distinct; neither adds new Provider
 model fields merely to fill a native configuration key.
+
+## Remaining implementation sequence
+
+Continue P24 without pausing after each small slice; task status remains only in
+[`todo.md`](todo.md). Use the existing field evidence, and recheck only the
+contracts needed by a new mapping.
+
+1. Add Pi extended-level mappings for official OpenRouter Chat when the central
+   model explicitly lists the level. Confirm gateway values and Pi's request
+   construction; preserve existing maps/null and reject unverified protocols or
+   custom bases. Cover preview, explicit default selection, stale approvals and
+   restoration, plus frontend options in both languages.
+2. Review remaining DeepSeek model/protocol mappings and Claude Code capacity
+   recognition against official contracts. Implement only evidenced fields;
+   document absent native declaration channels as unsupported, not as unfinished
+   request-tuning editors.
+3. Complete the nine-combination configuration matrix with versions, evidence,
+   unsupported/unverified reasons and precedence/default/switching boundaries.
+   Keep actual Provider calls and maintainer desktop acceptance separate.
+4. Run full frontend checks, Rust formatting/Clippy/tests and a locked no-bundle
+   desktop build. Do not mark P24 complete while any required implementation,
+   failed check or maintainer-only acceptance remains unresolved.
+
+## Maintainer acceptance handoff
+
+Automated checks and isolated native samples do not complete P24's real-use
+acceptance. Use the existing application; do not add an inference-check button.
+
+- For each supported Provider/Agent route in the compatibility matrix, record
+  the exact Agent version, Provider/model ID and protocol, then preview and read
+  both the field summary and detailed diff. Confirm central capabilities,
+  selected defaults and switchable mappings are distinct. Never record keys.
+- Apply only after reviewing the real-target diff and backup. In the Agent,
+  confirm the injected model is selectable, test declared effort switching and
+  one permitted request, and check tools/images only where the model declares
+  support. Record success, unsupported or unverified with a concrete reason.
+- Switch Provider/model without reusing another binding's draft; verify the
+  documented project/environment/resumed-session precedence. For Grok, note
+  that its native effort command persists a global choice; for Pi, returning to
+  a model reloads its saved per-model choice.
+- Restore the original configuration through history and verify original bytes
+  and unrelated aliases/fields. Maintainer desktop acceptance includes the new
+  Pi choices and the full preview/apply/restore flow, not only terminal samples.
+
+Windows/Linux native system verification stays in P37, and broad real-use
+coverage remains shared with P38. Neither is recorded as passed from macOS.
+P24 remains open until its required maintainer evidence is supplied; unknown
+Claude capacity/capability channels do not authorize guessed writes.
 
 ## Acceptance and verification
 

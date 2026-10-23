@@ -11,7 +11,8 @@ use crate::providers::{ProviderKind, ProviderProtocol, ProviderRecord};
 use serde_json::{Map, Value, json};
 
 /// Add missing verified mappings for all declared extended levels, not just the
-/// chosen default. Only DeepSeek flash on its official Chat endpoint is verified.
+/// chosen default. Verified Chat bindings are DeepSeek flash/pro and OpenRouter's
+/// gateway, where the central model list bounds the accepted gateway values.
 /// Returns `TargetConflict` for a malformed owned map; no I/O or credential reads.
 pub(super) fn inject_declared_levels(
     definition: &mut Map<String, Value>,
@@ -27,21 +28,30 @@ pub(super) fn inject_declared_levels(
         .thinking
         .map(|value| value.as_state())
         .unwrap_or(model.capabilities.thinking.state);
-    if provider.kind != ProviderKind::DeepSeek
-        || model.model_id != "deepseek-flash"
-        || protocol != ProviderProtocol::ChatCompletions
-        || base != "https://api.deepseek.com"
-        || thinking != CapabilityState::Supported
-    {
+    if protocol != ProviderProtocol::ChatCompletions || thinking != CapabilityState::Supported {
         return Ok(());
     }
+    // OpenRouter normalizes declared efforts at its own gateway. Unlike the
+    // DeepSeek alias, xhigh is sent unchanged in Pi's nested reasoning.effort.
+    // Neither contract applies to lookalike hosts, custom bases or other APIs.
+    let xhigh_vendor = match provider.kind {
+        ProviderKind::DeepSeek
+            if matches!(
+                model.model_id.as_str(),
+                "deepseek-flash" | "deepseek-v4-pro"
+            ) && base == "https://api.deepseek.com" =>
+        {
+            "high"
+        }
+        ProviderKind::OpenRouter if base == "https://openrouter.ai/api/v1" => "xhigh",
+        _ => return Ok(()),
+    };
     let Some(ThinkingEffort::Listed { levels, .. }) = &model.thinking_effort else {
         return Ok(());
     };
-    // The provider documents xhigh as an alias for high, and accepts max
-    // directly. Do not infer vendor values for any other provider or model.
+    // Inject only explicitly listed values, never an expansion of `any`.
     let mappings: Vec<_> = [
-        (EffortLevel::XHigh, "xhigh", "high"),
+        (EffortLevel::XHigh, "xhigh", xhigh_vendor),
         (EffortLevel::Max, "max", "max"),
     ]
     .into_iter()

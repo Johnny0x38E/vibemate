@@ -1,9 +1,9 @@
 # Central Skill library
 
 `src/features/skills/` and `src-tauri/src/skills/` implement the central Skill
-library. Installing from a confirmed GitHub source is implemented. Update
-comparison and deployment to an Agent are not; see
-[`plans/todo.md`](plans/todo.md).
+library. Installing from a confirmed GitHub source and deploying a library Skill
+into Pi's user-level `skills/` directory are implemented. Update comparison and
+deployment to other Agents are not; see [`plans/todo.md`](plans/todo.md).
 
 ## Scope
 
@@ -17,14 +17,18 @@ comparison and deployment to an Agent are not; see
   fetch method and the reviewed install command.
 - Page the list with a bounded cursor; an address with no fetch method is shown
   as not auto-updatable.
-- Delete a library entry with a bilingual confirmation.
+- Deploy a library Skill into Pi (`PI_CODING_AGENT_DIR` or `~/.pi/agent`) as a
+  symlink when possible, or as an explicit copy-sync; revoke only vibemate-owned
+  targets.
+- Delete a library entry with a bilingual confirmation; deletion refuses while
+  any deployment row remains.
 
 ## Data model
 
 Migration v10 created `skill`; v11 rebuilt it to widen the content limits; v27
-added the fetch method and installer fields. Files live in
-`<app-data>/skills/<id>/`. Managed copies move with the database, so a backup of
-the app-data folder stays complete.
+added the fetch method and installer fields; v28 added `skill_deployment` for
+per-Agent ownership. Files live in `<app-data>/skills/<id>/`. Managed copies
+move with the database, so a backup of the app-data folder stays complete.
 
 | Field                                     | Meaning                                                                   |
 | ----------------------------------------- | ------------------------------------------------------------------------- |
@@ -170,9 +174,31 @@ stays.
 
 `cleanup_deleted_skill_copies` removes only parked copies with no matching record.
 A parked copy whose record still exists comes from an interrupted delete and
-stays until that record is deleted. There are no deployment relationships yet, so
-deletion cannot affect an Agent configuration; the deployment work must add a
-reference check.
+stays until that record is deleted. Deleting a Skill that still has a
+`skill_deployment` row returns `skill_in_use`; revoke the deployment first. P35
+will add richer reference UI.
+
+## Deploy to Pi
+
+Deployment writes only the Pi user-level directory resolved the same way as
+model configuration: `PI_CODING_AGENT_DIR` when set, otherwise `~/.pi/agent`.
+The target is `<agent-dir>/skills/<skill-name>/`. Shared locations such as
+`~/.agents/skills/` are not written.
+
+1. **Preview** classifies the target as absent, vibemate-owned symlink, owned
+   copy, or foreign; probes whether a directory symlink can be created under
+   `skills/`; and suggests symlink when available, otherwise copy.
+2. **Apply** requires the reviewed skill revision, config root, mode and target
+   state. Symlink mode is refused when the probe fails. Foreign targets are
+   never overwritten. After a successful filesystem write, schema v28 records
+   ownership (`mode`, skill revision, content digest). A failed record attempt
+   rolls back the filesystem write when possible, otherwise `outcome_unknown`.
+3. **Disable** removes only a still-owned symlink or copy. If the user replaced
+   the target, the path is left alone and the ownership row is cleared.
+
+The Skill detail page owns the deploy controls. The Agent detail Skill segment
+for Pi is read-only: it lists deployments for that agent directory and jumps to
+the Skills module.
 
 ## Interface
 
@@ -196,6 +222,9 @@ reference check.
   start from the latest revision.
 - Digests stay out of the interface: they are a machine comparison value and a
   baseline for the future update comparison.
+- The detail page includes a **Deploy to Pi** card: target path and status, mode
+  choice, apply, current deployments and remove. Browser preview reports that
+  deploy needs the desktop app.
 
 ## Verification scope
 
@@ -203,8 +232,9 @@ Rust tests cover path rules, unknown sources, duplicate names, parse failures,
 links and limits, the untouched source directory, deterministic digests, folder
 discovery and batch reporting, large bodies and headers, the IPC contract, Git
 and npx request validation, acquired-tree discovery, partial imports, workspace
-cleanup, source-method edits and the v27 fields. Storage tests cover the skill
-migrations and preserved rows.
+cleanup, source-method edits, the v27 fields, and Pi deploy preview/apply/disable
+(symlink, copy, foreign conflict, stale tokens, delete-while-deployed). Storage
+tests cover the skill migrations and preserved rows.
 
 The reviewed public source `vercel-labs/agent-skills` was installed through both
 real paths: a pinned Git commit (`063bee9…`) resolved to the same commit in the

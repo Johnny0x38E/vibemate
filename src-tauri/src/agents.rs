@@ -46,6 +46,9 @@ pub struct ApplyClaudeCodeSettingsRequest {
 /// Claude Code settings root, shared by discovery and the configuration preview.
 pub(crate) use discovery::claude_config_root;
 pub use discovery::discover_agents;
+/// Pi agent directory (`PI_CODING_AGENT_DIR` or `~/.pi/agent`), shared by
+/// configuration writes and skill deployment.
+pub(crate) use discovery::pi_config_root;
 use serde::{Deserialize, Serialize};
 use std::{ffi::OsString, path::PathBuf};
 

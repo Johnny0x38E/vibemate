@@ -1,10 +1,13 @@
 //! Skill library IPC: list entries, choose a folder, import its skills, record
-//! a source and delete a reviewed entry. Importing copies files into the private
-//! library and never executes a skill command; deleting removes only vibemate's
-//! own copy. All work happens on the blocking pool because it touches the disk,
-//! and the folder dialog is opened from Rust so the frontend never calls the
-//! dialog plugin's own commands.
+//! a source, delete a reviewed entry, and deploy a skill into Pi's user skills
+//! directory. Importing copies files into the private library and never
+//! executes a skill command; deleting removes only vibemate's own copy. Deploy
+//! prefers a symlink and falls back to copy-sync only when the user chooses it.
+//! All work happens on the blocking pool because it touches the disk, and the
+//! folder dialog is opened from Rust so the frontend never calls the dialog
+//! plugin's own commands.
 
+use super::agents::environment;
 use super::state::with_skill_library;
 use tauri::Manager;
 use tauri_plugin_dialog::DialogExt;
@@ -169,6 +172,90 @@ pub(crate) async fn cleanup_deleted_skill_copies(
     tauri::async_runtime::spawn_blocking(move || {
         with_skill_library(&app, |library, storage| {
             crate::skills::cleanup_deleted_skill_copies(library, storage)
+        })
+    })
+    .await
+    .map_err(|_| crate::skills::SkillError::OperationFailed)?
+}
+
+/// Preview deploying one central skill into the resolved Pi agent directory.
+#[tauri::command]
+pub(crate) async fn preview_pi_skill_deploy(
+    app: tauri::AppHandle,
+    skill_id: String,
+) -> Result<crate::skills::PiSkillDeployPreview, crate::skills::SkillError> {
+    let environment =
+        environment(&app).map_err(|_| crate::skills::SkillError::AgentLocationUnavailable)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        with_skill_library(&app, |library, storage| {
+            crate::skills::preview_pi_skill_deploy(library, storage, &environment, &skill_id)
+        })
+    })
+    .await
+    .map_err(|_| crate::skills::SkillError::OperationFailed)?
+}
+
+/// Apply a reviewed Pi skill deployment after the interface shows the preview.
+#[tauri::command]
+pub(crate) async fn apply_pi_skill_deploy(
+    app: tauri::AppHandle,
+    reviewed: crate::skills::ReviewedPiSkillDeploy,
+) -> Result<crate::skills::PiSkillDeployed, crate::skills::SkillError> {
+    let environment =
+        environment(&app).map_err(|_| crate::skills::SkillError::AgentLocationUnavailable)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let now = crate::shared::current_unix_millis()
+            .map_err(|_| crate::skills::SkillError::OperationFailed)?;
+        with_skill_library(&app, |library, storage| {
+            crate::skills::apply_pi_skill_deploy(library, storage, &environment, reviewed, now)
+        })
+    })
+    .await
+    .map_err(|_| crate::skills::SkillError::OperationFailed)?
+}
+
+/// Revoke one vibemate-managed Pi skill deployment without touching the library.
+#[tauri::command]
+pub(crate) async fn disable_pi_skill_deploy(
+    app: tauri::AppHandle,
+    request: crate::skills::DisablePiSkillDeployRequest,
+) -> Result<crate::skills::PiSkillDeployDisabled, crate::skills::SkillError> {
+    let environment =
+        environment(&app).map_err(|_| crate::skills::SkillError::AgentLocationUnavailable)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        with_skill_library(&app, |library, storage| {
+            crate::skills::disable_pi_skill_deploy(library, storage, &environment, request)
+        })
+    })
+    .await
+    .map_err(|_| crate::skills::SkillError::OperationFailed)?
+}
+
+/// List deployments recorded for the resolved Pi agent directory.
+#[tauri::command]
+pub(crate) async fn list_pi_skill_deployments(
+    app: tauri::AppHandle,
+) -> Result<Vec<crate::skills::SkillDeploymentRecord>, crate::skills::SkillError> {
+    let environment =
+        environment(&app).map_err(|_| crate::skills::SkillError::AgentLocationUnavailable)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        with_skill_library(&app, |library, storage| {
+            crate::skills::list_pi_skill_deployments(library, storage, &environment)
+        })
+    })
+    .await
+    .map_err(|_| crate::skills::SkillError::OperationFailed)?
+}
+
+/// List deployments recorded for one central skill.
+#[tauri::command]
+pub(crate) async fn list_skill_deployments(
+    app: tauri::AppHandle,
+    skill_id: String,
+) -> Result<Vec<crate::skills::SkillDeploymentRecord>, crate::skills::SkillError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        with_skill_library(&app, |library, storage| {
+            crate::skills::list_skill_deployments(library, storage, &skill_id)
         })
     })
     .await

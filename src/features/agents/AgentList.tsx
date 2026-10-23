@@ -35,6 +35,7 @@ import { AgentPage } from "./AgentPage";
 import { AgentVersionPanel } from "./AgentVersionPanel";
 import { CurrentConfigPin, RestoreView } from "./RestoreView";
 import { WriteConfigDialog } from "./WriteConfigDialog";
+import { AgentSkillPanel } from "./AgentSkillPanel";
 import underlineTabs from "../../components/underlineTabs.module.css";
 import {
     readConfigurationHistory,
@@ -82,9 +83,12 @@ function hasConfigAdapter(id: AgentId): id is ConfigurableAgent {
 export function AgentList({
     hidden = false,
     homeRef,
+    onOpenSkills,
 }: {
     hidden?: boolean;
     homeRef?: Ref<ModuleNavigationHandle>;
+    /** Jump to the Skills module from the Skill detail slot. */
+    onOpenSkills?: () => void;
 }): JSX.Element {
     const { t } = useTranslation();
     const [state, setState] = useState<State>({ kind: "loading" });
@@ -931,9 +935,12 @@ export function AgentList({
                         aria-labelledby={`agent-segment-${id}-skill`}
                         hidden={segment !== "skill"}
                     >
-                        <p className={styles["hint"]}>
-                            {t("agents.skillPanel.empty")}
-                        </p>
+                        <AgentSkillPanel
+                            agentId={id}
+                            onOpenSkills={() => {
+                                onOpenSkills?.();
+                            }}
+                        />
                     </div>
                     <div
                         role="tabpanel"

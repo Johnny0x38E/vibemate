@@ -541,6 +541,25 @@ const MIGRATIONS: &[Migration] = &[
             ALTER TABLE skill ADD COLUMN installer_command TEXT
                 CHECK(installer_command IS NULL OR length(installer_command) BETWEEN 1 AND 1024);",
     },
+    Migration {
+        version: 28,
+        // P27: one owned deploy target per Agent config root and skill name.
+        // Deleting a central skill refuses while any row remains (RESTRICT).
+        // agent_id is the camelCase AgentId wire value; only "pi" is written now.
+        sql: "CREATE TABLE skill_deployment (
+            skill_id TEXT NOT NULL REFERENCES skill(id) ON DELETE RESTRICT,
+            agent_id TEXT NOT NULL CHECK(agent_id IN ('pi')),
+            config_root TEXT NOT NULL CHECK(length(config_root) BETWEEN 1 AND 4096),
+            target_name TEXT NOT NULL CHECK(length(target_name) BETWEEN 1 AND 64),
+            mode TEXT NOT NULL CHECK(mode IN ('symlink','copy')),
+            skill_revision INTEGER NOT NULL CHECK(skill_revision >= 1),
+            content_digest TEXT NOT NULL
+                CHECK(length(content_digest)=64 AND content_digest NOT GLOB '*[^0-9a-f]*'),
+            deployed_at INTEGER NOT NULL CHECK(deployed_at >= 0),
+            PRIMARY KEY(agent_id, config_root, target_name),
+            UNIQUE(skill_id, agent_id, config_root)
+        ) STRICT, WITHOUT ROWID;",
+    },
 ];
 
 /// Errors from opening or migrating the private database.

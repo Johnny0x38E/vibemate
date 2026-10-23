@@ -174,6 +174,9 @@ export default function App({ languageSettings }: AppProps): JSX.Element {
                         <AgentList
                             hidden={page !== "agents"}
                             homeRef={agentsNavigation}
+                            onOpenSkills={() => {
+                                navigate("skills");
+                            }}
                         />
                     )}
                     {skillsVisited && (

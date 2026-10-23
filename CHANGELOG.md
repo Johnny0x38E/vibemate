@@ -8,6 +8,16 @@ GitHub release notes are extracted from the matching version section only.
 
 ### Added
 
+- Deploy a central Skill into Pi's user-level `skills/` directory. Preview names
+  the target path and whether it is empty, vibemate-owned or foreign; symlink is
+  preferred when the platform can create one, otherwise the user must choose
+  copy. Apply records ownership (schema v28) with the skill revision and content
+  digest; disable removes only a still-managed target and leaves user content
+  alone. Deleting a Skill that is still deployed returns `skill_in_use`. The
+  Skill detail page owns the deploy controls; the Pi Agent Skill segment lists
+  deployments read-only and jumps to the Skills module. Grok Build and Claude
+  Code skill deployment, and Skill updates, remain unimplemented.
+
 - Grok Build writes a declared, non-empty reasoning-effort list and its model default to the native `reasoning_efforts` array when that field is absent. Each entry carries `value`, a generated English `label`, and `default = true` on the central default when that level is in the list. Existing arrays, deprecated effort fields, `[models]` globals, unrelated aliases and request parameters stay unchanged; open (`any`), empty and unsupported statements are not expanded. Isolated macOS Grok 1.0.67 checks confirm the injected menu, declared default and running-session selection for Chat Completions and Responses; six isolated local-stub samples confirm Chat's `reasoning_effort` and Responses' `reasoning.effort`, including the declared default. Both backends also send the changed effort on the next isolated TUI request. Grok persists its own selection globally and reuses it in new sessions; vibemate does not write that global setting. Real Provider acceptance remains unverified. Independent maximum-output and tool mappings remain unwritten.
 
 - Pi injects every declared, verified extended thinking level independently of the saved default, so native switching does not require first selecting each level in vibemate. For official DeepSeek Chat bindings with the exact `deepseek-flash` or `deepseek-v4-pro` ID, `xhigh` maps to `high` and `max` to `max`. Official OpenRouter Chat bindings inject explicitly declared `xhigh` and `max` unchanged; the gateway receives them as nested `reasoning.effort`. Custom bases, other APIs and open (`any`) declarations receive no guessed extended mappings. Existing user mappings and null exclusions are preserved; other bindings receive no guessed mappings. Isolated macOS Pi 1.4.0 checks confirm the extended menu, runtime selection, saved per-model defaults and same-ID Provider isolation. Returning to a model reloads its saved thinking level rather than retaining a temporary selection; four installed-SDK payload samples confirm the new Chat mappings before network access, while real Provider acceptance remains unverified. No request-tuning editor or new Provider model fields are added. Grok previews identify context-capacity source/write state and map declared image capability to the native `vision` flag without displaying unknown native shapes; Grok effort-array injection follows the preservation rules above.

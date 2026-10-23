@@ -1073,7 +1073,13 @@
             "providerModel": "{{provider}} · {{model}}"
         },
         "skillPanel": {
-            "empty": "即将在技能模块管理；此处稍后显示只读状态。"
+            "empty": "尚未向此 Pi agent 目录部署 vibemate 管理的技能。请在技能模块中部署。",
+            "unsupported": "此 Agent 的技能部署尚未实现。",
+            "loading": "正在读取技能部署…",
+            "desktopRequired": "查看技能部署状态需要桌面应用。",
+            "listLabel": "已部署的技能",
+            "rowSummary": "{{name}} · {{mode}} · {{sync}}",
+            "openSkills": "打开技能模块"
         },
         "mcpPanel": {
             "empty": "即将在 MCP 模块管理；此处稍后显示只读状态。"
@@ -1139,7 +1145,34 @@
         "sourceSaved": "来源已保存。",
         "reload": "重新载入列表",
         "reloadUnknown": "结果未知。请重新载入列表后再做其他修改。",
-        "notDeployed": "已支持从远程来源安装；自动更新与向 Agent 部署尚未实现。",
+        "notDeployed": "打开技能详情页即可部署到 Pi。",
+        "deploy": {
+            "title": "部署到 Pi",
+            "loading": "正在检查 Pi 技能目录…",
+            "desktopRequired": "部署技能需要桌面应用。",
+            "target": "目标路径",
+            "targetState": "目标状态",
+            "mode": "链接方式",
+            "modeSymlink": "符号链接",
+            "modeCopy": "复制",
+            "symlinkUnavailable": "当前系统无法在此创建目录符号链接。请选择复制以继续。",
+            "foreignHint": "该名称已被 vibemate 未管理的内容占用，不会覆盖。",
+            "apply": "部署到 Pi",
+            "applying": "正在部署…",
+            "none": "尚未部署到 Pi。",
+            "listLabel": "当前 Pi 部署",
+            "agentPi": "Pi",
+            "rowSummary": "{{agent}} · {{mode}} · 修订 {{revision}} · {{sync}}",
+            "inSync": "已同步",
+            "outOfSync": "已被外部修改",
+            "disable": "从 Pi 移除",
+            "states": {
+                "absent": "空闲 — 可以部署",
+                "owned_symlink": "vibemate 符号链接",
+                "owned_copy": "vibemate 副本",
+                "foreign": "非托管内容"
+            }
+        },
         "sourceTitle": "技能来源",
         "urlLabel": "来源地址",
         "urlPlaceholder": "https://github.com/example/skills",
@@ -1227,6 +1260,12 @@
             "invalid_stored_skill": "已保存的技能元数据无效，未做修改。",
             "outcome_unknown": "结果未知。请重新载入列表后再做其他修改。",
             "operation_failed": "技能库暂时不可用。",
+            "skill_in_use": "该技能仍部署在某个 Agent 上，请先移除部署。",
+            "agent_location_unavailable": "无法解析 Pi 的 agent 目录。",
+            "target_conflict": "部署目标已被非托管路径占用。",
+            "target_changed": "预览之后目标已变化，请重新载入后再试。",
+            "symlink_unavailable": "此处无法创建符号链接，请改用复制。",
+            "deploy_mode_invalid": "当前目标不允许该部署方式。",
             "desktop_required": "该操作需要桌面应用。",
             "invalid_response": "桌面应用返回了意外的响应。"
         }

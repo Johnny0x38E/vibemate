@@ -34,6 +34,12 @@ const SKILL_CODES = [
     "invalid_stored_skill",
     "outcome_unknown",
     "operation_failed",
+    "skill_in_use",
+    "agent_location_unavailable",
+    "target_conflict",
+    "target_changed",
+    "symlink_unavailable",
+    "deploy_mode_invalid",
 ] as const;
 /** Sanitized domain, preview or response-validation failure. */
 export type SkillErrorCode =
@@ -626,4 +632,260 @@ export async function deleteSkill(request: {
 export async function cleanupDeletedSkillCopies(): Promise<boolean> {
     desktop();
     return boolean(await call("cleanup_deleted_skill_copies", {}));
+}
+
+/** How a skill is linked into an Agent skills directory. */
+export type SkillDeployMode = "symlink" | "copy";
+/** Filesystem classification of the deploy target at preview time. */
+export type SkillDeployTargetState =
+    "absent" | "owned_symlink" | "owned_copy" | "foreign";
+/** Preview of deploying one skill into Pi's user skills directory. */
+export interface PiSkillDeployPreview {
+    skillId: string;
+    skillName: string;
+    skillRevision: number;
+    contentDigest: string;
+    configRoot: string;
+    targetPath: string;
+    targetName: string;
+    targetState: SkillDeployTargetState;
+    symlinkAvailable: boolean;
+    suggestedMode: SkillDeployMode;
+    canApply: boolean;
+}
+/** Result of applying a reviewed Pi skill deployment. */
+export interface PiSkillDeployed {
+    skillId: string;
+    skillName: string;
+    skillRevision: number;
+    mode: SkillDeployMode;
+    targetPath: string;
+}
+/** Outcome of disabling a Pi skill deployment. */
+export interface PiSkillDeployDisabled {
+    skillId: string;
+    targetPath: string;
+    targetRemoved: boolean;
+    leftForeign: boolean;
+}
+/** One recorded skill deployment for an Agent configuration root. */
+export interface SkillDeploymentRecord {
+    skillId: string;
+    skillName: string;
+    agentId: string;
+    configRoot: string;
+    mode: SkillDeployMode;
+    skillRevision: number;
+    contentDigest: string;
+    inSync: boolean;
+    deployedAtMs: number;
+}
+
+const DEPLOY_MODES = ["symlink", "copy"] as const;
+const TARGET_STATES = [
+    "absent",
+    "owned_symlink",
+    "owned_copy",
+    "foreign",
+] as const;
+
+function deployMode(value: unknown): SkillDeployMode {
+    const text = string(value);
+    const known = DEPLOY_MODES.find((mode) => mode === text);
+    if (known === undefined) invalid();
+    return known;
+}
+
+function targetState(value: unknown): SkillDeployTargetState {
+    const text = string(value);
+    const known = TARGET_STATES.find((state) => state === text);
+    if (known === undefined) invalid();
+    return known;
+}
+
+function deployPreview(value: unknown): PiSkillDeployPreview {
+    const data = object(value, [
+        "skillId",
+        "skillName",
+        "skillRevision",
+        "contentDigest",
+        "configRoot",
+        "targetPath",
+        "targetName",
+        "targetState",
+        "symlinkAvailable",
+        "suggestedMode",
+        "canApply",
+    ]);
+    const skillId = string(data["skillId"]);
+    const skillName = string(data["skillName"]);
+    const contentDigest = string(data["contentDigest"]);
+    const configRoot = string(data["configRoot"]);
+    const targetPath = string(data["targetPath"]);
+    const targetName = string(data["targetName"]);
+    if (
+        !ID_PATTERN.test(skillId) ||
+        !NAME_PATTERN.test(skillName) ||
+        !DIGEST_PATTERN.test(contentDigest) ||
+        targetName !== skillName ||
+        hasControlCharacter(configRoot) ||
+        hasControlCharacter(targetPath) ||
+        configRoot.trim() === "" ||
+        targetPath.trim() === ""
+    )
+        invalid();
+    return {
+        skillId,
+        skillName,
+        skillRevision: integer(data["skillRevision"], 1),
+        contentDigest,
+        configRoot,
+        targetPath,
+        targetName,
+        targetState: targetState(data["targetState"]),
+        symlinkAvailable: boolean(data["symlinkAvailable"]),
+        suggestedMode: deployMode(data["suggestedMode"]),
+        canApply: boolean(data["canApply"]),
+    };
+}
+
+function deploymentRecord(value: unknown): SkillDeploymentRecord {
+    const data = object(value, [
+        "skillId",
+        "skillName",
+        "agentId",
+        "configRoot",
+        "mode",
+        "skillRevision",
+        "contentDigest",
+        "inSync",
+        "deployedAtMs",
+    ]);
+    const skillId = string(data["skillId"]);
+    const skillName = string(data["skillName"]);
+    const agentId = string(data["agentId"]);
+    const configRoot = string(data["configRoot"]);
+    const contentDigest = string(data["contentDigest"]);
+    if (
+        !ID_PATTERN.test(skillId) ||
+        !NAME_PATTERN.test(skillName) ||
+        agentId !== "pi" ||
+        !DIGEST_PATTERN.test(contentDigest) ||
+        hasControlCharacter(configRoot) ||
+        configRoot.trim() === ""
+    )
+        invalid();
+    return {
+        skillId,
+        skillName,
+        agentId,
+        configRoot,
+        mode: deployMode(data["mode"]),
+        skillRevision: integer(data["skillRevision"], 1),
+        contentDigest,
+        inSync: boolean(data["inSync"]),
+        deployedAtMs: integer(data["deployedAtMs"], 0),
+    };
+}
+
+/**
+ * Preview deploying one library skill into Pi. Browser mode reports that the
+ * desktop app is required; it never invents a successful path.
+ */
+export async function previewPiSkillDeploy(
+    skillId: string,
+): Promise<
+    { kind: "preview" } | { kind: "desktop"; preview: PiSkillDeployPreview }
+> {
+    if (!isTauri()) return { kind: "preview" };
+    const preview = deployPreview(
+        await call("preview_pi_skill_deploy", { skillId }),
+    );
+    if (preview.skillId !== skillId) invalid();
+    return { kind: "desktop", preview };
+}
+
+/** Apply a reviewed Pi skill deployment. */
+export async function applyPiSkillDeploy(input: {
+    skillId: string;
+    expectedSkillRevision: number;
+    configRoot: string;
+    mode: SkillDeployMode;
+    targetState: SkillDeployTargetState;
+}): Promise<PiSkillDeployed> {
+    desktop();
+    const data = object(
+        await call("apply_pi_skill_deploy", { reviewed: input }),
+        ["skillId", "skillName", "skillRevision", "mode", "targetPath"],
+    );
+    const skillId = string(data["skillId"]);
+    const skillName = string(data["skillName"]);
+    const targetPath = string(data["targetPath"]);
+    if (
+        skillId !== input.skillId ||
+        !NAME_PATTERN.test(skillName) ||
+        hasControlCharacter(targetPath) ||
+        targetPath.trim() === ""
+    )
+        invalid();
+    return {
+        skillId,
+        skillName,
+        skillRevision: integer(data["skillRevision"], 1),
+        mode: deployMode(data["mode"]),
+        targetPath,
+    };
+}
+
+/** Revoke one vibemate-managed Pi skill deployment. */
+export async function disablePiSkillDeploy(input: {
+    skillId: string;
+    configRoot: string;
+}): Promise<PiSkillDeployDisabled> {
+    desktop();
+    const data = object(
+        await call("disable_pi_skill_deploy", { request: input }),
+        ["skillId", "targetPath", "targetRemoved", "leftForeign"],
+    );
+    const skillId = string(data["skillId"]);
+    const targetPath = string(data["targetPath"]);
+    if (
+        skillId !== input.skillId ||
+        hasControlCharacter(targetPath) ||
+        targetPath.trim() === ""
+    )
+        invalid();
+    return {
+        skillId,
+        targetPath,
+        targetRemoved: boolean(data["targetRemoved"]),
+        leftForeign: boolean(data["leftForeign"]),
+    };
+}
+
+/** List deployments for the resolved Pi agent directory. */
+export async function listPiSkillDeployments(): Promise<
+    { kind: "preview" } | { kind: "desktop"; items: SkillDeploymentRecord[] }
+> {
+    if (!isTauri()) return { kind: "preview" };
+    const data = await call("list_pi_skill_deployments", {});
+    if (!Array.isArray(data)) invalid();
+    return {
+        kind: "desktop",
+        items: data.map((value: unknown) => deploymentRecord(value)),
+    };
+}
+
+/** List deployments recorded for one central skill. */
+export async function listSkillDeployments(
+    skillId: string,
+): Promise<
+    { kind: "preview" } | { kind: "desktop"; items: SkillDeploymentRecord[] }
+> {
+    if (!isTauri()) return { kind: "preview" };
+    const data = await call("list_skill_deployments", { skillId });
+    if (!Array.isArray(data)) invalid();
+    const items = data.map((value: unknown) => deploymentRecord(value));
+    if (items.some((row) => row.skillId !== skillId)) invalid();
+    return { kind: "desktop", items };
 }

@@ -295,3 +295,26 @@
 .segments {
     margin: 0 0 4px;
 }
+
+.skillPanel {
+    display: grid;
+    gap: var(--space-md);
+    justify-items: start;
+}
+
+.skillDeployList {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: var(--space-sm);
+    width: 100%;
+}
+
+.skillDeployRow {
+    margin: 0;
+    color: var(--color-summary);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}

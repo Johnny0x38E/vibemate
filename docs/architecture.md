@@ -107,8 +107,9 @@ unapplied request or claim a successful provider request. When the effective
 running-session state is unknown, show that next to the enabled configuration.
 
 Agent adapters translate a switch into the verified native operation. Every
-mutation uses preview, concurrent-change checks, backups and rollback. Skill and
-MCP deployment are not implemented yet; see [plans/todo.md](plans/todo.md).
+mutation uses preview, concurrent-change checks, backups and rollback. Skill
+deployment to Pi is implemented; MCP deployment and Skill deployment to other
+Agents are not yet; see [plans/todo.md](plans/todo.md).
 
 ## Planned boundaries
 

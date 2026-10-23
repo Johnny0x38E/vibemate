@@ -11,6 +11,7 @@ import { DetailFact, DetailPanel } from "../../components/DetailForm";
 import { EditFormRow } from "../../components/EditFormRow";
 import { FieldSelect } from "../../components/FieldSelect";
 import { skillSource } from "./skillSource";
+import { SkillDeployPanel } from "./SkillDeployPanel";
 import { ProviderPage } from "../providers/ProviderPage";
 import { SecondaryPageActions } from "../../components/SecondaryPageActions";
 import {
@@ -100,9 +101,10 @@ export function SkillDetail({
         record.fetchMethod,
     );
     const [state, setState] = useState<FormState>({ kind: "idle" });
+    const [deployBusy, setDeployBusy] = useState(false);
     const active = useRef(true);
     const mutationPending = useRef(false);
-    const busy = state.kind === "saving";
+    const busy = state.kind === "saving" || deployBusy;
     const size = formatSize(record.byteSize, i18n.language);
     const source = skillSource(record);
     const sourceText =
@@ -141,12 +143,13 @@ export function SkillDetail({
     useEffect(() => {
         onNavigationBlockedChange?.(
             state.kind === "saving" ||
+                deployBusy ||
                 (state.kind === "error" && state.uncertain),
         );
         return () => {
             onNavigationBlockedChange?.(false);
         };
-    }, [onNavigationBlockedChange, state]);
+    }, [onNavigationBlockedChange, state, deployBusy]);
     async function submit(event: SubmitEvent<HTMLFormElement>): Promise<void> {
         event.preventDefault();
         if (busy || mutationPending.current || formBlocked) return;
@@ -243,6 +246,10 @@ export function SkillDetail({
                         value={date(record.updatedAtMs)}
                     />
                 </DetailPanel>
+                <SkillDeployPanel
+                    record={record}
+                    onBusyChange={setDeployBusy}
+                />
                 <form
                     className={styles["sourceForm"]}
                     id={formId}
@@ -384,7 +391,6 @@ export function SkillDetail({
                             )}
                         </>
                     )}
-                    <p className={styles["hint"]}>{t("skills.notDeployed")}</p>
                     <SecondaryPageActions>
                         <div className={styles["sourceActions"]}>
                             {state.kind === "error" && state.uncertain && (

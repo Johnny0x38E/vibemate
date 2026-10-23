@@ -18,8 +18,10 @@ import {
     getSkill,
     importSkillFolder,
     installSkill,
+    listSkillDeployments,
     listSkills,
     pickSkillFolder,
+    previewPiSkillDeploy,
     previewSkillInstall,
     setSkillSource,
     SkillRequestError,
@@ -40,6 +42,8 @@ vi.mock(import("../../lib/desktop/skills"), async (importOriginal) => ({
     setSkillSource: vi.fn(),
     deleteSkill: vi.fn(),
     cleanupDeletedSkillCopies: vi.fn(),
+    previewPiSkillDeploy: vi.fn(),
+    listSkillDeployments: vi.fn(),
 }));
 const list = vi.mocked(listSkills);
 const get = vi.mocked(getSkill);
@@ -50,6 +54,8 @@ const install = vi.mocked(installSkill);
 const save = vi.mocked(setSkillSource);
 const remove = vi.mocked(deleteSkill);
 const removeCopies = vi.mocked(cleanupDeletedSkillCopies);
+const previewDeploy = vi.mocked(previewPiSkillDeploy);
+const listDeployments = vi.mocked(listSkillDeployments);
 
 const ID = "0123456789abcdef0123456789abcdef";
 const row: SkillRecord = {
@@ -154,6 +160,8 @@ beforeEach(() => {
         preview: gitPreview,
     });
     install.mockReset().mockResolvedValue(gitReport);
+    previewDeploy.mockReset().mockResolvedValue({ kind: "preview" });
+    listDeployments.mockReset().mockResolvedValue({ kind: "preview" });
     save.mockReset().mockResolvedValue({
         ...row,
         sourceUrl: "https://example.com/skills",
@@ -205,9 +213,7 @@ test("the detail page shows the imported facts", async () => {
     expect(screen.getByText("Imported from")).toBeDefined();
     expect(screen.getByText("Last change")).toBeDefined();
     expect(
-        screen.getByText(
-            "Remote installation is available. Automatic updates and deployment to an agent are not implemented yet.",
-        ),
+        await screen.findByText("Deploying a skill needs the desktop app."),
     ).toBeDefined();
 });
 

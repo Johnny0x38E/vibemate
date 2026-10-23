@@ -3,6 +3,7 @@
 //! Importing never runs a skill command and never changes the source directory,
 //! and deleting removes only the managed copy and its record.
 
+mod deploy;
 mod install;
 mod manifest;
 mod repository;
@@ -10,14 +11,20 @@ mod service;
 mod types;
 mod validation;
 
+pub use deploy::{
+    apply_pi_skill_deploy, disable_pi_skill_deploy, list_pi_skill_deployments,
+    list_skill_deployments, preview_pi_skill_deploy,
+};
 pub use install::{install_skill, preview_skill_install};
 pub use repository::{get_skill, list_skills};
 pub use service::{cleanup_deleted_skill_copies, delete_skill, import_folder, set_skill_source};
 pub use types::{
-    DeleteSkillRequest, DeletedSkill, FetchMethod, GitInstallSource, ImportFolderReport,
-    ImportFolderRequest, NpxInstallSource, PickedFolder, SetSkillSourceRequest, SkillError,
-    SkillInstallPreview, SkillInstallReport, SkillInstallSource, SkillPage, SkillRecord,
-    SkippedSkill,
+    DeleteSkillRequest, DeletedSkill, DisablePiSkillDeployRequest, FetchMethod, GitInstallSource,
+    ImportFolderReport, ImportFolderRequest, NpxInstallSource, PiSkillDeployDisabled,
+    PiSkillDeployPreview, PiSkillDeployed, PickedFolder, ReviewedPiSkillDeploy,
+    SetSkillSourceRequest, SkillDeployMode, SkillDeployTargetState, SkillDeploymentRecord,
+    SkillError, SkillInstallPreview, SkillInstallReport, SkillInstallSource, SkillPage,
+    SkillRecord, SkippedSkill,
 };
 
 use std::path::PathBuf;

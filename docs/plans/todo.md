@@ -11,9 +11,10 @@
 3. 六 Agent 固定目录、只读发现、显式与自动版本读取已交付并通过验收（2026-10-13）。
 4. 维护者已确认 H1/H3 桌面目视验收通过；H3 已完成，H1 的 Windows/Linux 原生分页验证仍随 P37 跟踪。
 5. P24.c 首批（每模型思考档位，以及 Pi 计划中的模型设置行）已在本机完成代码与自动化检查，待维护者桌面验收；本机 Pi 已升级至 1.4.0，2026-10-22 复核所用字段与档位规则未变。
-6. P26 已交付：Git 固定修订与已核实的 `skills@1.7.4` npx 安装均在隔离目录获取并导入，失败不改变已有库；来源页可补记获取方式。P27–P30 待做。
-7. 下一条业务主线按 P24 剩余项 → Skill 更新/部署（P27–P30）→ MCP 部署 → P35 引用约束的顺序推进；见 [phase-1](phase-1.md)。
+6. P26 已交付：Git 固定修订与已核实的 `skills@1.7.4` npx 安装均在隔离目录获取并导入，失败不改变已有库；来源页可补记获取方式。
+7. P27 已交付：向 Pi `<agent-dir>/skills/<name>/` 部署（symlink 优先、显式 copy-sync、所有权、禁用只撤托管目标、删除 `skill_in_use`、Agent Skill 只读槽）。P28–P30 待做。
 8. P24.d 首批已合入本机：Grok Build 只在原生字段缺失时写入已声明的 `reasoning_efforts` 列表与列表内默认档；已有数组、旧字段和全局默认保持不变；隔离 macOS Chat/Responses 已确认原生菜单、列表默认档与运行中选择更新，本地 stub 已核实 backend 字段/默认档及运行中切档后的下一请求；Grok 自身将选用值全局持久化并供新会话读取，真实 Provider 接受仍待验证。
+9. 下一条业务主线按 P24 剩余项 → Skill 更新/部署（P28–P30）→ MCP 部署 → P35 引用约束的顺序推进；见 [phase-1](phase-1.md)。
 
 ## 文档整理（2026-10-19）
 
@@ -57,6 +58,7 @@
 | BR0–BR5         | 命令、Provider/MCP、Models/Fetch 与共享校验拆分                                      | [backend-modularity](backend-modularity.md)                                                |
 | P25 / P31       | 中央 Skill 库与本地导入/删除；中央 MCP 定义与删除                                    | [skills](../skills.md)、[mcp](../mcp.md)                                                   |
 | P26             | Git 固定修订与已核实 npx 安装器；隔离获取、命令确认、来源/获取方式记录               | [skills](../skills.md)                                                                     |
+| P27             | 向 Pi 部署 Skill：预览、symlink/copy-sync、所有权、禁用、Agent 只读槽                | [skills](../skills.md)、[Pi](../integrations/pi.md)                                        |
 
 P15 的真实连接记录来自维护者确认，不代表代理重新执行，也不补写未提供的模型、协议或套餐细节。
 
@@ -224,14 +226,16 @@ P24.b = Claude Code；P24.c = Pi；P24.d = Grok Build。服务商模型是唯一
 
 ### Task P27: 向 Pi 部署 Skill
 
+**状态：** 已完成（代码与自动化检查）。真实 Pi `/reload`、维护者桌面目视与 Windows/Linux 原生验证仍未完成。
+
 **Acceptance criteria:**
 
-- [ ] 预览新增/冲突与目标路径，symlink 优先；不可用时让用户选择 copy-sync。
-- [ ] 保留同名用户内容，记录所有权；禁用只撤销自己管理的目标。
-- [ ] 报告目标已同步的 revision，失败可恢复，不把部分部署显示为整体成功。
-- [ ] 在 Agent 详情汇总区添加 Skill 只读槽位（部署状态 + 跳转技能模块）。
+- [x] 预览新增/冲突与目标路径，symlink 优先；不可用时让用户选择 copy-sync。
+- [x] 保留同名用户内容，记录所有权；禁用只撤销自己管理的目标。
+- [x] 报告目标已同步的 revision，失败可恢复，不把部分部署显示为整体成功。
+- [x] 在 Agent 详情汇总区添加 Skill 只读槽位（部署状态 + 跳转技能模块）。
 
-**Verification:** Rust 临时目录/链接/复制测试与部署 UI 测试；本机 Pi 能发现测试 Skill，卸载不损害已有内容。
+**Verification:** Rust 658 项通过、4 项忽略（含 9 项部署：symlink/copy、foreign 冲突、owned 撤销、过期审批、`skill_in_use`）；fmt/Clippy `-D warnings` 与 `check:frontend`（1123 项 UI 测试）通过。真实 Pi `/reload`、维护者桌面目视与 Windows/Linux 仍随发布前专项。
 
 **Dependencies:** P02,P19,P25。
 

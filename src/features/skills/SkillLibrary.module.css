@@ -177,6 +177,30 @@
     gap: var(--space-sm);
 }
 
+.deployActions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: var(--space-sm);
+    margin-top: var(--space-sm);
+}
+
+.deployList {
+    margin: var(--space-sm) 0 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: var(--space-sm);
+}
+
+.deployRow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-sm);
+}
+
 .factValue {
     margin: 0;
     color: var(--color-summary);

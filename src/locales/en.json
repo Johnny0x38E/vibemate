@@ -1073,7 +1073,13 @@
             "providerModel": "{{provider}} · {{model}}"
         },
         "skillPanel": {
-            "empty": "Managed in the Skills module soon; a read-only status will appear here later."
+            "empty": "No vibemate-managed skills are deployed to this Pi agent directory yet. Deploy from the Skills module.",
+            "unsupported": "Skill deployment for this agent is not implemented yet.",
+            "loading": "Reading skill deployments…",
+            "desktopRequired": "Skill deployment status needs the desktop app.",
+            "listLabel": "Deployed skills",
+            "rowSummary": "{{name}} · {{mode}} · {{sync}}",
+            "openSkills": "Open Skills"
         },
         "mcpPanel": {
             "empty": "Managed in the MCP module soon; a read-only status will appear here later."
@@ -1139,7 +1145,34 @@
         "sourceSaved": "Source saved.",
         "reload": "Reload list",
         "reloadUnknown": "The result is unknown. Reload the list before another change.",
-        "notDeployed": "Remote installation is available. Automatic updates and deployment to an agent are not implemented yet.",
+        "notDeployed": "Open a skill's detail page to deploy it to Pi.",
+        "deploy": {
+            "title": "Deploy to Pi",
+            "loading": "Checking the Pi skills directory…",
+            "desktopRequired": "Deploying a skill needs the desktop app.",
+            "target": "Target path",
+            "targetState": "Target status",
+            "mode": "Link mode",
+            "modeSymlink": "Symbolic link",
+            "modeCopy": "Copy",
+            "symlinkUnavailable": "This system cannot create a directory symlink here. Choose copy to continue.",
+            "foreignHint": "A path that vibemate does not manage already occupies this name. It will not be overwritten.",
+            "apply": "Deploy to Pi",
+            "applying": "Deploying…",
+            "none": "Not deployed to Pi yet.",
+            "listLabel": "Current Pi deployments",
+            "agentPi": "Pi",
+            "rowSummary": "{{agent}} · {{mode}} · revision {{revision}} · {{sync}}",
+            "inSync": "in sync",
+            "outOfSync": "changed outside vibemate",
+            "disable": "Remove from Pi",
+            "states": {
+                "absent": "Empty — ready to deploy",
+                "owned_symlink": "vibemate symlink",
+                "owned_copy": "vibemate copy",
+                "foreign": "Unmanaged content"
+            }
+        },
         "sourceTitle": "Skill source",
         "urlLabel": "Source address",
         "urlPlaceholder": "https://github.com/example/skills",
@@ -1227,6 +1260,12 @@
             "invalid_stored_skill": "Stored skill metadata is invalid and was left unchanged.",
             "outcome_unknown": "The result is unknown. Reload the list before another change.",
             "operation_failed": "The skill library is temporarily unavailable.",
+            "skill_in_use": "This skill is still deployed to an agent. Remove the deployment first.",
+            "agent_location_unavailable": "Pi's agent directory could not be resolved.",
+            "target_conflict": "An unmanaged path already occupies the deploy target.",
+            "target_changed": "The deploy target changed after the preview. Reload and try again.",
+            "symlink_unavailable": "A symbolic link cannot be created here. Choose copy instead.",
+            "deploy_mode_invalid": "That deploy mode is not allowed for this target.",
             "desktop_required": "This action needs the desktop app.",
             "invalid_response": "The desktop app returned an unexpected response."
         }

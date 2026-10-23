@@ -373,6 +373,11 @@ pub fn delete_skill(
     if request.expected_revision < 1 {
         return Err(SkillError::InvalidRequest);
     }
+    // Deployment relationships block deletion until the user revokes them; P35
+    // will add richer reference UI, but the files must not vanish while linked.
+    if super::deploy::skill_has_deployments(storage, &request.id)? {
+        return Err(SkillError::SkillInUse);
+    }
     let root = library.root();
     let target = root.join(&request.id);
     let parked = root.join(format!("{PARKED_PREFIX}{}", request.id));
@@ -443,6 +448,30 @@ pub fn cleanup_deleted_skill_copies(
         }
     }
     Ok(unremovable == 0)
+}
+
+/// Digest the planned files without writing, using the same stream as import.
+///
+/// Used by skill deployment to verify an owned copy still matches the recorded
+/// content digest. Symbolic links inside the tree are refused by inspection.
+///
+/// # Errors
+/// Reports an unreadable source file and a source that changed after inspection.
+pub(super) fn digest_tree(source: &Path, plan: &SourcePlan) -> Result<String, SkillError> {
+    let mut hasher = Sha256::new();
+    hasher.update(DIGEST_DOMAIN);
+    for file in &plan.files {
+        let bytes =
+            fs::read(source.join(&file.relative)).map_err(|_| SkillError::SourceNotFound)?;
+        if bytes.len() as u64 != file.size {
+            return Err(SkillError::SourceChanged);
+        }
+        hasher.update((file.relative.len() as u64).to_be_bytes());
+        hasher.update(file.relative.as_bytes());
+        hasher.update((bytes.len() as u64).to_be_bytes());
+        hasher.update(&bytes);
+    }
+    Ok(format!("{:x}", hasher.finalize()))
 }
 
 /// Copy the planned files and return the digest of exactly those bytes.

@@ -66,6 +66,18 @@ pub(crate) fn claude_config_root(
     )
 }
 
+/// Pi's agent directory: `PI_CODING_AGENT_DIR` when set and usable, then
+/// `<home>/.pi/agent`. Skill deployment writes under `<root>/skills/`.
+pub(crate) fn pi_config_root(
+    environment: &DiscoveryEnvironment,
+) -> (Option<PathBuf>, DirectorySource) {
+    config_directory(
+        &environment.home,
+        environment.pi_directory.as_ref(),
+        ".pi/agent",
+    )
+}
+
 fn file_state(path: &Path) -> FileState {
     match fs::metadata(path) {
         Ok(metadata) if metadata.is_file() => FileState::Present,

@@ -36,7 +36,12 @@ vi.mock(import("../../lib/desktop/history"), async (original) => ({
     ...(await original()),
     readConfigurationHistory: vi.fn(),
 }));
+vi.mock(import("../../lib/desktop/skills"), async (original) => ({
+    ...(await original()),
+    listPiSkillDeployments: vi.fn(),
+}));
 import { readConfigurationHistory } from "../../lib/desktop/history";
+import { listPiSkillDeployments } from "../../lib/desktop/skills";
 const probe = vi.mocked(probeAgentVersion);
 const pi: AgentObservation = {
     id: "pi",
@@ -75,10 +80,12 @@ const result: DiscoveryResult = {
 };
 const read = vi.mocked(discoverAgents);
 const loadHistory = vi.mocked(readConfigurationHistory);
+const listDeployments = vi.mocked(listPiSkillDeployments);
 beforeEach(() => {
     read.mockReset().mockResolvedValue(result);
     probe.mockReset();
     loadHistory.mockReset().mockResolvedValue({ kind: "preview" });
+    listDeployments.mockReset().mockResolvedValue({ kind: "preview" });
 });
 afterEach(cleanup);
 async function mount(locale: "en" | "zh-CN" = "en") {

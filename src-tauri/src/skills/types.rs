@@ -70,6 +70,18 @@ pub enum SkillError {
     OutcomeUnknown,
     /// A worker task failed, possibly after a change; reload first.
     OperationFailed,
+    /// The skill still has an Agent deployment; revoke it before deleting.
+    SkillInUse,
+    /// The Agent configuration root cannot be resolved or written.
+    AgentLocationUnavailable,
+    /// An unmanaged path already occupies the deploy target.
+    TargetConflict,
+    /// The target changed after the preview the user reviewed.
+    TargetChanged,
+    /// Symlink mode was requested but the platform cannot create one here.
+    SymlinkUnavailable,
+    /// The requested deploy mode is not allowed for this preview.
+    DeployModeInvalid,
 }
 
 /// Import the skills inside one chosen folder.
@@ -294,4 +306,136 @@ pub struct SkillPage {
     /// How many skills the library holds in total, so a count stays correct
     /// without reading every page.
     pub total: i64,
+}
+
+/// How a skill is linked into an Agent skills directory.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SkillDeployMode {
+    /// Directory symlink to the managed library copy.
+    Symlink,
+    /// Independent directory copy of the managed content.
+    Copy,
+}
+
+/// Filesystem classification of the deploy target at preview time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SkillDeployTargetState {
+    /// No file or directory at the target path.
+    Absent,
+    /// Vibemate-owned symlink to the current managed copy.
+    OwnedSymlink,
+    /// Vibemate-owned directory copy of the managed content.
+    OwnedCopy,
+    /// An unmanaged path occupies the target; vibemate will not overwrite it.
+    Foreign,
+}
+
+/// Preview of deploying one central skill into Pi's user skills directory.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PiSkillDeployPreview {
+    /// Central skill identity.
+    pub skill_id: String,
+    /// Skill name used as the target directory name.
+    pub skill_name: String,
+    /// Current library revision the preview was built from.
+    pub skill_revision: i64,
+    /// Content digest that would be recorded on apply.
+    pub content_digest: String,
+    /// Absolute Pi agent directory used for this preview.
+    pub config_root: String,
+    /// Absolute target path under `<config_root>/skills/<name>/`.
+    pub target_path: String,
+    /// Directory name under `skills/`, equal to `skill_name`.
+    pub target_name: String,
+    /// What currently occupies the target path.
+    pub target_state: SkillDeployTargetState,
+    /// Whether a directory symlink can be created under the skills parent.
+    pub symlink_available: bool,
+    /// Preferred mode when apply is allowed: symlink when available, else copy.
+    pub suggested_mode: SkillDeployMode,
+    /// False when the target is foreign or the agent root is unusable.
+    pub can_apply: bool,
+}
+
+/// Tokens from a reviewed Pi skill deploy preview.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ReviewedPiSkillDeploy {
+    /// Central skill identity the preview named.
+    pub skill_id: String,
+    /// Library revision the user reviewed.
+    pub expected_skill_revision: i64,
+    /// Absolute Pi agent directory from the preview.
+    pub config_root: String,
+    /// Deploy mode the user confirmed.
+    pub mode: SkillDeployMode,
+    /// Target classification the preview reported.
+    pub target_state: SkillDeployTargetState,
+}
+
+/// Result of applying a reviewed Pi skill deployment.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PiSkillDeployed {
+    /// Central skill identity.
+    pub skill_id: String,
+    /// Skill name at the target.
+    pub skill_name: String,
+    /// Library revision recorded with the deployment.
+    pub skill_revision: i64,
+    /// Mode that was written.
+    pub mode: SkillDeployMode,
+    /// Absolute target path that was created or replaced.
+    pub target_path: String,
+}
+
+/// Request to revoke one vibemate-managed Pi skill deployment.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DisablePiSkillDeployRequest {
+    /// Central skill identity.
+    pub skill_id: String,
+    /// Absolute Pi agent directory that holds the deployment.
+    pub config_root: String,
+}
+
+/// Outcome of disabling a Pi skill deployment.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PiSkillDeployDisabled {
+    /// Central skill identity.
+    pub skill_id: String,
+    /// Absolute target path that was reviewed.
+    pub target_path: String,
+    /// Whether the managed filesystem target was removed.
+    pub target_removed: bool,
+    /// True when the path no longer matched ownership and was left alone.
+    pub left_foreign: bool,
+}
+
+/// One recorded skill deployment for an Agent configuration root.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillDeploymentRecord {
+    /// Central skill identity.
+    pub skill_id: String,
+    /// Skill name at deploy time (target directory name).
+    pub skill_name: String,
+    /// Agent identity wire value (`pi`).
+    pub agent_id: String,
+    /// Absolute Agent configuration root.
+    pub config_root: String,
+    /// Deploy mode last applied.
+    pub mode: SkillDeployMode,
+    /// Library revision recorded at apply time.
+    pub skill_revision: i64,
+    /// Content digest recorded at apply time.
+    pub content_digest: String,
+    /// Whether the live target still matches vibemate ownership.
+    pub in_sync: bool,
+    /// Deploy timestamp in Unix milliseconds.
+    pub deployed_at_ms: i64,
 }

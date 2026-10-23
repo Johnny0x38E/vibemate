@@ -212,7 +212,9 @@ beforeEach(() => {
         ],
     });
     previewDeploy.mockReset().mockResolvedValue({ kind: "preview" });
-    listDeployments.mockReset().mockResolvedValue({ kind: "preview" });
+    listDeployments
+        .mockReset()
+        .mockResolvedValue({ kind: "desktop", items: [] });
     save.mockReset().mockResolvedValue({
         ...row,
         sourceUrl: "https://example.com/skills",
@@ -266,6 +268,51 @@ test("the detail page shows the imported facts", async () => {
     expect(
         await screen.findByText("Deploying a skill needs the desktop app."),
     ).toBeDefined();
+});
+
+test("the deploy panel offers Claude Code and previews its own target", async () => {
+    previewDeploy.mockImplementation((agentId) =>
+        Promise.resolve({
+            kind: "desktop" as const,
+            preview: {
+                agentId,
+                skillId: ID,
+                skillName: row.name,
+                skillRevision: row.revision,
+                contentDigest: row.contentDigest,
+                configRoot:
+                    agentId === "claudeCode"
+                        ? "/home/test/.claude"
+                        : "/home/test/pi",
+                targetPath:
+                    agentId === "claudeCode"
+                        ? "/home/test/.claude/skills/demo-skill"
+                        : "/home/test/pi/skills/demo-skill",
+                targetName: row.name,
+                targetState: "absent" as const,
+                symlinkAvailable: true,
+                suggestedMode: "symlink" as const,
+                canApply: true,
+            },
+        }),
+    );
+    listDeployments.mockResolvedValue({ kind: "desktop", items: [] });
+    await setup();
+    fireEvent.click(
+        await screen.findByRole("button", {
+            name: "Open details for demo-skill",
+        }),
+    );
+    const agent = await screen.findByRole("combobox", { name: "Agent" });
+    expect(
+        await screen.findByText("/home/test/pi/skills/demo-skill"),
+    ).toBeDefined();
+
+    await setFieldSelectValue(agent, "claudeCode");
+    expect(
+        await screen.findByText("/home/test/.claude/skills/demo-skill"),
+    ).toBeDefined();
+    expect(previewDeploy).toHaveBeenLastCalledWith("claudeCode", ID);
 });
 
 test("a large skill reports its size in megabytes", async () => {
@@ -544,6 +591,44 @@ test("a skill is deleted only after the confirmation names it", async () => {
         expect(list).toHaveBeenCalledTimes(2);
     });
     expect(screen.queryByRole("heading", { name: "demo-skill" })).toBeNull();
+});
+
+test("a deployed skill lists its references and opens the detail page", async () => {
+    listDeployments.mockResolvedValue({
+        kind: "desktop",
+        items: [
+            {
+                skillId: ID,
+                skillName: row.name,
+                agentId: "claudeCode",
+                configRoot: "/home/test/.claude",
+                mode: "symlink",
+                skillRevision: 1,
+                contentDigest: row.contentDigest,
+                inSync: true,
+                deployedAtMs: 1,
+            },
+        ],
+    });
+    await setup();
+    fireEvent.click(
+        await screen.findByRole("button", { name: "Delete “demo-skill”" }),
+    );
+    expect(
+        await screen.findByText(
+            "Claude Code · Symbolic link · revision 1 · in sync",
+        ),
+    ).toBeDefined();
+    expect(
+        screen
+            .getByRole("button", { name: "Delete" })
+            .getAttribute("aria-disabled"),
+    ).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "Review deployments" }));
+    expect(
+        await screen.findByRole("heading", { level: 1, name: "Skill details" }),
+    ).toBeDefined();
+    expect(remove).not.toHaveBeenCalled();
 });
 
 test("a stale delete confirmation is refused and the list can be reloaded", async () => {

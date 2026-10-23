@@ -11,16 +11,17 @@ mod validation;
 use crate::storage::Storage;
 pub use repository::{get_provider, list_providers};
 pub use service::{
-    create_provider, delete_provider, get_secret_status, replace_provider_secret, update_provider,
+    clear_provider_reference, create_provider, delete_provider, get_secret_status,
+    provider_deletion_impact, replace_provider_secret, update_provider,
     update_provider_with_secret,
 };
 pub use templates::{base_url_for_protocol, provider_templates};
 pub use types::{
-    CreateProviderRequest, DeleteProviderRequest, DeletedProvider, ListProvidersRequest,
-    MAX_BASE_URL_LEN, MAX_DISPLAY_NAME_CHARS, MAX_PAGE_SIZE, ProviderError, ProviderId,
-    ProviderKind, ProviderPage, ProviderProtocol, ProviderRecord, ProviderSecretState,
-    ProviderSecretStatus, ProviderSettings, ProviderTemplate, ReplaceProviderSecretRequest,
-    UpdateProviderRequest,
+    ClearProviderReferenceRequest, CreateProviderRequest, DeleteProviderRequest, DeletedProvider,
+    ListProvidersRequest, MAX_BASE_URL_LEN, MAX_DISPLAY_NAME_CHARS, MAX_PAGE_SIZE,
+    ProviderDeletionImpact, ProviderError, ProviderId, ProviderKind, ProviderPage,
+    ProviderProtocol, ProviderRecord, ProviderSecretState, ProviderSecretStatus, ProviderSettings,
+    ProviderTemplate, ReplaceProviderSecretRequest, UpdateProviderRequest,
 };
 pub use validation::{normalize_base_url, parse_kind, validate_display_name, validate_settings};
 

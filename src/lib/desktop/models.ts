@@ -1,8 +1,10 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import {
     PROVIDER_PROTOCOLS,
+    agentReferences,
     hasExactKeys,
     isObject,
+    type AgentReference,
     type ProviderProtocol,
 } from "./providers";
 
@@ -20,6 +22,7 @@ const RUST_MODEL_ERROR_CODES = [
     "model_parameters_invalid",
     "model_already_exists",
     "model_not_found",
+    "model_in_use",
     "model_changed",
     "model_route_not_supported",
     "operation_failed",
@@ -261,6 +264,26 @@ export interface AddManualModelInput {
 export interface DeleteManualModelInput {
     providerId: string;
     modelId: string;
+}
+
+/** Agent bindings and remembered choices affected by a model deletion. */
+export interface ModelDeletionImpact {
+    providerId: string;
+    modelId: string;
+    references: AgentReference[];
+    /** Claude Code remembered choices removed by the same transaction. */
+    rememberedPreferences: number;
+    /** True only when no binding row blocks deletion. */
+    canDelete: boolean;
+}
+
+/** Request to clear one stale Grok alias binding. */
+export interface ClearModelReferenceInput {
+    providerId: string;
+    modelId: string;
+    agentId: "grokBuild";
+    configRoot: string;
+    label: string;
 }
 
 /** Why a successful fetch could not establish the complete upstream list. */
@@ -725,6 +748,57 @@ export async function deleteManualProviderModel(
         null
     )
         throw invalidResponse();
+}
+
+/** Read the Agent bindings that block deleting one saved model. */
+export async function modelDeletionImpact(
+    providerId: string,
+    modelId: string,
+): Promise<ModelDeletionImpact> {
+    requireDesktop();
+    const data = object(
+        await call("model_deletion_impact", { providerId, modelId }),
+        [
+            "providerId",
+            "modelId",
+            "references",
+            "rememberedPreferences",
+            "canDelete",
+        ],
+    );
+    if (
+        data["providerId"] !== providerId ||
+        data["modelId"] !== modelId ||
+        typeof data["rememberedPreferences"] !== "number" ||
+        !Number.isSafeInteger(data["rememberedPreferences"]) ||
+        data["rememberedPreferences"] < 0 ||
+        typeof data["canDelete"] !== "boolean"
+    ) {
+        throw invalidResponse();
+    }
+    let references: AgentReference[];
+    try {
+        references = agentReferences(data["references"]);
+    } catch {
+        throw invalidResponse();
+    }
+    return {
+        providerId,
+        modelId,
+        references,
+        rememberedPreferences: data["rememberedPreferences"],
+        canDelete: boolean(data["canDelete"]),
+    };
+}
+
+/** Remove one stale Grok alias binding after the Agent file no longer names it. */
+export async function clearModelReference(
+    input: ClearModelReferenceInput,
+): Promise<void> {
+    requireDesktop();
+    if ((await call("clear_model_reference", { request: input })) !== null) {
+        throw invalidResponse();
+    }
 }
 
 /**

@@ -8,6 +8,7 @@ use super::{ModelError, parse_provider_id};
 use crate::model_catalog::{ModelCapabilities, accepted_limit, encode_thinking_effort};
 use crate::model_identity::{RouteSupport, is_valid_model_id, route_support};
 use crate::providers::validate_display_name;
+use crate::references::{self, ReferenceClearError, ReferenceReadError};
 use crate::storage::Storage;
 use rusqlite::{TransactionBehavior, params};
 use std::collections::BTreeSet;
@@ -137,11 +138,115 @@ pub fn add_manual_model(
     Ok(model)
 }
 
+/// List the Grok aliases and live Pi entries that a model deletion affects.
+///
+/// # Errors
+/// `InvalidRequest` for malformed IDs, `NotFound` for an unknown provider,
+/// `ModelNotFound` for an unknown row, and storage or read failures.
+pub fn model_deletion_impact(
+    storage: &Storage,
+    provider_id: &str,
+    model_id: &str,
+) -> Result<ModelDeletionImpact, ModelError> {
+    let provider_id = parse_provider_id(provider_id)?;
+    if !is_valid_model_id(model_id) {
+        return Err(ModelError::InvalidRequest);
+    }
+    {
+        let connection = lock(storage)?;
+        read_provider(&connection, &provider_id)?;
+        read_model(&connection, &provider_id, model_id)?.ok_or(ModelError::ModelNotFound)?;
+    }
+    let references = references::model_references(storage, provider_id.as_str(), model_id)
+        .map_err(map_reference_read)?;
+    let remembered_preferences =
+        references::remembered_preferences(storage, provider_id.as_str(), Some(model_id))
+            .map_err(map_reference_read)?;
+    Ok(ModelDeletionImpact {
+        provider_id: provider_id.as_str().to_owned(),
+        model_id: model_id.to_owned(),
+        can_delete: references.is_empty(),
+        references,
+        remembered_preferences,
+    })
+}
+
+/// Remove one stale Grok alias binding for a Provider/model pair.
+///
+/// The Agent file must already be free of the alias. A live Pi model entry has
+/// no central row and is removed by changing or restoring the Pi configuration.
+///
+/// # Errors
+/// `InvalidRequest` for malformed fields, `NotFound` when the binding is gone,
+/// `ModelInUse` when the Agent file still names it or cannot be read, and
+/// storage failures.
+pub fn clear_model_reference(
+    storage: &Storage,
+    request: ClearModelReferenceRequest,
+) -> Result<(), ModelError> {
+    let provider_id = parse_provider_id(&request.provider_id)?;
+    if !is_valid_model_id(&request.model_id)
+        || request.agent_id != "grokBuild"
+        || !valid_reference_text(&request.config_root, 4096)
+        || !valid_reference_text(&request.label, 4096)
+    {
+        return Err(ModelError::InvalidRequest);
+    }
+    references::clear_model_reference(
+        storage,
+        provider_id.as_str(),
+        &request.model_id,
+        &request.agent_id,
+        &request.config_root,
+        &request.label,
+    )
+    .map_err(map_reference_clear)
+}
+
+fn any_model_reference_blocks(
+    storage: &Storage,
+    provider_id: &str,
+    model_id: &str,
+) -> Result<bool, ModelError> {
+    let references =
+        references::model_references(storage, provider_id, model_id).map_err(map_reference_read)?;
+    if references
+        .iter()
+        .any(|reference| reference.state != references::ReferenceState::Stale)
+    {
+        return Ok(true);
+    }
+    references::model_has_bindings(storage, provider_id, model_id).map_err(map_reference_read)
+}
+
+fn valid_reference_text(value: &str, limit: usize) -> bool {
+    !value.is_empty() && value.len() <= limit && !value.chars().any(char::is_control)
+}
+
+fn map_reference_read(error: ReferenceReadError) -> ModelError {
+    match error {
+        ReferenceReadError::StorageUnavailable => ModelError::StorageUnavailable,
+        ReferenceReadError::ReadFailed => ModelError::ReadFailed,
+    }
+}
+
+fn map_reference_clear(error: ReferenceClearError) -> ModelError {
+    match error {
+        ReferenceClearError::StorageUnavailable => ModelError::StorageUnavailable,
+        ReferenceClearError::ReadFailed => ModelError::ReadFailed,
+        ReferenceClearError::WriteFailed => ModelError::WriteFailed,
+        ReferenceClearError::InvalidRequest => ModelError::InvalidRequest,
+        ReferenceClearError::NotFound => ModelError::NotFound,
+        ReferenceClearError::InUse => ModelError::ModelInUse,
+    }
+}
+
 /// Delete a model that was added by hand.
 ///
 /// # Errors
 /// `ModelNotFound` when no such model exists; `InvalidRequest` when the model was
-/// fetched (fetched rows follow the vendor's list and are never deleted by hand).
+/// fetched (fetched rows follow the vendor's list and are never deleted by hand);
+/// `ModelInUse` while an Agent binding or live Pi entry still names it.
 pub fn delete_manual_model(
     storage: &Storage,
     request: &DeleteManualModelRequest,
@@ -149,6 +254,9 @@ pub fn delete_manual_model(
     let provider_id = parse_provider_id(&request.provider_id)?;
     if !is_valid_model_id(&request.model_id) {
         return Err(ModelError::InvalidRequest);
+    }
+    if any_model_reference_blocks(storage, provider_id.as_str(), &request.model_id)? {
+        return Err(ModelError::ModelInUse);
     }
     let mut connection = lock(storage)?;
     let transaction = connection
@@ -159,6 +267,17 @@ pub fn delete_manual_model(
         .ok_or(ModelError::ModelNotFound)?;
     if stored.source != ModelSource::Manual.as_str() {
         return Err(ModelError::InvalidRequest);
+    }
+    let bindings: i64 = transaction
+        .query_row(
+            "SELECT COUNT(*) FROM grok_model_binding
+             WHERE provider_id = ?1 AND model_id = ?2",
+            params![provider_id.as_str(), request.model_id],
+            |row| row.get(0),
+        )
+        .map_err(|_| ModelError::ReadFailed)?;
+    if bindings > 0 {
+        return Err(ModelError::ModelInUse);
     }
     transaction
         .execute(
@@ -210,12 +329,30 @@ pub fn save_provider_model_selections(
     if remove.is_empty() && request.add.is_empty() {
         return Err(ModelError::InvalidRequest);
     }
+    for model_id in &remove {
+        if any_model_reference_blocks(storage, provider_id.as_str(), model_id)? {
+            return Err(ModelError::ModelInUse);
+        }
+    }
 
     let mut connection = lock(storage)?;
     let transaction = connection
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(|_| ModelError::WriteFailed)?;
     let provider = read_provider(&transaction, &provider_id)?;
+    for model_id in &remove {
+        let bindings: i64 = transaction
+            .query_row(
+                "SELECT COUNT(*) FROM grok_model_binding
+                 WHERE provider_id = ?1 AND model_id = ?2",
+                params![provider_id.as_str(), model_id],
+                |row| row.get(0),
+            )
+            .map_err(|_| ModelError::ReadFailed)?;
+        if bindings > 0 {
+            return Err(ModelError::ModelInUse);
+        }
+    }
 
     for model_id in remove {
         transaction

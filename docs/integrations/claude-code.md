@@ -123,20 +123,23 @@ MCP 服务器按三个作用域存储：
 
 ## Skill 配置
 
-| 位置                                      | 生效范围               |
-| ----------------------------------------- | ---------------------- |
-| `~/.claude/skills/<name>/SKILL.md`        | 本机所有项目（个人级） |
-| `.claude/skills/<name>/SKILL.md`          | 本仓库会话（项目级）   |
-| `<subdir>/.claude/skills/<name>/SKILL.md` | 子目录会话（嵌套）     |
-| 托管设置目录                              | 组织内所有用户         |
-| `<plugin>/skills/<name>/SKILL.md`         | 插件启用处             |
+| 位置                                                   | 生效范围               |
+| ------------------------------------------------------ | ---------------------- |
+| `$CLAUDE_CONFIG_DIR\|~/.claude/skills/<name>/SKILL.md` | 本机所有项目（个人级） |
+| `.claude/skills/<name>/SKILL.md`                       | 本仓库会话（项目级）   |
+| `<subdir>/.claude/skills/<name>/SKILL.md`              | 子目录会话（嵌套）     |
+| 托管设置目录                                           | 组织内所有用户         |
+| `<plugin>/skills/<name>/SKILL.md`                      | 插件启用处             |
 
 同名 skill 优先级：企业级 > 个人级 > 项目级。`<name>` 条目可以是符号链接，
 Claude Code 从目标读取 `SKILL.md` 并去重加载。`~/.claude/skills/synced/` 是
 claude.ai 同步技能的保留目录，不得用于用户技能。
 
-本机观测：`~/.claude/skills/` 存有多个个人技能目录。技能部署（P27）可优先使用
-符号链接，与官方文档的 symlink 支持一致。
+本机 2.1.308 的配置根解析为 `CLAUDE_CONFIG_DIR`，未设置时使用 `~/.claude`；
+个人技能目录是该配置根下的 `skills/`。本机观测：`~/.claude/skills/` 存有多个个人
+技能目录。官方文档明确 `<name>` 条目可以是符号链接，Claude Code 从目标读取
+`SKILL.md`。技能部署写入 `<root>/skills/<name>/`，符号链接优先、复制作为回退；
+所有权记录在 schema v31。
 
 ## 认证与凭据
 

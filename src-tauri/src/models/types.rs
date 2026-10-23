@@ -157,6 +157,34 @@ pub struct DeleteManualModelRequest {
     pub model_id: String,
 }
 
+/// Agent bindings and remembered choices that a model deletion would affect.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelDeletionImpact {
+    /// Provider that owns the model row.
+    pub provider_id: String,
+    /// Model ID the dialog is about.
+    pub model_id: String,
+    /// Grok aliases and live Pi entries that still name this model.
+    pub references: Vec<crate::references::AgentReference>,
+    /// Claude Code remembered choices removed by the foreign-key cascade.
+    pub remembered_preferences: u64,
+    /// True only when no binding row blocks deletion.
+    pub can_delete: bool,
+}
+
+/// Remove one stale Grok alias binding for a Provider/model pair.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ClearModelReferenceRequest {
+    pub provider_id: String,
+    pub model_id: String,
+    /// Currently only `grokBuild` has a clearable model binding.
+    pub agent_id: String,
+    pub config_root: String,
+    pub label: String,
+}
+
 /// Upstream metadata for a model the user wants to keep selected (P12.c.5).
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

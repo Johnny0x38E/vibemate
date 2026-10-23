@@ -15,9 +15,11 @@ import {
     addManualProviderModel,
     browseUpstreamModelsPage,
     cancelProviderModelFetch,
+    clearModelReference,
     getProviderModelFetchStatus,
     getProviderModelSnapshot,
     listProviderModels,
+    modelDeletionImpact,
     refreshSavedProviderModels,
     saveProviderModelSelections,
     type ProviderModel,
@@ -29,7 +31,9 @@ import { ProviderModels } from "./ProviderModels";
 vi.mock(import("../../lib/desktop/models"), async (importOriginal) => ({
     ...(await importOriginal()),
     addManualProviderModel: vi.fn(),
+    clearModelReference: vi.fn(),
     listProviderModels: vi.fn(),
+    modelDeletionImpact: vi.fn(),
     saveProviderModelSelections: vi.fn(),
     browseUpstreamModelsPage: vi.fn(),
     cancelProviderModelFetch: vi.fn(),
@@ -49,6 +53,8 @@ vi.mock(
 const addManual = vi.mocked(addManualProviderModel);
 const list = vi.mocked(listProviderModels);
 const saveSelections = vi.mocked(saveProviderModelSelections);
+const impact = vi.mocked(modelDeletionImpact);
+const clearReference = vi.mocked(clearModelReference);
 const browse = vi.mocked(browseUpstreamModelsPage);
 const cancelFetch = vi.mocked(cancelProviderModelFetch);
 const readFetchStatus = vi.mocked(getProviderModelFetchStatus);
@@ -121,6 +127,16 @@ afterEach(() => {
 });
 beforeEach(() => {
     addManual.mockReset();
+    impact.mockReset().mockImplementation((providerId, modelId) =>
+        Promise.resolve({
+            providerId,
+            modelId,
+            references: [],
+            rememberedPreferences: 0,
+            canDelete: true,
+        }),
+    );
+    clearReference.mockReset();
     vi.mocked(getProviderModelSnapshot).mockReset();
     vi.mocked(updateProviderModelEdit).mockReset();
     vi.mocked(refreshSavedProviderModels).mockReset();
@@ -451,6 +467,75 @@ describe("ProviderModels", () => {
             name: "Deselect deepseek-chat",
         });
         fireEvent.click(checkbox);
+        fireEvent.click(screen.getByRole("button", { name: "Save" }));
+        await waitFor(() => {
+            expect(saveSelections).toHaveBeenCalledWith({
+                providerId: ID,
+                removeModelIds: ["deepseek-chat"],
+                add: [],
+            });
+        });
+    });
+
+    test("save pauses for a live reference and resumes after a stale binding is cleared", async () => {
+        list.mockResolvedValue(desktopPage([model()]));
+        impact
+            .mockResolvedValueOnce({
+                providerId: ID,
+                modelId: "deepseek-chat",
+                references: [
+                    {
+                        agentId: "grokBuild",
+                        configRoot: "/tmp/grok",
+                        label: "vibemate-chat",
+                        modelId: "deepseek-chat",
+                        state: "stale",
+                        clearable: true,
+                    },
+                ],
+                rememberedPreferences: 0,
+                canDelete: false,
+            })
+            .mockResolvedValue({
+                providerId: ID,
+                modelId: "deepseek-chat",
+                references: [],
+                rememberedPreferences: 0,
+                canDelete: true,
+            });
+        await renderModels();
+        fireEvent.click(
+            await screen.findByRole("checkbox", {
+                name: "Deselect deepseek-chat",
+            }),
+        );
+        fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+        expect(
+            await screen.findByText(
+                "Some models are still used by an Agent configuration, so they were not removed.",
+            ),
+        ).toBeDefined();
+        expect(saveSelections).not.toHaveBeenCalled();
+        fireEvent.click(
+            screen.getByRole("button", { name: "Clear reference" }),
+        );
+        await waitFor(() => {
+            expect(clearReference).toHaveBeenCalledWith({
+                providerId: ID,
+                modelId: "deepseek-chat",
+                agentId: "grokBuild",
+                configRoot: "/tmp/grok",
+                label: "vibemate-chat",
+            });
+        });
+        await waitFor(() => {
+            expect(
+                screen.queryByText(
+                    "Some models are still used by an Agent configuration, so they were not removed.",
+                ),
+            ).toBeNull();
+        });
         fireEvent.click(screen.getByRole("button", { name: "Save" }));
         await waitFor(() => {
             expect(saveSelections).toHaveBeenCalledWith({

@@ -139,6 +139,36 @@ pub(crate) async fn delete_provider(
     crate::logging::provider_outcome("delete_provider", result)
 }
 
+/// List the Agent bindings that block deleting one Provider.
+#[tauri::command]
+pub(crate) async fn provider_deletion_impact(
+    app: tauri::AppHandle,
+    provider_id: String,
+) -> Result<providers::ProviderDeletionImpact, ProviderError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        with_provider_storage(&app, |storage| {
+            providers::provider_deletion_impact(storage, &provider_id)
+        })
+    })
+    .await
+    .map_err(|_| ProviderError::OperationFailed)?
+}
+
+/// Remove one stale Pi Provider binding or Grok alias binding.
+#[tauri::command]
+pub(crate) async fn clear_provider_reference(
+    app: tauri::AppHandle,
+    request: providers::ClearProviderReferenceRequest,
+) -> Result<(), ProviderError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        with_provider_storage(&app, |storage| {
+            providers::clear_provider_reference(storage, request)
+        })
+    })
+    .await
+    .map_err(|_| ProviderError::OperationFailed)?
+}
+
 /// Replace a provider's API key (or set a missing one) and return the new status.
 /// The key goes to the OS credential store only. A task failure has an unknown
 /// outcome: the caller must re-read the status before acting.

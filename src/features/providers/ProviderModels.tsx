@@ -13,15 +13,19 @@ import { useNotify } from "../../components/Notifications";
 import {
     browseUpstreamModelsPage,
     cancelProviderModelFetch,
+    clearModelReference,
     getProviderModelFetchStatus,
     listProviderModels,
     ModelRequestError,
+    modelDeletionImpact,
     refreshSavedProviderModels,
     saveProviderModelSelections,
+    type ModelDeletionImpact,
     type ModelErrorCode,
     type ProviderModel,
     type UpstreamBrowseModel,
 } from "../../lib/desktop/models";
+import type { AgentReference } from "../../lib/desktop/providers";
 import { getProviderSecretStatus } from "../../lib/desktop/providerSecrets";
 import { IconButton } from "../../components/IconButton";
 import { ModelEntryForm } from "./ModelEntryForm";
@@ -260,6 +264,16 @@ export function ProviderModels({
     const refreshGeneration = useRef(0);
     const searchField = useRef<HTMLInputElement>(null);
     const [saveState, setSaveState] = useState<SaveState>({ kind: "idle" });
+    /** Removals stopped by Agent ownership rows, keyed by model ID. */
+    const [blockedRemovals, setBlockedRemovals] = useState<
+        ModelDeletionImpact[]
+    >([]);
+    const [clearingReference, setClearingReference] = useState<string | null>(
+        null,
+    );
+    const [referenceError, setReferenceError] = useState<ModelErrorCode | null>(
+        null,
+    );
 
     const loadGeneration = useRef(0);
     const browseGeneration = useRef(0);
@@ -570,6 +584,8 @@ export function ProviderModels({
     }
 
     function toggleDraft(modelId: string, nextSelected: boolean): void {
+        setBlockedRemovals([]);
+        setReferenceError(null);
         setDraftSelected((current) => {
             const next = new Set(current);
             if (nextSelected) next.add(modelId);
@@ -578,9 +594,15 @@ export function ProviderModels({
         });
     }
 
+    function referenceKey(modelId: string, reference: AgentReference): string {
+        return `${modelId}:${reference.agentId}:${reference.configRoot}:${reference.label}`;
+    }
+
     async function runSave(): Promise<void> {
         if (!dirty || saveState.kind === "running") return;
         setSaveState({ kind: "running" });
+        setBlockedRemovals([]);
+        setReferenceError(null);
         const upstreamById = new Map<string, UpstreamBrowseModel>();
         if (upstream.kind === "ready") {
             for (const row of upstream.items) {
@@ -612,6 +634,24 @@ export function ProviderModels({
             });
         }
         try {
+            const impacts = await Promise.all(
+                removeModelIds.map((modelId) =>
+                    modelDeletionImpact(providerId, modelId),
+                ),
+            );
+            const blocking = impacts.filter(
+                (impact) => impact.references.length > 0,
+            );
+            if (blocking.length > 0) {
+                setBlockedRemovals(blocking);
+                setSaveState({ kind: "idle" });
+                return;
+            }
+        } catch (error: unknown) {
+            setSaveState({ kind: "error", code: errorCode(error) });
+            return;
+        }
+        try {
             await saveProviderModelSelections({
                 providerId,
                 removeModelIds,
@@ -632,6 +672,41 @@ export function ProviderModels({
             await refreshSelectedCount();
         } catch (error: unknown) {
             setSaveState({ kind: "error", code: errorCode(error) });
+        }
+    }
+
+    async function clearReference(
+        impact: ModelDeletionImpact,
+        reference: AgentReference,
+    ): Promise<void> {
+        if (
+            clearingReference !== null ||
+            !reference.clearable ||
+            reference.agentId !== "grokBuild"
+        ) {
+            return;
+        }
+        const key = referenceKey(impact.modelId, reference);
+        setClearingReference(key);
+        setReferenceError(null);
+        try {
+            await clearModelReference({
+                providerId,
+                modelId: impact.modelId,
+                agentId: "grokBuild",
+                configRoot: reference.configRoot,
+                label: reference.label,
+            });
+            const next = await modelDeletionImpact(providerId, impact.modelId);
+            setBlockedRemovals((current) =>
+                current
+                    .map((row) => (row.modelId === impact.modelId ? next : row))
+                    .filter((row) => row.references.length > 0),
+            );
+        } catch (error: unknown) {
+            setReferenceError(errorCode(error));
+        } finally {
+            setClearingReference(null);
         }
     }
 
@@ -1263,6 +1338,102 @@ export function ProviderModels({
                 >
                     {t(`providers.models.errors.${refreshState.code}`)}
                 </p>
+            )}
+
+            {blockedRemovals.length > 0 && (
+                <section
+                    className={styles["referencePanel"]}
+                    aria-label={t("providers.models.referencesLabel")}
+                >
+                    <p className={styles["message"]} role="alert">
+                        {t("providers.models.referencesBlocked")}
+                    </p>
+                    <ul className={styles["referenceList"]}>
+                        {blockedRemovals.flatMap((impact) =>
+                            impact.references.map((reference) => {
+                                const key = referenceKey(
+                                    impact.modelId,
+                                    reference,
+                                );
+                                return (
+                                    <li
+                                        className={styles["referenceRow"]}
+                                        key={key}
+                                    >
+                                        <div>
+                                            <p
+                                                className={
+                                                    styles["referenceName"]
+                                                }
+                                            >
+                                                {t(
+                                                    `providers.models.referenceNames.${reference.agentId}`,
+                                                    {
+                                                        model: impact.modelId,
+                                                        label: reference.label,
+                                                    },
+                                                )}
+                                            </p>
+                                            <p
+                                                className={
+                                                    styles["referenceMeta"]
+                                                }
+                                            >
+                                                {reference.configRoot}
+                                                {" · "}
+                                                {t(
+                                                    `providers.models.referenceStates.${reference.state}`,
+                                                )}
+                                            </p>
+                                        </div>
+                                        {reference.clearable &&
+                                        reference.agentId === "grokBuild" ? (
+                                            <button
+                                                type="button"
+                                                className={buttons["secondary"]}
+                                                disabled={
+                                                    clearingReference !== null
+                                                }
+                                                onClick={() => {
+                                                    void clearReference(
+                                                        impact,
+                                                        reference,
+                                                    );
+                                                }}
+                                            >
+                                                {clearingReference === key
+                                                    ? t(
+                                                          "providers.models.clearingReference",
+                                                      )
+                                                    : t(
+                                                          "providers.models.clearReference",
+                                                      )}
+                                            </button>
+                                        ) : (
+                                            <p
+                                                className={
+                                                    styles["referenceHint"]
+                                                }
+                                            >
+                                                {t(
+                                                    `providers.models.referenceHints.${reference.state}`,
+                                                )}
+                                            </p>
+                                        )}
+                                    </li>
+                                );
+                            }),
+                        )}
+                    </ul>
+                    <p className={styles["referenceHint"]}>
+                        {t("providers.models.referencesHelp")}
+                    </p>
+                    {referenceError !== null && (
+                        <p className={styles["error"]} role="alert">
+                            {t(`providers.models.errors.${referenceError}`)}
+                        </p>
+                    )}
+                </section>
             )}
 
             {keyMissing && (

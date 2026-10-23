@@ -10,6 +10,7 @@ use crate::credentials::{
     CommitFailure, CredentialStore, DeleteError, ReplaceError, SaveNewError, Secret,
     delete_then_commit, replace_then_commit, save_new_then_commit, validate_secret,
 };
+use crate::references::{self, ReferenceClearError, ReferenceReadError};
 use crate::storage::Storage;
 use rusqlite::OptionalExtension;
 
@@ -228,6 +229,9 @@ pub fn delete_provider(
             return Err(ProviderError::RevisionConflict);
         }
     }
+    if references::provider_has_bindings(storage, id.as_str()).map_err(map_reference_read)? {
+        return Err(ProviderError::ProviderInUse);
+    }
     let reference = id.credential_reference();
     let deleted = delete_then_commit(store, &reference, || {
         commit_provider_delete(storage, &request)
@@ -244,6 +248,82 @@ pub fn delete_provider(
             restored: false, ..
         })
         | Err(DeleteError::CommitUncertain { .. }) => Err(ProviderError::DeleteOutcomeUnknown),
+    }
+}
+
+/// List the Pi/Grok ownership rows and Claude choices a Provider deletion affects.
+///
+/// # Errors
+/// `InvalidRequest` for a malformed ID, `NotFound`, `StorageUnavailable`, or
+/// `ReadFailed`.
+pub fn provider_deletion_impact(
+    storage: &Storage,
+    provider_id: &str,
+) -> Result<ProviderDeletionImpact, ProviderError> {
+    let id = ProviderId::parse(provider_id).ok_or(ProviderError::InvalidRequest)?;
+    get_provider(storage, id.as_str())?;
+    let references =
+        references::provider_references(storage, id.as_str()).map_err(map_reference_read)?;
+    let remembered_preferences = references::remembered_preferences(storage, id.as_str(), None)
+        .map_err(map_reference_read)?;
+    Ok(ProviderDeletionImpact {
+        provider_id: id.as_str().to_owned(),
+        can_delete: references.is_empty(),
+        references,
+        remembered_preferences,
+    })
+}
+
+/// Remove one stale Pi Provider binding or Grok alias binding.
+///
+/// The Agent file must already be free of the named entry. An active or
+/// unreadable binding is refused, so this never hides a live reference.
+///
+/// # Errors
+/// `InvalidRequest` for malformed fields, `NotFound` when the binding is gone,
+/// `ProviderInUse` when the Agent file still names it or cannot be read, and
+/// storage failures.
+pub fn clear_provider_reference(
+    storage: &Storage,
+    request: ClearProviderReferenceRequest,
+) -> Result<(), ProviderError> {
+    let provider_id =
+        ProviderId::parse(&request.provider_id).ok_or(ProviderError::InvalidRequest)?;
+    if !matches!(request.agent_id.as_str(), "pi" | "grokBuild")
+        || !valid_reference_text(&request.config_root, 4096)
+        || !valid_reference_text(&request.label, 4096)
+    {
+        return Err(ProviderError::InvalidRequest);
+    }
+    references::clear_provider_reference(
+        storage,
+        provider_id.as_str(),
+        &request.agent_id,
+        &request.config_root,
+        &request.label,
+    )
+    .map_err(map_reference_clear)
+}
+
+fn valid_reference_text(value: &str, limit: usize) -> bool {
+    !value.is_empty() && value.len() <= limit && !value.chars().any(char::is_control)
+}
+
+fn map_reference_read(error: ReferenceReadError) -> ProviderError {
+    match error {
+        ReferenceReadError::StorageUnavailable => ProviderError::StorageUnavailable,
+        ReferenceReadError::ReadFailed => ProviderError::ReadFailed,
+    }
+}
+
+fn map_reference_clear(error: ReferenceClearError) -> ProviderError {
+    match error {
+        ReferenceClearError::StorageUnavailable => ProviderError::StorageUnavailable,
+        ReferenceClearError::ReadFailed => ProviderError::ReadFailed,
+        ReferenceClearError::WriteFailed => ProviderError::WriteFailed,
+        ReferenceClearError::InvalidRequest => ProviderError::InvalidRequest,
+        ReferenceClearError::NotFound => ProviderError::NotFound,
+        ReferenceClearError::InUse => ProviderError::ProviderInUse,
     }
 }
 

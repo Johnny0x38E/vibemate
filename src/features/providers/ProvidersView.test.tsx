@@ -18,12 +18,14 @@ import {
 } from "../../test/fieldSelect";
 import { createAppI18n } from "../../i18n";
 import {
+    clearProviderReference,
     createProvider,
     deleteProvider,
     getProvider,
     listProviders,
     listProviderTemplates,
     ProviderRequestError,
+    providerDeletionImpact,
     updateProvider,
     type ProviderPageResult,
     type ProviderRecord,
@@ -39,16 +41,20 @@ import { PROVIDER_PAGE_SIZE, ProvidersView } from "./ProvidersView";
 // Keep the real error class and constants; only the IPC calls are replaced.
 vi.mock(import("../../lib/desktop/providers"), async (importOriginal) => ({
     ...(await importOriginal()),
+    clearProviderReference: vi.fn(),
     createProvider: vi.fn(),
     deleteProvider: vi.fn(),
     getProvider: vi.fn(),
     listProviders: vi.fn(),
     listProviderTemplates: vi.fn(),
+    providerDeletionImpact: vi.fn(),
     updateProvider: vi.fn(),
 }));
 const create = vi.mocked(createProvider);
 const update = vi.mocked(updateProvider);
 const remove = vi.mocked(deleteProvider);
+const impact = vi.mocked(providerDeletionImpact);
+const clearReference = vi.mocked(clearProviderReference);
 const read = vi.mocked(getProvider);
 const list = vi.mocked(listProviders);
 const readTemplates = vi.mocked(listProviderTemplates);
@@ -130,8 +136,25 @@ function deferred<T>() {
 
 afterEach(cleanup);
 beforeEach(() => {
-    for (const mock of [create, update, read, list, readTemplates, remove])
+    for (const mock of [
+        create,
+        update,
+        read,
+        list,
+        readTemplates,
+        remove,
+        impact,
+        clearReference,
+    ])
         mock.mockReset();
+    impact.mockImplementation((providerId) =>
+        Promise.resolve({
+            providerId,
+            references: [],
+            rememberedPreferences: 0,
+            canDelete: true,
+        }),
+    );
     listModels.mockReset().mockResolvedValue({
         kind: "desktop",
         page: { items: [], nextCursor: null, totalMatches: null },
@@ -252,6 +275,80 @@ test("a stale delete keeps the row and reloads the list", async () => {
     // The reload starts in an effect after the error render.
     await waitFor(() => {
         expect(list.mock.calls.length).toBeGreaterThan(readsBefore);
+    });
+});
+
+test("lists Agent references and clears a stale binding before deleting", async () => {
+    list.mockResolvedValue(page([row("a")], null, 1));
+    const first = row("a");
+    impact
+        .mockResolvedValueOnce({
+            providerId: first.id,
+            references: [
+                {
+                    agentId: "pi",
+                    configRoot: "/home/test/.pi/agent",
+                    label: "vibemate-Pi-test",
+                    modelId: null,
+                    state: "stale",
+                    clearable: true,
+                },
+            ],
+            rememberedPreferences: 1,
+            canDelete: false,
+        })
+        .mockResolvedValue({
+            providerId: first.id,
+            references: [],
+            rememberedPreferences: 1,
+            canDelete: true,
+        });
+    clearReference.mockResolvedValue(undefined);
+    remove.mockResolvedValue({
+        id: first.id,
+        displayName: "Work",
+        selectedModelCount: 0,
+    });
+    await mount();
+    await screen.findByText("Work");
+    fireEvent.click(screen.getByRole("button", { name: "Delete Work" }));
+    const dialog = await screen.findByRole("dialog", {
+        name: "Delete provider",
+    });
+    expect(
+        await within(dialog).findByText("Pi · provider vibemate-Pi-test"),
+    ).toBeDefined();
+    expect(within(dialog).getByText(/1 Claude Code remembered/)).toBeTruthy();
+    const deleteButton = within(dialog).getByRole("button", {
+        name: "Delete provider",
+    });
+    expect(deleteButton.getAttribute("aria-disabled")).toBe("true");
+
+    fireEvent.click(
+        within(dialog).getByRole("button", { name: "Clear reference" }),
+    );
+    await waitFor(() => {
+        expect(clearReference).toHaveBeenCalledWith({
+            providerId: first.id,
+            agentId: "pi",
+            configRoot: "/home/test/.pi/agent",
+            label: "vibemate-Pi-test",
+        });
+    });
+    await waitFor(() => {
+        expect(
+            within(dialog).queryByText("Pi · provider vibemate-Pi-test"),
+        ).toBeNull();
+    });
+    await waitFor(() => {
+        expect(deleteButton.getAttribute("aria-disabled")).toBe("false");
+    });
+    fireEvent.click(deleteButton);
+    await waitFor(() => {
+        expect(remove).toHaveBeenCalledWith({
+            id: first.id,
+            expectedRevision: 1,
+        });
     });
 });
 

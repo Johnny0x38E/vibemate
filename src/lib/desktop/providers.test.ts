@@ -1,12 +1,14 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+    clearProviderReference,
     createProvider,
     deleteProvider,
     getProvider,
     listProviderTemplates,
     listProviders,
     ProviderRequestError,
+    providerDeletionImpact,
     updateProvider,
     type CreateProviderInput,
     type ProviderRecord,
@@ -358,6 +360,63 @@ describe("provider desktop boundary", () => {
             deleteProvider({ id: ID, expectedRevision: 3 }),
         ).rejects.toMatchObject({ code: "desktop_required" });
         expect(invoke).not.toHaveBeenCalled();
+    });
+
+    it("validates Provider deletion references and clears one stale binding", async () => {
+        const impact = {
+            providerId: ID,
+            references: [
+                {
+                    agentId: "pi",
+                    configRoot: "/home/test/.pi/agent",
+                    label: "vibemate-Pi-test",
+                    modelId: null,
+                    state: "stale",
+                    clearable: true,
+                },
+            ],
+            rememberedPreferences: 1,
+            canDelete: false,
+        };
+        vi.mocked(invoke).mockResolvedValueOnce(impact);
+        expect(await providerDeletionImpact(ID)).toEqual(impact);
+        expect(invoke).toHaveBeenLastCalledWith("provider_deletion_impact", {
+            providerId: ID,
+        });
+        for (const response of [
+            { ...impact, providerId: "f".repeat(32) },
+            {
+                ...impact,
+                references: [{ ...impact.references[0], state: "other" }],
+            },
+            { ...impact, rememberedPreferences: -1 },
+            { ...impact, canDelete: "yes" },
+            { ...impact, extra: null },
+        ]) {
+            vi.mocked(invoke).mockResolvedValueOnce(response);
+            await expect(providerDeletionImpact(ID)).rejects.toMatchObject({
+                code: "invalid_response",
+            });
+        }
+        const clear = {
+            providerId: ID,
+            agentId: "pi" as const,
+            configRoot: "/home/test/.pi/agent",
+            label: "vibemate-Pi-test",
+        };
+        vi.mocked(invoke).mockResolvedValueOnce(null);
+        await expect(clearProviderReference(clear)).resolves.toBeUndefined();
+        expect(invoke).toHaveBeenLastCalledWith("clear_provider_reference", {
+            request: clear,
+        });
+        vi.mocked(invoke).mockResolvedValueOnce("ok");
+        await expect(clearProviderReference(clear)).rejects.toMatchObject({
+            code: "invalid_response",
+        });
+        vi.mocked(invoke).mockRejectedValueOnce("provider_in_use");
+        await expect(clearProviderReference(clear)).rejects.toMatchObject({
+            code: "provider_in_use",
+        });
     });
 
     it("drops unknown runtime diagnostics instead of forwarding them", async () => {

@@ -31,7 +31,7 @@ storage, registers plugins and managed state, and registers every command.
 ### Persistence
 
 `src-tauri/src/storage.rs` owns the private SQLite database in the app-data
-folder and its forward-only migrations, currently schema v23. Each feature owns
+folder and its forward-only migrations, currently schema v31. Each feature owns
 its SQL:
 
 - `providers.rs` keeps the public entrypoints while `providers/` separates types,
@@ -58,6 +58,15 @@ its SQL:
 validation and the compensation helpers that keep the store and SQLite consistent
 when providers and MCP definitions are created, edited or deleted. Credentials are
 read only at the moment a command needs them, outside the SQLite lock.
+
+### Reference-aware deletion
+
+`src-tauri/src/references.rs` reads Pi provider bindings and Grok model bindings
+before a Provider or model is removed. It classifies each row against the live
+Agent file as active, stale or unverified. Active/unverified rows block deletion;
+a stale row can be cleared explicitly without rewriting the Agent file. Skill
+deletion uses its deployment rows and the same active/stale distinction. The
+module only reads Agent configuration; it never writes it.
 
 ### Agent discovery and version probing
 
@@ -108,8 +117,8 @@ running-session state is unknown, show that next to the enabled configuration.
 
 Agent adapters translate a switch into the verified native operation. Every
 mutation uses preview, concurrent-change checks, backups and rollback. Skill
-deployment to Pi is implemented; MCP deployment and Skill deployment to other
-Agents are not yet; see [plans/todo.md](plans/todo.md).
+deployment to Claude Code, Pi and Grok Build is implemented; MCP deployment is
+not yet; see [plans/todo.md](plans/todo.md).
 
 ## Planned boundaries
 

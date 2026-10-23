@@ -1441,6 +1441,68 @@ fn concurrent_openers_apply_each_migration_exactly_once() {
 }
 
 #[test]
+fn claude_code_skill_deployment_migration_keeps_existing_targets() {
+    let directory = TestDirectory::new("skill-deploy-claude-code");
+    let path = directory.path.join(DATABASE_FILE_NAME);
+    let skill_id = "0123456789abcdef0123456789abcdef";
+    let digest = "ab".repeat(32);
+    {
+        let old = Storage::open_file(&path, &MIGRATIONS[..30]).expect("v30 database");
+        old.lock()
+            .unwrap()
+            .execute_batch(&format!(
+                "INSERT INTO skill(
+                    id, name, description, origin_path, content_digest,
+                    file_count, byte_size, revision, imported_at, updated_at
+                 ) VALUES(
+                    '{skill_id}', 'demo', 'A test skill.', '/tmp/demo', '{digest}',
+                    1, 1, 1, 1, 1
+                 );
+                 INSERT INTO skill_deployment VALUES(
+                    '{skill_id}', 'pi', '/home/test/.pi/agent', 'demo', 'symlink',
+                    1, '{digest}', 1
+                 );"
+            ))
+            .expect("seed v30 rows");
+    }
+
+    let storage = Storage::open_in_directory(&directory.path).expect("upgrade");
+    assert_eq!(
+        storage.schema_version().expect("schema version"),
+        latest_schema_version()
+    );
+    let connection = storage.lock().expect("lock test connection");
+    let (agent_id, target_name): (String, String) = connection
+        .query_row(
+            "SELECT agent_id, target_name FROM skill_deployment",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .expect("existing row");
+    assert_eq!(agent_id, "pi");
+    assert_eq!(target_name, "demo");
+
+    connection
+        .execute(
+            "INSERT INTO skill_deployment VALUES(
+                ?1, 'claudeCode', '/home/test/.claude', 'demo', 'copy', 1, ?2, 1
+             )",
+            rusqlite::params![skill_id, digest],
+        )
+        .expect("Claude Code target");
+    assert!(
+        connection
+            .execute(
+                "INSERT INTO skill_deployment VALUES(
+                    ?1, 'unknown', '/home/test/other', 'demo', 'copy', 1, ?2, 1
+                 )",
+                rusqlite::params![skill_id, digest],
+            )
+            .is_err()
+    );
+}
+
+#[test]
 fn shipped_migrations_are_numbered_consecutively_from_one() {
     for (index, migration) in MIGRATIONS.iter().enumerate() {
         let expected = u32::try_from(index + 1).expect("migration count fits in u32");

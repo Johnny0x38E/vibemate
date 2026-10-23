@@ -18,7 +18,7 @@ import {
 import buttons from "../../components/actionButtons.module.css";
 import styles from "./SkillLibrary.module.css";
 
-const DEPLOY_AGENTS: SkillDeployAgent[] = ["pi", "grokBuild"];
+const DEPLOY_AGENTS: SkillDeployAgent[] = ["claudeCode", "pi", "grokBuild"];
 
 type PanelState =
     | { kind: "loading" }
@@ -55,10 +55,13 @@ function uncertain(code: SkillErrorCode): boolean {
 
 function agentLabel(
     agentId: SkillDeployAgent,
-): "skills.deploy.agentPi" | "skills.deploy.agentGrokBuild" {
-    return agentId === "pi"
-        ? "skills.deploy.agentPi"
-        : "skills.deploy.agentGrokBuild";
+):
+    | "skills.deploy.agentPi"
+    | "skills.deploy.agentGrokBuild"
+    | "skills.deploy.agentClaudeCode" {
+    if (agentId === "pi") return "skills.deploy.agentPi";
+    if (agentId === "grokBuild") return "skills.deploy.agentGrokBuild";
+    return "skills.deploy.agentClaudeCode";
 }
 
 /** Inputs for {@link SkillDeployPanel}. */
@@ -230,6 +233,7 @@ export function SkillDeployPanel({
                     <FieldSelect
                         id={`${prefix}-agent`}
                         value={agentId}
+                        aria-label={t("skills.deploy.agent")}
                         options={DEPLOY_AGENTS.map((id) => ({
                             value: id,
                             label: t(agentLabel(id)),
@@ -237,7 +241,11 @@ export function SkillDeployPanel({
                         blocked={busy}
                         size="fill"
                         onChange={(value) => {
-                            if (value === "pi" || value === "grokBuild") {
+                            if (
+                                value === "pi" ||
+                                value === "grokBuild" ||
+                                value === "claudeCode"
+                            ) {
                                 setAgentId(value);
                             }
                         }}
@@ -296,6 +304,7 @@ export function SkillDeployPanel({
                                                 ? mode
                                                 : "copy"
                                         }
+                                        aria-label={t("skills.deploy.mode")}
                                         options={[
                                             ...(preview.symlinkAvailable
                                                 ? [

@@ -141,14 +141,27 @@ the row.
 ## Provider deletion
 
 The Providers list row has a destructive **Delete** action that opens a
-confirmation naming the provider and its added-model count. Deletion removes the
-configuration, its saved models and its stored key. A stale confirmation fails
-without touching the credential store; a definite database failure restores the
-key; an unknown outcome reloads the list. Agent configuration files are never read
-or written by this action.
+confirmation naming the provider and its added-model count. Before deleting, the
+dialog reads Pi/Grok ownership rows and classifies each one against the live
+Agent file:
 
-Once managed Agent references exist, deletion must check them first; see
-[`plans/todo.md`](plans/todo.md).
+- an active or unreadable binding blocks deletion;
+- a stale binding can be cleared explicitly after the Agent file no longer
+  contains the named entry;
+- Claude Code remembered starting choices are counted and removed by the same
+  foreign-key cascade.
+
+Deletion removes the configuration, its saved models and its stored key only when
+no binding row remains. A stale confirmation fails without touching the
+credential store; a definite database failure restores the key; an unknown
+outcome reloads the list. Agent configuration files are never read or written by
+the delete itself; the reference check only reads the files to prove whether an
+entry is still present. MCP references remain part of feat-mcp/P35.
+
+Model removal follows the same rule: a Grok alias or a live Pi model entry blocks
+removal, and a stale Grok alias can be cleared from the Models tab before saving.
+The Models tab lists those references instead of silently dropping the row. See
+[`skills.md`](skills.md) for the Skill deployment rule.
 
 ## Verification scope
 

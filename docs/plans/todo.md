@@ -12,9 +12,10 @@
 4. 维护者已确认 H1/H3 桌面目视验收通过；H3 已完成，H1 的 Windows/Linux 原生分页验证仍随 P37 跟踪。
 5. P24.c 首批（每模型思考档位，以及 Pi 计划中的模型设置行）已在本机完成代码与自动化检查，待维护者桌面验收；本机 Pi 已升级至 1.4.0，2026-10-22 复核所用字段与档位规则未变。
 6. P26 已交付：Git 固定修订与已核实的 `skills@1.7.4` npx 安装均在隔离目录获取并导入，失败不改变已有库；来源页可补记获取方式。
-7. P27–P30 已交付：Pi/Grok Skill 部署、更新预览与应用（keep/replace、部署刷新）；Claude Code 部署待做。
+7. P27–P30 已交付：Pi/Grok Skill 部署、更新预览与应用（keep/replace、部署刷新）；Claude Code Skill 部署代码与自动化检查已补齐（schema v31），维护者桌面验收待做。
 8. P24.d 首批已合入本机：Grok Build 只在原生字段缺失时写入已声明的 `reasoning_efforts` 列表与列表内默认档；已有数组、旧字段和全局默认保持不变；隔离 macOS Chat/Responses 已确认原生菜单、列表默认档与运行中选择更新，本地 stub 已核实 backend 字段/默认档及运行中切档后的下一请求；Grok 自身将选用值全局持久化并供新会话读取，真实 Provider 接受仍待验证。
 9. skills.sh 市场浏览/安装、Git revision 检查与 P30 应用更新已交付。Skill 方向参考 [skills-marketplace-reference](skills-marketplace-reference.md)；不引入 preset/工作区。下一条主线按 P24 剩余项 → MCP 部署 → P35 的顺序推进；见 [phase-1](phase-1.md)。
+10. P35 非 MCP 部分已实现并通过自动化检查（2026-10-23）：Provider/Model/Skill 删除前列出 Pi/Grok 绑定和 Skill 部署，活动的 Agent 引用阻止删除，失效绑定可显式清除；凭据与数据库删除仍遵守补偿约定。P34 未开始，设计和停止点见 [skill-recovery](skill-recovery.md)。feat-mcp 尚未合并。
 
 ## 文档整理（2026-10-19）
 
@@ -36,34 +37,35 @@
 
 ## 已交付摘要
 
-| 任务            | 已交付内容                                                                           | 现行说明                                                                                   |
-| --------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
-| P00             | pnpm 与锁文件迁移                                                                    | 根目录 `AGENTS.md`                                                                         |
-| P01–P03 / C03   | Provider 与 Pi/Grok 官方接入证据                                                     | [integrations](../integrations)，实施前重新核实版本                                        |
-| P04–P06 / C06   | UI 行为测试、私有 SQLite、OS 凭据接口                                                | [frontend](../frontend.md)、[architecture](../architecture.md)                             |
-| P07–P09 / C09   | 中英文资源、偏好、启动与界面接线                                                     | [frontend](../frontend.md)                                                                 |
-| I02–I15         | 桌面壳、基础外观、共享表单、Base UI 下拉与概览五卡片                                 | [frontend](../frontend.md)                                                                 |
-| P10–P12 / C12   | 服务商与密钥统一保存，模型获取/选择/搜索和手动模型                                   | [models](../models.md)                                                                     |
-| P13 / P14       | 并入 P12                                                                             | 最小推理检查仍在 P38，不因合并而标为通过                                                   |
-| P15 / C15       | 按模型协议路由与三家多协议模板                                                       | [integrations/providers](../integrations/providers.md)                                     |
-| P16 / C16 / P40 | 能力解析与来源、用户声明、别名编辑、上下文/输出/档位                                 | [models](../models.md)、[provider 证据](../integrations/providers.md)                      |
-| P17.a–P17.t     | 六 Agent 只读发现、手动路径、显式/自动版本读取与官方标志                             | [agents](../agents.md)                                                                     |
-| P18–P21 / C21   | Claude Code 预览、写入、回滚与历史                                                   | [configuration](../configuration.md)                                                       |
-| PI1             | Pi 预览、双文件备份、应用与历史                                                      | [Pi 契约](../integrations/pi.md)                                                           |
-| P22–P23         | Grok Build 预览、应用与历史恢复                                                      | [Grok 契约](../integrations/grok-build.md)                                                 |
-| 当前模型展示    | Claude Code/Pi/Grok Build 列表当前模型读取与归属判定；Grok 不改写 `[models].default` | [agents](../agents.md)、[Pi](../integrations/pi.md)、[Grok](../integrations/grok-build.md) |
-| H1 分页与界面   | 快照、核对/解决、未引用副本管理、根限定版本分页、当前版本独立加载并置顶              | [configuration](../configuration.md)                                                       |
-| H2              | 独立完整版本选择、严格 IPC、字段差异预览、并发保护                                   | [configuration](../configuration.md)                                                       |
-| H3 后端与界面   | 持久删除状态、独占副本删除、严格 IPC、确认对话框                                     | [configuration](../configuration.md)                                                       |
-| BR0–BR5         | 命令、Provider/MCP、Models/Fetch 与共享校验拆分                                      | [backend-modularity](backend-modularity.md)                                                |
-| P25 / P31       | 中央 Skill 库与本地导入/删除；中央 MCP 定义与删除                                    | [skills](../skills.md)、[mcp](../mcp.md)                                                   |
-| P26             | Git 固定修订与已核实 npx 安装器；隔离获取、命令确认、来源/获取方式记录               | [skills](../skills.md)                                                                     |
-| P27             | 向 Pi 部署 Skill：预览、symlink/copy-sync、所有权、禁用、Agent 只读槽                | [skills](../skills.md)、[Pi](../integrations/pi.md)                                        |
-| P28             | 向 Grok Build 部署 Skill：同路径约定、独立所有权与撤销，schema v29                   | [skills](../skills.md)、[Grok](../integrations/grok-build.md)                              |
-| P29             | 预览 Skill 更新：按已记录 Git/npx 获取、比对摘要与路径差异、命名 keep/replace 策略   | [skills](../skills.md)                                                                     |
-| P30             | 应用 Skill 更新：摘要令牌复核、keep/replace、中央库替换与部署刷新                    | [skills](../skills.md)                                                                     |
-| 市场安装        | skills.sh 浏览/搜索与 GitHub `HEAD` 安装入中央库；非 GitHub 来源拒绝                 | [skills](../skills.md)、[marketplace 参考](skills-marketplace-reference.md)                |
-| Revision 检查   | Git `ls-remote` 对比已记录修订并存储状态；列表提示 update_available；npx 不走此路    | [skills](../skills.md)                                                                     |
+| 任务                   | 已交付内容                                                                           | 现行说明                                                                                   |
+| ---------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| P00                    | pnpm 与锁文件迁移                                                                    | 根目录 `AGENTS.md`                                                                         |
+| P01–P03 / C03          | Provider 与 Pi/Grok 官方接入证据                                                     | [integrations](../integrations)，实施前重新核实版本                                        |
+| P04–P06 / C06          | UI 行为测试、私有 SQLite、OS 凭据接口                                                | [frontend](../frontend.md)、[architecture](../architecture.md)                             |
+| P07–P09 / C09          | 中英文资源、偏好、启动与界面接线                                                     | [frontend](../frontend.md)                                                                 |
+| I02–I15                | 桌面壳、基础外观、共享表单、Base UI 下拉与概览五卡片                                 | [frontend](../frontend.md)                                                                 |
+| P10–P12 / C12          | 服务商与密钥统一保存，模型获取/选择/搜索和手动模型                                   | [models](../models.md)                                                                     |
+| P13 / P14              | 并入 P12                                                                             | 最小推理检查仍在 P38，不因合并而标为通过                                                   |
+| P15 / C15              | 按模型协议路由与三家多协议模板                                                       | [integrations/providers](../integrations/providers.md)                                     |
+| P16 / C16 / P40        | 能力解析与来源、用户声明、别名编辑、上下文/输出/档位                                 | [models](../models.md)、[provider 证据](../integrations/providers.md)                      |
+| P17.a–P17.t            | 六 Agent 只读发现、手动路径、显式/自动版本读取与官方标志                             | [agents](../agents.md)                                                                     |
+| P18–P21 / C21          | Claude Code 预览、写入、回滚与历史                                                   | [configuration](../configuration.md)                                                       |
+| PI1                    | Pi 预览、双文件备份、应用与历史                                                      | [Pi 契约](../integrations/pi.md)                                                           |
+| P22–P23                | Grok Build 预览、应用与历史恢复                                                      | [Grok 契约](../integrations/grok-build.md)                                                 |
+| 当前模型展示           | Claude Code/Pi/Grok Build 列表当前模型读取与归属判定；Grok 不改写 `[models].default` | [agents](../agents.md)、[Pi](../integrations/pi.md)、[Grok](../integrations/grok-build.md) |
+| H1 分页与界面          | 快照、核对/解决、未引用副本管理、根限定版本分页、当前版本独立加载并置顶              | [configuration](../configuration.md)                                                       |
+| H2                     | 独立完整版本选择、严格 IPC、字段差异预览、并发保护                                   | [configuration](../configuration.md)                                                       |
+| H3 后端与界面          | 持久删除状态、独占副本删除、严格 IPC、确认对话框                                     | [configuration](../configuration.md)                                                       |
+| BR0–BR5                | 命令、Provider/MCP、Models/Fetch 与共享校验拆分                                      | [backend-modularity](backend-modularity.md)                                                |
+| P25 / P31              | 中央 Skill 库与本地导入/删除；中央 MCP 定义与删除                                    | [skills](../skills.md)、[mcp](../mcp.md)                                                   |
+| P26                    | Git 固定修订与已核实 npx 安装器；隔离获取、命令确认、来源/获取方式记录               | [skills](../skills.md)                                                                     |
+| P27                    | 向 Pi 部署 Skill：预览、symlink/copy-sync、所有权、禁用、Agent 只读槽                | [skills](../skills.md)、[Pi](../integrations/pi.md)                                        |
+| P28                    | 向 Grok Build 部署 Skill：同路径约定、独立所有权与撤销，schema v29                   | [skills](../skills.md)、[Grok](../integrations/grok-build.md)                              |
+| Claude Code Skill 部署 | 第三个部署目标：配置根、symlink/copy、独立所有权与撤销，schema v31                   | [skills](../skills.md)、[Claude Code](../integrations/claude-code.md)                      |
+| P29                    | 预览 Skill 更新：按已记录 Git/npx 获取、比对摘要与路径差异、命名 keep/replace 策略   | [skills](../skills.md)                                                                     |
+| P30                    | 应用 Skill 更新：摘要令牌复核、keep/replace、中央库替换与部署刷新                    | [skills](../skills.md)                                                                     |
+| 市场安装               | skills.sh 浏览/搜索与 GitHub `HEAD` 安装入中央库；非 GitHub 来源拒绝                 | [skills](../skills.md)、[marketplace 参考](skills-marketplace-reference.md)                |
+| Revision 检查          | Git `ls-remote` 对比已记录修订并存储状态；列表提示 update_available；npx 不走此路    | [skills](../skills.md)                                                                     |
 
 P15 的真实连接记录来自维护者确认，不代表代理重新执行，也不补写未提供的模型、协议或套餐细节。
 
@@ -327,6 +329,8 @@ P24.b = Claude Code；P24.c = Pi；P24.d = Grok Build。服务商模型是唯一
 
 ### Task P34: 恢复未完成操作
 
+**状态：** 未开始（2026-10-23 停止点）。Skill 部署日志/分类/恢复动作的设计已记录在 [skill-recovery](skill-recovery.md)；部分草稿已撤回以保持工作区可编译。MCP 部分随 P33。
+
 **Description:** 在启动时发现上次中断的 Agent 配置或 Skill/MCP 部署操作，提供明确的恢复入口，不静默重放敏感操作。Agent 配置的中断核对与显式解决已交付（见 H1），本任务补 Skill/MCP 操作类型与统一入口。
 
 **Acceptance criteria:**
@@ -340,6 +344,8 @@ P24.b = Claude Code；P24.c = Pi；P24.d = Grok Build。服务商模型是唯一
 **Dependencies:** P21,P23,P30,P33。
 
 ### Task P35: 约束被引用配置的删除
+
+**状态：** 非 MCP 部分已实现（2026-10-23）：Provider/Model/Skill 的引用查询、删除阻止和失效绑定清除已完成并通过自动化检查；MCP 引用与维护者桌面验收待做。
 
 **Description:** 完善 Provider/Model/Skill/MCP 的删除行为，防止已有 Agent 引用突然失效。
 

@@ -586,6 +586,8 @@ pub enum SkillDeployAgent {
     Pi,
     /// xAI Grok Build configuration root.
     GrokBuild,
+    /// Claude Code user configuration root.
+    ClaudeCode,
 }
 
 impl SkillDeployAgent {
@@ -594,6 +596,7 @@ impl SkillDeployAgent {
         match self {
             Self::Pi => "pi",
             Self::GrokBuild => "grokBuild",
+            Self::ClaudeCode => "claudeCode",
         }
     }
 
@@ -602,6 +605,7 @@ impl SkillDeployAgent {
         match value {
             "pi" => Some(Self::Pi),
             "grokBuild" => Some(Self::GrokBuild),
+            "claudeCode" => Some(Self::ClaudeCode),
             _ => None,
         }
     }
@@ -709,7 +713,7 @@ pub struct SkillDeploymentRecord {
     pub skill_id: String,
     /// Skill name at deploy time (target directory name).
     pub skill_name: String,
-    /// Agent identity wire value (`pi` or `grokBuild`).
+    /// Agent identity wire value (`pi`, `grokBuild` or `claudeCode`).
     pub agent_id: String,
     /// Absolute Agent configuration root.
     pub config_root: String,

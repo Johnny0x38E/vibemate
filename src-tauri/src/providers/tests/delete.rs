@@ -4,8 +4,11 @@ use super::*;
 use crate::credentials::CredentialError;
 use crate::credentials::fake::FakeStore;
 use crate::providers::{
-    DeleteProviderRequest, DeletedProvider, delete_provider, fail_commits_after_provider_delete,
+    ClearProviderReferenceRequest, DeleteProviderRequest, DeletedProvider,
+    clear_provider_reference, delete_provider, fail_commits_after_provider_delete,
+    provider_deletion_impact,
 };
+use crate::references::ReferenceState;
 
 const KEY: &str = "vibemate-synthetic-key-7f3a9c";
 
@@ -81,6 +84,150 @@ fn delete_removes_the_provider_its_models_and_its_key_only() {
     );
     assert_eq!(store.call_count(), before);
     assert_eq!(table_rows(&storage, "provider_instance"), 1);
+}
+
+#[test]
+fn provider_delete_is_blocked_by_pi_and_grok_bindings_and_keeps_the_key() {
+    let directory = TestDirectory::new();
+    let storage = directory.open();
+    let store = FakeStore::default();
+    let record = create_with_store(&storage, &store, "Bound");
+
+    let pi_root = directory.0.join("pi-agent");
+    fs::create_dir_all(&pi_root).expect("pi root");
+    fs::write(
+        pi_root.join("models.json"),
+        r#"{"providers":{"vibemate-Pi-test":{"models":[{"id":"deepseek-flash"}]}}}"#,
+    )
+    .expect("pi models");
+    let grok_root = directory.0.join("grok-home");
+    fs::create_dir_all(&grok_root).expect("grok root");
+    fs::write(
+        grok_root.join("config.toml"),
+        "[model.vibemate-deepseek-flash]\nmodel = \"deepseek-flash\"\n",
+    )
+    .expect("grok config");
+
+    storage
+        .lock()
+        .expect("lock")
+        .execute(
+            "INSERT INTO pi_provider_binding(config_root, provider_key, provider_id)
+             VALUES (?1, 'vibemate-Pi-test', ?2)",
+            params![pi_root.to_string_lossy(), record.id.as_str()],
+        )
+        .expect("pi binding");
+    storage
+        .lock()
+        .expect("lock")
+        .execute(
+            "INSERT INTO grok_model_binding
+                (config_root, model_alias, provider_id, model_id)
+             VALUES (?1, 'vibemate-deepseek-flash', ?2, 'deepseek-flash')",
+            params![grok_root.to_string_lossy(), record.id.as_str()],
+        )
+        .expect("grok binding");
+
+    let impact = provider_deletion_impact(&storage, record.id.as_str()).expect("impact");
+    assert_eq!(impact.references.len(), 2);
+    assert!(!impact.can_delete);
+    assert!(
+        impact
+            .references
+            .iter()
+            .all(|reference| reference.state == ReferenceState::Active)
+    );
+
+    assert_eq!(
+        delete_provider(&storage, &store, delete_request(record.id.as_str(), 1)),
+        Err(ProviderError::ProviderInUse)
+    );
+    assert_eq!(table_rows(&storage, "provider_instance"), 1);
+    assert_eq!(
+        store.stored(&record.id.credential_reference()).as_deref(),
+        Some(KEY),
+        "the blocked delete never removes the key"
+    );
+}
+
+#[test]
+fn stale_provider_bindings_can_be_cleared_before_deleting() {
+    let directory = TestDirectory::new();
+    let storage = directory.open();
+    let store = FakeStore::default();
+    let record = create_with_store(&storage, &store, "Stale");
+    let pi_root = directory.0.join("empty-pi");
+    fs::create_dir_all(&pi_root).expect("pi root");
+
+    storage
+        .lock()
+        .expect("lock")
+        .execute(
+            "INSERT INTO pi_provider_binding(config_root, provider_key, provider_id)
+             VALUES (?1, 'vibemate-Pi-test', ?2)",
+            params![pi_root.to_string_lossy(), record.id.as_str()],
+        )
+        .expect("pi binding");
+
+    let impact = provider_deletion_impact(&storage, record.id.as_str()).expect("impact");
+    assert_eq!(impact.references.len(), 1);
+    assert_eq!(impact.references[0].state, ReferenceState::Stale);
+    assert!(impact.references[0].clearable);
+    assert!(!impact.can_delete);
+
+    clear_provider_reference(
+        &storage,
+        ClearProviderReferenceRequest {
+            provider_id: record.id.as_str().to_owned(),
+            agent_id: "pi".into(),
+            config_root: pi_root.to_string_lossy().into_owned(),
+            label: "vibemate-Pi-test".into(),
+        },
+    )
+    .expect("clear stale binding");
+
+    delete_provider(&storage, &store, delete_request(record.id.as_str(), 1)).expect("delete");
+    assert_eq!(table_rows(&storage, "provider_instance"), 0);
+    assert_eq!(store.stored(&record.id.credential_reference()), None);
+}
+
+#[test]
+fn active_provider_bindings_cannot_be_cleared() {
+    let directory = TestDirectory::new();
+    let storage = directory.open();
+    let store = FakeStore::default();
+    let record = create_with_store(&storage, &store, "Active");
+    let pi_root = directory.0.join("active-pi");
+    fs::create_dir_all(&pi_root).expect("pi root");
+    fs::write(
+        pi_root.join("models.json"),
+        r#"{"providers":{"vibemate-Pi-test":{"models":[]}}}"#,
+    )
+    .expect("pi models");
+
+    storage
+        .lock()
+        .expect("lock")
+        .execute(
+            "INSERT INTO pi_provider_binding(config_root, provider_key, provider_id)
+             VALUES (?1, 'vibemate-Pi-test', ?2)",
+            params![pi_root.to_string_lossy(), record.id.as_str()],
+        )
+        .expect("pi binding");
+
+    assert_eq!(
+        clear_provider_reference(
+            &storage,
+            ClearProviderReferenceRequest {
+                provider_id: record.id.as_str().to_owned(),
+                agent_id: "pi".into(),
+                config_root: pi_root.to_string_lossy().into_owned(),
+                label: "vibemate-Pi-test".into(),
+            },
+        ),
+        Err(ProviderError::ProviderInUse)
+    );
+    assert_eq!(table_rows(&storage, "pi_provider_binding"), 1);
 }
 
 #[test]

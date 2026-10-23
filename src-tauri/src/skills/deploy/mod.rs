@@ -1,10 +1,12 @@
 //! Deploy a central skill into an Agent's user-level `skills/` directory.
 //!
 //! Pi writes `<PI_CODING_AGENT_DIR|~/.pi/agent>/skills/<name>/`. Grok Build
-//! writes `<GROK_HOME|~/.grok>/skills/<name>/`. Both use the same SKILL.md
-//! directory form. Symlink is preferred when the platform can create a
-//! directory link; otherwise the caller must choose copy-sync. User content at
-//! the same name is never overwritten. Ownership lives in `skill_deployment`.
+//! writes `<GROK_HOME|~/.grok>/skills/<name>/`. Claude Code writes
+//! `<CLAUDE_CONFIG_DIR|~/.claude>/skills/<name>/`. All three use the same
+//! SKILL.md directory form. Symlink is preferred when the platform can create
+//! a directory link; otherwise the caller must choose copy-sync. User content
+//! at the same name is never overwritten. Ownership lives in
+//! `skill_deployment`.
 
 mod repository;
 
@@ -21,7 +23,9 @@ use super::types::{
     SkillUpdateDeployResult,
 };
 use super::validation;
-use crate::agents::{DirectorySource, DiscoveryEnvironment, grok_config_root, pi_config_root};
+use crate::agents::{
+    DirectorySource, DiscoveryEnvironment, claude_config_root, grok_config_root, pi_config_root,
+};
 use crate::storage::Storage;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -40,6 +44,7 @@ fn resolve_root(
     let (root, source) = match agent {
         SkillDeployAgent::Pi => pi_config_root(environment),
         SkillDeployAgent::GrokBuild => grok_config_root(environment),
+        SkillDeployAgent::ClaudeCode => claude_config_root(environment),
     };
     match (root, source) {
         (Some(path), DirectorySource::Default | DirectorySource::Environment) => Ok(path),

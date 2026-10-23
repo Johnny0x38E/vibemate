@@ -138,6 +138,21 @@ fn delete_in_transaction(
             |row| row.get(0),
         )
         .map_err(|_| ProviderError::ReadFailed)?;
+    // Binding rows have no foreign key to provider_instance, so the cascade
+    // below would leave them pointing at a removed Provider. Check them inside
+    // this transaction as well as in the service's early guard.
+    let bindings: i64 = transaction
+        .query_row(
+            "SELECT
+                (SELECT COUNT(*) FROM pi_provider_binding WHERE provider_id = ?1) +
+                (SELECT COUNT(*) FROM grok_model_binding WHERE provider_id = ?1)",
+            [id.as_str()],
+            |row| row.get(0),
+        )
+        .map_err(|_| ProviderError::ReadFailed)?;
+    if bindings > 0 {
+        return Err(ProviderError::ProviderInUse);
+    }
     // The foreign keys cascade to provider_model, provider_model_fetch and
     // provider_credential, so this one row removes everything the provider owns.
     let removed = transaction

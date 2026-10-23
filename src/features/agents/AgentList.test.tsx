@@ -896,6 +896,38 @@ test("agent detail defaults to History and has no Write tab", async () => {
     expect(screen.getByRole("tab", { name: "Install & paths" })).toBeTruthy();
 });
 
+test("Claude Code reads its own Skill deployments", async () => {
+    listDeployments.mockResolvedValue({
+        kind: "desktop",
+        items: [
+            {
+                skillId: "f".repeat(32),
+                skillName: "demo-skill",
+                agentId: "claudeCode",
+                configRoot: "/home/test/.claude",
+                mode: "symlink",
+                skillRevision: 1,
+                contentDigest: "ab".repeat(32),
+                inSync: true,
+                deployedAtMs: 1_700_000_000_000,
+            },
+        ],
+    });
+    await mount();
+    fireEvent.click(
+        await screen.findByRole("button", {
+            name: "Open Claude Code details",
+        }),
+    );
+    fireEvent.click(screen.getByRole("tab", { name: "Skill" }));
+    await waitFor(() => {
+        expect(listDeployments).toHaveBeenCalledWith("claudeCode");
+    });
+    expect(
+        await screen.findByText(/demo-skill · Symbolic link · in sync/u),
+    ).toBeDefined();
+});
+
 test("list Write opens a titlebar-safe dialog with inline form; row click does not open detail", async () => {
     await mount();
     const list = await screen.findByRole("list", { name: "Agents" });

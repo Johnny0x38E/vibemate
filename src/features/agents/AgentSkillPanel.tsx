@@ -22,7 +22,8 @@ function errorCode(error: unknown): SkillErrorCode {
 }
 
 function asDeployAgent(agentId: AgentId): SkillDeployAgent | null {
-    if (agentId === "pi" || agentId === "grokBuild") return agentId;
+    if (agentId === "pi" || agentId === "grokBuild" || agentId === "claudeCode")
+        return agentId;
     return null;
 }
 
@@ -34,9 +35,9 @@ export interface AgentSkillPanelProps {
 }
 
 /**
- * Read-only Skill slot on an Agent detail page. Pi and Grok Build list
- * vibemate-managed deployments and offer a jump to the Skills module; other
- * Agents stay honest about missing support.
+ * Read-only Skill slot on an Agent detail page. Claude Code, Pi and Grok Build
+ * list vibemate-managed deployments and offer a jump to the Skills module;
+ * other Agents stay honest about missing support.
  */
 export function AgentSkillPanel({
     agentId,

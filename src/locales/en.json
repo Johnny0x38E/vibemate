@@ -158,7 +158,28 @@
             "body_other": "Delete “{{name}}”? This removes the configuration, its {{count}} added models and the stored API key. Agent configuration files are not changed.",
             "confirm": "Delete provider",
             "cancel": "Cancel",
-            "done": "Deleted “{{name}}”."
+            "done": "Deleted “{{name}}”.",
+            "checkingReferences": "Checking Agent references…",
+            "referencesHint": "This provider is still recorded in an Agent configuration. Change or restore that configuration, or clear a stale binding, before deleting it.",
+            "referencesLabel": "Agent references",
+            "referenceLabel": {
+                "pi": "Pi · provider {{label}}",
+                "grokBuild": "Grok Build · alias {{label}}"
+            },
+            "referenceStates": {
+                "active": "still present in the Agent file",
+                "stale": "no longer present in the Agent file",
+                "unverified": "Agent file could not be read"
+            },
+            "referenceHints": {
+                "active": "Change or restore this Agent configuration first.",
+                "stale": "Clear this stale binding to continue.",
+                "unverified": "Resolve the Agent file before deleting."
+            },
+            "clear": "Clear reference",
+            "clearing": "Clearing…",
+            "remembered_one": "{{count}} Claude Code remembered starting choice will also be removed.",
+            "remembered_other": "{{count}} Claude Code remembered starting choices will also be removed."
         },
         "tabs": {
             "ariaLabel": "Provider configuration sections",
@@ -192,6 +213,25 @@
             "save": "Save",
             "saving": "Saving…",
             "saveNotice": "Model selection saved.",
+            "referencesLabel": "Agent references blocking removal",
+            "referencesBlocked": "Some models are still used by an Agent configuration, so they were not removed.",
+            "referencesHelp": "Change or restore the Agent configuration for active entries. A stale binding can be cleared here, then Save again.",
+            "referenceNames": {
+                "pi": "Pi · {{model}} · provider {{label}}",
+                "grokBuild": "Grok Build · {{model}} · alias {{label}}"
+            },
+            "referenceStates": {
+                "active": "still present in the Agent file",
+                "stale": "no longer present in the Agent file",
+                "unverified": "Agent file could not be read"
+            },
+            "referenceHints": {
+                "active": "Change or restore this Agent configuration first.",
+                "stale": "Clear this stale binding to continue.",
+                "unverified": "Resolve the Agent file before deleting."
+            },
+            "clearReference": "Clear reference",
+            "clearingReference": "Clearing…",
             "unsavedLeave": "You have unsaved model checkbox changes. Leave without saving?",
             "backToSelected": "View added models",
             "upstreamListLabel": "Upstream models for this provider",
@@ -250,6 +290,7 @@
                 "model_parameters_invalid": "Enter a positive whole number for each limit, and choose a valid reasoning-effort combination.",
                 "model_already_exists": "This model ID is already saved.",
                 "model_not_found": "This model was not found. Refresh the list.",
+                "model_in_use": "An Agent configuration still uses this model. Resolve the listed references before removing it.",
                 "model_changed": "This model changed since you opened it. Reload before saving.",
                 "model_route_not_supported": "This model has no API route vibemate can use.",
                 "secret_missing": "Add an API key in the fields above before selecting models.",
@@ -369,7 +410,8 @@
             "credential_store_failed": "The system credential store reported an error and nothing was changed. If you denied access in a system prompt, try again and allow it.",
             "create_outcome_unknown": "vibemate could not confirm whether this configuration was saved, and an unused key entry may remain in the system credential store (vibemate never reads it). Refresh the list to check before adding it again.",
             "secret_outcome_unknown": "vibemate could not confirm whether the key was replaced; the system credential store may already hold the new key. Refresh the key status and replace it again if unsure.",
-            "delete_outcome_unknown": "Deletion unconfirmed. Refresh the list to check."
+            "delete_outcome_unknown": "Deletion unconfirmed. Refresh the list to check.",
+            "provider_in_use": "An Agent configuration still references this provider. Resolve the listed bindings before deleting."
         }
     },
     "mcp": {
@@ -1145,7 +1187,7 @@
         "sourceSaved": "Source saved.",
         "reload": "Reload list",
         "reloadUnknown": "The result is unknown. Reload the list before another change.",
-        "notDeployed": "Open a skill's detail page to deploy it to Pi or Grok Build.",
+        "notDeployed": "Open a skill's detail page to deploy it to Claude Code, Pi or Grok Build.",
         "deploy": {
             "title": "Deploy to an agent",
             "agent": "Agent",
@@ -1164,6 +1206,7 @@
             "listLabel": "Current deployments",
             "agentPi": "Pi",
             "agentGrokBuild": "Grok Build",
+            "agentClaudeCode": "Claude Code",
             "rowSummary": "{{agent}} · {{mode}} · revision {{revision}} · {{sync}}",
             "inSync": "in sync",
             "outOfSync": "changed outside vibemate",
@@ -1253,7 +1296,12 @@
             "done": "Deleted “{{name}}”.",
             "cleanupPending": "Skill deleted; copied files remain. Retry cleanup.",
             "cleanup": "Retry file cleanup",
-            "cleanupDone": "Copied files removed."
+            "cleanupDone": "Copied files removed.",
+            "checking": "Checking Agent deployments…",
+            "referencesPreview": "Deployment references need the desktop app.",
+            "referencesHint": "This skill is still deployed to an Agent. Remove the deployments before deleting the library entry.",
+            "referencesLabel": "Agent deployments",
+            "manage": "Review deployments"
         },
         "errors": {
             "storage_unavailable": "vibemate cannot reach its private library right now.",

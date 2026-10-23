@@ -865,7 +865,7 @@ export type SkillDeployMode = "symlink" | "copy";
 export type SkillDeployTargetState =
     "absent" | "owned_symlink" | "owned_copy" | "foreign";
 /** Agents that accept central skill deployment in this build. */
-export type SkillDeployAgent = "pi" | "grokBuild";
+export type SkillDeployAgent = "pi" | "grokBuild" | "claudeCode";
 /** Preview of deploying one skill into an Agent user skills directory. */
 export interface SkillDeployPreview {
     agentId: SkillDeployAgent;
@@ -918,7 +918,7 @@ const TARGET_STATES = [
     "owned_copy",
     "foreign",
 ] as const;
-const DEPLOY_AGENTS = ["pi", "grokBuild"] as const;
+const DEPLOY_AGENTS = ["pi", "grokBuild", "claudeCode"] as const;
 
 function deployMode(value: unknown): SkillDeployMode {
     const text = string(value);

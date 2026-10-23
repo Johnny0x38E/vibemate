@@ -291,6 +291,37 @@ pub(crate) async fn update_provider_model_edit(
     .map_err(|_| ModelError::OperationFailed)?
 }
 
+/// List the Agent bindings that block deleting one saved model.
+#[tauri::command]
+pub(crate) async fn model_deletion_impact(
+    app: tauri::AppHandle,
+    provider_id: String,
+    model_id: String,
+) -> Result<models::ModelDeletionImpact, ModelError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        with_model_storage(&app, |storage| {
+            models::model_deletion_impact(storage, &provider_id, &model_id)
+        })
+    })
+    .await
+    .map_err(|_| ModelError::OperationFailed)?
+}
+
+/// Remove one stale Grok alias binding for a Provider/model pair.
+#[tauri::command]
+pub(crate) async fn clear_model_reference(
+    app: tauri::AppHandle,
+    request: models::ClearModelReferenceRequest,
+) -> Result<(), ModelError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        with_model_storage(&app, |storage| {
+            models::clear_model_reference(storage, request)
+        })
+    })
+    .await
+    .map_err(|_| ModelError::OperationFailed)?
+}
+
 /// Delete only a manual model; fetched rows are rejected by the domain layer.
 #[tauri::command]
 pub(crate) async fn delete_manual_provider_model(

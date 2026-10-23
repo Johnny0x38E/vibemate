@@ -44,6 +44,28 @@
     overflow-wrap: anywhere;
 }
 
+.references {
+    margin-top: var(--space-sm);
+}
+
+.referenceList {
+    display: grid;
+    gap: var(--space-sm);
+    margin: var(--space-sm) 0;
+    padding: 0;
+    list-style: none;
+}
+
+.referenceRow {
+    padding: var(--space-sm);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    color: var(--color-text);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
 .actions {
     display: flex;
     flex-wrap: wrap;

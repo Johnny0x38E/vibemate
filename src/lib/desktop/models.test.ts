@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
     addManualProviderModel,
     cancelProviderModelFetch,
+    clearModelReference,
     deleteManualProviderModel,
     fetchProviderModels,
     getProviderModelFetchStatus,
@@ -11,6 +12,7 @@ import {
     updateProviderModelEdit,
     countProviderModels,
     listProviderModels,
+    modelDeletionImpact,
     ModelRequestError,
     setProviderModelsSelected,
     type ProviderModel,
@@ -745,6 +747,64 @@ describe("model IPC boundary", () => {
         vi.mocked(invoke).mockRejectedValue(code);
         await expect(fetchProviderModels(ID)).rejects.toMatchObject({ code });
         await expect(listProviderModels(input)).rejects.toMatchObject({ code });
+    });
+
+    it("validates model deletion references and clears one stale alias", async () => {
+        const impact = {
+            providerId: ID,
+            modelId: "mistral/mistral-large-4",
+            references: [
+                {
+                    agentId: "grokBuild",
+                    configRoot: "/home/test/.grok",
+                    label: "vibemate-mistral",
+                    modelId: "mistral/mistral-large-4",
+                    state: "stale",
+                    clearable: true,
+                },
+            ],
+            rememberedPreferences: 0,
+            canDelete: false,
+        };
+        vi.mocked(invoke).mockResolvedValueOnce(impact);
+        expect(
+            await modelDeletionImpact(ID, "mistral/mistral-large-4"),
+        ).toEqual(impact);
+        expect(invoke).toHaveBeenLastCalledWith("model_deletion_impact", {
+            providerId: ID,
+            modelId: "mistral/mistral-large-4",
+        });
+        for (const response of [
+            { ...impact, modelId: "other" },
+            {
+                ...impact,
+                references: [{ ...impact.references[0], state: "other" }],
+            },
+            { ...impact, rememberedPreferences: -1 },
+            { ...impact, canDelete: "yes" },
+            { ...impact, extra: null },
+        ]) {
+            vi.mocked(invoke).mockResolvedValueOnce(response);
+            await expect(
+                modelDeletionImpact(ID, "mistral/mistral-large-4"),
+            ).rejects.toMatchObject({ code: "invalid_response" });
+        }
+        const clear = {
+            providerId: ID,
+            modelId: "mistral/mistral-large-4",
+            agentId: "grokBuild" as const,
+            configRoot: "/home/test/.grok",
+            label: "vibemate-mistral",
+        };
+        vi.mocked(invoke).mockResolvedValueOnce(null);
+        await expect(clearModelReference(clear)).resolves.toBeUndefined();
+        expect(invoke).toHaveBeenLastCalledWith("clear_model_reference", {
+            request: clear,
+        });
+        vi.mocked(invoke).mockRejectedValueOnce("model_in_use");
+        await expect(clearModelReference(clear)).rejects.toMatchObject({
+            code: "model_in_use",
+        });
     });
 
     it("discards raw errors, structured payloads and frontend-only codes", async () => {

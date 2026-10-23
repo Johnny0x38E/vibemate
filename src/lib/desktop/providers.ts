@@ -117,6 +117,39 @@ export interface DeletedProvider {
     selectedModelCount: number;
 }
 
+/** Live state of one Agent ownership row. */
+export type AgentReferenceState = "active" | "stale" | "unverified";
+
+/** One Pi/Grok binding that still names a central Provider or model. */
+export interface AgentReference {
+    agentId: "pi" | "grokBuild";
+    configRoot: string;
+    /** Provider key in Pi or model alias in Grok. */
+    label: string;
+    modelId: string | null;
+    state: AgentReferenceState;
+    /** True only when the Agent file no longer contains the entry. */
+    clearable: boolean;
+}
+
+/** Agent references and remembered choices affected by a Provider deletion. */
+export interface ProviderDeletionImpact {
+    providerId: string;
+    references: AgentReference[];
+    /** Claude Code remembered choices removed by the same transaction. */
+    rememberedPreferences: number;
+    /** True only when no binding row blocks deletion. */
+    canDelete: boolean;
+}
+
+/** Request to clear one stale Agent binding. */
+export interface ClearProviderReferenceInput {
+    providerId: string;
+    agentId: "pi" | "grokBuild";
+    configRoot: string;
+    label: string;
+}
+
 /** Page request: `after` is `null` for the first page; `limit` is 1–100. */
 export interface ListProvidersInput {
     after: string | null;
@@ -155,6 +188,7 @@ const RUST_PROVIDER_ERROR_CODES = [
     "create_outcome_unknown",
     "secret_outcome_unknown",
     "delete_outcome_unknown",
+    "provider_in_use",
 ] as const;
 
 /**
@@ -524,4 +558,95 @@ export async function deleteProvider(
         throw invalidResponse();
     }
     return { id, displayName, selectedModelCount };
+}
+
+const REFERENCE_STATES = ["active", "stale", "unverified"] as const;
+
+function referenceState(value: unknown): AgentReferenceState {
+    for (const state of REFERENCE_STATES) if (value === state) return state;
+    throw invalidResponse();
+}
+
+function reference(value: unknown): AgentReference {
+    if (
+        !isObject(value) ||
+        !hasExactKeys(value, [
+            "agentId",
+            "configRoot",
+            "label",
+            "modelId",
+            "state",
+            "clearable",
+        ]) ||
+        (value["agentId"] !== "pi" && value["agentId"] !== "grokBuild") ||
+        typeof value["configRoot"] !== "string" ||
+        value["configRoot"].trim() === "" ||
+        typeof value["label"] !== "string" ||
+        value["label"].trim() === "" ||
+        (value["modelId"] !== null && typeof value["modelId"] !== "string") ||
+        typeof value["clearable"] !== "boolean"
+    ) {
+        throw invalidResponse();
+    }
+    return {
+        agentId: value["agentId"],
+        configRoot: value["configRoot"],
+        label: value["label"],
+        modelId: value["modelId"],
+        state: referenceState(value["state"]),
+        clearable: value["clearable"],
+    };
+}
+
+/** Validate a bounded list of Agent ownership references from Rust. */
+export function agentReferences(value: unknown): AgentReference[] {
+    if (!Array.isArray(value)) throw invalidResponse();
+    return value.map(reference);
+}
+
+/** Read the Agent bindings that block deleting one Provider. */
+export async function providerDeletionImpact(
+    providerId: string,
+): Promise<ProviderDeletionImpact> {
+    if (!isTauri()) throw new ProviderRequestError("desktop_required");
+    const data: unknown = await callProviderCommand(
+        "provider_deletion_impact",
+        { providerId },
+    );
+    if (
+        !isObject(data) ||
+        !hasExactKeys(data, [
+            "providerId",
+            "references",
+            "rememberedPreferences",
+            "canDelete",
+        ]) ||
+        data["providerId"] !== providerId ||
+        typeof data["rememberedPreferences"] !== "number" ||
+        !Number.isSafeInteger(data["rememberedPreferences"]) ||
+        data["rememberedPreferences"] < 0 ||
+        typeof data["canDelete"] !== "boolean"
+    ) {
+        throw invalidResponse();
+    }
+    return {
+        providerId,
+        references: agentReferences(data["references"]),
+        rememberedPreferences: data["rememberedPreferences"],
+        canDelete: data["canDelete"],
+    };
+}
+
+/** Remove one stale Agent binding after the Agent file no longer names it. */
+export async function clearProviderReference(
+    input: ClearProviderReferenceInput,
+): Promise<void> {
+    if (!isTauri()) throw new ProviderRequestError("desktop_required");
+    if (
+        (await callProviderCommand("clear_provider_reference", {
+            request: input,
+        })) !== null
+    ) {
+        throw invalidResponse();
+    }
 }

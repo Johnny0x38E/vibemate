@@ -19,10 +19,12 @@ import {
     deleteSkill,
     getSkill,
     importSkillFolder,
+    listSkillDeployments,
     listSkills,
     pickSkillFolder,
     SkillRequestError,
     type ImportReport,
+    type SkillDeploymentRecord,
     type SkillErrorCode,
     type SkillInstallReport,
     type SkillRecord,
@@ -48,6 +50,10 @@ type ListState =
           more: "idle" | "loading";
       };
 type PageState = { kind: "list" } | { kind: "detail"; record: SkillRecord };
+type DeleteReferences =
+    | { kind: "idle" | "loading" | "preview" }
+    | { kind: "ready"; items: SkillDeploymentRecord[] }
+    | { kind: "error"; code: SkillErrorCode };
 type ActionState =
     | { kind: "idle" | "picking" | "importing" | "deleting" }
     | { kind: "error"; code: SkillErrorCode; uncertain: boolean };
@@ -130,6 +136,10 @@ export function SkillLibrary({
     const [installOpen, setInstallOpen] = useState(false);
     const [marketplaceOpen, setMarketplaceOpen] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState<SkillRecord | null>(null);
+    const [deleteReferences, setDeleteReferences] = useState<{
+        targetId: string | null;
+        state: DeleteReferences;
+    }>({ targetId: null, state: { kind: "idle" } });
     // A deletion whose files could not be removed keeps offering the retry.
     const [cleanupPending, setCleanupPending] = useState(false);
     const active = useRef(true);
@@ -152,7 +162,6 @@ export function SkillLibrary({
         action.kind === "deleting" ||
         (action.kind === "error" && action.uncertain) ||
         (list.kind === "ready" && list.more === "loading");
-
     useImperativeHandle(homeRef, () => ({
         openHome() {
             if (blocked || formBlocked || mutationPending.current) return false;
@@ -206,10 +215,68 @@ export function SkillLibrary({
             clearTimeout(timer);
         };
     }, [reload]);
+    // Reset in render when a different row opens its confirmation, so the effect
+    // only starts the read and never calls setState synchronously for loading.
+    if (
+        deleteTarget !== null &&
+        deleteReferences.targetId !== deleteTarget.id
+    ) {
+        setDeleteReferences({
+            targetId: deleteTarget.id,
+            state: { kind: "loading" },
+        });
+    }
+    const referencesState: DeleteReferences =
+        deleteTarget === null
+            ? { kind: "idle" }
+            : deleteReferences.targetId === deleteTarget.id
+              ? deleteReferences.state
+              : { kind: "loading" };
+    const canDeleteSkill =
+        action.kind !== "deleting" &&
+        referencesState.kind === "ready" &&
+        referencesState.items.length === 0;
+
+    useEffect(() => {
+        if (deleteTarget === null) return;
+        let active = true;
+        void listSkillDeployments(deleteTarget.id).then(
+            (result) => {
+                if (!active) return;
+                setDeleteReferences({
+                    targetId: deleteTarget.id,
+                    state:
+                        result.kind === "preview"
+                            ? { kind: "preview" }
+                            : { kind: "ready", items: result.items },
+                });
+            },
+            (error: unknown) => {
+                if (active) {
+                    setDeleteReferences({
+                        targetId: deleteTarget.id,
+                        state: {
+                            kind: "error",
+                            code: errorCode(error),
+                        },
+                    });
+                }
+            },
+        );
+        return () => {
+            active = false;
+        };
+    }, [deleteTarget]);
+
     function returnToList(): void {
         pageGeneration.current++;
         focusRequested.current = true;
         setPage({ kind: "list" });
+    }
+
+    function closeDeleteDialog(): void {
+        setDeleteTarget(null);
+        setDeleteReferences({ targetId: null, state: { kind: "idle" } });
     }
     async function more(): Promise<void> {
         if (
@@ -355,7 +422,13 @@ export function SkillLibrary({
      * folder the skill was imported from is never touched.
      */
     async function remove(): Promise<void> {
-        if (deleteTarget === null || mutationPending.current) return;
+        if (
+            deleteTarget === null ||
+            mutationPending.current ||
+            referencesState.kind !== "ready" ||
+            referencesState.items.length > 0
+        )
+            return;
         const target = deleteTarget;
         mutationPending.current = true;
         setAction({ kind: "deleting" });
@@ -365,7 +438,7 @@ export function SkillLibrary({
                 expectedRevision: target.revision,
             });
             if (!stillMounted()) return;
-            setDeleteTarget(null);
+            closeDeleteDialog();
             focusRequested.current = true;
             // Files that could not be removed are a real leftover, so the
             // deletion is reported with the retry instead of as fully clean.
@@ -383,7 +456,7 @@ export function SkillLibrary({
             await reload();
         } catch (error: unknown) {
             if (!stillMounted()) return;
-            setDeleteTarget(null);
+            closeDeleteDialog();
             const code = errorCode(error);
             setAction({
                 kind: "error",
@@ -395,6 +468,14 @@ export function SkillLibrary({
             mutationPending.current = false;
         }
     }
+    function targetAgentLabel(
+        agentId: SkillDeploymentRecord["agentId"],
+    ): string {
+        if (agentId === "pi") return t("skills.deploy.agentPi");
+        if (agentId === "grokBuild") return t("skills.deploy.agentGrokBuild");
+        return t("skills.deploy.agentClaudeCode");
+    }
+
     /** Retry removing parked copies after a deletion could not clean up. */
     async function cleanupDeleted(): Promise<void> {
         if (blocked || mutationPending.current) return;
@@ -714,8 +795,7 @@ export function SkillLibrary({
             <Dialog.Root
                 open={deleteTarget !== null}
                 onOpenChange={(open) => {
-                    if (!open && !mutationPending.current)
-                        setDeleteTarget(null);
+                    if (!open && !mutationPending.current) closeDeleteDialog();
                 }}
             >
                 <Dialog.Portal>
@@ -741,6 +821,78 @@ export function SkillLibrary({
                                 name: deleteTarget?.name ?? "",
                             })}
                         </Dialog.Description>
+                        {referencesState.kind === "loading" && (
+                            <p className={dialog["body"]} role="status">
+                                {t("skills.delete.checking")}
+                            </p>
+                        )}
+                        {referencesState.kind === "preview" && (
+                            <p className={dialog["body"]}>
+                                {t("skills.delete.referencesPreview")}
+                            </p>
+                        )}
+                        {referencesState.kind === "error" && (
+                            <p className={dialog["body"]} role="alert">
+                                {t(`skills.errors.${referencesState.code}`)}
+                            </p>
+                        )}
+                        {referencesState.kind === "ready" &&
+                            referencesState.items.length > 0 && (
+                                <div className={dialog["references"]}>
+                                    <p className={dialog["body"]} role="alert">
+                                        {t("skills.delete.referencesHint")}
+                                    </p>
+                                    <ul
+                                        className={dialog["referenceList"]}
+                                        aria-label={t(
+                                            "skills.delete.referencesLabel",
+                                        )}
+                                    >
+                                        {referencesState.items.map((row) => (
+                                            <li
+                                                className={
+                                                    dialog["referenceRow"]
+                                                }
+                                                key={`${row.agentId}:${row.configRoot}`}
+                                            >
+                                                {t("skills.deploy.rowSummary", {
+                                                    agent: targetAgentLabel(
+                                                        row.agentId,
+                                                    ),
+                                                    mode: t(
+                                                        row.mode === "symlink"
+                                                            ? "skills.deploy.modeSymlink"
+                                                            : "skills.deploy.modeCopy",
+                                                    ),
+                                                    revision: row.skillRevision,
+                                                    sync: t(
+                                                        row.inSync
+                                                            ? "skills.deploy.inSync"
+                                                            : "skills.deploy.outOfSync",
+                                                    ),
+                                                })}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                    <button
+                                        type="button"
+                                        className={buttons["secondary"]}
+                                        disabled={action.kind === "deleting"}
+                                        onClick={() => {
+                                            if (
+                                                deleteTarget === null ||
+                                                mutationPending.current
+                                            )
+                                                return;
+                                            const target = deleteTarget;
+                                            closeDeleteDialog();
+                                            void openDetail(target);
+                                        }}
+                                    >
+                                        {t("skills.delete.manage")}
+                                    </button>
+                                </div>
+                            )}
                         <div className={dialog["actions"]}>
                             <button
                                 ref={cancelDelete}
@@ -749,7 +901,7 @@ export function SkillLibrary({
                                 disabled={action.kind === "deleting"}
                                 onClick={() => {
                                     if (!mutationPending.current)
-                                        setDeleteTarget(null);
+                                        closeDeleteDialog();
                                 }}
                             >
                                 {t("skills.delete.cancel")}
@@ -757,8 +909,9 @@ export function SkillLibrary({
                             <button
                                 type="button"
                                 className={buttons["dangerSecondary"]}
-                                aria-disabled={action.kind === "deleting"}
+                                aria-disabled={!canDeleteSkill}
                                 onClick={() => {
+                                    if (!canDeleteSkill) return;
                                     void remove();
                                 }}
                             >

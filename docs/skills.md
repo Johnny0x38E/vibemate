@@ -3,9 +3,9 @@
 `src/features/skills/` and `src-tauri/src/skills/` implement the central Skill
 library. Installing from a confirmed GitHub source, browsing/installing from the
 skills.sh marketplace at Git `HEAD`, a lightweight Git revision check via
-`ls-remote`, previewing an update from a recorded Git or npx fetch method, and
-deploying a library Skill into Pi or Grok Build user-level `skills/` directories
-are implemented. Applying an update and Claude Code deployment are not; see
+`ls-remote`, previewing and applying an update from a recorded Git or npx fetch
+method, and deploying a library Skill into Claude Code, Pi or Grok Build
+user-level `skills/` directories are implemented. See
 [`plans/todo.md`](plans/todo.md) and the
 [marketplace reference](plans/skills-marketplace-reference.md).
 
@@ -24,8 +24,8 @@ are implemented. Applying an update and Claude Code deployment are not; see
 - Preview an update for a skill that has a recorded Git or npx fetch method:
   re-acquire into a temporary workspace, compare digests and path lists, and name
   keep/replace strategies without writing the library or Agent targets.
-- Deploy a library Skill into Pi or Grok Build as a symlink when possible, or as
-  an explicit copy-sync; revoke only vibemate-owned targets.
+- Deploy a library Skill into Claude Code, Pi or Grok Build as a symlink when
+  possible, or as an explicit copy-sync; revoke only vibemate-owned targets.
 - Delete a library entry with a bilingual confirmation; deletion refuses while
   any deployment row remains.
 
@@ -33,7 +33,8 @@ are implemented. Applying an update and Claude Code deployment are not; see
 
 Migration v10 created `skill`; v11 rebuilt it to widen the content limits; v27
 added the fetch method and installer fields; v28–v29 added `skill_deployment`
-for per-Agent ownership; v30 added revision-check columns. Files live in
+for per-Agent ownership; v30 added revision-check columns; v31 added Claude Code
+as a deployment target. Files live in
 `<app-data>/skills/<id>/`. Managed copies move with the database, so a backup of
 the app-data folder stays complete.
 
@@ -235,39 +236,44 @@ stays.
 `cleanup_deleted_skill_copies` removes only parked copies with no matching record.
 A parked copy whose record still exists comes from an interrupted delete and
 stays until that record is deleted. Deleting a Skill that still has a
-`skill_deployment` row returns `skill_in_use`; revoke the deployment first. P35
-will add richer reference UI.
+`skill_deployment` row returns `skill_in_use`. The delete confirmation loads
+those rows and shows the Agent, mode, revision and sync state; deletion stays
+disabled until the user opens the detail page and revokes the deployments. This
+is the Skill-specific reference view; MCP references remain with P33/P35.
 
-## Deploy to Pi and Grok Build
+## Deploy to Claude Code, Pi and Grok Build
 
 Deployment writes only each Agent's user-level skills directory, resolved the
 same way as model configuration:
 
-| Agent      | Root resolution                           | Target                        |
-| ---------- | ----------------------------------------- | ----------------------------- |
-| Pi         | `PI_CODING_AGENT_DIR`, else `~/.pi/agent` | `<root>/skills/<skill-name>/` |
-| Grok Build | `GROK_HOME`, else `~/.grok`               | `<root>/skills/<skill-name>/` |
+| Agent       | Root resolution                           | Target                        |
+| ----------- | ----------------------------------------- | ----------------------------- |
+| Claude Code | `CLAUDE_CONFIG_DIR`, else `~/.claude`     | `<root>/skills/<skill-name>/` |
+| Pi          | `PI_CODING_AGENT_DIR`, else `~/.pi/agent` | `<root>/skills/<skill-name>/` |
+| Grok Build  | `GROK_HOME`, else `~/.grok`               | `<root>/skills/<skill-name>/` |
 
-Both Agents use the same `SKILL.md` directory form. Shared locations such as
-`~/.agents/skills/` and project-local discovery paths are not written. Claude
-Code skill deployment remains unimplemented.
+All three Agents use the same `SKILL.md` directory form. Shared locations such
+as `~/.agents/skills/` and project-local discovery paths are not written.
+Claude Code's personal skills directory follows its configuration root; the
+installed 2.1.308 binary resolves `<CLAUDE_CONFIG_DIR|~/.claude>/skills`, and
+the official Skill contract allows a `<name>` entry to be a symbolic link.
 
 1. **Preview** names the Agent, classifies the target as absent, vibemate-owned
    symlink, owned copy, or foreign; probes whether a directory symlink can be
    created under `skills/`; and suggests symlink when available, otherwise copy.
 2. **Apply** requires the reviewed Agent, skill revision, config root, mode and
    target state. Symlink mode is refused when the probe fails. Foreign targets
-   are never overwritten. After a successful filesystem write, schema v29 records
-   ownership (`agent_id` is `pi` or `grokBuild`, plus mode, skill revision and
-   content digest). A failed record attempt rolls back the filesystem write when
-   possible, otherwise `outcome_unknown`. One skill may be deployed to Pi and
-   Grok independently; revoking one does not touch the other.
+   are never overwritten. After a successful filesystem write, schema v31 records
+   ownership (`agent_id` is `pi`, `grokBuild` or `claudeCode`, plus mode, skill
+   revision and content digest). A failed record attempt rolls back the
+   filesystem write when possible, otherwise `outcome_unknown`. One skill may be
+   deployed to each Agent independently; revoking one does not touch the others.
 3. **Disable** removes only a still-owned symlink or copy. If the user replaced
    the target, the path is left alone and the ownership row is cleared.
 
 The Skill detail page owns the deploy controls and an Agent selector. The Agent
-detail Skill segment for Pi and Grok Build is read-only: it lists deployments for
-that agent directory and jumps to the Skills module.
+detail Skill segment for Claude Code, Pi and Grok Build is read-only: it lists
+deployments for that agent directory and jumps to the Skills module.
 
 ## Interface
 
@@ -291,9 +297,9 @@ that agent directory and jumps to the Skills module.
   start from the latest revision.
 - Digests stay out of the interface: they are a machine comparison value and a
   baseline for the future update comparison.
-- The detail page includes a **Deploy to Pi** card: target path and status, mode
-  choice, apply, current deployments and remove. Browser preview reports that
-  deploy needs the desktop app.
+- The detail page includes a **Deploy to an agent** card: Agent and mode choice,
+  target path and status, apply, current deployments and remove. Browser preview
+  reports that deploy needs the desktop app.
 
 ## Verification scope
 
@@ -301,9 +307,11 @@ Rust tests cover path rules, unknown sources, duplicate names, parse failures,
 links and limits, the untouched source directory, deterministic digests, folder
 discovery and batch reporting, large bodies and headers, the IPC contract, Git
 and npx request validation, acquired-tree discovery, partial imports, workspace
-cleanup, source-method edits, the v27 fields, and Pi deploy preview/apply/disable
-(symlink, copy, foreign conflict, stale tokens, delete-while-deployed). Storage
-tests cover the skill migrations and preserved rows.
+cleanup, source-method edits, the v27 fields, and deploy preview/apply/disable
+for Claude Code, Pi and Grok Build (symlink, copy, config-root override, foreign
+conflict, stale tokens, cross-Agent isolation, delete-while-deployed). Storage
+tests cover the skill migrations, preserved deployment rows and the new
+`claudeCode` target value.
 
 The reviewed public source `vercel-labs/agent-skills` was installed through both
 real paths: a pinned Git commit (`063bee9…`) resolved to the same commit in the

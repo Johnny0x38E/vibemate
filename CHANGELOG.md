@@ -8,6 +8,15 @@ GitHub release notes are extracted from the matching version section only.
 
 ### Added
 
+- Reference-aware deletion for Providers, saved models and Skills. Provider and
+  model dialogs list Pi provider bindings and Grok model aliases, classify them
+  against the live Agent file, and refuse deletion while an entry is active or
+  unreadable. A stale binding can be cleared explicitly; Claude Code remembered
+  choices are reported and removed by the existing cascade. The Models tab
+  lists the same references before saving removals. The Skill delete
+  confirmation lists deployed Agents and disables deletion until those
+  deployments are revoked. Agent files are only read, never rewritten.
+
 - Apply a reviewed Skill update after digest preview. Apply re-checks digests
   and refuses a stale plan; `keep` writes nothing; `replace` swaps the managed
   copy, advances the Git source revision, marks the revision check up to date,
@@ -37,17 +46,19 @@ GitHub release notes are extracted from the matching version section only.
   workspace. Preview never writes the library or Agent targets. Skills without a
   fetch method stay non-updatable.
 
-- Deploy a central Skill into Pi or Grok Build user-level `skills/` directories
-  (`PI_CODING_AGENT_DIR|~/.pi/agent` and `GROK_HOME|~/.grok`). Preview names the
-  Agent, target path and whether it is empty, vibemate-owned or foreign; symlink
-  is preferred when the platform can create one, otherwise the user must choose
-  copy. Apply records ownership (schema v29, `pi` or `grokBuild`) with the skill
-  revision and content digest; one skill may land on both Agents independently.
-  Disable removes only a still-managed target and leaves user content alone.
-  Deleting a Skill that is still deployed returns `skill_in_use`. The Skill
-  detail page owns the deploy controls and Agent selector; Pi and Grok Agent
+- Deploy a central Skill into Claude Code, Pi or Grok Build user-level `skills/`
+  directories (`CLAUDE_CONFIG_DIR|~/.claude`, `PI_CODING_AGENT_DIR|~/.pi/agent`
+  and `GROK_HOME|~/.grok`). Preview names the Agent, target path and whether it
+  is empty, vibemate-owned or foreign; symlink is preferred when the platform
+  can create one, otherwise the user must choose copy. Apply records ownership
+  (schema v31, `claudeCode`, `pi` or `grokBuild`) with the skill revision and
+  content digest; one skill may land on each Agent independently. Disable
+  removes only a still-managed target and leaves user content alone. Deleting a
+  Skill that is still deployed returns `skill_in_use`. The Skill detail page
+  owns the deploy controls and Agent selector; Claude Code, Pi and Grok Agent
   Skill segments list deployments read-only and jump to the Skills module.
-  Claude Code skill deployment remains unimplemented.
+  Claude Code's personal skills directory follows its configuration root; the
+  installed 2.1.308 binary resolves `<CLAUDE_CONFIG_DIR|~/.claude>/skills`.
 
 - Grok Build writes a declared, non-empty reasoning-effort list and its model default to the native `reasoning_efforts` array when that field is absent. Each entry carries `value`, a generated English `label`, and `default = true` on the central default when that level is in the list. Existing arrays, deprecated effort fields, `[models]` globals, unrelated aliases and request parameters stay unchanged; open (`any`), empty and unsupported statements are not expanded. Isolated macOS Grok 1.0.67 checks confirm the injected menu, declared default and running-session selection for Chat Completions and Responses; six isolated local-stub samples confirm Chat's `reasoning_effort` and Responses' `reasoning.effort`, including the declared default. Both backends also send the changed effort on the next isolated TUI request. Grok persists its own selection globally and reuses it in new sessions; vibemate does not write that global setting. Real Provider acceptance remains unverified. Independent maximum-output and tool mappings remain unwritten.
 

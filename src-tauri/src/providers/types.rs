@@ -207,6 +207,9 @@ pub enum ProviderError {
     /// may not still exist, and its key may or may not still be stored. Reload the
     /// list before acting.
     DeleteOutcomeUnknown,
+    /// A Pi or Grok ownership row still names this Provider. Clear the binding
+    /// after changing or restoring the Agent configuration, then delete again.
+    ProviderInUse,
 }
 
 impl std::fmt::Display for ProviderError {
@@ -234,6 +237,7 @@ impl std::fmt::Display for ProviderError {
             Self::CreateOutcomeUnknown => "Whether the provider was saved is unknown.",
             Self::SecretOutcomeUnknown => "Whether the API key was replaced is unknown.",
             Self::DeleteOutcomeUnknown => "Whether the provider was deleted is unknown.",
+            Self::ProviderInUse => "An Agent configuration still references this provider.",
         })
     }
 }
@@ -436,4 +440,32 @@ pub struct DeletedProvider {
     pub display_name: String,
     /// Saved models removed with the instance through the foreign-key cascade.
     pub selected_model_count: u32,
+}
+
+/// Agent bindings and remembered choices that a Provider deletion would affect.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderDeletionImpact {
+    /// Provider the dialog is about.
+    pub provider_id: String,
+    /// Pi and Grok ownership rows that still name this Provider.
+    pub references: Vec<crate::references::AgentReference>,
+    /// Claude Code remembered choices removed by the foreign-key cascade.
+    pub remembered_preferences: u64,
+    /// True only when no binding row blocks deletion.
+    pub can_delete: bool,
+}
+
+/// Remove one stale Pi Provider binding or Grok alias binding.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ClearProviderReferenceRequest {
+    /// Provider the binding names.
+    pub provider_id: String,
+    /// `pi` or `grokBuild`.
+    pub agent_id: String,
+    /// Absolute configuration root recorded with the binding.
+    pub config_root: String,
+    /// Provider key in Pi or model alias in Grok.
+    pub label: String,
 }

@@ -8,6 +8,7 @@ use super::validation::MAX_CURSOR_LEN;
 use super::*;
 use crate::model_catalog::{CapabilityOverride, CapabilityOverrides};
 use crate::model_identity::RouteSupport;
+use crate::references::ReferenceState;
 use crate::storage::Storage;
 use rusqlite::params;
 
@@ -152,6 +153,39 @@ fn save_selections_deletes_removed_rows_and_inserts_new_ones() {
     let page = list(&storage, None, 50, "selected");
     let ids: Vec<_> = page.items.iter().map(|m| m.model_id.as_str()).collect();
     assert_eq!(ids, ["keep-me", "new-model"]);
+}
+
+#[test]
+fn save_selections_refuses_to_remove_a_model_with_an_agent_binding() {
+    let directory = TestDirectory::new();
+    let storage = directory.open();
+    insert_provider(&storage, PROVIDER, "deepseek", "chat_completions");
+    insert_fetched(&storage, PROVIDER, "drop-me", None);
+    select(&storage, &["drop-me"], true).expect("select");
+    storage
+        .lock()
+        .unwrap()
+        .execute(
+            "INSERT INTO grok_model_binding
+                (config_root, model_alias, provider_id, model_id)
+             VALUES ('/tmp/grok', 'vibemate-drop', ?1, 'drop-me')",
+            [PROVIDER],
+        )
+        .unwrap();
+
+    assert_eq!(
+        save_provider_model_selections(
+            &storage,
+            &SaveProviderModelSelectionsRequest {
+                provider_id: PROVIDER.to_owned(),
+                remove_model_ids: vec!["drop-me".to_owned()],
+                add: Vec::new(),
+            },
+            300,
+        ),
+        Err(ModelError::ModelInUse)
+    );
+    assert_eq!(list(&storage, None, 50, "selected").items.len(), 1);
 }
 
 #[test]
@@ -496,6 +530,133 @@ fn only_manual_models_can_be_deleted() {
         .map(|model| model.model_id)
         .collect();
     assert_eq!(remaining, ["deepseek-flash"]);
+}
+
+#[test]
+fn model_delete_is_blocked_by_a_live_grok_alias_and_can_follow_a_stale_clear() {
+    let directory = TestDirectory::new();
+    let storage = directory.open();
+    insert_provider(&storage, PROVIDER, "deepseek", "chat_completions");
+    add(&storage, "bound/model", None).expect("manual model");
+    let grok_root = directory.0.join("grok-home");
+    fs::create_dir_all(&grok_root).expect("grok root");
+    fs::write(
+        grok_root.join("config.toml"),
+        "[model.vibemate-bound]\nmodel = \"bound/model\"\n",
+    )
+    .expect("grok config");
+    storage
+        .lock()
+        .unwrap()
+        .execute(
+            "INSERT INTO grok_model_binding
+                (config_root, model_alias, provider_id, model_id)
+             VALUES (?1, 'vibemate-bound', ?2, 'bound/model')",
+            params![grok_root.to_string_lossy(), PROVIDER],
+        )
+        .unwrap();
+
+    let impact = model_deletion_impact(&storage, PROVIDER, "bound/model").expect("impact");
+    assert_eq!(impact.references.len(), 1);
+    assert_eq!(impact.references[0].agent_id, "grokBuild");
+    assert_eq!(impact.references[0].state, ReferenceState::Active);
+    assert!(!impact.can_delete);
+    assert_eq!(
+        delete_manual_model(
+            &storage,
+            &DeleteManualModelRequest {
+                provider_id: PROVIDER.to_owned(),
+                model_id: "bound/model".to_owned(),
+            },
+        ),
+        Err(ModelError::ModelInUse)
+    );
+
+    // Removing the alias makes the ownership row stale. The explicit clear
+    // step then allows deletion without rewriting the Grok file.
+    fs::write(
+        grok_root.join("config.toml"),
+        "[model.other]\nmodel = \"x\"\n",
+    )
+    .expect("grok config without alias");
+    let stale = model_deletion_impact(&storage, PROVIDER, "bound/model").expect("stale impact");
+    assert_eq!(stale.references[0].state, ReferenceState::Stale);
+    assert!(stale.references[0].clearable);
+    clear_model_reference(
+        &storage,
+        ClearModelReferenceRequest {
+            provider_id: PROVIDER.to_owned(),
+            model_id: "bound/model".to_owned(),
+            agent_id: "grokBuild".into(),
+            config_root: grok_root.to_string_lossy().into_owned(),
+            label: "vibemate-bound".into(),
+        },
+    )
+    .expect("clear stale alias");
+    delete_manual_model(
+        &storage,
+        &DeleteManualModelRequest {
+            provider_id: PROVIDER.to_owned(),
+            model_id: "bound/model".to_owned(),
+        },
+    )
+    .expect("delete after clear");
+}
+
+#[test]
+fn model_delete_is_blocked_while_pi_still_lists_the_model() {
+    let directory = TestDirectory::new();
+    let storage = directory.open();
+    insert_provider(&storage, PROVIDER, "deepseek", "chat_completions");
+    add(&storage, "pi/model", None).expect("manual model");
+    let pi_root = directory.0.join("pi-agent");
+    fs::create_dir_all(&pi_root).expect("pi root");
+    fs::write(
+        pi_root.join("models.json"),
+        r#"{"providers":{"vibemate-Pi-test":{"models":[{"id":"pi/model"}]}}}"#,
+    )
+    .expect("pi models");
+    storage
+        .lock()
+        .unwrap()
+        .execute(
+            "INSERT INTO pi_provider_binding(config_root, provider_key, provider_id)
+             VALUES (?1, 'vibemate-Pi-test', ?2)",
+            params![pi_root.to_string_lossy(), PROVIDER],
+        )
+        .unwrap();
+
+    let impact = model_deletion_impact(&storage, PROVIDER, "pi/model").expect("impact");
+    assert_eq!(impact.references.len(), 1);
+    assert_eq!(impact.references[0].agent_id, "pi");
+    assert_eq!(impact.references[0].state, ReferenceState::Active);
+    assert!(!impact.references[0].clearable);
+    assert_eq!(
+        delete_manual_model(
+            &storage,
+            &DeleteManualModelRequest {
+                provider_id: PROVIDER.to_owned(),
+                model_id: "pi/model".to_owned(),
+            },
+        ),
+        Err(ModelError::ModelInUse)
+    );
+
+    // The Pi model entry has no central ownership row; editing or restoring the
+    // Pi configuration is the supported removal path.
+    fs::write(
+        pi_root.join("models.json"),
+        r#"{"providers":{"vibemate-Pi-test":{"models":[]}}}"#,
+    )
+    .expect("pi models without model");
+    delete_manual_model(
+        &storage,
+        &DeleteManualModelRequest {
+            provider_id: PROVIDER.to_owned(),
+            model_id: "pi/model".to_owned(),
+        },
+    )
+    .expect("delete after Pi edit");
 }
 
 #[test]

@@ -158,7 +158,28 @@
             "body_other": "删除「{{name}}」？该操作会删除这项配置、{{count}} 个已添加模型和保存的 API 密钥。不会修改 Agent 配置文件。",
             "confirm": "删除服务商",
             "cancel": "取消",
-            "done": "已删除「{{name}}」。"
+            "done": "已删除「{{name}}」。",
+            "checkingReferences": "正在检查 Agent 引用…",
+            "referencesHint": "该服务商仍记录在某个 Agent 配置中。请先更改或恢复该配置，或清除已失效的绑定，再删除。",
+            "referencesLabel": "Agent 引用",
+            "referenceLabel": {
+                "pi": "Pi · 服务商 {{label}}",
+                "grokBuild": "Grok Build · 别名 {{label}}"
+            },
+            "referenceStates": {
+                "active": "Agent 文件中仍存在",
+                "stale": "Agent 文件中已不存在",
+                "unverified": "无法读取 Agent 文件"
+            },
+            "referenceHints": {
+                "active": "请先更改或恢复该 Agent 配置。",
+                "stale": "请清除这条失效绑定后继续。",
+                "unverified": "请先解决该 Agent 文件的状态。"
+            },
+            "clear": "清除引用",
+            "clearing": "正在清除…",
+            "remembered_one": "还会移除 {{count}} 条 Claude Code 记住的起始档位。",
+            "remembered_other": "还会移除 {{count}} 条 Claude Code 记住的起始档位。"
         },
         "tabs": {
             "ariaLabel": "服务商配置分区",
@@ -192,6 +213,25 @@
             "save": "保存",
             "saving": "正在保存…",
             "saveNotice": "模型勾选已保存。",
+            "referencesLabel": "阻止移除的 Agent 引用",
+            "referencesBlocked": "部分模型仍被 Agent 配置使用，因此没有移除。",
+            "referencesHelp": "仍有效的条目请更改或恢复对应 Agent 配置；已失效的绑定可在此清除，然后再次保存。",
+            "referenceNames": {
+                "pi": "Pi · {{model}} · 服务商 {{label}}",
+                "grokBuild": "Grok Build · {{model}} · 别名 {{label}}"
+            },
+            "referenceStates": {
+                "active": "Agent 文件中仍存在",
+                "stale": "Agent 文件中已不存在",
+                "unverified": "无法读取 Agent 文件"
+            },
+            "referenceHints": {
+                "active": "请先更改或恢复该 Agent 配置。",
+                "stale": "请清除这条失效绑定后继续。",
+                "unverified": "请先解决该 Agent 文件的状态。"
+            },
+            "clearReference": "清除引用",
+            "clearingReference": "正在清除…",
             "unsavedLeave": "模型勾选尚未保存，确定要离开吗？",
             "backToSelected": "查看已添加",
             "upstreamListLabel": "此服务商的上游模型",
@@ -250,6 +290,7 @@
                 "model_parameters_invalid": "上下文窗口和最大输出需要是正整数，推理档位也需要是有效组合。",
                 "model_already_exists": "该模型 ID 已存在。",
                 "model_not_found": "找不到该模型，请刷新列表。",
+                "model_in_use": "仍有 Agent 配置使用此模型。请先解决列出的引用，再移除。",
                 "model_changed": "该模型已发生变更，请重新加载后再保存。",
                 "model_route_not_supported": "该模型没有 vibemate 可用的 API 路由。",
                 "secret_missing": "请先在上方填写 API 密钥，再勾选模型。",
@@ -369,7 +410,8 @@
             "credential_store_failed": "系统凭据库报告了错误，什么都没有更改。如果你在系统提示中拒绝了访问，请重试并选择允许。",
             "create_outcome_unknown": "无法确认这项配置是否已保存，系统凭据库中可能留有一个未被使用的密钥条目（vibemate 不会读取它）。请先刷新列表确认，再决定是否重新添加。",
             "secret_outcome_unknown": "无法确认密钥是否已替换，系统凭据库中可能已经是新密钥。请刷新密钥状态；如不确定，请再次替换。",
-            "delete_outcome_unknown": "删除结果未知，请刷新列表确认。"
+            "delete_outcome_unknown": "删除结果未知，请刷新列表确认。",
+            "provider_in_use": "仍有 Agent 配置引用此服务商。请先解决列出的绑定，再删除。"
         }
     },
     "mcp": {
@@ -1145,7 +1187,7 @@
         "sourceSaved": "来源已保存。",
         "reload": "重新载入列表",
         "reloadUnknown": "结果未知。请重新载入列表后再做其他修改。",
-        "notDeployed": "打开技能详情页即可部署到 Pi 或 Grok Build。",
+        "notDeployed": "打开技能详情页即可部署到 Claude Code、Pi 或 Grok Build。",
         "deploy": {
             "title": "部署到 Agent",
             "agent": "Agent",
@@ -1164,6 +1206,7 @@
             "listLabel": "当前部署",
             "agentPi": "Pi",
             "agentGrokBuild": "Grok Build",
+            "agentClaudeCode": "Claude Code",
             "rowSummary": "{{agent}} · {{mode}} · 修订 {{revision}} · {{sync}}",
             "inSync": "已同步",
             "outOfSync": "已被外部修改",
@@ -1253,7 +1296,12 @@
             "done": "已删除“{{name}}”。",
             "cleanupPending": "技能已删除，副本未清理。请重试清理。",
             "cleanup": "重试清理副本文件",
-            "cleanupDone": "副本已清理。"
+            "cleanupDone": "副本已清理。",
+            "checking": "正在检查 Agent 部署…",
+            "referencesPreview": "部署引用需要桌面应用。",
+            "referencesHint": "该技能仍部署在某个 Agent 中。请先移除部署，再删除库记录。",
+            "referencesLabel": "Agent 部署",
+            "manage": "查看部署"
         },
         "errors": {
             "storage_unavailable": "vibemate 暂时无法访问自己的私有库。",

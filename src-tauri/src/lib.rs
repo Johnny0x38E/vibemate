@@ -18,6 +18,7 @@ pub mod model_identity;
 pub mod model_search;
 pub mod models;
 pub mod providers;
+pub mod references;
 pub mod settings;
 mod shared;
 pub mod skills;
@@ -149,6 +150,8 @@ pub fn run() {
             commands::providers::get_provider_secret_status,
             commands::providers::replace_provider_secret,
             commands::providers::delete_provider,
+            commands::providers::provider_deletion_impact,
+            commands::providers::clear_provider_reference,
             commands::models::fetch_provider_models,
             commands::models::refresh_saved_provider_models,
             commands::models::browse_upstream_models_page,
@@ -160,6 +163,8 @@ pub fn run() {
             commands::models::set_provider_models_selected,
             commands::models::add_manual_provider_model,
             commands::models::delete_manual_provider_model,
+            commands::models::model_deletion_impact,
+            commands::models::clear_model_reference,
             commands::models::get_provider_model_snapshot,
             commands::models::update_provider_model_edit,
         ])

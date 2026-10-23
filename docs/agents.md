@@ -137,10 +137,10 @@ dots stack vertically when only Detail is available.
 The detail page is keyed by Agent and configuration epoch. Its segments are
 **History**, **Skill**, **MCP** and **Install & paths**; History is the default.
 A read-only current-configuration pin sits above the segments. The Skill segment
-for Pi lists vibemate-managed deployments (name, mode, sync) and jumps to the
-Skills module; other Agents state that skill deployment is not implemented. The
-MCP segment still shows an explicit empty state until its deployment feature
-exists.
+for Claude Code, Pi and Grok Build lists vibemate-managed deployments (name,
+mode, sync) and jumps to the Skills module; the other Agents state that skill
+deployment is not implemented. The MCP segment still shows an explicit empty
+state until its deployment feature exists.
 
 ## Configuration adapters
 

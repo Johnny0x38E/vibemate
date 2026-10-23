@@ -4,9 +4,13 @@ import { useTranslation } from "react-i18next";
 import { IconButton } from "../../components/IconButton";
 import { useNotify } from "../../components/Notifications";
 import {
+    clearProviderReference,
     deleteProvider,
     ProviderRequestError,
+    providerDeletionImpact,
+    type AgentReference,
     type DeletedProvider,
+    type ProviderDeletionImpact,
     type ProviderErrorCode,
     type ProviderRecord,
 } from "../../lib/desktop/providers";
@@ -28,10 +32,27 @@ type DeleteState =
     | { kind: "deleting" }
     | { kind: "error"; code: ProviderErrorCode };
 
+type ImpactState =
+    | { kind: "idle" | "loading" }
+    | { kind: "ready"; impact: ProviderDeletionImpact }
+    | { kind: "error"; code: ProviderErrorCode };
+
+function errorCode(error: unknown): ProviderErrorCode {
+    return error instanceof ProviderRequestError
+        ? error.code
+        : "operation_failed";
+}
+
+function referenceKey(reference: AgentReference): string {
+    return `${reference.agentId}:${reference.configRoot}:${reference.label}`;
+}
+
 /**
  * Delete one saved configuration after an explicit confirmation that names the
- * provider and its saved-model count. The dialog traps focus and returns it to
- * the row action. A conflict or unknown outcome reloads the list instead of
+ * provider and its saved-model count. Pi/Grok ownership rows are listed before
+ * deletion; active rows must be removed through the Agent configuration, while
+ * stale rows can be cleared here. The dialog traps focus and returns it to the
+ * row action. A conflict or unknown outcome reloads the list instead of
  * pretending the delete succeeded.
  */
 export function ProviderDeleteAction({
@@ -44,20 +65,99 @@ export function ProviderDeleteAction({
     const notify = useNotify();
     const [open, setOpen] = useState(false);
     const [state, setState] = useState<DeleteState>({ kind: "idle" });
+    const [impact, setImpact] = useState<{
+        open: boolean;
+        state: ImpactState;
+    }>({ open: false, state: { kind: "idle" } });
+    const [clearing, setClearing] = useState<string | null>(null);
+    const [clearError, setClearError] = useState<ProviderErrorCode | null>(
+        null,
+    );
     const trigger = useRef<HTMLElement | null>(null);
     const cancelButton = useRef<HTMLButtonElement | null>(null);
+    const mounted = useRef(true);
     const deleting = state.kind === "deleting";
 
     // Hiding or leaving the list unmounts this action; the reference must not
     // outlive the row it points at.
     useEffect(() => {
+        mounted.current = true;
         return () => {
+            mounted.current = false;
             trigger.current = null;
         };
     }, []);
 
+    // Reset in render when the dialog opens or closes so the effect only starts
+    // the read and never calls setState synchronously for the loading state.
+    if (impact.open !== open) {
+        setImpact({
+            open,
+            state: open ? { kind: "loading" } : { kind: "idle" },
+        });
+    }
+    const impactState: ImpactState =
+        impact.open === open ? impact.state : { kind: "loading" };
+
+    useEffect(() => {
+        if (!open) return;
+        let active = true;
+        void providerDeletionImpact(record.id).then(
+            (next) => {
+                if (active) {
+                    setImpact({
+                        open: true,
+                        state: { kind: "ready", impact: next },
+                    });
+                }
+            },
+            (error: unknown) => {
+                if (active) {
+                    setImpact({
+                        open: true,
+                        state: { kind: "error", code: errorCode(error) },
+                    });
+                }
+            },
+        );
+        return () => {
+            active = false;
+        };
+    }, [open, record.id]);
+
+    async function clear(reference: AgentReference): Promise<void> {
+        if (clearing !== null || !reference.clearable) return;
+        setClearing(referenceKey(reference));
+        setClearError(null);
+        try {
+            await clearProviderReference({
+                providerId: record.id,
+                agentId: reference.agentId,
+                configRoot: reference.configRoot,
+                label: reference.label,
+            });
+            const next = await providerDeletionImpact(record.id);
+            if (mounted.current) {
+                setImpact({
+                    open: true,
+                    state: { kind: "ready", impact: next },
+                });
+            }
+        } catch (error: unknown) {
+            if (mounted.current) setClearError(errorCode(error));
+        } finally {
+            if (mounted.current) setClearing(null);
+        }
+    }
+
     async function confirm(): Promise<void> {
-        if (deleting) return;
+        if (
+            deleting ||
+            impactState.kind !== "ready" ||
+            !impactState.impact.canDelete
+        ) {
+            return;
+        }
         setState({ kind: "deleting" });
         try {
             const deleted = await deleteProvider({
@@ -73,10 +173,7 @@ export function ProviderDeleteAction({
                 }),
             );
         } catch (error: unknown) {
-            const code =
-                error instanceof ProviderRequestError
-                    ? error.code
-                    : "operation_failed";
+            const code = errorCode(error);
             // The list must not keep showing a row whose state is unknown.
             onReload();
             setState({ kind: "error", code });
@@ -97,6 +194,17 @@ export function ProviderDeleteAction({
         }
     }
 
+    const canDelete =
+        state.kind === "idle" &&
+        impactState.kind === "ready" &&
+        impactState.impact.canDelete;
+    const references =
+        impactState.kind === "ready" ? impactState.impact.references : [];
+    const remembered =
+        impactState.kind === "ready"
+            ? impactState.impact.rememberedPreferences
+            : 0;
+
     return (
         <Dialog.Root
             open={open}
@@ -104,7 +212,10 @@ export function ProviderDeleteAction({
                 // A delete in flight must finish; nothing else blocks closing.
                 if (!nextOpen && deleting) return;
                 setOpen(nextOpen);
-                if (!nextOpen) setState({ kind: "idle" });
+                if (!nextOpen) {
+                    setState({ kind: "idle" });
+                    setClearError(null);
+                }
             }}
         >
             <IconButton
@@ -120,6 +231,7 @@ export function ProviderDeleteAction({
                         document.activeElement instanceof HTMLElement
                             ? document.activeElement
                             : null;
+                    setClearError(null);
                     setOpen(true);
                 }}
             />
@@ -142,6 +254,112 @@ export function ProviderDeleteAction({
                             count: record.selectedModelCount,
                         })}
                     </Dialog.Description>
+                    {impactState.kind === "loading" && (
+                        <p className={styles["hint"]} role="status">
+                            {t("providers.delete.checkingReferences")}
+                        </p>
+                    )}
+                    {impactState.kind === "error" && (
+                        <p className={styles["error"]} role="alert">
+                            {t(`providers.errors.${impactState.code}`)}
+                        </p>
+                    )}
+                    {impactState.kind === "ready" && references.length > 0 && (
+                        <div className={styles["references"]}>
+                            <p className={styles["hint"]}>
+                                {t("providers.delete.referencesHint")}
+                            </p>
+                            <ul
+                                className={styles["referenceList"]}
+                                aria-label={t(
+                                    "providers.delete.referencesLabel",
+                                )}
+                            >
+                                {references.map((reference) => {
+                                    const key = referenceKey(reference);
+                                    return (
+                                        <li
+                                            className={styles["referenceRow"]}
+                                            key={key}
+                                        >
+                                            <div>
+                                                <p
+                                                    className={
+                                                        styles["referenceName"]
+                                                    }
+                                                >
+                                                    {t(
+                                                        `providers.delete.referenceLabel.${reference.agentId}`,
+                                                        {
+                                                            label: reference.label,
+                                                        },
+                                                    )}
+                                                </p>
+                                                <p
+                                                    className={
+                                                        styles["referenceMeta"]
+                                                    }
+                                                >
+                                                    {reference.configRoot}
+                                                    {" · "}
+                                                    {t(
+                                                        `providers.delete.referenceStates.${reference.state}`,
+                                                    )}
+                                                </p>
+                                            </div>
+                                            {reference.clearable ? (
+                                                <button
+                                                    type="button"
+                                                    className={
+                                                        buttons["secondary"]
+                                                    }
+                                                    disabled={
+                                                        clearing !== null ||
+                                                        deleting
+                                                    }
+                                                    onClick={() => {
+                                                        void clear(reference);
+                                                    }}
+                                                >
+                                                    {clearing === key
+                                                        ? t(
+                                                              "providers.delete.clearing",
+                                                          )
+                                                        : t(
+                                                              "providers.delete.clear",
+                                                          )}
+                                                </button>
+                                            ) : (
+                                                <p
+                                                    className={
+                                                        styles[
+                                                            "referenceAction"
+                                                        ]
+                                                    }
+                                                >
+                                                    {t(
+                                                        `providers.delete.referenceHints.${reference.state}`,
+                                                    )}
+                                                </p>
+                                            )}
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                            {clearError !== null && (
+                                <p className={styles["error"]} role="alert">
+                                    {t(`providers.errors.${clearError}`)}
+                                </p>
+                            )}
+                        </div>
+                    )}
+                    {impactState.kind === "ready" && remembered > 0 && (
+                        <p className={styles["hint"]}>
+                            {t("providers.delete.remembered", {
+                                count: remembered,
+                            })}
+                        </p>
+                    )}
                     {state.kind === "error" && (
                         <p className={styles["error"]} role="alert">
                             {t(`providers.errors.${state.code}`)}
@@ -162,9 +380,9 @@ export function ProviderDeleteAction({
                         <button
                             type="button"
                             className={buttons["dangerSecondary"]}
-                            aria-disabled={deleting}
+                            aria-disabled={!canDelete}
                             onClick={() => {
-                                if (deleting) return;
+                                if (!canDelete) return;
                                 void confirm();
                             }}
                         >

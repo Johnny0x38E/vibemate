@@ -39,6 +39,7 @@ impl Fixture {
         let home = root.join("home");
         fs::create_dir_all(home.join(".pi/agent")).expect("pi root");
         fs::create_dir_all(home.join(".grok")).expect("grok root");
+        fs::create_dir_all(home.join(".claude")).expect("claude root");
         Self {
             root,
             storage,
@@ -114,6 +115,7 @@ impl Fixture {
         match agent {
             SkillDeployAgent::Pi => self.home.join(".pi/agent/skills").join(name),
             SkillDeployAgent::GrokBuild => self.home.join(".grok/skills").join(name),
+            SkillDeployAgent::ClaudeCode => self.home.join(".claude/skills").join(name),
         }
     }
 }
@@ -192,6 +194,135 @@ fn grok_copy_deploy_writes_independent_tree() {
     assert!(meta.is_dir());
     assert!(!meta.file_type().is_symlink());
     assert!(target.join(MANIFEST_FILE_NAME).is_file());
+}
+
+#[test]
+fn claude_code_deploy_uses_its_config_root_and_records_ownership() {
+    let fixture = Fixture::new();
+    let record = fixture.import("claude-skill");
+    let preview = fixture
+        .preview(SkillDeployAgent::ClaudeCode, &record.id)
+        .expect("preview");
+    assert_eq!(preview.agent_id, SkillDeployAgent::ClaudeCode);
+    assert_eq!(
+        preview.config_root,
+        fixture.home.join(".claude").to_string_lossy()
+    );
+    assert_eq!(
+        preview.target_path,
+        fixture
+            .home
+            .join(".claude/skills/claude-skill")
+            .to_string_lossy()
+    );
+    assert!(preview.symlink_available);
+
+    let applied = fixture
+        .apply(reviewed_from_preview(&preview, SkillDeployMode::Symlink))
+        .expect("apply");
+    assert_eq!(applied.agent_id, SkillDeployAgent::ClaudeCode);
+    let target = fixture.target(SkillDeployAgent::ClaudeCode, "claude-skill");
+    assert!(
+        fs::symlink_metadata(&target)
+            .expect("meta")
+            .file_type()
+            .is_symlink()
+    );
+
+    let listed = list_agent_skill_deployments(
+        &fixture.library,
+        &fixture.storage,
+        &fixture.environment(),
+        SkillDeployAgent::ClaudeCode,
+    )
+    .expect("list");
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].agent_id, "claudeCode");
+    assert!(listed[0].in_sync);
+}
+
+#[test]
+fn claude_code_honors_a_config_directory_override() {
+    let fixture = Fixture::new();
+    let custom_root = fixture.root.join("custom-claude");
+    fs::create_dir_all(&custom_root).expect("custom root");
+    let environment = DiscoveryEnvironment {
+        claude_directory: Some(custom_root.clone().into_os_string()),
+        ..fixture.environment()
+    };
+    let record = fixture.import("custom-root");
+    let preview = preview_skill_deploy(
+        &fixture.library,
+        &fixture.storage,
+        &environment,
+        SkillDeployAgent::ClaudeCode,
+        &record.id,
+    )
+    .expect("preview");
+    assert_eq!(preview.config_root, custom_root.to_string_lossy());
+
+    let applied = apply_skill_deploy(
+        &fixture.library,
+        &fixture.storage,
+        &environment,
+        reviewed_from_preview(&preview, SkillDeployMode::Copy),
+        NOW,
+    )
+    .expect("apply");
+    assert_eq!(applied.mode, SkillDeployMode::Copy);
+    assert!(
+        custom_root
+            .join("skills/custom-root")
+            .join(MANIFEST_FILE_NAME)
+            .is_file()
+    );
+}
+
+#[test]
+fn claude_code_rejects_a_relative_config_directory() {
+    let fixture = Fixture::new();
+    let environment = DiscoveryEnvironment {
+        claude_directory: Some("relative".into()),
+        ..fixture.environment()
+    };
+    let record = fixture.import("relative-root");
+    let error = preview_skill_deploy(
+        &fixture.library,
+        &fixture.storage,
+        &environment,
+        SkillDeployAgent::ClaudeCode,
+        &record.id,
+    )
+    .expect_err("relative root");
+    assert_eq!(error, SkillError::AgentLocationUnavailable);
+}
+
+#[test]
+fn claude_code_and_pi_deployments_are_independent() {
+    let fixture = Fixture::new();
+    let record = fixture.import("two-agents");
+    let pi = fixture
+        .preview(SkillDeployAgent::Pi, &record.id)
+        .expect("pi preview");
+    fixture
+        .apply(reviewed_from_preview(&pi, SkillDeployMode::Symlink))
+        .expect("pi apply");
+    let claude = fixture
+        .preview(SkillDeployAgent::ClaudeCode, &record.id)
+        .expect("claude preview");
+    fixture
+        .apply(reviewed_from_preview(&claude, SkillDeployMode::Symlink))
+        .expect("claude apply");
+
+    fixture
+        .disable(SkillDeployAgent::Pi, &record.id, &pi.config_root)
+        .expect("disable pi");
+    assert!(!fixture.target(SkillDeployAgent::Pi, "two-agents").exists());
+    assert!(
+        fixture
+            .target(SkillDeployAgent::ClaudeCode, "two-agents")
+            .exists()
+    );
 }
 
 #[test]

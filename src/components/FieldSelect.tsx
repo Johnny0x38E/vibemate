@@ -29,6 +29,8 @@ export interface FieldSelectProps {
      * provider pickers) or a long value would truncate (provider model IDs).
      */
     size?: "default" | "fill";
+    /** Accessible name when the visible label is not a native `<label>`. */
+    "aria-label"?: string | undefined;
     "aria-describedby"?: string | undefined;
     "aria-invalid"?: boolean | undefined;
     /** Optional test hook (for example provider kind). */
@@ -48,6 +50,7 @@ export function FieldSelect({
     blocked = false,
     disabled = false,
     size = "default",
+    "aria-label": ariaLabel,
     "aria-describedby": ariaDescribedBy,
     "aria-invalid": ariaInvalid,
     "data-test-value": dataTestValue,
@@ -85,6 +88,7 @@ export function FieldSelect({
                 <Select.Trigger
                     id={id}
                     className={styles["trigger"]}
+                    aria-label={ariaLabel}
                     aria-disabled={blocked || undefined}
                     aria-describedby={ariaDescribedBy}
                     aria-invalid={ariaInvalid}

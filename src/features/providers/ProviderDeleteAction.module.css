@@ -47,6 +47,60 @@
     line-height: 1.5;
 }
 
+.hint {
+    margin: var(--space-sm) 0 0;
+    color: var(--color-summary);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+}
+
+.references {
+    margin-top: var(--space-sm);
+}
+
+.referenceList {
+    display: grid;
+    gap: var(--space-sm);
+    margin: var(--space-sm) 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.referenceRow {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    padding: var(--space-sm);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+}
+
+.referenceName,
+.referenceMeta,
+.referenceAction {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.referenceName {
+    color: var(--color-text);
+    font-size: 0.8125rem;
+    font-weight: 600;
+}
+
+.referenceMeta,
+.referenceAction {
+    color: var(--color-summary);
+    font-size: 0.75rem;
+    line-height: 1.45;
+}
+
+.referenceAction {
+    max-width: 12rem;
+    text-align: right;
+}
+
 .actions {
     display: flex;
     flex-wrap: wrap;
